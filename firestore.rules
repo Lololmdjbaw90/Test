@@ -1,0 +1,176 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function userDoc() { return get(/databases/$(database)/documents/User/$(request.auth.uid)); }
+    function isAdmin() { return signedIn() && userDoc().data.role == 'admin'; }
+    function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
+    function ownEmail() { return request.auth.token.email; }
+    function ownsResource() {
+      return signedIn() && (
+        resource.data.created_by == ownEmail() ||
+        resource.data.user_email == ownEmail() ||
+        resource.data.owner_email == ownEmail() ||
+        resource.data.artist_email == ownEmail() ||
+        resource.data.requester_email == ownEmail()
+      );
+    }
+    function ownsIncomingData() {
+      return signedIn() && (
+        request.resource.data.created_by == ownEmail() ||
+        request.resource.data.user_email == ownEmail() ||
+        request.resource.data.owner_email == ownEmail() ||
+        request.resource.data.artist_email == ownEmail() ||
+        request.resource.data.requester_email == ownEmail()
+      );
+    }
+    function onlyChanged(fields) {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly(fields);
+    }
+    function ownsCommunity(communityId) {
+      return signedIn() && get(/databases/$(database)/documents/Community/$(communityId)).data.owner_email == ownEmail();
+    }
+    function managesCommunity(communityId) { return isAdmin() || ownsCommunity(communityId); }
+
+    match /User/{uid} {
+      allow read: if signedIn();
+      allow create: if isSelf(uid)
+        && request.resource.data.email == ownEmail()
+        && request.resource.data.role == 'user';
+      allow update: if isAdmin() || (isSelf(uid)
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.role == resource.data.role);
+      allow delete: if isAdmin();
+    }
+
+    match /SiteConfig/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /Log/{id} {
+      allow read, write, delete: if isAdmin();
+    }
+
+    match /Artwork/{id} {
+      allow read: if signedIn();
+      allow create: if ownsIncomingData();
+      allow update: if isAdmin() || ownsResource() || onlyChanged(['likes', 'updated_date', 'updated_at']);
+      allow delete: if isAdmin() || ownsResource();
+    }
+
+    match /CommunityPost/{id} {
+      allow read: if signedIn();
+      allow create: if ownsIncomingData();
+      allow update: if isAdmin() || ownsResource() || onlyChanged(['likes', 'updated_date', 'updated_at']);
+      allow delete: if isAdmin() || ownsResource();
+    }
+
+    match /MusicReview/{id} {
+      allow read: if signedIn();
+      allow create: if ownsIncomingData();
+      allow update: if isAdmin() || ownsResource() || onlyChanged(['likes', 'updated_date', 'updated_at']);
+      allow delete: if isAdmin() || ownsResource();
+    }
+
+    match /Comment/{id} {
+      allow read: if signedIn();
+      allow create: if ownsIncomingData();
+      allow update, delete: if isAdmin() || ownsResource();
+    }
+
+    match /CommunityComment/{id} {
+      allow read: if signedIn();
+      allow create: if ownsIncomingData();
+      allow update, delete: if isAdmin() || ownsResource();
+    }
+
+    match /ProfileMessage/{id} {
+      allow read: if signedIn();
+      allow create: if ownsIncomingData();
+      allow update, delete: if isAdmin() || ownsResource();
+    }
+
+    match /Commission/{id} {
+      allow read: if signedIn();
+      allow create: if ownsIncomingData();
+      allow update, delete: if isAdmin() || ownsResource();
+    }
+
+    match /Community/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.owner_email == ownEmail();
+      allow update: if isAdmin()
+        || resource.data.owner_email == ownEmail()
+        || onlyChanged(['member_emails', 'updated_date', 'updated_at']);
+      allow delete: if isAdmin() || resource.data.owner_email == ownEmail();
+    }
+
+    match /ServerChannel/{id} {
+      allow read: if signedIn();
+      allow create: if managesCommunity(request.resource.data.community_id);
+      allow update, delete: if managesCommunity(resource.data.community_id);
+    }
+
+    match /ServerRole/{id} {
+      allow read: if signedIn();
+      allow create: if managesCommunity(request.resource.data.community_id);
+      allow update, delete: if managesCommunity(resource.data.community_id);
+    }
+
+    match /ServerMember/{id} {
+      allow read: if signedIn();
+      allow create: if managesCommunity(request.resource.data.community_id) || request.resource.data.user_email == ownEmail();
+      allow update, delete: if managesCommunity(resource.data.community_id) || resource.data.user_email == ownEmail();
+    }
+
+    match /ChannelMessage/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.user_email == ownEmail();
+      allow update: if isAdmin()
+        || resource.data.user_email == ownEmail()
+        || managesCommunity(resource.data.community_id)
+        || onlyChanged(['reactions', 'thread_count', 'updated_date', 'updated_at']);
+      allow delete: if isAdmin() || resource.data.user_email == ownEmail() || managesCommunity(resource.data.community_id);
+    }
+
+    match /Friendship/{id} {
+      allow read: if signedIn() && (resource.data.requester_email == ownEmail() || resource.data.receiver_email == ownEmail() || isAdmin());
+      allow create: if signedIn() && request.resource.data.requester_email == ownEmail();
+      allow update, delete: if isAdmin() || resource.data.requester_email == ownEmail() || resource.data.receiver_email == ownEmail();
+    }
+
+    match /GroupChat/{id} {
+      allow read: if signedIn() && (ownEmail() in resource.data.member_emails || isAdmin());
+      allow create: if signedIn() && ownEmail() in request.resource.data.member_emails;
+      allow update, delete: if isAdmin() || resource.data.owner_email == ownEmail();
+    }
+
+
+    match /DirectMessage/{id} {
+      allow read: if signedIn() && (ownEmail() in resource.data.member_emails || isAdmin());
+      allow create: if signedIn()
+        && ownEmail() in request.resource.data.member_emails
+        && request.resource.data.user_email == ownEmail();
+      allow update: if isAdmin()
+        || (resource.data.user_email == ownEmail() && onlyChanged(['content', 'is_edited', 'read_by', 'reactions', 'updated_date', 'updated_at']))
+        || (ownEmail() in resource.data.member_emails && onlyChanged(['read_by', 'reactions', 'updated_date', 'updated_at']));
+      allow delete: if isAdmin() || resource.data.user_email == ownEmail();
+    }
+
+    match /ArtworkPing/{id} {
+      allow read: if signedIn() && (resource.data.from_email == ownEmail() || resource.data.to_email == ownEmail() || isAdmin());
+      allow create: if signedIn() && request.resource.data.from_email == ownEmail();
+      allow update, delete: if isAdmin() || resource.data.from_email == ownEmail() || resource.data.to_email == ownEmail();
+    }
+
+    match /Notification/{id} {
+      allow read, update, delete: if signedIn() && (resource.data.to_email == ownEmail() || isAdmin());
+      allow create: if signedIn();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

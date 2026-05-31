@@ -1,0 +1,5 @@
+import React from "react";
+const FILTERS=[{value:"all",label:"All"},{value:"painting",label:"Painting"},{value:"digital",label:"Digital"},{value:"drawing",label:"Drawing"},{value:"photography",label:"Photography"},{value:"sculpture",label:"Sculpture"},{value:"mixed_media",label:"Mixed Media"},{value:"other",label:"Other"}];
+export default function FilterBar({selectedMedium,onMediumChange}){
+  return(<div className="flex gap-2 overflow-x-auto pb-1 mb-3" style={{scrollbarWidth:"none"}}>{FILTERS.map(f=><button key={f.value} onClick={()=>onMediumChange(f.value)} className="flex-shrink-0 text-xs px-3.5 py-1.5 rounded-full font-medium" style={selectedMedium===f.value?{background:"var(--accent-pink)",color:"white"}:{background:"var(--pink-soft)",color:"var(--text-secondary)"}}>{f.label}</button>)}</div>);
+}

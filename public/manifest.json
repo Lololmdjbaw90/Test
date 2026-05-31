@@ -1,0 +1,11 @@
+{
+  "name": "Mimi Locks",
+  "short_name": "Mimi Locks",
+  "description": "Mimi Locks",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fdf8f9",
+  "theme_color": "#e8a0b4",
+  "icons": []
+}

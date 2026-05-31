@@ -1,0 +1,313 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+    --primary: 340 70% 75%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 340 30% 96%;
+    --secondary-foreground: 340 40% 40%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 50%;
+    --accent: 340 30% 95%;
+    --accent-foreground: 340 50% 50%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 340 20% 90%;
+    --input: 340 20% 92%;
+    --ring: 340 70% 75%;
+    --radius: .75rem;
+
+    /* Mimi Locks custom palette (used via var(--token) in inline styles) */
+    --pink: #e8a0b4;
+    --pink-light: #f5c6d6;
+    --pink-soft: #fdf0f4;
+    --pink-muted: #fae8ef;
+    --rose: #d4708a;
+    --rose-dark: #c0526e;
+    --white: #ffffff;
+    --off-white: #fdf8f9;
+    --gray-50: #f9f9f9;
+    --gray-100: #f0f0f0;
+    --gray-200: #e0e0e0;
+    --gray-300: #c8c8c8;
+    --gray-400: #a0a0a0;
+    --gray-500: #707070;
+    --gray-700: #333333;
+    --gray-900: #111111;
+    --app-bg: #fdf8f9;
+    --surface: #ffffff;
+    --border-c: #f0e4ea;
+    --text-primary: #1a1a1a;
+    --text-secondary: #666666;
+    --text-muted: #999999;
+    --accent-pink: #e8a0b4;
+    --accent-rose: #d4708a;
+  }
+
+  .dark {
+    --background: 340 10% 8%;
+    --foreground: 340 20% 92%;
+    --card: 340 10% 11%;
+    --card-foreground: 340 20% 92%;
+    --popover: 340 10% 11%;
+    --popover-foreground: 340 20% 92%;
+    --primary: 340 55% 65%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 340 10% 16%;
+    --secondary-foreground: 340 20% 80%;
+    --muted: 340 8% 14%;
+    --muted-foreground: 340 10% 55%;
+    --accent: 340 10% 16%;
+    --accent-foreground: 340 20% 82%;
+    --destructive: 0 65% 48%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 340 10% 18%;
+    --input: 340 10% 16%;
+    --ring: 340 55% 65%;
+
+    --app-bg: #100a0d;
+    --surface: #1a1015;
+    --border-c: #2a1a20;
+    --text-primary: #f0e8ec;
+    --text-secondary: #9a8590;
+    --text-muted: #5a4550;
+    --accent-pink: #d4708a;
+    --accent-rose: #c0526e;
+    --pink-soft: rgba(212, 112, 138, .08);
+    --pink-muted: rgba(212, 112, 138, .06);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer components {
+  .app-shell {
+    background:
+      radial-gradient(circle at top left, rgba(232, 160, 180, 0.18), transparent 32rem),
+      linear-gradient(180deg, var(--app-bg), var(--app-bg));
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border-c);
+    border-radius: 1.25rem;
+    box-shadow: 0 10px 30px rgba(148, 83, 103, 0.07);
+  }
+
+  .card-sm {
+    background: var(--surface);
+    border: 1px solid var(--border-c);
+    border-radius: 1rem;
+    box-shadow: 0 6px 18px rgba(148, 83, 103, 0.055);
+  }
+
+  .card,
+  .card-sm {
+    transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease, background 160ms ease;
+  }
+
+  .card:hover,
+  .card-sm:hover {
+    border-color: color-mix(in srgb, var(--accent-pink) 42%, var(--border-c));
+    box-shadow: 0 16px 42px rgba(148, 83, 103, 0.12);
+  }
+
+  .badge-pink {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    background: var(--pink-soft);
+    color: var(--accent-rose);
+    border: 1px solid color-mix(in srgb, var(--accent-pink) 26%, transparent);
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    line-height: 1;
+    padding: 0.32rem 0.65rem;
+  }
+
+  .btn,
+  .btn-outline,
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border-radius: 999px;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    min-height: 2.35rem;
+    transition: transform 140ms ease, background 140ms ease, border-color 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
+  }
+
+  .btn {
+    background: linear-gradient(135deg, var(--accent-pink), var(--accent-rose));
+    color: #fff;
+    border: 1px solid transparent;
+    padding: 0.6rem 1.35rem;
+    box-shadow: 0 9px 18px rgba(212, 112, 138, 0.24);
+  }
+
+  .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 24px rgba(212, 112, 138, 0.28);
+  }
+
+  .btn-outline {
+    background: color-mix(in srgb, var(--surface) 88%, var(--pink-soft));
+    color: var(--accent-rose);
+    border: 1px solid color-mix(in srgb, var(--accent-pink) 55%, var(--border-c));
+    padding: 0.55rem 1.2rem;
+  }
+
+  .btn-outline:hover {
+    background: var(--pink-soft);
+    transform: translateY(-1px);
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid transparent;
+    padding: 0.5rem 1rem;
+  }
+
+  .btn-ghost:hover {
+    background: var(--pink-soft);
+    color: var(--accent-rose);
+  }
+
+  .btn:active,
+  .btn-outline:active,
+  .btn-ghost:active {
+    transform: translateY(0);
+  }
+
+  .btn:disabled,
+  .btn-outline:disabled,
+  .btn-ghost:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+    transform: none;
+    box-shadow: none;
+  }
+
+  .input {
+    width: 100%;
+    min-height: 2.55rem;
+    background: color-mix(in srgb, var(--surface) 78%, var(--app-bg));
+    border: 1px solid var(--border-c);
+    border-radius: 0.9rem;
+    padding: 0.68rem 0.9rem;
+    color: var(--text-primary);
+    outline: none;
+    font: inherit;
+    transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+  }
+
+  .input:focus {
+    border-color: var(--accent-pink);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-pink) 18%, transparent);
+    background: var(--surface);
+  }
+
+  .input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border-c);
+  }
+
+  .skeleton {
+    border-radius: 0.85rem;
+    background: linear-gradient(90deg, var(--pink-soft) 25%, var(--pink-muted) 37%, var(--pink-soft) 63%);
+    background-size: 400% 100%;
+    animation: shimmer 1.35s ease-in-out infinite;
+  }
+}
+
+@layer utilities {
+  .scroll {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--accent-pink) 42%, transparent) transparent;
+  }
+
+  .scroll::-webkit-scrollbar {
+    width: 0.45rem;
+    height: 0.45rem;
+  }
+
+  .scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scroll::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--accent-pink) 35%, transparent);
+    border-radius: 999px;
+  }
+
+  .scroll::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--accent-pink) 55%, transparent);
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  background: var(--app-bg);
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+img {
+  max-width: 100%;
+}
+
+/* --- small UI polish --- */
+::selection {
+  background: color-mix(in srgb, var(--accent-pink) 28%, transparent);
+  color: var(--text-primary);
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-pink) 60%, transparent);
+  outline-offset: 2px;
+  border-radius: 8px;
+}

@@ -1,0 +1,20 @@
+import React, { useState } from "react";
+import { base44 } from "@/api/base44Client";
+import { Palette, Check } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+export const NAME_STYLES = [
+  {id:"default",label:"Default",preview:()=>({fontFamily:"Inter,sans-serif",fontWeight:700,color:"var(--text-primary)",fontSize:"1.25rem"})},
+  {id:"glow-pink",label:"Pink Glow",preview:()=>({fontFamily:"Inter,sans-serif",fontWeight:700,color:"#e8a0b4",textShadow:"0 0 12px rgba(232,160,180,0.9),0 0 30px rgba(232,160,180,0.5)",fontSize:"1.25rem"})},
+  {id:"glow-purple",label:"Purple Glow",preview:()=>({fontFamily:"Inter,sans-serif",fontWeight:700,color:"#c084fc",textShadow:"0 0 12px rgba(192,132,252,0.9),0 0 30px rgba(192,132,252,0.5)",fontSize:"1.25rem"})},
+  {id:"glow-gold",label:"Gold Glow",preview:()=>({fontFamily:"Inter,sans-serif",fontWeight:700,color:"#fbbf24",textShadow:"0 0 12px rgba(251,191,36,0.9),0 0 30px rgba(251,191,36,0.4)",fontSize:"1.25rem"})},
+  {id:"aurora",label:"Aurora",preview:()=>({fontFamily:"Inter,sans-serif",fontWeight:800,background:"linear-gradient(90deg,#e8a0b4,#c084fc,#60a5fa,#e8a0b4)",backgroundSize:"200%",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",fontSize:"1.25rem"})},
+  {id:"neon",label:"Neon",preview:()=>({fontFamily:"Inter,sans-serif",fontWeight:900,color:"#fff",textShadow:"0 0 6px #fff,0 0 20px #e8a0b4,0 0 40px #d4708a,0 0 80px #c0526e",fontSize:"1.25rem"})},
+  {id:"italic-serif",label:"Italic Serif",preview:()=>({fontFamily:"'Playfair Display',Georgia,serif",fontWeight:700,fontStyle:"italic",color:"var(--text-primary)",fontSize:"1.3rem"})},
+  {id:"bold-serif",label:"Bold Serif",preview:()=>({fontFamily:"'Playfair Display',Georgia,serif",fontWeight:900,color:"var(--accent-rose)",textShadow:"0 0 16px rgba(212,112,138,0.35)",fontSize:"1.3rem"})},
+];
+export function getNameStyle(styleId){return NAME_STYLES.find(s=>s.id===styleId)||NAME_STYLES[0];}
+export default function NameStylePicker({currentStyle,name,onSave}){
+  const[open,setOpen]=useState(false);const[saving,setSaving]=useState(false);const[selected,setSelected]=useState(currentStyle||"default");
+  const handleSave=async(styleId)=>{setSaving(true);setSelected(styleId);await base44.auth.updateMe({name_style:styleId});onSave(styleId);setSaving(false);setOpen(false);};
+  return(<div className="relative"><button onClick={()=>setOpen(o=>!o)} className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full" style={{background:"var(--pink-soft)",color:"var(--accent-rose)",border:"1px solid var(--border-c)"}}><Palette className="w-3 h-3"/>Style</button><AnimatePresence>{open&&<motion.div initial={{opacity:0,y:8,scale:0.95}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:8,scale:0.95}} className="absolute left-0 top-8 z-50 w-72 rounded-2xl shadow-2xl overflow-hidden" style={{background:"var(--surface)",border:"1px solid var(--border-c)"}}><div className="px-4 py-3 border-b" style={{borderColor:"var(--border-c)"}}><p className="text-xs font-semibold" style={{color:"var(--text-primary)"}}>Choose name style</p></div><div className="p-2 space-y-1 max-h-72 overflow-y-auto scroll">{NAME_STYLES.map(style=>{const isActive=selected===style.id;return(<button key={style.id} onClick={()=>handleSave(style.id)} disabled={saving} className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left" style={isActive?{background:"var(--pink-soft)"}:{}} onMouseEnter={e=>!isActive&&(e.currentTarget.style.background="var(--pink-soft)")} onMouseLeave={e=>!isActive&&(e.currentTarget.style.background="transparent")}><span style={style.preview()}>{name}</span>{isActive&&<Check className="w-3.5 h-3.5 flex-shrink-0" style={{color:"var(--accent-pink)"}}/>}</button>);})}</div></motion.div>}</AnimatePresence>{open&&<div className="fixed inset-0 z-40" onClick={()=>setOpen(false)}/>}</div>);
+}
