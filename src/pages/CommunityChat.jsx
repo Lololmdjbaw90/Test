@@ -18,6 +18,7 @@ import ServerSettingsModal from "@/components/server/ServerSettingsModal";
 import ChannelSettingsModal from "@/components/server/ChannelSettingsModal";
 import AddChannelModal from "@/components/server/AddChannelModal";
 import VoiceChannelView from "@/components/server/VoiceChannelView";
+import ProfileCard from "@/components/server/ProfileCard";
 
 export default function CommunityChatPage() {
   const navigate = useNavigate();
@@ -31,6 +32,8 @@ export default function CommunityChatPage() {
   const [channelSettings, setChannelSettings] = useState(null);
   const [addChannel, setAddChannel] = useState(null);
   const [joining, setJoining] = useState(false);
+  const [profileTarget, setProfileTarget] = useState(null); // { email, anchor, placement }
+  const openProfile = (placement) => (email, anchor) => setProfileTarget({ email, anchor, placement });
 
   const { data: communities, loading } = useLiveQuery("Community", { id: communityId }, { enabled: !!communityId });
   const community = communities[0] || null;
@@ -148,25 +151,37 @@ export default function CommunityChatPage() {
             <div className="flex-1 min-h-0 flex flex-col"><VoiceChannelView key={activeChannel.id} channel={activeChannel} me={me} /></div>
           </div>
         ) : (
-          <ChatArea channel={activeChannel} community={community} me={me} roles={roles} members={members} myRoleIds={myMember?.roles || []} canManage={canManage} onOpenSidebar={() => setShowSidebar(true)} onToggleMembers={() => setShowMembers((v) => !v)} showMembers={showMembers} />
+          <ChatArea channel={activeChannel} community={community} me={me} roles={roles} members={members} myRoleIds={myMember?.roles || []} canManage={canManage} onOpenSidebar={() => setShowSidebar(true)} onToggleMembers={() => setShowMembers((v) => !v)} showMembers={showMembers} onOpenProfile={openProfile("right-start")} />
         )}
       </main>
 
       <AnimatePresence initial={false}>
         {showMembers && (
           <motion.div initial={{ width: 0, opacity: 0 }} animate={{ width: 260, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ type: "spring", damping: 32, stiffness: 320 }} className="hidden lg:flex flex-shrink-0 h-full overflow-hidden">
-            <div className="w-[260px] h-full"><MemberList members={members} roles={roles} usersByEmail={usersByEmail} community={community} me={me} canManage={canManage} onKick={kick} onRoleChange={changeRole} onClose={() => setShowMembers(false)} /></div>
+            <div className="w-[260px] h-full"><MemberList members={members} roles={roles} usersByEmail={usersByEmail} community={community} onOpenProfile={openProfile("left-start")} onClose={() => setShowMembers(false)} /></div>
           </motion.div>
         )}
       </AnimatePresence>
       <AnimatePresence>
         {showMembers && (
           <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", damping: 32, stiffness: 320 }} className="lg:hidden fixed right-0 top-0 bottom-0 w-[82vw] max-w-xs z-[90] flex" style={{ background: "var(--surface)", boxShadow: "var(--shadow-lg)" }}>
-            <MemberList members={members} roles={roles} usersByEmail={usersByEmail} community={community} me={me} canManage={canManage} onKick={kick} onRoleChange={changeRole} onClose={() => setShowMembers(false)} />
+            <MemberList members={members} roles={roles} usersByEmail={usersByEmail} community={community} onOpenProfile={openProfile("left-start")} onClose={() => setShowMembers(false)} />
           </motion.div>
         )}
       </AnimatePresence>
 
+      <ProfileCard
+        target={profileTarget}
+        onClose={() => setProfileTarget(null)}
+        user={profileTarget ? usersByEmail[profileTarget.email] : null}
+        member={profileTarget ? members.find((m) => m.user_email === profileTarget.email) : null}
+        roles={roles}
+        community={community}
+        me={me}
+        canManage={canManage}
+        onRoleChange={changeRole}
+        onKick={kick}
+      />
       <ServerSettingsModal open={showSettings} community={community} members={members} roles={roles} usersByEmail={usersByEmail} me={me} onClose={() => setShowSettings(false)} onKick={kick} onRoleChange={changeRole} />
       <ChannelSettingsModal channel={channelSettings} roles={roles} onClose={() => setChannelSettings(null)} onDeleted={(ch) => { if (ch.id === activeChannel?.id) setParams({ id: communityId }, { replace: true }); }} />
       <AddChannelModal open={!!addChannel} defaultType={addChannel || "text"} communityId={communityId} channelCount={channels.length} onClose={() => setAddChannel(null)} onCreated={(ch) => selectChannel(ch)} />

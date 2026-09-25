@@ -1,13 +1,15 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ChevronDown, Hash, Link2, Lock, LogOut, Plus, Settings, Users, Volume2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, Hash, Link2, Lock, LogOut, MicOff, Plus, Settings, Users, Video, Volume2 } from "lucide-react";
 import { VOICE_STALE_MS } from "@/lib/voice";
+import { useVoice } from "@/components/voice/useVoice";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { toast } from "@/lib/toast";
 import Avatar from "@/components/common/Avatar";
+import Popover from "@/components/common/Popover";
 
-function ChannelRow({ ch, active, canManage, onSelect, onSettings, voicePeers }) {
+function ChannelRow({ ch, active, canManage, onSelect, onSettings, voicePeers, live }) {
   const Icon = ch.type === "voice" ? Volume2 : Hash;
   const locked = ch.allowed_roles?.length > 0;
   const inVoice = ch.type === "voice" ? voicePeers.filter((p) => p.channel_id === ch.id) : [];
@@ -26,13 +28,19 @@ function ChannelRow({ ch, active, canManage, onSelect, onSettings, voicePeers })
       </div>
       {inVoice.length > 0 && (
         <div className="ml-8 mb-1 space-y-0.5">
-          {inVoice.map((p) => (
-            <div key={p.id} className="flex items-center gap-2 py-1 text-xs" style={{ color: "var(--text-secondary)" }}>
-              <Avatar src={p.user?.profile_picture} name={p.user?.display_name} size={20} />
-              <span className="truncate flex-1">{p.user?.display_name || "Someone"}</span>
-              {p.muted && <span className="text-[10px]" title="Muted">🔇</span>}
-            </div>
-          ))}
+          {inVoice.map((p) => {
+            // Live speaking / mute state for the channel we're connected to.
+            const l = live?.find((x) => x.peerId === p.peer_id);
+            const muted = l ? l.muted : p.muted;
+            return (
+              <div key={p.id} className="flex items-center gap-2 py-1 text-xs" style={{ color: l?.speaking ? "var(--text-primary)" : "var(--text-secondary)" }}>
+                <span className="rounded-full transition-shadow duration-150" style={{ boxShadow: l?.speaking ? "0 0 0 2px #3ddc97" : "none" }}><Avatar src={p.user?.profile_picture} name={p.user?.display_name} size={20} /></span>
+                <span className="truncate flex-1" style={{ fontWeight: l?.speaking ? 700 : 500 }}>{p.user?.display_name || "Someone"}</span>
+                {p.video && <Video className="w-3 h-3 flex-shrink-0 opacity-70" />}
+                {muted && <MicOff className="w-3 h-3 flex-shrink-0" style={{ color: "var(--danger)" }} aria-label="Muted" />}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -41,10 +49,12 @@ function ChannelRow({ ch, active, canManage, onSelect, onSettings, voicePeers })
 
 export default function ServerSidebar({ community, channels, activeChannel, canManage, isOwner, memberCount, onSelectChannel, onAddChannel, onChannelSettings, onServerSettings, onMembers, onLeave }) {
   const [menu, setMenu] = useState(false);
+  const menuRef = useRef(null);
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 15000); return () => clearInterval(t); }, []);
   const { data: presence } = useLiveQuery("VoicePresence", { community_id: community.id });
   const voicePeers = presence.filter((p) => now - (p.last_active || 0) < VOICE_STALE_MS);
+  const vs = useVoice();
   const text = channels.filter((c) => c.type !== "voice");
   const voiceChannels = channels.filter((c) => c.type === "voice");
   const invite = async () => {
@@ -61,24 +71,19 @@ export default function ServerSidebar({ community, channels, activeChannel, canM
           <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgb(20 8 14 / 0.6), transparent)" }} />
           <Link to="/Communities" className="absolute top-2.5 left-2.5 icon-btn glass w-8 h-8" aria-label="Back to servers"><ArrowLeft className="w-4 h-4" /></Link>
         </div>
-        <button onClick={() => setMenu((v) => !v)} className="absolute bottom-0 inset-x-0 flex items-center gap-2 px-3 py-2.5 text-white text-left" aria-expanded={menu}>
+        <button ref={menuRef} onClick={() => setMenu((v) => !v)} className="absolute bottom-0 inset-x-0 flex items-center gap-2 px-3 py-2.5 text-white text-left" aria-expanded={menu}>
           <span className="w-8 h-8 rounded-xl flex items-center justify-center text-lg overflow-hidden flex-shrink-0" style={{ background: "rgb(255 255 255 / 0.25)" }}>{community.icon_url ? <img src={community.icon_url} alt="" className="w-full h-full object-cover" /> : community.icon_emoji || "💬"}</span>
           <span className="flex-1 min-w-0 font-display text-lg font-semibold truncate drop-shadow">{community.name}</span>
           <motion.span animate={{ rotate: menu ? 180 : 0 }}><ChevronDown className="w-4 h-4" /></motion.span>
         </button>
-        <AnimatePresence>
-          {menu && (
-            <>
-              <div className="fixed inset-0 z-30" onClick={() => setMenu(false)} />
-              <motion.div initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6 }} className="absolute left-2 right-2 top-full mt-1 z-40 rounded-2xl p-1.5" style={{ background: "var(--surface)", border: "1px solid var(--border-c)", boxShadow: "var(--shadow-lg)" }}>
-                <button onClick={invite} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[var(--pink-soft)]" style={{ color: "var(--accent-rose)" }}><Link2 className="w-4 h-4" /> Copy invite link</button>
-                {canManage && <button onClick={() => { setMenu(false); onServerSettings(); }} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[var(--surface-2)]" style={{ color: "var(--text-secondary)" }}><Settings className="w-4 h-4" /> Server settings</button>}
-                {canManage && <button onClick={() => { setMenu(false); onAddChannel("text"); }} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[var(--surface-2)]" style={{ color: "var(--text-secondary)" }}><Plus className="w-4 h-4" /> Create channel</button>}
-                {!isOwner && <button onClick={() => { setMenu(false); onLeave(); }} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[var(--surface-2)]" style={{ color: "var(--danger)" }}><LogOut className="w-4 h-4" /> Leave server</button>}
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
+        <Popover open={menu} onClose={() => setMenu(false)} anchorRef={menuRef} placement="bottom-start" width={240} label="Server menu">
+          <div className="p-1.5">
+            <button onClick={invite} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[var(--pink-soft)]" style={{ color: "var(--accent-rose)" }}><Link2 className="w-4 h-4" /> Copy invite link</button>
+            {canManage && <button onClick={() => { setMenu(false); onServerSettings(); }} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[var(--surface-2)]" style={{ color: "var(--text-secondary)" }}><Settings className="w-4 h-4" /> Server settings</button>}
+            {canManage && <button onClick={() => { setMenu(false); onAddChannel("text"); }} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[var(--surface-2)]" style={{ color: "var(--text-secondary)" }}><Plus className="w-4 h-4" /> Create channel</button>}
+            {!isOwner && <button onClick={() => { setMenu(false); onLeave(); }} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[var(--surface-2)]" style={{ color: "var(--danger)" }}><LogOut className="w-4 h-4" /> Leave server</button>}
+          </div>
+        </Popover>
       </div>
 
       <div className="flex-1 overflow-y-auto no-scrollbar px-2 py-3 space-y-4">
@@ -90,7 +95,7 @@ export default function ServerSidebar({ community, channels, activeChannel, canM
                 {canManage && <button onClick={() => onAddChannel(group.type)} className="icon-btn w-6 h-6" aria-label={`Add ${group.type} channel`}><Plus className="w-3.5 h-3.5" /></button>}
               </div>
               <div className="space-y-0.5">
-                {group.list.map((ch) => <ChannelRow key={ch.id} ch={ch} active={activeChannel?.id === ch.id} canManage={canManage} onSelect={onSelectChannel} onSettings={onChannelSettings} voicePeers={voicePeers} />)}
+                {group.list.map((ch) => <ChannelRow key={ch.id} ch={ch} active={activeChannel?.id === ch.id} canManage={canManage} onSelect={onSelectChannel} onSettings={onChannelSettings} voicePeers={voicePeers} live={vs.room?.id === ch.id ? vs.participants : null} />)}
               </div>
             </div>
           )

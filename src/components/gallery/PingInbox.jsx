@@ -1,31 +1,28 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
 import { BellRing, Trash2, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { timeAgo } from "@/lib/format";
 import Avatar from "@/components/common/Avatar";
+import Popover from "@/components/common/Popover";
 
 export default function PingInbox() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
+  const ref = useRef(null);
   const { data: pings, setData } = useLiveQuery("ArtworkPing", user ? { to_email: user.email } : null, { sort: "-created_date", limit: 30, enabled: !!user });
   if (!user) return null;
   const del = async (id) => { setData((p) => p.filter((x) => x.id !== id)); await base44.entities.ArtworkPing.delete(id).catch(() => {}); };
 
   return (
     <div className="relative">
-      <button onClick={() => setOpen((o) => !o)} className="btn-outline relative" aria-expanded={open}>
+      <button ref={ref} onClick={() => setOpen((o) => !o)} className="btn-outline relative" aria-expanded={open}>
         <BellRing className="w-4 h-4" /> Pings
         {pings.length > 0 && <span className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center" style={{ background: "var(--accent-rose)" }}>{pings.length > 9 ? "9+" : pings.length}</span>}
       </button>
-      <AnimatePresence>
-        {open && (
-          <>
-            <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-            <motion.div initial={{ opacity: 0, y: 8, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8 }} className="absolute right-0 top-12 z-40 w-80 rounded-3xl overflow-hidden" style={{ background: "var(--surface)", border: "1px solid var(--border-c)", boxShadow: "var(--shadow-lg)" }}>
+      <Popover open={open} onClose={() => setOpen(false)} anchorRef={ref} placement="bottom-end" width={330} label="Pings">
               <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: "var(--border-c)" }}>
                 <span className="font-display font-semibold" style={{ color: "var(--text-primary)" }}>Pings</span>
                 <button onClick={() => setOpen(false)} className="icon-btn w-7 h-7" aria-label="Close"><X className="w-4 h-4" /></button>
@@ -48,10 +45,7 @@ export default function PingInbox() {
                   </div>
                 ))}
               </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      </Popover>
     </div>
   );
 }

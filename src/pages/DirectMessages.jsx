@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Check, Crown, Info, Loader2, LogOut, MessageSquare, Plus, Trash2, UserPlus, Users } from "lucide-react";
+import { ArrowLeft, Check, Crown, Info, Loader2, LogOut, MessageSquare, Phone, PhoneCall, Plus, Trash2, UserPlus, Users, Video } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -12,6 +12,9 @@ import { SearchInput } from "@/components/common/Controls";
 import Modal, { useConfirm } from "@/components/common/Modal";
 import Avatar from "@/components/common/Avatar";
 import DMChatWindow from "@/components/dm/DMChatWindow";
+import voice, { VOICE_STALE_MS } from "@/lib/voice";
+import { isLiveCall, joinCall, messagePreview, startCall } from "@/lib/calls";
+import { useNow, useVoice } from "@/components/voice/useVoice";
 
 function GroupIcon({ group, size = 44 }) {
   const initials = (group?.name || "G").slice(0, 1).toUpperCase();
@@ -163,6 +166,27 @@ export default function DirectMessagesPage() {
   const close = () => setParams({});
   useEffect(() => { setShowInfo(false); }, [activeId]);
 
+  // Calls: header buttons + "call in progress" banner for this conversation.
+  const vs = useVoice();
+  const now = useNow(5000);
+  const { data: calls } = useLiveQuery("Call", { member_emails: { $contains: me.email } }, { sort: "-created_date", limit: 15 });
+  const liveCall = active ? calls.find((c) => c.conversation_id === active.id && isLiveCall(c, now)) : null;
+  const { data: callPresence } = useLiveQuery("VoicePresence", liveCall ? { channel_id: liveCall.id } : null, { enabled: !!liveCall });
+  const inCallPeople = liveCall ? callPresence.filter((p) => now - (p.last_active || 0) < VOICE_STALE_MS) : [];
+  const inThisCall = !!liveCall && vs.room?.id === liveCall.id;
+  const joinable = liveCall && !inThisCall && inCallPeople.length > 0;
+  const [calling, setCalling] = useState(false);
+  const call = async (video) => {
+    if (!active) return;
+    if (inThisCall) { voice.setExpanded(true); return; }
+    setCalling(true);
+    try {
+      if (joinable) await joinCall(liveCall, me, { video });
+      else await startCall({ conversation: active, me, video, pictures: Object.fromEntries(users.map((u) => [u.email, u.profile_picture || ""])) });
+    } catch (e) { toast.error(e?.message || "Could not start the call."); }
+    setCalling(false);
+  };
+
   const q = search.trim().toLowerCase();
   const visible = conversations.filter((c) => !q || (c.type === "group" ? c.group.name : displayName(c.otherUser)).toLowerCase().includes(q));
 
@@ -185,7 +209,7 @@ export default function DirectMessagesPage() {
         {visible.map((c, i) => {
           const isActive = c.id === activeId;
           const title = c.type === "group" ? c.group.name : displayName(c.otherUser);
-          const preview = c.last ? `${c.last.user_email === me.email ? "You: " : c.type === "group" ? `${c.last.user_display_name?.split(" ")[0]}: ` : ""}${c.last.content || "📷 Image"}` : c.type === "group" ? `${c.group.member_emails.length} members` : "Say hi 👋";
+          const preview = c.last ? `${c.last.user_email === me.email ? "You: " : c.type === "group" ? `${c.last.user_display_name?.split(" ")[0]}: ` : ""}${messagePreview(c.last, me.email)}` : c.type === "group" ? `${c.group.member_emails.length} members` : "Say hi 👋";
           return (
             <motion.button key={c.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(i, 10) * 0.03 }} onClick={() => open(c)} className="relative w-full flex items-center gap-3 p-2.5 rounded-2xl text-left transition-colors hover:bg-[var(--surface-2)]">
               {isActive && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 rounded-2xl" style={{ background: "var(--pink-soft)", boxShadow: "inset 0 0 0 1px rgb(var(--accent-rgb) / 0.2)" }} transition={{ type: "spring", stiffness: 420, damping: 34 }} />}
@@ -207,6 +231,15 @@ export default function DirectMessagesPage() {
     </div>
   );
 
+  const callButtons = inThisCall ? (
+    <button onClick={() => voice.setExpanded(true)} className="btn !px-3 text-xs" style={{ background: "linear-gradient(90deg,#15803d,#22c55e)" }}><PhoneCall className="w-4 h-4" /> <span className="hidden sm:inline">Return to call</span></button>
+  ) : (
+    <>
+      <button onClick={() => call(false)} disabled={calling} className="icon-btn" aria-label="Start voice call" title="Voice call">{calling ? <Loader2 className="w-5 h-5 animate-spin" /> : <Phone className="w-5 h-5" />}</button>
+      <button onClick={() => call(true)} disabled={calling} className="icon-btn" aria-label="Start video call" title="Video call"><Video className="w-5 h-5" /></button>
+    </>
+  );
+
   const chat = active ? (
     <div className="flex flex-col h-full min-h-0">
       <div className="h-16 flex-shrink-0 flex items-center gap-3 px-3 sm:px-5 glass" style={{ borderBottom: "1px solid var(--border-c)" }}>
@@ -218,6 +251,7 @@ export default function DirectMessagesPage() {
               <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{active.group.name}</p>
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>{active.group.member_emails.length} members · {active.group.member_emails.filter((e) => isOnline(usersByEmail[e])).length} online</p>
             </div>
+            {callButtons}
             <button onClick={() => setShowInfo(true)} className="icon-btn" aria-label="Group info"><Info className="w-5 h-5" /></button>
           </>
         ) : (
@@ -227,10 +261,19 @@ export default function DirectMessagesPage() {
               <Link to={profileLink(active.otherUser.email)} className="text-sm font-bold truncate block hover:underline" style={{ color: "var(--text-primary)" }}>{displayName(active.otherUser)}</Link>
               <p className="text-xs" style={{ color: isOnline(active.otherUser) ? "var(--success)" : "var(--text-muted)" }}>{isOnline(active.otherUser) ? "Online" : active.otherUser.last_seen ? `Active ${timeAgo(active.otherUser.last_seen)}` : "Offline"}</p>
             </div>
+            {callButtons}
           </>
         )}
       </div>
-      <div className="flex-1 min-h-0"><DMChatWindow key={active.id} conversation={active} me={me} /></div>
+      {joinable && (
+        <motion.button initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} onClick={() => call(false)} className="flex-shrink-0 flex items-center gap-3 px-4 py-2.5 text-left text-white" style={{ background: "linear-gradient(90deg, #15803d, #22c55e)" }}>
+          <PhoneCall className="w-4 h-4 flex-shrink-0" />
+          <span className="flex-1 min-w-0 text-sm font-semibold truncate">{liveCall.video ? "Video call" : "Call"} in progress · {inCallPeople.length} {inCallPeople.length === 1 ? "person" : "people"}</span>
+          <span className="flex -space-x-2">{inCallPeople.slice(0, 4).map((p) => <Avatar key={p.id} src={p.user?.profile_picture} name={p.user?.display_name} size={22} style={{ boxShadow: "0 0 0 2px #16a34a", borderRadius: 9999 }} />)}</span>
+          <span className="px-3 py-1 rounded-full text-xs font-bold" style={{ background: "rgb(255 255 255 / 0.22)" }}>Join</span>
+        </motion.button>
+      )}
+      <div className="flex-1 min-h-0"><DMChatWindow key={active.id} conversation={active} me={me} onCall={call} /></div>
     </div>
   ) : (
     <div className="h-full flex flex-col items-center justify-center text-center gap-4 p-8">

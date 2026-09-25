@@ -106,6 +106,7 @@ function canCreate(user, name, data) {
   if (name === "DirectMessage") return (data?.member_emails || []).includes(user.email) && same(data?.user_email, user.email);
   if (name === "GroupChat") return (data?.member_emails || []).includes(user.email);
   if (name === "VoicePresence" || name === "VoiceSignal") return same(data?.user_email, user.email);
+  if (name === "Call") return same(data?.caller_email, user.email) && (data?.member_emails || []).includes(user.email);
   return true;
 }
 function canUpdate(user, name, current, data = {}) {
@@ -128,6 +129,9 @@ function canUpdate(user, name, current, data = {}) {
         ((current?.member_emails || []).includes(email) && onlyChanged(data, ["member_emails", "member_display_names"]) && !(data.member_emails || []).includes(email));
     case "Notification": return same(current?.to_email, email);
     case "ArtworkPing": return same(current?.from_email, email) || same(current?.to_email, email);
+    case "Call":
+      return same(current?.caller_email, email) ||
+        ((current?.member_emails || []).includes(email) && onlyChanged(data, ["status", "declined_by", "joined_emails", "answered_at", "ended_at"]));
     default:
       if (LIKEABLE.includes(name) && onlyChanged(data, ["likes"])) return true;
       return isOwner(user, current);
@@ -151,6 +155,7 @@ function canDelete(user, name, current) {
     case "CommunityComment": return isOwner(user, current) || current?.post_id === `profile_${email}`;
     case "VoicePresence": return isOwner(user, current) || (current?.last_active || 0) < Date.now() - 60000;
     case "VoiceSignal": return isOwner(user, current) || same(current?.to_email, email);
+    case "Call": return same(current?.caller_email, email);
     default: return isOwner(user, current);
   }
 }
@@ -239,7 +244,7 @@ export const ENTITY_NAMES = [
   "Artwork", "ArtworkPing", "ChannelMessage", "Comment", "Commission", "Community",
   "CommunityComment", "CommunityPost", "DirectMessage", "Friendship", "GroupChat", "Log", "MusicReview",
   "Notification", "ServerChannel", "ServerMember", "ServerRole", "SiteConfig", "User",
-  "VoicePresence", "VoiceSignal",
+  "VoicePresence", "VoiceSignal", "Call",
 ];
 const entities = {};
 ENTITY_NAMES.forEach((n) => { entities[n] = makeEntity(n); });

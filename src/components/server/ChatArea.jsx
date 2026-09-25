@@ -17,7 +17,7 @@ import { QUICK_REACTIONS } from "@/components/chat/EmojiPicker";
 
 const compact = (s) => String(s || "").replace(/\s+/g, "").toLowerCase();
 
-function MessageItem({ msg, grouped, me, roleColor, mentionsMe, canPin, canDelete, onReply, onEdit, onDelete, onPin, onReact, onJumpTo }) {
+function MessageItem({ msg, grouped, me, roleColor, mentionsMe, canPin, canDelete, onReply, onEdit, onDelete, onPin, onReact, onJumpTo, onOpenProfile, tapped, onTap }) {
   const [picker, setPicker] = useState(false);
   const own = msg.user_email === me.email;
   if (msg.type === "join" || msg.user_email === "__system__") {
@@ -37,10 +37,11 @@ function MessageItem({ msg, grouped, me, roleColor, mentionsMe, canPin, canDelet
       className={`group relative flex gap-3 px-4 sm:px-6 ${grouped ? "py-0.5" : "pt-3 pb-0.5"} transition-colors hover:bg-[var(--surface-2)]`}
       style={mentionsMe ? { background: "rgb(240 160 32 / 0.08)", boxShadow: "inset 3px 0 0 #f0a020" } : undefined}
       onMouseLeave={() => setPicker(false)}
+      onClick={(e) => { if (window.matchMedia("(hover: none)").matches && !e.target.closest("button,a,input,textarea")) onTap?.(msg.id); }}
     >
       <div className="w-10 flex-shrink-0">
         {!grouped ? (
-          <Link to={profileLink(msg.user_email)}><Avatar src={msg.user_profile_picture} name={msg.user_display_name} size={40} /></Link>
+          <button onClick={(e) => onOpenProfile?.(msg.user_email, e.currentTarget)} className="rounded-full transition-[scale] hover:scale-105" aria-label={`View ${msg.user_display_name}'s profile`}><Avatar src={msg.user_profile_picture} name={msg.user_display_name} size={40} /></button>
         ) : (
           <span className="text-[10px] opacity-0 group-hover:opacity-100 block text-right pt-1" style={{ color: "var(--text-muted)" }}>{clockTime(msg.created_date)}</span>
         )}
@@ -53,7 +54,7 @@ function MessageItem({ msg, grouped, me, roleColor, mentionsMe, canPin, canDelet
         )}
         {!grouped && (
           <div className="flex items-baseline gap-2 flex-wrap">
-            <Link to={profileLink(msg.user_email)} className="text-sm font-bold hover:underline" style={{ color: roleColor || "var(--text-primary)" }}>{msg.user_display_name}</Link>
+            <button onClick={(e) => onOpenProfile?.(msg.user_email, e.currentTarget)} className="text-sm font-bold hover:underline" style={{ color: roleColor || "var(--text-primary)" }}>{msg.user_display_name}</button>
             <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>{clockTime(msg.created_date)}</span>
             {msg.is_pinned && <span className="text-[10px] font-bold flex items-center gap-0.5" style={{ color: "#f0a020" }}><Pin className="w-3 h-3" /> pinned</span>}
           </div>
@@ -68,7 +69,7 @@ function MessageItem({ msg, grouped, me, roleColor, mentionsMe, canPin, canDelet
           </div>
         )}
       </div>
-      <div className="absolute -top-3 right-4 sm:right-6 flex items-center gap-0.5 p-0.5 rounded-xl opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity z-10" style={{ background: "var(--surface)", border: "1px solid var(--border-c)", boxShadow: "var(--shadow-sm)" }}>
+      <div className={`absolute -top-3 right-4 sm:right-6 flex items-center gap-0.5 p-0.5 rounded-xl transition-opacity z-10 ${tapped ? "opacity-100" : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto"}`} style={{ background: "var(--surface)", border: "1px solid var(--border-c)", boxShadow: "var(--shadow-sm)" }}>
         <button onClick={() => setPicker((v) => !v)} className="icon-btn w-8 h-8" aria-label="Add reaction"><SmilePlus className="w-4 h-4" /></button>
         <button onClick={() => onReply(msg)} className="icon-btn w-8 h-8" aria-label="Reply"><Reply className="w-4 h-4" /></button>
         {own && msg.content && <button onClick={() => onEdit(msg)} className="icon-btn w-8 h-8" aria-label="Edit"><Pencil className="w-4 h-4" /></button>}
@@ -86,8 +87,9 @@ function MessageItem({ msg, grouped, me, roleColor, mentionsMe, canPin, canDelet
   );
 }
 
-export default function ChatArea({ channel, community, me, roles, members, myRoleIds, canManage, onOpenSidebar, onToggleMembers, showMembers }) {
+export default function ChatArea({ channel, community, me, roles, members, myRoleIds, canManage, onOpenSidebar, onToggleMembers, showMembers, onOpenProfile }) {
   const confirm = useConfirm();
+  const [tapped, setTapped] = useState(null); // message showing its action bar on touch screens
   const scrollRef = useRef(null);
   const [atBottom, setAtBottom] = useState(true);
   const [replyTo, setReplyTo] = useState(null);
@@ -233,7 +235,7 @@ export default function ChatArea({ channel, community, me, roles, members, myRol
                 return (
                   <React.Fragment key={m.id}>
                     {newDay && <div className="flex items-center gap-3 px-6 my-4"><div className="divider flex-1" /><span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>{dayLabel(m.created_date)}</span><div className="divider flex-1" /></div>}
-                    <MessageItem msg={m} grouped={grouped} me={me} roleColor={roleColorFor[m.user_email]} mentionsMe={mentionsMe} canPin={canManage} canDelete={m.user_email === me.email || canManage} onReply={setReplyTo} onEdit={setEditing} onDelete={remove} onPin={pin} onReact={react} onJumpTo={jumpTo} />
+                    <MessageItem msg={m} grouped={grouped} me={me} roleColor={roleColorFor[m.user_email]} mentionsMe={mentionsMe} canPin={canManage} canDelete={m.user_email === me.email || canManage} onReply={setReplyTo} onEdit={setEditing} onDelete={remove} onPin={pin} onReact={react} onJumpTo={jumpTo} onOpenProfile={onOpenProfile} tapped={tapped === m.id} onTap={(id) => setTapped((t) => (t === id ? null : id))} />
                   </React.Fragment>
                 );
               })}

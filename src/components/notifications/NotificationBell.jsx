@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { AtSign, Bell, CheckCheck, Heart, MessageCircle, Trash2, UserCheck, UserPlus } from "lucide-react";
@@ -7,6 +7,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { toast } from "@/lib/toast";
 import { timeAgo } from "@/lib/format";
 import Avatar from "@/components/common/Avatar";
+import Popover from "@/components/common/Popover";
 
 const TYPE_ICONS = { follow: UserPlus, like: Heart, comment: MessageCircle, friend_request: UserPlus, friend_accepted: UserCheck, mention: AtSign, dm: MessageCircle, ping: Bell };
 const TYPE_COLORS = { follow: "#7c5cf0", like: "#e0526b", comment: "#7c5cf0", friend_request: "#f0a020", friend_accepted: "#17a673", mention: "var(--accent-rose)", dm: "#2f80e0", ping: "var(--accent-rose)" };
@@ -21,12 +22,6 @@ export default function NotificationBell({ me }) {
     enabled: !!me?.email,
     onEvent: (ev) => { if (ev.type === "create" && ev.data?.message) toast(ev.data.message, { icon: <Bell className="w-5 h-5" /> }); },
   });
-
-  useEffect(() => {
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
 
   const unread = notifications.filter((n) => !n.is_read).length;
   const markAllRead = async () => {
@@ -62,16 +57,8 @@ export default function NotificationBell({ me }) {
           )}
         </AnimatePresence>
       </button>
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: 8, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.97 }}
-            transition={{ type: "spring", stiffness: 420, damping: 32 }}
-            className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 top-16 sm:top-[calc(100%+10px)] z-[100] sm:w-[380px] max-h-[70vh] flex flex-col rounded-3xl overflow-hidden"
-            style={{ background: "var(--surface)", border: "1px solid var(--border-c)", boxShadow: "var(--shadow-lg)", transformOrigin: "top right" }}
-          >
+      <Popover open={open} onClose={() => setOpen(false)} anchorRef={ref} placement="bottom-end" width={380} label="Notifications">
+        <div className="flex flex-col max-h-[70vh]">
             <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: "var(--border-c)" }}>
               <span className="font-display text-lg font-semibold flex-1" style={{ color: "var(--text-primary)" }}>Notifications</span>
               {unread > 0 && <button onClick={markAllRead} className="chip-sm"><CheckCheck className="w-3 h-3" /> Mark read</button>}
@@ -116,9 +103,8 @@ export default function NotificationBell({ me }) {
                 </AnimatePresence>
               )}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+        </div>
+      </Popover>
     </div>
   );
 }

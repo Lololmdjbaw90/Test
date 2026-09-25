@@ -8,6 +8,8 @@
       { "fieldPath": "member_emails", "arrayConfig": "CONTAINS" }, { "fieldPath": "created_date", "order": "DESCENDING" } ] },
     { "collectionGroup": "DirectMessage", "queryScope": "COLLECTION", "fields": [
       { "fieldPath": "conversation_id", "order": "ASCENDING" }, { "fieldPath": "member_emails", "arrayConfig": "CONTAINS" }, { "fieldPath": "created_date", "order": "DESCENDING" } ] },
+    { "collectionGroup": "Call", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "member_emails", "arrayConfig": "CONTAINS" }, { "fieldPath": "created_date", "order": "DESCENDING" } ] },
     { "collectionGroup": "GroupChat", "queryScope": "COLLECTION", "fields": [
       { "fieldPath": "member_emails", "arrayConfig": "CONTAINS" }, { "fieldPath": "created_date", "order": "DESCENDING" } ] },
     { "collectionGroup": "Notification", "queryScope": "COLLECTION", "fields": [

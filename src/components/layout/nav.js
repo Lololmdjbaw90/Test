@@ -1,4 +1,4 @@
-import { Home, Grid2X2, Users, Music, Crown, MessageCircle, UserCheck, Server, Store, Upload, ClipboardList, Shield, Settings, UserCircle } from "lucide-react";
+import { LayoutGrid, Home, Grid2X2, Users, Music, Crown, MessageCircle, UserCheck, Server, Store, Upload, ClipboardList, Shield, Settings, UserCircle } from "lucide-react";
 
 export const NAV_SECTIONS = [
   {
@@ -43,10 +43,10 @@ export const ACCOUNT_ITEMS = [
 
 export const MOBILE_NAV = [
   { label: "Home", path: "/", icon: Home },
-  { label: "Gallery", path: "/Gallery", icon: Grid2X2 },
+  { label: "Community", path: "/Community", icon: Users },
   { label: "create" },
   { label: "Chat", path: "/DirectMessages", icon: MessageCircle, badge: "dms" },
-  { label: "Servers", path: "/Communities", icon: Server },
+  { label: "More", icon: LayoutGrid },
 ];
 
 export function isActivePath(pathname, path) {

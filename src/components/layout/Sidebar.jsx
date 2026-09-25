@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronsLeft, ChevronsRight, LogOut, Moon, Plus, Settings, Sun } from "lucide-react";
 import Avatar from "@/components/common/Avatar";
 import CreateMenu from "./CreateMenu";
+import Popover from "@/components/common/Popover";
 import { ADMIN_SECTION, NAV_SECTIONS, isActivePath } from "./nav";
 import { useAuth } from "@/lib/AuthContext";
 import { displayName, profileLink } from "@/lib/format";
@@ -49,6 +50,7 @@ export default function Sidebar({ collapsed, onToggleCollapsed, badges = {}, onT
   const { user, isAdmin, logout } = useAuth();
   const location = useLocation();
   const [createOpen, setCreateOpen] = useState(false);
+  const createRef = useRef(null);
   const sections = isAdmin ? [...NAV_SECTIONS, ADMIN_SECTION] : NAV_SECTIONS;
   const level = getLevelInfo(user?.xp || 0);
 
@@ -63,19 +65,14 @@ export default function Sidebar({ collapsed, onToggleCollapsed, badges = {}, onT
         <Logo collapsed={collapsed} />
       </div>
 
-      <div className={`relative ${collapsed ? "px-4" : "px-4"} pb-2`}>
-        <button onClick={() => setCreateOpen((v) => !v)} className={`btn w-full ${collapsed ? "px-0" : ""}`} title="Create" aria-expanded={createOpen}>
+      <div className="relative px-4 pb-2">
+        <button ref={createRef} onClick={() => setCreateOpen((v) => !v)} className={`btn w-full ${collapsed ? "px-0" : ""}`} title="Create" aria-expanded={createOpen}>
           <motion.span animate={{ rotate: createOpen ? 45 : 0 }} className="inline-flex"><Plus className="w-4 h-4" /></motion.span>
           {!collapsed && "Create"}
         </button>
-        <AnimatePresence>
-          {createOpen && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setCreateOpen(false)} />
-              <div className="absolute left-4 top-full mt-2 z-50"><CreateMenu isAdmin={isAdmin} onDone={() => setCreateOpen(false)} /></div>
-            </>
-          )}
-        </AnimatePresence>
+        <Popover open={createOpen} onClose={() => setCreateOpen(false)} anchorRef={createRef} placement={collapsed ? "right-start" : "bottom-start"} width={290} label="Create">
+          <CreateMenu isAdmin={isAdmin} onDone={() => setCreateOpen(false)} />
+        </Popover>
       </div>
 
       <nav className="flex-1 overflow-y-auto no-scrollbar px-3 py-2 space-y-5">

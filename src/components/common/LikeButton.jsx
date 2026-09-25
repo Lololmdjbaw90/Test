@@ -58,11 +58,11 @@ export default function LikeButton({ liked, count, onToggle, variant = "pill", d
         </AnimatePresence>
       </span>
       {count !== undefined && (
-        <AnimatePresence mode="popLayout" initial={false}>
-          <motion.span key={count} initial={{ y: liked ? 8 : -8, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: liked ? -8 : 8, opacity: 0 }} transition={{ duration: 0.18 }}>
+        <span className="relative inline-flex overflow-hidden tabular-nums" style={{ minWidth: "1ch" }}>
+          <motion.span key={count} initial={{ y: liked ? 10 : -10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 500, damping: 30 }}>
             {count}
           </motion.span>
-        </AnimatePresence>
+        </span>
       )}
     </button>
   );

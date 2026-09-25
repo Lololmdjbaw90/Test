@@ -1,12 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useLocation, useOutlet } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { MessageCircle, Megaphone, Plus, Search, X } from "lucide-react";
+import { LogOut, MessageCircle, Megaphone, Moon, Plus, Search, Settings, Sun, X } from "lucide-react";
 import Sidebar, { Logo } from "@/components/layout/Sidebar";
 import CommandPalette from "@/components/layout/CommandPalette";
 import CreateMenu from "@/components/layout/CreateMenu";
 import MiniPlayer from "@/components/layout/MiniPlayer";
-import { MOBILE_NAV, isActivePath } from "@/components/layout/nav";
+import VoiceDock from "@/components/voice/VoiceDock";
+import CallManager from "@/components/voice/CallManager";
+import { ADMIN_SECTION, MOBILE_NAV, NAV_SECTIONS, isActivePath } from "@/components/layout/nav";
+import Popover from "@/components/common/Popover";
 import NotificationBell from "@/components/notifications/NotificationBell";
 import Avatar from "@/components/common/Avatar";
 import { useAuth } from "@/lib/AuthContext";
@@ -15,6 +18,7 @@ import { applyTheme } from "@/lib/theme";
 import { pageTransition } from "@/lib/motion";
 import { toast } from "@/lib/toast";
 import { displayName, profileLink } from "@/lib/format";
+import { messagePreview } from "@/lib/calls";
 
 const FULL_HEIGHT = ["/communitychat", "/directmessages"];
 
@@ -56,42 +60,94 @@ function TopBar({ onSearch, user }) {
   );
 }
 
-function MobileNav({ badges, isAdmin }) {
+function MoreSheet({ open, onClose, anchorRef, badges, isDark, onToggleTheme }) {
+  const { user, isAdmin, logout } = useAuth();
   const location = useLocation();
-  const [createOpen, setCreateOpen] = useState(false);
-  useEffect(() => setCreateOpen(false), [location.pathname]);
+  const sections = isAdmin ? [...NAV_SECTIONS, ADMIN_SECTION] : NAV_SECTIONS;
+  return (
+    <Popover open={open} onClose={onClose} anchorRef={anchorRef} placement="top-end" width={340} label="More">
+      <div className="px-4 pb-4 pt-1 space-y-4">
+        {user && (
+          <Link to={profileLink(user.email)} onClick={onClose} className="card-sm p-3 flex items-center gap-3">
+            <Avatar src={user.profile_picture} name={displayName(user)} size={44} nitro={user.nitro_active} online />
+            <span className="flex-1 min-w-0">
+              <span className="block font-bold truncate" style={{ color: "var(--text-primary)" }}>{displayName(user)}</span>
+              <span className="block text-xs" style={{ color: "var(--text-muted)" }}>View your profile</span>
+            </span>
+          </Link>
+        )}
+        {sections.map((section) => (
+          <div key={section.label}>
+            <p className="eyebrow mb-2 px-1">{section.label}</p>
+            <div className="grid grid-cols-4 gap-2">
+              {section.items.map((item) => {
+                const active = isActivePath(location.pathname, item.path);
+                const badge = item.badge ? badges[item.badge] : 0;
+                return (
+                  <Link key={item.path} to={item.path} onClick={onClose} className="relative flex flex-col items-center gap-1.5 py-2.5 rounded-2xl transition-colors" style={{ background: active ? "var(--pink-soft)" : "var(--surface-2)", color: active ? "var(--accent-rose)" : "var(--text-secondary)" }}>
+                    <item.icon className="w-5 h-5" />
+                    <span className="text-[10px] font-bold text-center leading-tight px-1">{item.label}</span>
+                    {badge > 0 && <span className="absolute top-1.5 right-2 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold text-white flex items-center justify-center" style={{ background: "var(--accent-rose)" }}>{badge > 9 ? "9+" : badge}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        <div className="grid grid-cols-3 gap-2">
+          <button onClick={onToggleTheme} className="btn-outline !px-2">{isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}{isDark ? "Light" : "Dark"}</button>
+          <Link to="/Settings" onClick={onClose} className="btn-outline !px-2"><Settings className="w-4 h-4" /> Settings</Link>
+          <button onClick={logout} className="btn-outline !px-2" style={{ color: "var(--danger)" }}><LogOut className="w-4 h-4" /> Log out</button>
+        </div>
+      </div>
+    </Popover>
+  );
+}
+
+function MobileNav({ badges, isAdmin, isDark, onToggleTheme }) {
+  const location = useLocation();
+  const [sheet, setSheet] = useState(null); // "create" | "more" | null
+  const createRef = useRef(null);
+  const moreRef = useRef(null);
+  useEffect(() => setSheet(null), [location.pathname, location.search]);
+  const moreActive = !MOBILE_NAV.some((i) => i.path && isActivePath(location.pathname, i.path));
   return (
     <>
-      <AnimatePresence>
-        {createOpen && (
-          <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="md:hidden fixed inset-0 z-[70] backdrop-blur-sm" style={{ background: "rgb(20 8 14 / 0.35)" }} onClick={() => setCreateOpen(false)} />
-            <div className="md:hidden fixed z-[75] left-1/2 -translate-x-1/2 bottom-[92px]"><CreateMenu isAdmin={isAdmin} onDone={() => setCreateOpen(false)} /></div>
-          </>
-        )}
-      </AnimatePresence>
+      <Popover open={sheet === "create"} onClose={() => setSheet(null)} anchorRef={createRef} placement="top-center" width={300} label="Create">
+        <p className="eyebrow px-5 pt-1">Create something</p>
+        <CreateMenu isAdmin={isAdmin} onDone={() => setSheet(null)} className="pb-4" />
+      </Popover>
+      <MoreSheet open={sheet === "more"} onClose={() => setSheet(null)} anchorRef={moreRef} badges={badges} isDark={isDark} onToggleTheme={onToggleTheme} />
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-[65] glass safe-bottom" style={{ borderTop: "1px solid var(--border-c)" }} aria-label="Main">
-        <div className="flex items-center justify-around h-[72px] px-2">
+        <div className="flex items-center justify-around h-[68px] px-2">
           {MOBILE_NAV.map((item) => {
             if (item.label === "create") {
               return (
-                <motion.button key="create" whileTap={{ scale: 0.9 }} onClick={() => setCreateOpen((v) => !v)} className="w-14 h-14 -mt-6 rounded-2xl flex items-center justify-center text-white" style={{ background: "var(--accent-grad)", boxShadow: "var(--shadow-accent)" }} aria-label="Create" aria-expanded={createOpen}>
-                  <motion.span animate={{ rotate: createOpen ? 45 : 0 }} className="inline-flex"><Plus className="w-6 h-6" /></motion.span>
+                <motion.button key="create" ref={createRef} whileTap={{ scale: 0.9 }} onClick={() => setSheet((v) => (v === "create" ? null : "create"))} className="w-14 h-14 -mt-6 rounded-2xl flex items-center justify-center text-white" style={{ background: "var(--accent-grad)", boxShadow: "var(--shadow-accent)" }} aria-label="Create" aria-expanded={sheet === "create"}>
+                  <motion.span animate={{ rotate: sheet === "create" ? 45 : 0 }} className="inline-flex"><Plus className="w-6 h-6" /></motion.span>
                 </motion.button>
               );
             }
-            const active = isActivePath(location.pathname, item.path);
+            const isMore = item.label === "More";
+            const active = isMore ? moreActive || sheet === "more" : isActivePath(location.pathname, item.path);
             const Icon = item.icon;
-            const badge = item.badge ? badges[item.badge] : 0;
-            return (
-              <Link key={item.path} to={item.path} className="relative flex flex-col items-center justify-center gap-1 w-16 h-14 rounded-2xl" style={{ color: active ? "var(--accent-rose)" : "var(--text-muted)" }}>
+            const badge = isMore ? (badges.friends || 0) : item.badge ? badges[item.badge] : 0;
+            const inner = (
+              <>
                 {active && <motion.span layoutId="mobile-nav-active" className="absolute inset-1 rounded-2xl" style={{ background: "var(--pink-soft)" }} transition={{ type: "spring", stiffness: 420, damping: 34 }} />}
                 <span className="relative">
                   <Icon className="w-5 h-5" />
                   {badge > 0 && <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold text-white flex items-center justify-center" style={{ background: "var(--accent-rose)" }}>{badge > 9 ? "9+" : badge}</span>}
                 </span>
                 <span className="relative text-[10px] font-bold">{item.label}</span>
-              </Link>
+              </>
+            );
+            const cls = "relative flex flex-col items-center justify-center gap-1 w-16 h-14 rounded-2xl";
+            const style = { color: active ? "var(--accent-rose)" : "var(--text-muted)" };
+            return isMore ? (
+              <button key="more" ref={moreRef} onClick={() => setSheet((v) => (v === "more" ? null : "more"))} className={cls} style={style} aria-label="More pages" aria-expanded={sheet === "more"}>{inner}</button>
+            ) : (
+              <Link key={item.path} to={item.path} className={cls} style={style}>{inner}</Link>
             );
           })}
         </div>
@@ -130,7 +186,7 @@ export default function Layout() {
     enabled: !!user,
     onEvent: (ev) => {
       if (ev.type !== "create" || ev.data?.user_email === user?.email || onDmsPageRef.current) return;
-      toast(`${ev.data.user_display_name || "Someone"}: ${String(ev.data.content || "sent an image").slice(0, 80)}`, { icon: <MessageCircle className="w-5 h-5" />, description: ev.data.conversation_type === "group" ? ev.data.group_name : "Direct message" });
+      toast(`${ev.data.user_display_name || "Someone"}: ${messagePreview(ev.data, user?.email).slice(0, 80)}`, { icon: <MessageCircle className="w-5 h-5" />, description: ev.data.conversation_type === "group" ? ev.data.group_name : "Direct message" });
     },
   });
   const { data: requests } = useLiveQuery("Friendship", user ? { receiver_email: user.email, status: "pending" } : null, { enabled: !!user });
@@ -171,6 +227,7 @@ export default function Layout() {
       <Sidebar collapsed={collapsed} onToggleCollapsed={toggleCollapsed} badges={badges} onToggleTheme={toggleTheme} isDark={isDark} />
       <div className="flex-1 min-w-0 flex flex-col relative">
         <AnnouncementBar config={siteConfig} />
+        <VoiceDock />
         {!fullHeight && <TopBar onSearch={() => setPaletteOpen(true)} user={user} />}
         <main ref={mainRef} id="main" className={`flex-1 min-h-0 relative ${fullHeight ? `overflow-hidden ${hideMobileNav ? "" : "pb-[72px] md:pb-0"}` : "overflow-y-auto overflow-x-hidden scroll"}`}>
           {/* Enter-only transition keyed by route; no exit phase that could stall navigation. */}
@@ -179,8 +236,9 @@ export default function Layout() {
           </motion.div>
         </main>
       </div>
-      {!hideMobileNav && <MobileNav badges={badges} isAdmin={isAdmin} />}
+      {!hideMobileNav && <MobileNav badges={badges} isAdmin={isAdmin} isDark={isDark} onToggleTheme={toggleTheme} />}
       <MiniPlayer raised={!hideMobileNav} />
+      {user && <CallManager me={user} />}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} isDark={isDark} onToggleTheme={toggleTheme} />
     </div>
   );

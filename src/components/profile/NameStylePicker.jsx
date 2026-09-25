@@ -1,9 +1,9 @@
-import React, { useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import React, { useRef, useState } from "react";
 import { Check, Lock, Palette, Sparkles } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { toast } from "@/lib/toast";
 import { isNitro } from "@/lib/format";
+import Popover from "@/components/common/Popover";
 
 const base = { fontFamily: "var(--font-display)", fontWeight: 600 };
 export const NAME_STYLES = [
@@ -24,6 +24,7 @@ export function getNameStyle(styleId) {
 export default function NameStylePicker({ currentStyle, name, onSave }) {
   const { user, updateMe } = useAuth();
   const [open, setOpen] = useState(false);
+  const ref = useRef(null);
   const nitro = isNitro(user);
   const pick = async (style) => {
     if (style.premium && !nitro) { toast("MimiNitro style", { description: "Get Nitro from the shop on your profile to unlock this.", icon: <Sparkles className="w-5 h-5" /> }); return; }
@@ -34,31 +35,24 @@ export default function NameStylePicker({ currentStyle, name, onSave }) {
     } catch (e) { toast.error(e?.message || "Could not save style."); }
   };
   return (
-    <div className="relative">
-      <button onClick={() => setOpen((o) => !o)} className="chip !py-1.5" aria-expanded={open}><Palette className="w-3.5 h-3.5" /> Name style</button>
-      <AnimatePresence>
-        {open && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-            <motion.div initial={{ opacity: 0, y: 8, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.96 }} className="absolute left-0 top-11 z-50 w-72 rounded-3xl overflow-hidden" style={{ background: "var(--surface)", border: "1px solid var(--border-c)", boxShadow: "var(--shadow-lg)" }}>
-              <p className="eyebrow px-4 pt-4 pb-2">Choose a name style</p>
-              <div className="p-2 pt-0 max-h-80 overflow-y-auto scroll">
-                {NAME_STYLES.map((style) => {
-                  const active = (currentStyle || "default") === style.id;
-                  const locked = style.premium && !nitro;
-                  return (
-                    <button key={style.id} onClick={() => pick(style)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-left transition-colors hover:bg-[var(--surface-2)]" style={active ? { background: "var(--pink-soft)" } : undefined}>
-                      <span className="flex-1 min-w-0 truncate text-lg" style={style.preview()}>{name}</span>
-                      <span className="text-[10px] font-bold flex items-center gap-1" style={{ color: "var(--text-muted)" }}>{style.premium && (locked ? <Lock className="w-3 h-3" /> : <Sparkles className="w-3 h-3" style={{ color: "#a67cf7" }} />)}{style.label}</span>
-                      {active && <Check className="w-4 h-4" style={{ color: "var(--accent-rose)" }} />}
-                    </button>
-                  );
-                })}
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-    </div>
+    <>
+      <button ref={ref} onClick={() => setOpen((o) => !o)} className="chip !py-1.5" aria-expanded={open}><Palette className="w-3.5 h-3.5" /> Name style</button>
+      <Popover open={open} onClose={() => setOpen(false)} anchorRef={ref} placement="bottom-start" width={300} label="Name style">
+        <p className="eyebrow px-4 pt-4 pb-2">Choose a name style</p>
+        <div className="p-2 pt-0 max-h-80 overflow-y-auto scroll">
+          {NAME_STYLES.map((style) => {
+            const active = (currentStyle || "default") === style.id;
+            const locked = style.premium && !nitro;
+            return (
+              <button key={style.id} onClick={() => pick(style)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-left transition-colors hover:bg-[var(--surface-2)]" style={active ? { background: "var(--pink-soft)" } : undefined}>
+                <span className="flex-1 min-w-0 truncate text-lg" style={style.preview()}>{name}</span>
+                <span className="text-[10px] font-bold flex items-center gap-1" style={{ color: "var(--text-muted)" }}>{style.premium && (locked ? <Lock className="w-3 h-3" /> : <Sparkles className="w-3 h-3" style={{ color: "#a67cf7" }} />)}{style.label}</span>
+                {active && <Check className="w-4 h-4" style={{ color: "var(--accent-rose)" }} />}
+              </button>
+            );
+          })}
+        </div>
+      </Popover>
+    </>
   );
 }

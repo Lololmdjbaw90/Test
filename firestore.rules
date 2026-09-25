@@ -190,6 +190,18 @@ service cloud.firestore {
       allow delete: if signedIn() && (resource.data.to_email == ownEmail() || resource.data.user_email == ownEmail());
     }
 
+    // DM / group calls: the ringing + status doc shared by the call's members.
+    match /Call/{id} {
+      allow read: if signedIn() && (ownEmail() in resource.data.member_emails || isAdmin());
+      allow create: if signedIn()
+        && request.resource.data.caller_email == ownEmail()
+        && ownEmail() in request.resource.data.member_emails;
+      allow update: if isAdmin() || resource.data.caller_email == ownEmail()
+        || (signedIn() && ownEmail() in resource.data.member_emails
+            && onlyChanged(['status', 'declined_by', 'joined_emails', 'answered_at', 'ended_at', 'updated_date', 'updated_at']));
+      allow delete: if isAdmin() || resource.data.caller_email == ownEmail();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

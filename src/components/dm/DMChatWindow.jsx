@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowDown, CheckCheck, MessageSquare, Pencil, SmilePlus, Trash2 } from "lucide-react";
+import { ArrowDown, CheckCheck, MessageSquare, Pencil, Phone, PhoneMissed, SmilePlus, Trash2, Video } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { checkText } from "@/lib/moderation";
@@ -11,6 +11,26 @@ import { useConfirm } from "@/components/common/Modal";
 import ChatComposer from "@/components/chat/ChatComposer";
 import RichText from "@/components/chat/RichText";
 import { QUICK_REACTIONS } from "@/components/chat/EmojiPicker";
+import { callSummary } from "@/lib/calls";
+
+// Centered "Missed call / Call · 4:12" notice with a call-back button.
+function CallNotice({ msg, me, onCall }) {
+  const missed = msg.call_outcome !== "ended";
+  const alert = missed && msg.user_email !== me.email;
+  const Icon = missed ? PhoneMissed : msg.call_video ? Video : Phone;
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex justify-center my-3">
+      <div className="flex items-center gap-3 pl-2 pr-2.5 py-2 rounded-2xl" style={{ background: "var(--surface)", border: "1px solid var(--border-c)", boxShadow: "var(--shadow-sm)" }}>
+        <span className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={alert ? { background: "color-mix(in srgb, var(--danger) 14%, transparent)", color: "var(--danger)" } : { background: "var(--pink-soft)", color: "var(--accent-rose)" }}><Icon className="w-4 h-4" /></span>
+        <div className="min-w-0">
+          <p className="text-sm font-bold" style={{ color: alert ? "var(--danger)" : "var(--text-primary)" }}>{callSummary(msg, me.email)}</p>
+          <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>{msg.user_email === me.email ? "You called" : `${msg.user_display_name} called`} · {clockTime(msg.created_date)}</p>
+        </div>
+        {onCall && <button onClick={() => onCall(!!msg.call_video)} className="btn-outline !py-1.5 !px-3 text-xs ml-1">{msg.call_video ? <Video className="w-3.5 h-3.5" /> : <Phone className="w-3.5 h-3.5" />} Call back</button>}
+      </div>
+    </motion.div>
+  );
+}
 
 function Bubble({ msg, own, showAvatar, showName, isGroup, seen, onEdit, onDelete, onReact, me }) {
   const [react, setReact] = useState(false);
@@ -54,7 +74,7 @@ function Bubble({ msg, own, showAvatar, showName, isGroup, seen, onEdit, onDelet
   );
 }
 
-export default function DMChatWindow({ conversation, me }) {
+export default function DMChatWindow({ conversation, me, onCall }) {
   const confirm = useConfirm();
   const isGroup = conversation.type === "group";
   const scrollRef = useRef(null);
@@ -125,7 +145,7 @@ export default function DMChatWindow({ conversation, me }) {
     base44.entities.DirectMessage.update(msg.id, { reactions }).catch((e) => toast.error(e?.message || "Could not react."));
   };
 
-  const lastOwn = [...messages].reverse().find((m) => m.user_email === me.email);
+  const lastOwn = [...messages].reverse().find((m) => m.user_email === me.email && m.type !== "call");
   const seenId = !isGroup && lastOwn && (lastOwn.read_by || []).includes(conversation.otherUser?.email) ? lastOwn.id : null;
   const mentionCandidates = isGroup ? Object.values(conversation.group.member_display_names || {}).filter((n) => n !== displayName(me)).map((name) => ({ name })) : [];
 
@@ -144,7 +164,7 @@ export default function DMChatWindow({ conversation, me }) {
           messages.map((m, i) => {
             const prev = messages[i - 1];
             const newDay = !prev || new Date(prev.created_date).toDateString() !== new Date(m.created_date).toDateString();
-            const grouped = prev && !newDay && prev.user_email === m.user_email && new Date(m.created_date) - new Date(prev.created_date) < 5 * 60000;
+            const grouped = prev && !newDay && prev.type !== "call" && prev.user_email === m.user_email && new Date(m.created_date) - new Date(prev.created_date) < 5 * 60000;
             return (
               <React.Fragment key={m.id}>
                 {newDay && (
@@ -154,7 +174,7 @@ export default function DMChatWindow({ conversation, me }) {
                     <div className="divider flex-1" />
                   </div>
                 )}
-                <Bubble msg={m} me={me} own={m.user_email === me.email} showAvatar={!grouped} showName={!grouped} isGroup={isGroup} seen={m.id === seenId} onEdit={setEditing} onDelete={remove} onReact={react} />
+                {m.type === "call" ? <CallNotice msg={m} me={me} onCall={onCall} /> : <Bubble msg={m} me={me} own={m.user_email === me.email} showAvatar={!grouped} showName={!grouped} isGroup={isGroup} seen={m.id === seenId} onEdit={setEditing} onDelete={remove} onReact={react} />}
               </React.Fragment>
             );
           })

@@ -30,6 +30,12 @@ export default function Modal({ open, onClose, title, subtitle, children, footer
     return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; clearTimeout(t); };
   }, [open, onClose]);
 
+  // While closing, keep showing the last content so it animates out instead of
+  // collapsing when the caller clears its data (e.g. selected item -> null).
+  const last = useRef({ title, subtitle, children, footer });
+  if (open) last.current = { title, subtitle, children, footer };
+  ({ title, subtitle, children, footer } = last.current);
+
   const mounted = useDelayedUnmount(open);
   if (!mounted) return null;
   return createPortal(

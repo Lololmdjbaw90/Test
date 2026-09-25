@@ -14,20 +14,13 @@ export default function CreateMenu({ onDone, isAdmin, className = "" }) {
   const navigate = useNavigate();
   const actions = isAdmin ? [...CREATE_ACTIONS, { label: "Upload to gallery", desc: "Curated gallery (admin)", icon: Upload, to: "/Upload" }] : CREATE_ACTIONS;
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8, scale: 0.96 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 8, scale: 0.96 }}
-      transition={{ type: "spring", stiffness: 420, damping: 30 }}
-      className={`glass rounded-3xl p-2 w-72 ${className}`}
-      style={{ border: "1px solid var(--border-c)", boxShadow: "var(--shadow-lg)" }}
-    >
+    <div className={`p-2 ${className}`}>
       {actions.map((a, i) => (
         <motion.button
           key={a.to}
           initial={{ opacity: 0, x: -8 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: i * 0.035 }}
+          transition={{ delay: i * 0.03 }}
           onClick={() => { navigate(a.to); onDone?.(); }}
           className="w-full flex items-center gap-3 p-2.5 rounded-2xl text-left transition-colors hover:bg-[var(--pink-soft)]"
         >
@@ -38,6 +31,6 @@ export default function CreateMenu({ onDone, isAdmin, className = "" }) {
           </span>
         </motion.button>
       ))}
-    </motion.div>
+    </div>
   );
 }
