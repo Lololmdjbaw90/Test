@@ -1,15 +1,45 @@
-import React, { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
-import { Loader2, ClipboardList } from "lucide-react";
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
+import { ClipboardList, Download, Shield, Trash2, Upload, UserCog } from "lucide-react";
+import { useAuth } from "@/lib/AuthContext";
+import { useLiveQuery } from "@/lib/useLiveQuery";
+import { timeAgo } from "@/lib/format";
+import { exportToCsv } from "@/utils/exportCsv";
+import { Page, PageHeader, EmptyState, CenterSpinner } from "@/components/common/Page";
+import { SearchInput } from "@/components/common/Controls";
+
+const ICONS = { artwork_added: Upload, artwork_deleted: Trash2, moderation_delete: Trash2, role_change: UserCog };
+
 export default function LogsPage() {
-  const [logs,setLogs]=useState([]),[loading,setLoading]=useState(true);
-  useEffect(()=>{base44.auth.me().then(me=>{if(me?.role!=="admin")window.location.href="/";return base44.entities.Log.list("-created_date");}).then(data=>setLogs(data)).catch(()=>{}).finally(()=>setLoading(false));},[]);
-  return(
-    <div className="h-full flex flex-col overflow-hidden">
-      <div className="flex-shrink-0 px-4 sm:px-6 py-4 border-b flex items-center gap-3" style={{background:"var(--surface)",borderColor:"var(--border-c)"}}><ClipboardList className="w-5 h-5" style={{color:"var(--accent-pink)"}}/><div><h1 className="text-base font-semibold" style={{color:"var(--text-primary)"}}>Activity Logs</h1><p className="text-xs" style={{color:"var(--text-muted)"}}>Admin only</p></div></div>
-      <div className="flex-1 overflow-y-auto scroll px-4 sm:px-6 py-4">
-        {loading?<div className="flex justify-center py-12"><Loader2 className="w-5 h-5 animate-spin" style={{color:"var(--accent-pink)"}}/></div>:<div className="space-y-2 pb-6">{logs.length===0&&<p className="text-center text-sm py-12" style={{color:"var(--text-muted)"}}>No logs yet.</p>}{logs.map(log=><div key={log.id} className="card-sm px-3 py-2.5 flex items-center gap-3"><div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{background:"var(--pink-soft)"}}><ClipboardList className="w-4 h-4" style={{color:"var(--accent-pink)"}}/></div><div className="flex-1 min-w-0"><p className="text-xs font-medium truncate" style={{color:"var(--text-primary)"}}>{log.details}</p><p className="text-[10px]" style={{color:"var(--text-muted)"}}>{log.user_email} · {log.action}</p></div><span className="text-[10px] flex-shrink-0" style={{color:"var(--text-muted)"}}>{new Date(log.created_date).toLocaleDateString()}</span></div>)}</div>}
-      </div>
-    </div>
+  const { isAdmin } = useAuth();
+  const [search, setSearch] = useState("");
+  const { data: logs, loading } = useLiveQuery("Log", null, { sort: "-created_date", limit: 300, enabled: isAdmin });
+  if (!isAdmin) return <Page><EmptyState icon={Shield} title="Admins only" action={<Link to="/" className="btn">Go home</Link>} /></Page>;
+  const q = search.trim().toLowerCase();
+  const filtered = logs.filter((l) => !q || [l.details, l.action, l.user_email].some((f) => String(f || "").toLowerCase().includes(q)));
+  return (
+    <Page width="max-w-3xl">
+      <PageHeader eyebrow="Admin" title="Activity logs" subtitle={`${logs.length} admin actions recorded`} icon={ClipboardList} actions={<button className="icon-btn icon-btn-bordered" onClick={() => exportToCsv(filtered.map((l) => ({ date: l.created_date, action: l.action, details: l.details, by: l.user_email })), "logs")} aria-label="Export CSV"><Download className="w-4 h-4" /></button>}>
+        <SearchInput value={search} onChange={setSearch} placeholder="Search logs…" className="max-w-sm" />
+      </PageHeader>
+      {loading ? <CenterSpinner /> : filtered.length === 0 ? <EmptyState icon={ClipboardList} title="No logs yet" text="Uploads, deletions and role changes are recorded here." /> : (
+        <div className="relative pl-8">
+          <div className="absolute left-[15px] top-2 bottom-2 w-px" style={{ background: "var(--border-strong)" }} />
+          {filtered.map((l, i) => {
+            const Icon = ICONS[l.action] || ClipboardList;
+            return (
+              <motion.div key={l.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(i, 15) * 0.03 }} className="relative mb-3">
+                <span className="absolute -left-8 top-3 w-[30px] h-[30px] rounded-full flex items-center justify-center" style={{ background: "var(--surface)", border: "1px solid var(--border-c)", color: "var(--accent-rose)" }}><Icon className="w-3.5 h-3.5" /></span>
+                <div className="card-sm p-3.5">
+                  <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{l.details}</p>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{l.action?.replace(/_/g, " ")} · {l.user_email} · {timeAgo(l.created_date)}</p>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
+    </Page>
   );
 }

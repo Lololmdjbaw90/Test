@@ -1,0 +1,29 @@
+{
+  "indexes": [
+    { "collectionGroup": "ChannelMessage", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "channel_id", "order": "ASCENDING" }, { "fieldPath": "created_date", "order": "DESCENDING" } ] },
+    { "collectionGroup": "ChannelMessage", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "channel_id", "order": "ASCENDING" }, { "fieldPath": "is_pinned", "order": "ASCENDING" }, { "fieldPath": "created_date", "order": "DESCENDING" } ] },
+    { "collectionGroup": "DirectMessage", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "member_emails", "arrayConfig": "CONTAINS" }, { "fieldPath": "created_date", "order": "DESCENDING" } ] },
+    { "collectionGroup": "DirectMessage", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "conversation_id", "order": "ASCENDING" }, { "fieldPath": "member_emails", "arrayConfig": "CONTAINS" }, { "fieldPath": "created_date", "order": "DESCENDING" } ] },
+    { "collectionGroup": "GroupChat", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "member_emails", "arrayConfig": "CONTAINS" }, { "fieldPath": "created_date", "order": "DESCENDING" } ] },
+    { "collectionGroup": "Notification", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "to_email", "order": "ASCENDING" }, { "fieldPath": "created_date", "order": "DESCENDING" } ] },
+    { "collectionGroup": "ArtworkPing", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "to_email", "order": "ASCENDING" }, { "fieldPath": "created_date", "order": "DESCENDING" } ] },
+    { "collectionGroup": "ServerChannel", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "community_id", "order": "ASCENDING" }, { "fieldPath": "position", "order": "ASCENDING" } ] },
+    { "collectionGroup": "ServerRole", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "community_id", "order": "ASCENDING" }, { "fieldPath": "position", "order": "ASCENDING" } ] },
+    { "collectionGroup": "CommunityComment", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "post_id", "order": "ASCENDING" }, { "fieldPath": "created_date", "order": "ASCENDING" } ] },
+    { "collectionGroup": "Comment", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "artwork_id", "order": "ASCENDING" }, { "fieldPath": "created_date", "order": "ASCENDING" } ] },
+    { "collectionGroup": "CommunityPost", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "user_email", "order": "ASCENDING" }, { "fieldPath": "created_date", "order": "DESCENDING" } ] }
+  ],
+  "fieldOverrides": []
+}

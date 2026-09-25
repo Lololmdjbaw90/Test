@@ -1,72 +1,105 @@
-import { Toaster } from "@/components/ui/toaster";
+import React, { Suspense, lazy, useEffect } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { MotionConfig } from "framer-motion";
 import { queryClientInstance } from "@/lib/query-client";
-import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
-import PageNotFound from "./lib/PageNotFound";
 import { AuthProvider, useAuth } from "@/lib/AuthContext";
-import UserNotRegisteredError from "@/components/UserNotRegisteredError";
-import Gallery from "./pages/Gallery";
-import Upload from "./pages/Upload";
-import Logs from "./pages/Logs";
-import Settings from "./pages/Settings";
-import Community from "./pages/Community";
-import Music from "./pages/Music";
-import Profile from "./pages/Profile";
-import Onboarding from "./pages/Onboarding";
-import Communities from "./pages/Communities";
-import CommunityChat from "./pages/CommunityChat";
-import Friends from "./pages/Friends";
-import Commissions from "./pages/Commissions";
-import TopArtists from "./pages/TopArtists";
-import DirectMessages from "./pages/DirectMessages";
-import AdminPanel from "./pages/AdminPanel";
-import Login from "./pages/Login";
+import { PlayerProvider } from "@/lib/player";
+import { Toaster } from "@/lib/toast";
+import { ConfirmProvider } from "@/components/common/Modal";
+import { CenterSpinner } from "@/components/common/Page";
 import Layout from "./Layout.jsx";
+import Login from "./pages/Login";
 
-const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError } = useAuth();
-  if (isLoadingPublicSettings || isLoadingAuth) return (
-    <div className="fixed inset-0 flex items-center justify-center">
-      <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+// Pages are code-split so the first load stays small.
+const Home = lazy(() => import("./pages/Home"));
+const Gallery = lazy(() => import("./pages/Gallery"));
+const Upload = lazy(() => import("./pages/Upload"));
+const Logs = lazy(() => import("./pages/Logs"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Community = lazy(() => import("./pages/Community"));
+const Music = lazy(() => import("./pages/Music"));
+const Profile = lazy(() => import("./pages/Profile"));
+const Onboarding = lazy(() => import("./pages/Onboarding"));
+const Communities = lazy(() => import("./pages/Communities"));
+const CommunityChat = lazy(() => import("./pages/CommunityChat"));
+const Friends = lazy(() => import("./pages/Friends"));
+const Commissions = lazy(() => import("./pages/Commissions"));
+const TopArtists = lazy(() => import("./pages/TopArtists"));
+const DirectMessages = lazy(() => import("./pages/DirectMessages"));
+const AdminPanel = lazy(() => import("./pages/AdminPanel"));
+const PageNotFound = lazy(() => import("./lib/PageNotFound"));
+
+function Splash() {
+  return (
+    <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 app-shell">
+      <div className="w-14 h-14 rounded-[18px] flex items-center justify-center text-white font-display italic text-2xl font-bold animate-pulse" style={{ background: "var(--accent-grad)", boxShadow: "var(--shadow-accent)" }}>M</div>
     </div>
   );
-  if (authError) {
-    if (authError.type === "user_not_registered") return <UserNotRegisteredError />;
-    else if (authError.type === "auth_required") return <Login />;
-  }
+}
+
+function RequireAuth({ children }) {
+  const { isAuthenticated } = useAuth();
+  const location = useLocation();
+  if (!isAuthenticated) return <Navigate to={`/Login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />;
+  return children;
+}
+
+const AppRoutes = () => {
+  const { authChecked, isAuthenticated } = useAuth();
+  if (!authChecked) return <Splash />;
   return (
-    <Routes>
-      <Route element={<Login />} path="/Login" />
-      <Route element={<Layout><Onboarding /></Layout>} path="/Onboarding" />
-      <Route element={<Layout><Gallery /></Layout>} path="/" />
-      <Route element={<Layout><Gallery /></Layout>} path="/Gallery" />
-      <Route element={<Layout><Upload /></Layout>} path="/Upload" />
-      <Route element={<Layout><Logs /></Layout>} path="/Logs" />
-      <Route element={<Layout><Settings /></Layout>} path="/Settings" />
-      <Route element={<Layout><Community /></Layout>} path="/Community" />
-      <Route element={<Layout><Music /></Layout>} path="/Music" />
-      <Route element={<Layout><Profile /></Layout>} path="/Profile" />
-      <Route element={<Layout><Communities /></Layout>} path="/Communities" />
-      <Route element={<Layout><CommunityChat /></Layout>} path="/CommunityChat" />
-      <Route element={<Layout><Friends /></Layout>} path="/Friends" />
-      <Route element={<Layout><Commissions /></Layout>} path="/Commissions" />
-      <Route element={<Layout><TopArtists /></Layout>} path="/TopArtists" />
-      <Route element={<Layout><DirectMessages /></Layout>} path="/DirectMessages" />
-      <Route element={<Layout><AdminPanel /></Layout>} path="/Admin" />
-      <Route path="*" element={<PageNotFound />} />
-    </Routes>
+    <Suspense fallback={<Splash />}>
+      <Routes>
+        <Route path="/Login" element={isAuthenticated ? <Navigate to="/" replace /> : <Login />} />
+        <Route path="/Onboarding" element={<RequireAuth><Onboarding /></RequireAuth>} />
+        <Route element={<RequireAuth><Layout /></RequireAuth>}>
+          <Route path="/" element={<Suspense fallback={<CenterSpinner />}><Home /></Suspense>} />
+          <Route path="/Home" element={<Navigate to="/" replace />} />
+          <Route path="/Gallery" element={<Suspense fallback={<CenterSpinner />}><Gallery /></Suspense>} />
+          <Route path="/Upload" element={<Suspense fallback={<CenterSpinner />}><Upload /></Suspense>} />
+          <Route path="/Logs" element={<Suspense fallback={<CenterSpinner />}><Logs /></Suspense>} />
+          <Route path="/Settings" element={<Suspense fallback={<CenterSpinner />}><Settings /></Suspense>} />
+          <Route path="/Community" element={<Suspense fallback={<CenterSpinner />}><Community /></Suspense>} />
+          <Route path="/Music" element={<Suspense fallback={<CenterSpinner />}><Music /></Suspense>} />
+          <Route path="/Profile" element={<Suspense fallback={<CenterSpinner />}><Profile /></Suspense>} />
+          <Route path="/Communities" element={<Suspense fallback={<CenterSpinner />}><Communities /></Suspense>} />
+          <Route path="/CommunityChat" element={<Suspense fallback={<CenterSpinner />}><CommunityChat /></Suspense>} />
+          <Route path="/Friends" element={<Suspense fallback={<CenterSpinner />}><Friends /></Suspense>} />
+          <Route path="/Commissions" element={<Suspense fallback={<CenterSpinner />}><Commissions /></Suspense>} />
+          <Route path="/TopArtists" element={<Suspense fallback={<CenterSpinner />}><TopArtists /></Suspense>} />
+          <Route path="/DirectMessages" element={<Suspense fallback={<CenterSpinner />}><DirectMessages /></Suspense>} />
+          <Route path="/Admin" element={<Suspense fallback={<CenterSpinner />}><AdminPanel /></Suspense>} />
+          <Route path="*" element={<Suspense fallback={<CenterSpinner />}><PageNotFound /></Suspense>} />
+        </Route>
+      </Routes>
+    </Suspense>
   );
 };
 
 export default function App() {
+  useEffect(() => {
+    const el = document.getElementById("app-loading");
+    if (!el) return;
+    el.style.opacity = "0";
+    const t = setTimeout(() => el.remove(), 450);
+    return () => clearTimeout(t);
+  }, []);
+
   return (
-    <AuthProvider>
-      <QueryClientProvider client={queryClientInstance}>
-        <Router>
-          <AuthenticatedApp />
-        </Router>
-        <Toaster />
-      </QueryClientProvider>
-    </AuthProvider>
+    <MotionConfig reducedMotion="user">
+      <AuthProvider>
+        <QueryClientProvider client={queryClientInstance}>
+          <PlayerProvider>
+            <ConfirmProvider>
+              <Router>
+                <AppRoutes />
+              </Router>
+              <Toaster />
+            </ConfirmProvider>
+          </PlayerProvider>
+        </QueryClientProvider>
+      </AuthProvider>
+    </MotionConfig>
   );
 }

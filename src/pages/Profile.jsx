@@ -1,139 +1,211 @@
-import React, { useState, useEffect } from "react";
-import { useLocation, Link } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
-import { Loader2, Settings, Grid3X3, MessageCircle, User, AtSign, Shield, UserPlus, UserCheck, Download, Sparkles } from "lucide-react";
-import { exportToCsv } from "../utils/exportCsv";
+import React, { useMemo, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import PostCard from "../components/community/PostCard";
-import ProfileMessageBoard from "../components/profile/ProfileMessageBoard";
-import NameStylePicker, { getNameStyle } from "../components/profile/NameStylePicker";
-import LevelBadge from "../components/profile/LevelBadge";
-import NitroBadge from "../components/profile/NitroBadge";
-import CoinDisplay from "../components/profile/CoinDisplay";
-import NitroShop from "../components/profile/NitroShop";
+import { Bookmark, Calendar, Check, Clock, Grid3X3, Heart, Loader2, MessageCircle, MessageSquare, Pencil, Shield, Sparkles, UserCheck, UserPlus, Users } from "lucide-react";
+import { base44 } from "@/api/base44Client";
+import { useAuth } from "@/lib/AuthContext";
+import { useLiveQuery } from "@/lib/useLiveQuery";
+import { useFriendships } from "@/lib/social";
+import { toggleLike } from "@/lib/likes";
+import { toast } from "@/lib/toast";
+import { compactNumber, displayName, isNitro, isOnline, timeAgo } from "@/lib/format";
+import { Page, EmptyState, CenterSpinner } from "@/components/common/Page";
+import { Segmented } from "@/components/common/Controls";
+import Avatar from "@/components/common/Avatar";
+import PostCard from "@/components/community/PostCard";
+import PostViewer from "@/components/community/PostViewer";
+import ProfileMessageBoard from "@/components/profile/ProfileMessageBoard";
+import NameStylePicker, { getNameStyle } from "@/components/profile/NameStylePicker";
+import LevelBadge, { getLevelInfo } from "@/components/profile/LevelBadge";
+import NitroBadge from "@/components/profile/NitroBadge";
+import NitroShop from "@/components/profile/NitroShop";
+import { notify } from "@/utils/notifications";
 
-const TABS = [{ id:"posts",label:"Posts",icon:Grid3X3},{id:"about",label:"About",icon:User},{id:"messages",label:"Messages",icon:MessageCircle},{id:"nitro",label:"Nitro",icon:Sparkles,ownerOnly:true}];
-
-function ProfileBanner({ isOwn, profile }) {
-  const bannerUrl = profile?.banner_url, bannerColor = profile?.banner_color || "#e8a0b4", isNitro = profile?.nitro_active;
+function Banner({ profile }) {
+  const nitro = isNitro(profile);
   return (
-    <div className="relative w-full overflow-hidden flex-shrink-0" style={{ height: 130 }}>
-      {bannerUrl ? <img src={bannerUrl} className="absolute inset-0 w-full h-full object-cover" alt="" />
-        : isNitro ? <motion.div className="absolute inset-0" animate={{ background: ["linear-gradient(135deg,#c084fc 0%,#818cf8 50%,#e8a0b4 100%)","linear-gradient(135deg,#e8a0b4 0%,#c084fc 50%,#818cf8 100%)","linear-gradient(135deg,#818cf8 0%,#e8a0b4 50%,#c084fc 100%)"] }} transition={{ duration:4,repeat:Infinity,ease:"linear" }} />
-        : <motion.div className="absolute inset-0" animate={{ background: [`linear-gradient(135deg,${bannerColor} 0%,#c0526e 100%)`,`linear-gradient(135deg,#d4708a 0%,${bannerColor} 100%)`] }} transition={{ duration:6,repeat:Infinity,ease:"linear" }} />}
-      <motion.div className="absolute inset-0" style={{ background:"linear-gradient(105deg,transparent 30%,rgba(255,255,255,0.15) 50%,transparent 70%)" }} animate={{ x:["-100%","200%"] }} transition={{ duration:2.5,repeat:Infinity,ease:"linear",repeatDelay:3 }} />
-      <div className="absolute bottom-0 left-0 right-0 h-16 pointer-events-none" style={{ background:"linear-gradient(to bottom,transparent,var(--app-bg))" }} />
-      {isOwn && <Link to="/Settings" className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/30 hover:scale-110 transition-transform" style={{ background:"rgba(255,255,255,0.2)" }}><Settings className="w-4 h-4 text-white" /></Link>}
+    <div className="relative h-44 sm:h-60 rounded-[2rem] overflow-hidden grain" style={{ boxShadow: "var(--shadow-md)" }}>
+      {profile.banner_url ? (
+        <img src={profile.banner_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+      ) : (
+        <div className="absolute inset-0" style={{ background: nitro ? "linear-gradient(120deg,#8b5cf6,#c084fc,#ee8fae,#7cbeff)" : `linear-gradient(120deg, ${profile.banner_color || "rgb(var(--accent-2-rgb))"}, rgb(var(--accent-rgb)))`, backgroundSize: "300% 300%", animation: "gradient-pan 12s ease infinite" }} />
+      )}
+      <div className="orb w-72 h-72 -top-20 right-10" style={{ background: "rgb(255 255 255 / 0.25)" }} />
+      <motion.div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(105deg,transparent 35%,rgb(255 255 255 / 0.18) 50%,transparent 65%)" }} animate={{ x: ["-100%", "200%"] }} transition={{ duration: 2.8, repeat: Infinity, repeatDelay: 4, ease: "easeInOut" }} />
     </div>
   );
 }
 
-function ProfileAvatar({ profile }) {
-  const [err, setErr] = useState(false);
+function Stat({ value, label, delay }) {
   return (
-    <div className="relative flex-shrink-0" style={{ marginTop:-40,zIndex:10 }}>
-      <motion.div className="absolute inset-0 rounded-full" style={{ margin:-3 }} animate={{ boxShadow:["0 0 0 2px rgba(232,160,180,0.5),0 0 16px rgba(232,160,180,0.25)","0 0 0 4px rgba(212,112,138,0.7),0 0 28px rgba(212,112,138,0.4)","0 0 0 2px rgba(232,160,180,0.5),0 0 16px rgba(232,160,180,0.25)"] }} transition={{ duration:2.5,repeat:Infinity,ease:"easeInOut" }} />
-      <motion.div className="w-24 h-24 rounded-full overflow-hidden border-4" style={{ borderColor:"var(--surface)",background:"var(--pink-soft)" }} initial={{ scale:0.7,opacity:0 }} animate={{ scale:1,opacity:1 }} transition={{ type:"spring",stiffness:260,damping:20 }}>
-        {profile.profile_picture && !err ? <img src={profile.profile_picture} onError={() => setErr(true)} className="w-full h-full object-cover" alt="" /> : <div className="w-full h-full flex items-center justify-center text-3xl font-bold" style={{ color:"var(--accent-pink)",background:"var(--pink-soft)" }}>{profile.display_name?.[0]?.toUpperCase()||"?"}</div>}
-      </motion.div>
-    </div>
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay }} className="text-center px-3">
+      <p className="font-display text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>{compactNumber(value)}</p>
+      <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>{label}</p>
+    </motion.div>
   );
-}
-
-function StyledName({ name, styleId, isOwn, onStyleChange }) {
-  const style = getNameStyle(styleId), styleProps = style.preview(name), isAurora = styleId === "aurora";
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      {isAurora ? <motion.h1 className="font-bold leading-tight" style={{ ...styleProps,backgroundSize:"200%" }} animate={{ backgroundPosition:["0% 50%","100% 50%","0% 50%"] }} transition={{ duration:4,repeat:Infinity,ease:"linear" }}>{name}</motion.h1> : <h1 className="leading-tight" style={styleProps}>{name}</h1>}
-      {isOwn && <NameStylePicker currentStyle={styleId} name={name} onSave={onStyleChange} />}
-    </div>
-  );
-}
-
-function StatCard({ value, label, delay }) {
-  return <motion.div initial={{ opacity:0,y:14 }} animate={{ opacity:1,y:0 }} transition={{ delay,type:"spring",stiffness:200 }} className="card-sm px-5 py-3 text-center flex-1" whileHover={{ scale:1.04,y:-2 }}><p className="text-lg font-bold" style={{ color:"var(--accent-rose)" }}>{value}</p><p className="text-[10px] font-medium uppercase tracking-widest mt-0.5" style={{ color:"var(--text-muted)" }}>{label}</p></motion.div>;
 }
 
 export default function ProfilePage() {
-  const location = useLocation();
-  const [profile, setProfile] = useState(null), [me, setMe] = useState(null), [posts, setPosts] = useState([]), [loading, setLoading] = useState(true), [tab, setTab] = useState("posts"), [nameStyle, setNameStyle] = useState("default"), [following, setFollowing] = useState(false), [followLoading, setFollowLoading] = useState(false);
+  const navigate = useNavigate();
+  const { user: me, updateMe } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const email = (params.get("email") || me?.email || "").toLowerCase();
+  const isOwn = me?.email === email;
+  const [tab, setTab] = useState("posts");
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => { fetchData(); }, [location.search]);
-  useEffect(() => { const onFocus = () => fetchData(); window.addEventListener("focus", onFocus); return () => window.removeEventListener("focus", onFocus); }, [location.search]);
-  useEffect(() => {
-    if (!me || !profile || me.email !== profile.email || loading) return;
-    const totalLikes = posts.reduce((s, p) => s + (p.likes?.length || 0), 0);
-    const earned = posts.length * 20 + totalLikes * 5;
-    if (earned > (profile.xp || 0)) base44.auth.updateMe({ xp: earned }).catch(() => {});
-  }, [me, profile, posts, loading]);
+  const { data: userRows, loading } = useLiveQuery("User", { email }, { enabled: !!email });
+  const profile = isOwn ? { ...(userRows[0] || {}), ...me } : userRows[0];
+  const { data: posts, setData: setPosts } = useLiveQuery("CommunityPost", { user_email: email }, { sort: "-created_date", enabled: !!email });
+  const { data: followers } = useLiveQuery("User", { following: { $contains: email } }, { enabled: !!email });
+  const { data: artworks } = useLiveQuery("Artwork", null, { sort: "-created_date", enabled: isOwn && tab === "saved", live: false });
+  const { friendships } = useFriendships(me?.email);
+  const friendship = friendships.find((f) => (f.requester_email === email && f.receiver_email === me?.email) || (f.receiver_email === email && f.requester_email === me?.email));
 
-  const fetchData = async () => {
-    setLoading(true);
-    const params = new URLSearchParams(location.search), email = params.get("email");
-    if (!email) { setLoading(false); return; }
-    const [allUsers, ps, meData] = await Promise.all([base44.entities.User.list("-updated_date",200), base44.entities.CommunityPost.filter({ user_email: email },"-created_date"), base44.auth.me().catch(() => null)]);
-    let found = allUsers.find(u => u.email === email) || null;
-    if (meData && meData.email === email) found = { ...found,...meData };
-    setProfile(found); setNameStyle(found?.name_style || "default"); setPosts(ps); setMe(meData);
-    if (meData && found && meData.email !== found.email) setFollowing(meData.following?.includes(found.email) || false);
-    setLoading(false);
+  const totalLikes = useMemo(() => posts.reduce((s, p) => s + (p.likes?.length || 0), 0), [posts]);
+  const following = (me?.following || []).includes(email);
+  const savedArt = artworks.filter((a) => (me?.saved_artworks || []).includes(a.id));
+  const openPostId = params.get("post");
+  const openPost = posts.find((p) => p.id === openPostId) || null;
+  const setOpenPost = (id) => setParams((p) => { const n = new URLSearchParams(p); if (id) n.set("post", id); else n.delete("post"); return n; });
+
+  if (loading && !profile?.email) return <CenterSpinner />;
+  if (!profile?.email) return <Page><EmptyState icon={Users} title="Profile not found" text="This person may have left, or the link is wrong." action={<Link to="/" className="btn">Go home</Link>} /></Page>;
+
+  const name = displayName(profile);
+  const style = getNameStyle(profile.name_style);
+  const nitro = isNitro(profile);
+  const level = getLevelInfo(profile.xp || 0);
+
+  const toggleFollow = async () => {
+    setBusy(true);
+    const next = following ? (me.following || []).filter((e) => e !== email) : [...(me.following || []), email];
+    try {
+      await updateMe({ following: next });
+      if (!following) await notify({ to_email: email, from_email: me.email, from_display_name: displayName(me), from_profile_picture: me.profile_picture, type: "follow", message: `${displayName(me)} started following you`, link: `/Profile?email=${encodeURIComponent(me.email)}` });
+    } catch (e) { toast.error(e?.message || "Could not update follow."); }
+    setBusy(false);
+  };
+  const addFriend = async () => {
+    setBusy(true);
+    try {
+      await base44.entities.Friendship.create({ requester_email: me.email, requester_display_name: displayName(me), requester_profile_picture: me.profile_picture || "", receiver_email: email, receiver_display_name: name, receiver_profile_picture: profile.profile_picture || "", status: "pending" });
+      await notify({ to_email: email, from_email: me.email, from_display_name: displayName(me), from_profile_picture: me.profile_picture, type: "friend_request", message: `${displayName(me)} sent you a friend request`, link: "/Friends" });
+      toast.success("Friend request sent");
+    } catch (e) { toast.error(e?.message || "Could not send request."); }
+    setBusy(false);
+  };
+  const acceptFriend = async () => {
+    setBusy(true);
+    try {
+      await base44.entities.Friendship.update(friendship.id, { status: "accepted" });
+      await notify({ to_email: email, from_email: me.email, from_display_name: displayName(me), from_profile_picture: me.profile_picture, type: "friend_accepted", message: `${displayName(me)} accepted your friend request`, link: "/Friends" });
+      toast.success(`You and ${name} are now friends`);
+    } catch (e) { toast.error(e?.message || "Could not accept."); }
+    setBusy(false);
+  };
+  const removePost = async (post) => {
+    try { await base44.entities.CommunityPost.delete(post.id); setOpenPost(null); toast.success("Post deleted"); } catch (e) { toast.error(e?.message || "Could not delete."); }
   };
 
-  if (loading) return <div className="flex items-center justify-center h-full"><Loader2 className="w-5 h-5 animate-spin" style={{ color:"var(--accent-pink)" }} /></div>;
-  if (!profile) return <div className="flex items-center justify-center h-full"><p className="text-sm" style={{ color:"var(--text-muted)" }}>Profile not found.</p></div>;
-
-  const isOwn = me?.email === profile.email, totalLikes = posts.reduce((s,p) => s + (p.likes?.length || 0), 0);
-
-  const handleFollow = async () => {
-    if (!me || isOwn) return;
-    setFollowLoading(true);
-    const next = following ? (me.following||[]).filter(e => e !== profile.email) : [...(me.following||[]),profile.email];
-    await base44.auth.updateMe({ following: next });
-    setMe(prev => ({ ...prev,following:next })); setFollowing(!following); setFollowLoading(false);
-  };
-
-  const aboutRows = [{ label:"Display Name",value:profile.display_name||profile.full_name,Icon:User },{ label:"Email",value:profile.email,Icon:AtSign },{ label:"Role",value:profile.role,Icon:Shield },{ label:"Bio",value:profile.bio,Icon:MessageCircle }].filter(r => r.value);
+  const tabs = [
+    { id: "posts", label: "Posts", icon: Grid3X3, count: posts.length },
+    { id: "guestbook", label: "Guestbook", icon: MessageCircle },
+    ...(isOwn ? [{ id: "saved", label: "Saved", icon: Bookmark }, { id: "shop", label: "Shop", icon: Sparkles }] : []),
+  ];
 
   return (
-    <div className="h-full overflow-y-auto scroll" style={{ background:"var(--app-bg)" }}>
-      <ProfileBanner isOwn={isOwn} profile={profile} />
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 pb-16">
-        <div className="flex items-end gap-4 mb-5">
-          <ProfileAvatar profile={profile} />
-          <motion.div className="flex-1 min-w-0 pb-1" initial={{ opacity:0,x:12 }} animate={{ opacity:1,x:0 }} transition={{ delay:0.15,duration:0.4 }}>
-            <StyledName name={profile.display_name||profile.full_name} styleId={isOwn?nameStyle:"default"} isOwn={isOwn} onStyleChange={setNameStyle} />
-            <div className="flex flex-wrap items-center gap-1.5 mt-1">
-              {profile.role === "admin" && <span className="badge-pink inline-flex items-center gap-1"><Shield className="w-2.5 h-2.5" /> Admin</span>}
-              <LevelBadge xp={profile.xp||0} showProgress /><NitroBadge active={profile.nitro_active} />
-            </div>
-            <div className="flex flex-wrap items-center gap-2 mt-1.5">
-              <p className="text-xs truncate" style={{ color:"var(--text-muted)" }}>{profile.email}</p>
-              {isOwn && <CoinDisplay coins={profile.coins||0} />}
-            </div>
-            {!isOwn && me && <button onClick={handleFollow} disabled={followLoading} className="mt-2 flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full transition-all" style={following?{background:"var(--pink-soft)",color:"var(--accent-rose)",border:"1.5px solid var(--accent-pink)"}:{background:"var(--accent-pink)",color:"white"}}>{followLoading?<Loader2 className="w-3 h-3 animate-spin"/>:following?<><UserCheck className="w-3 h-3"/> Following</>:<><UserPlus className="w-3 h-3"/> Follow</>}</button>}
+    <Page width="max-w-5xl">
+      <Banner profile={profile} />
+      <div className="px-2 sm:px-6 -mt-16 sm:-mt-20 relative">
+        <div className="flex flex-col sm:flex-row sm:items-start gap-4 sm:gap-6">
+          <motion.div initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 260, damping: 18 }} className="rounded-full w-fit" style={{ boxShadow: "0 0 0 6px var(--app-bg)" }}>
+            <Avatar src={profile.profile_picture} name={name} size={132} nitro={nitro} online={isOnline(profile)} />
           </motion.div>
+          <div className="flex-1 min-w-0 sm:pt-[92px]">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-3xl sm:text-4xl leading-tight" style={style.preview()}>{name}</h1>
+              {isOwn && <NameStylePicker currentStyle={profile.name_style} name={name} />}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              {profile.role === "admin" && <span className="badge-pink"><Shield className="w-3 h-3" /> Admin</span>}
+              <LevelBadge xp={profile.xp || 0} />
+              <NitroBadge active={nitro} />
+              <span className="text-xs flex items-center gap-1" style={{ color: "var(--text-muted)" }}><Calendar className="w-3.5 h-3.5" /> Joined {new Date(profile.created_date || Date.now()).toLocaleDateString(undefined, { month: "short", year: "numeric" })}</span>
+              {!isOnline(profile) && profile.last_seen && <span className="text-xs flex items-center gap-1" style={{ color: "var(--text-muted)" }}><Clock className="w-3.5 h-3.5" /> Active {timeAgo(profile.last_seen)}</span>}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 sm:pt-[96px]">
+            {isOwn ? (
+              <Link to="/Settings" className="btn-outline"><Pencil className="w-4 h-4" /> Edit profile</Link>
+            ) : (
+              <>
+                <button onClick={toggleFollow} disabled={busy} className={following ? "btn-outline" : "btn"}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : following ? <><Check className="w-4 h-4" /> Following</> : <><UserPlus className="w-4 h-4" /> Follow</>}</button>
+                {!friendship && <button onClick={addFriend} disabled={busy} className="btn-outline"><Users className="w-4 h-4" /> Add friend</button>}
+                {friendship?.status === "pending" && friendship.receiver_email === me?.email && <button onClick={acceptFriend} disabled={busy} className="btn-outline"><UserCheck className="w-4 h-4" /> Accept request</button>}
+                {friendship?.status === "pending" && friendship.requester_email === me?.email && <span className="chip"><Clock className="w-4 h-4" /> Request sent</span>}
+                {friendship?.status === "accepted" && <button onClick={() => navigate(`/DirectMessages?with=${encodeURIComponent(email)}`)} className="btn-outline"><MessageSquare className="w-4 h-4" /> Message</button>}
+              </>
+            )}
+          </div>
         </div>
-        {profile.bio && <motion.div initial={{ opacity:0,y:8 }} animate={{ opacity:1,y:0 }} transition={{ delay:0.25 }} className="card-sm px-4 py-3 mb-5" style={{ borderLeft:"3px solid var(--accent-pink)" }}><p className="text-sm leading-relaxed" style={{ color:"var(--text-secondary)" }}>{profile.bio}</p></motion.div>}
-        <div className="flex gap-3 mb-6"><StatCard value={posts.length} label="Posts" delay={0.3} /><StatCard value={totalLikes} label="Likes" delay={0.38} /><StatCard value={posts.filter(p=>p.image_url).length} label="Art" delay={0.46} /></div>
-        <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay:0.4 }} className="relative flex rounded-xl p-1 mb-6" style={{ background:"var(--pink-soft)",border:"1px solid var(--border-c)" }}>
-          {TABS.filter(t => !t.ownerOnly||isOwn).map(t => {
-            const Icon = t.icon, active = tab === t.id;
-            return <button key={t.id} onClick={() => setTab(t.id)} className="relative flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-colors z-10" style={{ color:active?"white":"var(--text-muted)" }}>{active && <motion.div layoutId="tab-pill" className="absolute inset-0 rounded-lg" style={{ background:"linear-gradient(135deg,var(--accent-pink),var(--accent-rose))",boxShadow:"0 2px 10px rgba(212,112,138,0.35)" }} transition={{ type:"spring",stiffness:400,damping:30 }} />}<Icon className="w-3.5 h-3.5 relative z-10" /><span className="relative z-10">{t.label}</span></button>;
-          })}
-        </motion.div>
+
+        <div className="grid md:grid-cols-[1fr_auto] gap-5 mt-6 items-start">
+          <div>
+            {profile.bio ? <p className="text-sm leading-relaxed max-w-2xl" style={{ color: "var(--text-secondary)" }}>{profile.bio}</p> : isOwn && <Link to="/Settings" className="text-sm font-semibold" style={{ color: "var(--accent-rose)" }}>+ Add a bio</Link>}
+            {profile.interests?.length > 0 && <div className="flex flex-wrap gap-1.5 mt-3">{profile.interests.map((i) => <span key={i} className="badge-pink">{i}</span>)}</div>}
+          </div>
+          <div className="card-sm flex divide-x py-3" style={{ borderColor: "var(--border-c)" }}>
+            <Stat value={posts.length} label="Posts" delay={0.1} />
+            <Stat value={totalLikes} label="Likes" delay={0.15} />
+            <Stat value={followers.length} label="Followers" delay={0.2} />
+            <Stat value={(profile.following || []).length} label="Following" delay={0.25} />
+          </div>
+        </div>
+
+        {level.next && isOwn && (
+          <div className="mt-5 max-w-md">
+            <div className="flex justify-between text-[11px] font-semibold mb-1.5" style={{ color: "var(--text-muted)" }}><span>{level.xpInLevel} / {level.xpNeeded} XP to {level.next.title}</span><span>{Math.round(level.progress)}%</span></div>
+            <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--border-c)" }}><motion.div className="h-full rounded-full" style={{ background: `linear-gradient(90deg, ${level.current.color}, ${level.next.color})` }} initial={{ width: 0 }} animate={{ width: `${level.progress}%` }} transition={{ duration: 1.1, delay: 0.3 }} /></div>
+          </div>
+        )}
+
+        <div className="mt-8 mb-6"><Segmented options={tabs} value={tab} onChange={setTab} /></div>
+
         <AnimatePresence mode="wait">
-          {tab === "posts" && <motion.div key="posts" initial={{ opacity:0,y:14 }} animate={{ opacity:1,y:0 }} exit={{ opacity:0,y:-8 }} transition={{ duration:0.25 }}>
-            {posts.length > 0 && <div className="flex justify-end mb-3"><button onClick={() => exportToCsv(posts.map(p=>({title:p.title||"",likes:p.likes?.length||0})),profile.email+"-posts")} className="btn-outline text-xs px-3 py-1.5 flex items-center gap-1.5"><Download className="w-3 h-3"/> Export CSV</button></div>}
-            {posts.length === 0 ? <div className="flex flex-col items-center py-20 gap-3"><div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background:"var(--pink-soft)" }}><Grid3X3 className="w-5 h-5" style={{ color:"var(--accent-pink)" }}/></div><p className="text-sm" style={{ color:"var(--text-muted)" }}>No posts yet.</p></div>
-              : <div className="columns-1 sm:columns-2 gap-4 pb-10">{posts.map((post,i) => <motion.div key={post.id} className="break-inside-avoid mb-4" initial={{ opacity:0,y:18 }} animate={{ opacity:1,y:0 }} transition={{ delay:i*0.05 }}><PostCard post={post} index={i} onUpdate={fetchData} currentUser={me} /></motion.div>)}</div>}
-          </motion.div>}
-          {tab === "about" && <motion.div key="about" initial={{ opacity:0,y:14 }} animate={{ opacity:1,y:0 }} exit={{ opacity:0,y:-8 }} transition={{ duration:0.25 }} className="space-y-2 mb-8">
-            {aboutRows.map((r,i) => { const Icon=r.Icon; return <motion.div key={r.label} initial={{ opacity:0,x:-12 }} animate={{ opacity:1,x:0 }} transition={{ delay:i*0.07 }} className="card-sm px-4 py-3 flex items-start gap-3" whileHover={{ x:3 }}><div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background:"var(--pink-soft)" }}><Icon className="w-3.5 h-3.5" style={{ color:"var(--accent-rose)" }}/></div><div><p className="text-[10px] font-semibold uppercase tracking-widest mb-0.5" style={{ color:"var(--text-muted)" }}>{r.label}</p><p className="text-sm" style={{ color:"var(--text-primary)" }}>{r.value}</p></div></motion.div>; })}
-          </motion.div>}
-          {tab === "messages" && <motion.div key="messages" initial={{ opacity:0,y:14 }} animate={{ opacity:1,y:0 }} exit={{ opacity:0,y:-8 }} transition={{ duration:0.25 }} className="pb-10"><ProfileMessageBoard profileUser={profile} currentUser={me} /></motion.div>}
-          {tab === "nitro" && isOwn && <motion.div key="nitro" initial={{ opacity:0,y:14 }} animate={{ opacity:1,y:0 }} exit={{ opacity:0,y:-8 }} transition={{ duration:0.25 }} className="pb-10"><NitroShop user={{ ...me,...profile }} onUpdate={(data) => { setProfile(p => ({ ...p,...data })); fetchData(); }} /></motion.div>}
+          <motion.div key={tab} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.22 }}>
+            {tab === "posts" && (posts.length === 0 ? (
+              <EmptyState icon={Grid3X3} title="No posts yet" text={isOwn ? "Share your first piece with the community." : `${name} hasn't posted yet.`} action={isOwn && <Link to="/Community?compose=1" className="btn">Create a post</Link>} />
+            ) : (
+              <div className="columns-1 sm:columns-2 lg:columns-3 gap-5">
+                {posts.map((p, i) => (
+                  <div key={p.id} className="break-inside-avoid mb-5">
+                    <PostCard post={p} index={i} onOpen={() => setOpenPost(p.id)} liked={!!me && (p.likes || []).includes(me.email)} likeCount={p.likes?.length || 0} onLike={() => toggleLike({ entity: "CommunityPost", record: p, user: me, setData: setPosts, message: "liked your post", link: `/Community?post=${p.id}` })} />
+                  </div>
+                ))}
+              </div>
+            ))}
+            {tab === "guestbook" && <ProfileMessageBoard profileUser={profile} />}
+            {tab === "saved" && isOwn && (savedArt.length === 0 ? (
+              <EmptyState icon={Bookmark} title="Nothing saved yet" text="Tap the bookmark on gallery pieces to collect them here." action={<Link to="/Gallery" className="btn">Browse the gallery</Link>} />
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                {savedArt.map((a, i) => (
+                  <motion.div key={a.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.04 }}>
+                    <Link to={`/Gallery?art=${a.id}`} className="group block rounded-3xl overflow-hidden aspect-square relative" style={{ boxShadow: "var(--shadow-sm)" }}>
+                      <img src={a.image_url} alt={a.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                      <span className="absolute inset-x-0 bottom-0 p-3 text-white text-sm font-semibold truncate" style={{ background: "linear-gradient(to top, rgb(20 8 14 / 0.7), transparent)" }}>{a.title}</span>
+                    </Link>
+                  </motion.div>
+                ))}
+              </div>
+            ))}
+            {tab === "shop" && isOwn && <NitroShop />}
+          </motion.div>
         </AnimatePresence>
       </div>
-    </div>
+
+      <PostViewer post={openPost} onClose={() => setOpenPost(null)} liked={!!openPost && !!me && (openPost.likes || []).includes(me.email)} likeCount={openPost?.likes?.length || 0} onLike={() => openPost && toggleLike({ entity: "CommunityPost", record: openPost, user: me, setData: setPosts, message: "liked your post", link: `/Community?post=${openPost.id}` })} onDelete={() => openPost && removePost(openPost)} />
+    </Page>
   );
 }

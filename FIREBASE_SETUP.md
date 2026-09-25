@@ -69,13 +69,15 @@ In Firebase Console, enable these:
 
 Without these, the app cannot create accounts, save posts, save messages, upload artwork, or do anything useful. Shocking, I know.
 
-## 5. Deploy rules first
+## 5. Deploy rules and indexes first
 
 ```bash
-firebase deploy --only firestore:rules,storage
+firebase deploy --only firestore:rules,firestore:indexes,storage
 ```
 
 These rules block normal users from editing or deleting other users’ artwork, comments, messages, posts, site settings, and admin-only data.
+
+The indexes in `firestore.indexes.json` make sorted chat/feed queries fast. If they aren't deployed yet the app still works (it sorts on the client and logs a hint in the console), but deploy them for anything beyond a small community.
 
 ## 6. Run locally
 
@@ -87,7 +89,7 @@ Open the local Vite URL.
 
 ## 7. Create your account
 
-Open the website and click **Create one** on the login page.
+Open the website, choose **Sign up** on the login page and finish the short onboarding.
 
 Then go to Firebase Console → Firestore Database → `User` collection → your user document.
 
@@ -103,9 +105,28 @@ to:
 role: "admin"
 ```
 
-Log out and log back in. The Admin Panel will unlock.
+Log out and log back in. The Admin Panel will unlock. From then on you can promote other members from **Admin Panel → Users → Make admin** — no console needed.
 
-## 8. Deploy the website
+## 8. Voice channels
+
+Voice uses WebRTC with signalling through Firestore (`VoicePresence` and `VoiceSignal` collections, covered by the rules above). Public STUN servers are used by default. If some members can't hear each other (strict corporate/mobile networks), add a TURN server in `.env`:
+
+```text
+VITE_TURN_URL=turn:turn.example.com:3478
+VITE_TURN_USERNAME=...
+VITE_TURN_CREDENTIAL=...
+```
+
+## 9. Try everything locally with emulators
+
+```bash
+npm run emulators      # needs Java installed
+npm run dev:emulator
+```
+
+This uses a `demo-mimilocks` project against local emulators that enforce the same rules, so you can test sign-ups, chat and uploads without touching real data.
+
+## 10. Deploy the website
 
 ```bash
 npm run build
@@ -114,7 +135,7 @@ firebase deploy
 
 Your Firebase Hosting site will then be live.
 
-## 9. What is saved for real
+## 11. What is saved for real
 
 With Firebase enabled, these are stored in Firestore:
 

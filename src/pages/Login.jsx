@@ -1,8 +1,50 @@
 import React, { useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowRight, Eye, EyeOff, Heart, Loader2, Lock, Mail, Music2, Palette, Sparkles, UserRound, Users } from "lucide-react";
 import { base44, backendMode } from "@/api/base44Client";
-import { Eye, EyeOff, Loader2, Lock, Mail, UserPlus } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
+import { Segmented } from "@/components/common/Controls";
+import { toast } from "@/lib/toast";
+
+const TILES = [
+  { x: "8%", y: "12%", r: -8, w: 150, h: 190, g: "linear-gradient(160deg,#ffd1dc,#ee8fae)", icon: Palette, d: 0 },
+  { x: "52%", y: "6%", r: 6, w: 170, h: 130, g: "linear-gradient(160deg,#d9c8ff,#9b7cf5)", icon: Music2, d: 0.6 },
+  { x: "30%", y: "40%", r: -3, w: 190, h: 150, g: "linear-gradient(160deg,#ffe2c7,#ffaa80)", icon: Heart, d: 1.2 },
+  { x: "62%", y: "46%", r: 9, w: 140, h: 180, g: "linear-gradient(160deg,#c6f1e3,#5fd3b0)", icon: Users, d: 1.8 },
+  { x: "70%", y: "74%", r: 4, w: 160, h: 120, g: "linear-gradient(160deg,#cfe6ff,#7cbeff)", icon: Sparkles, d: 2.4 },
+];
+
+function ArtCollage() {
+  return (
+    <div className="relative hidden lg:flex flex-1 overflow-hidden grain" style={{ background: "linear-gradient(145deg, rgb(var(--accent-2-rgb) / 0.35), rgb(var(--accent-rgb) / 0.15) 50%, transparent), var(--surface-2)" }}>
+      <div className="orb orb-a w-96 h-96 -top-20 -left-20" />
+      <div className="orb orb-b w-[28rem] h-[28rem] bottom-0 right-0" />
+      <div className="orb orb-c w-72 h-72 top-1/3 left-1/3" />
+      {TILES.map((t, i) => (
+        <motion.div
+          key={i}
+          className="absolute rounded-[28px] flex items-end p-4 text-white"
+          style={{ left: t.x, top: t.y, width: t.w, height: t.h, background: t.g, boxShadow: "0 30px 60px rgb(42 22 32 / 0.18)" }}
+          initial={{ opacity: 0, y: 40, rotate: t.r - 6 }}
+          animate={{ opacity: 1, y: [0, -12, 0], rotate: t.r }}
+          transition={{ opacity: { delay: t.d * 0.25, duration: 0.6 }, rotate: { delay: t.d * 0.25, type: "spring", stiffness: 80 }, y: { delay: t.d, duration: 6 + i, repeat: Infinity, ease: "easeInOut" } }}
+        >
+          <t.icon className="w-6 h-6 opacity-90" />
+        </motion.div>
+      ))}
+      <div className="relative mt-auto p-12 max-w-lg">
+        <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="eyebrow mb-3">A cozy corner of the internet</motion.p>
+        <motion.h2 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="font-display text-5xl font-semibold leading-[1.05]" style={{ color: "var(--text-primary)" }}>
+          Share your art, <em className="gradient-text">find your people.</em>
+        </motion.h2>
+        <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }} className="mt-4 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+          Gallery, community feed, music, servers with voice chat, DMs and commissions — all in one soft, friendly place.
+        </motion.p>
+      </div>
+    </div>
+  );
+}
 
 export default function LoginPage() {
   const [mode, setMode] = useState("login");
@@ -11,72 +53,115 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [form, setForm] = useState({ email: "", password: "", display_name: "" });
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const { checkUserAuth } = useAuth();
+  const next = params.get("next") || "/";
+
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const submit = async (e) => {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      if (mode === "register") {
+      if (mode === "reset") {
+        await base44.auth.resetPassword(form.email);
+        toast.success("Check your inbox", { description: `We sent a reset link to ${form.email}.` });
+        setMode("login");
+      } else if (mode === "register") {
         await base44.auth.register(form);
         await checkUserAuth();
-        navigate("/Onboarding");
+        navigate("/Onboarding", { replace: true });
       } else {
         await base44.auth.login(form);
         await checkUserAuth();
-        navigate("/");
+        navigate(next, { replace: true });
       }
     } catch (err) {
-      setError(err?.message || "Login failed.");
+      setError(err?.message || "Something went wrong.");
     } finally {
       setLoading(false);
     }
   };
 
+  const titles = {
+    login: ["Welcome back", "Log in to pick up where you left off."],
+    register: ["Create your account", "Join the community in under a minute."],
+    reset: ["Reset password", "We'll email you a link to choose a new one."],
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: "linear-gradient(135deg, #fff7fb, #ffe8f0)" }}>
-      <div className="w-full max-w-md rounded-[28px] shadow-xl border p-6" style={{ background: "rgba(255,255,255,0.9)", borderColor: "rgba(212,112,138,0.25)" }}>
-        <div className="text-center mb-6">
-          <div className="w-16 h-16 mx-auto mb-3 rounded-3xl flex items-center justify-center text-white text-2xl font-bold shadow" style={{ background: "linear-gradient(135deg,#f3a6bd,#d4708a)" }}>M</div>
-          <h1 className="text-xl font-bold" style={{ color: "#57333d" }}>{mode === "login" ? "Welcome back" : "Create your account"}</h1>
-          <p className="text-sm mt-1" style={{ color: "#9b6575" }}>Mimi Locks saves accounts, posts, likes, follows, comments and messages{backendMode === "firebase" ? " in Firebase." : " in this browser until Firebase is configured."}</p>
-        </div>
+    <div className="min-h-[100dvh] flex app-shell">
+      <ArtCollage />
+      <div className="flex-1 lg:max-w-[560px] flex items-center justify-center p-5 sm:p-10 relative">
+        <div className="orb orb-a w-72 h-72 -top-10 -right-10 lg:hidden" />
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 200, damping: 24 }} className="relative w-full max-w-md">
+          <div className="flex items-center gap-3 mb-8">
+            <motion.div initial={{ rotate: -20, scale: 0.6 }} animate={{ rotate: 0, scale: 1 }} transition={{ type: "spring", stiffness: 300, damping: 14 }} className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-display italic text-2xl font-bold" style={{ background: "var(--accent-grad)", boxShadow: "var(--shadow-accent)" }}>M</motion.div>
+            <span className="font-display text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>Mimi Locks</span>
+          </div>
 
-        <form onSubmit={submit} className="space-y-3">
-          {mode === "register" && (
-            <div className="relative">
-              <UserPlus className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#d4708a" }} />
-              <input className="input pl-10" placeholder="Display name" value={form.display_name} onChange={e => setForm(f => ({ ...f, display_name: e.target.value }))} required />
-            </div>
+          <AnimatePresence mode="wait">
+            <motion.div key={mode} initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} transition={{ duration: 0.2 }}>
+              <h1 className="font-display text-4xl font-semibold" style={{ color: "var(--text-primary)" }}>{titles[mode][0]}</h1>
+              <p className="text-sm mt-2 mb-6" style={{ color: "var(--text-muted)" }}>{titles[mode][1]}</p>
+            </motion.div>
+          </AnimatePresence>
+
+          {mode !== "reset" && (
+            <Segmented stretch className="mb-5" value={mode} onChange={(m) => { setMode(m); setError(""); }} options={[{ id: "login", label: "Log in" }, { id: "register", label: "Sign up" }]} />
           )}
-          <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#d4708a" }} />
-            <input className="input pl-10" type="email" placeholder="Email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
-          </div>
-          <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#d4708a" }} />
-            <input className="input pl-10 pr-10" type={showPassword ? "text" : "password"} placeholder="Password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} minLength={6} required />
-            <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2" onClick={() => setShowPassword(v => !v)} style={{ color: "#9b6575" }}>{showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
-          </div>
-          {error && <div className="text-xs px-3 py-2 rounded-xl" style={{ background: "#fff0f0", color: "#c24141", border: "1px solid #ffd0d0" }}>{error}</div>}
-          <button disabled={loading} className="btn w-full justify-center py-3" type="submit">{loading ? <Loader2 className="w-4 h-4 animate-spin" /> : mode === "login" ? "Log in" : "Create account"}</button>
-        </form>
 
-        <div className="mt-4 flex items-center justify-center gap-1 text-sm" style={{ color: "#9b6575" }}>
-          <span>{mode === "login" ? "No account?" : "Already have one?"}</span>
-          <button className="font-semibold" style={{ color: "#d4708a" }} onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}>{mode === "login" ? "Create one" : "Log in"}</button>
-        </div>
-        {backendMode === "local" && (
-          <div className="mt-4 text-[11px] leading-relaxed rounded-xl p-3" style={{ background: "#fff4f7", color: "#9b6575" }}>
-            Local demo admin: <strong>admin@mimilocks.local</strong> / <strong>admin123</strong>. This appears only when Firebase is not configured.
-          </div>
-        )}
-        {backendMode === "firebase" && (
-          <div className="mt-4 text-[11px] leading-relaxed rounded-xl p-3" style={{ background: "#fff4f7", color: "#9b6575" }}>
-            Firebase mode is active. Admin access comes from the user document role in Firestore.
-          </div>
-        )}
+          <form onSubmit={submit} className="space-y-3">
+            <AnimatePresence initial={false}>
+              {mode === "register" && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                  <div className="relative">
+                    <UserRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "var(--accent-rose)" }} />
+                    <input className="input pl-10" placeholder="Display name" value={form.display_name} onChange={set("display_name")} required autoComplete="nickname" />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <div className="relative">
+              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "var(--accent-rose)" }} />
+              <input className="input pl-10" type="email" placeholder="Email" value={form.email} onChange={set("email")} required autoComplete="email" />
+            </div>
+            {mode !== "reset" && (
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "var(--accent-rose)" }} />
+                <input className="input pl-10 pr-11" type={showPassword ? "text" : "password"} placeholder="Password" value={form.password} onChange={set("password")} minLength={6} required autoComplete={mode === "register" ? "new-password" : "current-password"} />
+                <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 icon-btn w-8 h-8" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
+              </div>
+            )}
+            {mode === "login" && (
+              <div className="flex justify-end">
+                <button type="button" onClick={() => { setMode("reset"); setError(""); }} className="text-xs font-semibold hover:underline" style={{ color: "var(--accent-rose)" }}>Forgot password?</button>
+              </div>
+            )}
+            <AnimatePresence>
+              {error && (
+                <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0, x: [0, -6, 6, -4, 4, 0] }} exit={{ opacity: 0 }} className="text-xs font-semibold px-3.5 py-2.5 rounded-xl" style={{ background: "rgb(224 82 107 / 0.1)", color: "var(--danger)", border: "1px solid rgb(224 82 107 / 0.25)" }} role="alert">
+                  {error}
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <button disabled={loading} className="btn w-full py-3 text-sm" type="submit">
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <>{mode === "login" ? "Log in" : mode === "register" ? "Create account" : "Send reset link"} <ArrowRight className="w-4 h-4" /></>}
+            </button>
+            {mode === "reset" && <button type="button" onClick={() => setMode("login")} className="btn-ghost w-full">Back to log in</button>}
+          </form>
+
+          {backendMode === "local" && mode === "login" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="mt-6 card-sm p-4 flex items-center gap-3">
+              <Sparkles className="w-5 h-5 flex-shrink-0" style={{ color: "var(--accent-rose)" }} />
+              <div className="flex-1 min-w-0 text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                Demo mode — data stays in this browser. Admin: <strong>admin@mimilocks.local</strong> / <strong>admin123</strong>
+              </div>
+              <button type="button" className="btn-outline text-xs" onClick={() => setForm((f) => ({ ...f, email: "admin@mimilocks.local", password: "admin123" }))}>Fill</button>
+            </motion.div>
+          )}
+        </motion.div>
       </div>
     </div>
   );

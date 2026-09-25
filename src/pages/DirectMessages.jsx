@@ -1,84 +1,252 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { motion } from "framer-motion";
+import { ArrowLeft, Check, Crown, Info, Loader2, LogOut, MessageSquare, Plus, Trash2, UserPlus, Users } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { Loader2, Plus, X, Search, Users, MessageSquare, ArrowLeft } from "lucide-react";
-import { Link } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import DMChatWindow from "../components/dm/DMChatWindow";
+import { useAuth } from "@/lib/AuthContext";
+import { useLiveQuery } from "@/lib/useLiveQuery";
+import { useFriendships, splitFriendships, dmConversationId } from "@/lib/social";
+import { toast } from "@/lib/toast";
+import { displayName, isOnline, profileLink, timeAgo } from "@/lib/format";
+import { SearchInput } from "@/components/common/Controls";
+import Modal, { useConfirm } from "@/components/common/Modal";
+import Avatar from "@/components/common/Avatar";
+import DMChatWindow from "@/components/dm/DMChatWindow";
 
-function Avatar({ user, size=36 }) {
-  const [err,setErr]=useState(false);
-  const style={width:size,height:size,borderRadius:"50%",flexShrink:0,objectFit:"cover"};
-  if(user?.profile_picture&&!err)return<img src={user.profile_picture} onError={()=>setErr(true)} style={style} alt=""/>;
-  return<div style={{...style,background:"var(--accent-pink)",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:size/3,fontWeight:600}}>{(user?.display_name||user?.full_name)?.[0]?.toUpperCase()||"?"}</div>;
+function GroupIcon({ group, size = 44 }) {
+  const initials = (group?.name || "G").slice(0, 1).toUpperCase();
+  return <span className="flex items-center justify-center rounded-2xl text-white font-display font-semibold flex-shrink-0" style={{ width: size, height: size, background: "linear-gradient(135deg,#b19cff,rgb(var(--accent-rgb)))", fontSize: size * 0.4 }}>{initials}</span>;
 }
 
-function Check({...props}){return<svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>;}
+function PickFriends({ friends, selected, onToggle }) {
+  if (friends.length === 0) return <p className="text-sm text-center py-6" style={{ color: "var(--text-muted)" }}>No friends to add yet.</p>;
+  return (
+    <div className="space-y-1 max-h-64 overflow-y-auto scroll">
+      {friends.map((f) => {
+        const on = selected.includes(f.email);
+        return (
+          <button key={f.email} type="button" onClick={() => onToggle(f.email)} className="w-full flex items-center gap-3 p-2 rounded-2xl text-left transition-colors hover:bg-[var(--surface-2)]" style={on ? { background: "var(--pink-soft)" } : undefined}>
+            <Avatar src={f.profile_picture} name={displayName(f)} size={36} />
+            <span className="flex-1 text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>{displayName(f)}</span>
+            <span className="w-6 h-6 rounded-full flex items-center justify-center" style={on ? { background: "var(--accent-grad)", color: "#fff" } : { border: "2px solid var(--border-strong)" }}>{on && <Check className="w-3.5 h-3.5" />}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
-function CreateGroupModal({ me, friends, onClose, onCreated }) {
-  const [name,setName]=useState(""),[selected,setSelected]=useState([]),[submitting,setSubmitting]=useState(false);
-  const toggle=(email)=>setSelected(prev=>prev.includes(email)?prev.filter(e=>e!==email):[...prev,email]);
-  const create=async()=>{if(!name.trim()||selected.length===0)return;setSubmitting(true);const memberEmails=[...selected,me.email];const memberNames={};friends.forEach(f=>{if(selected.includes(f.email))memberNames[f.email]=f.display_name||f.full_name;});memberNames[me.email]=me.display_name||me.full_name;await base44.entities.GroupChat.create({name:name.trim(),owner_email:me.email,member_emails:memberEmails,member_display_names:memberNames});setSubmitting(false);onCreated();onClose();};
-  return(
-    <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} style={{ position:"fixed",inset:0,zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:16,background:"rgba(0,0,0,0.5)" }}>
-      <motion.div initial={{ scale:0.95,opacity:0 }} animate={{ scale:1,opacity:1 }} exit={{ scale:0.95,opacity:0 }} transition={{ type:"spring",stiffness:300,damping:30 }} style={{ width:"100%",maxWidth:400,borderRadius:20,overflow:"hidden",background:"var(--surface)",border:"1px solid var(--border-c)" }}>
-        <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px",borderBottom:"1px solid var(--border-c)" }}><span style={{ fontWeight:600,fontSize:14,color:"var(--text-primary)" }}>New Group Chat</span><button onClick={onClose}><X className="w-4 h-4" style={{ color:"var(--text-muted)" }}/></button></div>
-        <div style={{ padding:20,display:"flex",flexDirection:"column",gap:16 }}>
-          <div><label style={{ fontSize:12,fontWeight:600,color:"var(--text-muted)",display:"block",marginBottom:6 }}>Group Name</label><input className="input text-sm" placeholder="e.g. Art Squad" value={name} onChange={e=>setName(e.target.value)}/></div>
-          <div><label style={{ fontSize:12,fontWeight:600,color:"var(--text-muted)",display:"block",marginBottom:8 }}>Add Members</label><div style={{ maxHeight:220,overflowY:"auto" }} className="scroll space-y-1">{friends.length===0&&<p style={{ fontSize:12,color:"var(--text-muted)",textAlign:"center",padding:"16px 0" }}>No friends yet.</p>}{friends.map(f=><button key={f.email} onClick={()=>toggle(f.email)} style={{ width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:12,textAlign:"left",border:selected.includes(f.email)?"1.5px solid var(--accent-pink)":"1.5px solid var(--border-c)",background:selected.includes(f.email)?"var(--pink-soft)":"transparent",transition:"all 0.15s" }}><Avatar user={f} size={32}/><span style={{ flex:1,fontSize:13,fontWeight:500,color:"var(--text-primary)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{f.display_name||f.full_name}</span>{selected.includes(f.email)&&<Check style={{ width:16,height:16,color:"var(--accent-rose)" }}/>}</button>)}</div></div>
-          <div style={{ display:"flex",gap:8 }}><button onClick={onClose} className="btn-ghost flex-1 text-xs">Cancel</button><button onClick={create} disabled={submitting||!name.trim()||selected.length===0} className="btn flex-1 text-xs justify-center">{submitting?<Loader2 className="w-3 h-3 animate-spin"/>:"Create"}</button></div>
+function NewGroupModal({ open, onClose, me, friends, onCreated }) {
+  const [name, setName] = useState("");
+  const [selected, setSelected] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const create = async () => {
+    setBusy(true);
+    try {
+      const members = [...selected, me.email].sort();
+      const names = { [me.email]: displayName(me) };
+      friends.forEach((f) => { if (selected.includes(f.email)) names[f.email] = displayName(f); });
+      const g = await base44.entities.GroupChat.create({ name: name.trim(), owner_email: me.email, member_emails: members, member_display_names: names });
+      toast.success(`Created ${name.trim()}`);
+      setName(""); setSelected([]);
+      onCreated(g);
+      onClose();
+    } catch (e) { toast.error(e?.message || "Could not create group."); }
+    setBusy(false);
+  };
+  return (
+    <Modal open={open} onClose={onClose} title="New group chat" subtitle="Chat with several friends at once" footer={<><button className="btn-ghost" onClick={onClose}>Cancel</button><button className="btn" disabled={busy || !name.trim() || selected.length === 0} onClick={create}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create group"}</button></>}>
+      <div className="space-y-4">
+        <div><label className="label" htmlFor="g-name">Group name</label><input id="g-name" className="input" placeholder="e.g. Art Squad" value={name} onChange={(e) => setName(e.target.value)} maxLength={40} /></div>
+        <div><p className="label">Members · {selected.length} selected</p><PickFriends friends={friends} selected={selected} onToggle={(e) => setSelected((s) => (s.includes(e) ? s.filter((x) => x !== e) : [...s, e]))} /></div>
+      </div>
+    </Modal>
+  );
+}
+
+function GroupInfoModal({ open, onClose, group, me, friends, usersByEmail, onLeft }) {
+  const confirm = useConfirm();
+  const [adding, setAdding] = useState([]);
+  const isOwner = group?.owner_email === me.email;
+  if (!group) return null;
+  const addable = friends.filter((f) => !group.member_emails.includes(f.email));
+  const update = (patch) => base44.entities.GroupChat.update(group.id, patch);
+  const addMembers = async () => {
+    const names = { ...(group.member_display_names || {}) };
+    addable.forEach((f) => { if (adding.includes(f.email)) names[f.email] = displayName(f); });
+    try { await update({ member_emails: [...group.member_emails, ...adding].sort(), member_display_names: names }); setAdding([]); toast.success("Members added"); } catch (e) { toast.error(e?.message || "Could not add members."); }
+  };
+  const kick = async (email) => {
+    const names = { ...(group.member_display_names || {}) };
+    delete names[email];
+    try { await update({ member_emails: group.member_emails.filter((e) => e !== email), member_display_names: names }); } catch (e) { toast.error(e?.message || "Could not remove member."); }
+  };
+  const leave = async () => {
+    if (!(await confirm({ title: `Leave ${group.name}?`, confirmLabel: "Leave", danger: true }))) return;
+    const names = { ...(group.member_display_names || {}) };
+    delete names[me.email];
+    try { await update({ member_emails: group.member_emails.filter((e) => e !== me.email), member_display_names: names }); onLeft(); onClose(); } catch (e) { toast.error(e?.message || "Could not leave."); }
+  };
+  const destroy = async () => {
+    if (!(await confirm({ title: `Delete ${group.name}?`, message: "The group will be removed for everyone.", confirmLabel: "Delete group", danger: true }))) return;
+    try { await base44.entities.GroupChat.delete(group.id); onLeft(); onClose(); } catch (e) { toast.error(e?.message || "Could not delete."); }
+  };
+  return (
+    <Modal open={open} onClose={onClose} title={group.name} subtitle={`${group.member_emails.length} members`}>
+      <div className="space-y-5">
+        <div className="space-y-1">
+          {group.member_emails.map((email) => {
+            const u = usersByEmail[email] || { email, display_name: group.member_display_names?.[email] };
+            return (
+              <div key={email} className="flex items-center gap-3 p-2 rounded-2xl">
+                <Link to={profileLink(email)} onClick={onClose}><Avatar src={u.profile_picture} name={displayName(u)} size={36} online={isOnline(u)} /></Link>
+                <span className="flex-1 min-w-0 text-sm font-semibold truncate flex items-center gap-1.5" style={{ color: "var(--text-primary)" }}>{displayName(u)}{email === group.owner_email && <Crown className="w-3.5 h-3.5" style={{ color: "#f0a020" }} />}</span>
+                {isOwner && email !== me.email && <button onClick={() => kick(email)} className="text-xs font-semibold px-2 py-1 rounded-lg hover:bg-[var(--pink-soft)]" style={{ color: "var(--danger)" }}>Remove</button>}
+              </div>
+            );
+          })}
         </div>
-      </motion.div>
-    </motion.div>
+        {isOwner && addable.length > 0 && (
+          <div>
+            <p className="label">Add friends</p>
+            <PickFriends friends={addable} selected={adding} onToggle={(e) => setAdding((s) => (s.includes(e) ? s.filter((x) => x !== e) : [...s, e]))} />
+            {adding.length > 0 && <button onClick={addMembers} className="btn w-full mt-3"><UserPlus className="w-4 h-4" /> Add {adding.length}</button>}
+          </div>
+        )}
+        <div className="flex gap-2">
+          {!isOwner && <button onClick={leave} className="btn-outline flex-1" style={{ color: "var(--danger)" }}><LogOut className="w-4 h-4" /> Leave group</button>}
+          {isOwner && <button onClick={destroy} className="btn-outline flex-1" style={{ color: "var(--danger)" }}><Trash2 className="w-4 h-4" /> Delete group</button>}
+        </div>
+      </div>
+    </Modal>
   );
 }
 
 export default function DirectMessagesPage() {
-  const [me,setMe]=useState(null),[allUsers,setAllUsers]=useState([]),[friendships,setFriendships]=useState([]),[groups,setGroups]=useState([]),[loading,setLoading]=useState(true),[activeConvo,setActiveConvo]=useState(null),[showCreateGroup,setShowCreateGroup]=useState(false),[search,setSearch]=useState(""),[mobileView,setMobileView]=useState("list");
-  useEffect(()=>{fetchData();},[]);
-  const fetchData=async()=>{setLoading(true);const[meData,users,fs,gs]=await Promise.all([base44.auth.me().catch(()=>null),base44.entities.User.list(),base44.entities.Friendship.list(),base44.entities.GroupChat.list("-created_date")]);setMe(meData);setAllUsers(users);setFriendships(fs);setGroups(gs.filter(g=>g.member_emails?.includes(meData?.email)));setLoading(false);};
+  const { user: me } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const [search, setSearch] = useState("");
+  const [showNewGroup, setShowNewGroup] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
+  const { data: users } = useLiveQuery("User", null, { sort: "-last_seen" });
+  const { data: groups } = useLiveQuery("GroupChat", { member_emails: { $contains: me.email } }, { sort: "-created_date" });
+  const { data: recent, loading } = useLiveQuery("DirectMessage", { member_emails: { $contains: me.email } }, { sort: "-created_date", limit: 300 });
+  const { friendships } = useFriendships(me.email);
+  const { friendEmails } = splitFriendships(friendships, me.email);
+  const usersByEmail = useMemo(() => Object.fromEntries(users.map((u) => [u.email, u])), [users]);
+  const friends = useMemo(() => friendEmails.map((e) => usersByEmail[e]).filter(Boolean), [friendEmails, usersByEmail]);
 
-  if(!me)return<div style={{ height:"100%",display:"flex",alignItems:"center",justifyContent:"center" }}><Loader2 className="w-5 h-5 animate-spin" style={{ color:"var(--accent-pink)" }}/></div>;
+  const conversations = useMemo(() => {
+    const last = {};
+    const unread = {};
+    recent.forEach((m) => {
+      if (!last[m.conversation_id]) last[m.conversation_id] = m;
+      if (m.user_email !== me.email && !(m.read_by || []).includes(me.email)) unread[m.conversation_id] = (unread[m.conversation_id] || 0) + 1;
+    });
+    const dmEmails = new Set(friendEmails);
+    recent.filter((m) => m.conversation_type !== "group").forEach((m) => (m.member_emails || []).forEach((e) => e !== me.email && dmEmails.add(e)));
+    const withEmail = params.get("with");
+    if (withEmail && withEmail !== me.email) dmEmails.add(withEmail);
+    const list = [
+      ...[...dmEmails].map((email) => {
+        const id = dmConversationId(me.email, email);
+        return { id, type: "dm", otherUser: usersByEmail[email] || { email, display_name: email.split("@")[0] }, last: last[id], unread: unread[id] || 0 };
+      }),
+      ...groups.map((g) => ({ id: g.id, type: "group", group: g, last: last[g.id], unread: unread[g.id] || 0 })),
+    ];
+    return list.sort((a, b) => new Date(b.last?.created_date || b.group?.created_date || 0) - new Date(a.last?.created_date || a.group?.created_date || 0));
+  }, [recent, groups, friendEmails, usersByEmail, me.email, params]);
 
-  const friends=friendships.filter(f=>f.status==="accepted"&&(f.requester_email===me.email||f.receiver_email===me.email)).map(f=>{const email=f.requester_email===me.email?f.receiver_email:f.requester_email;return allUsers.find(u=>u.email===email);}).filter(Boolean);
-  const getDMConvoId=(a,b)=>[a,b].sort().join("__dm__");
-  const isOnline=(u)=>{if(!u?.last_seen)return false;return Date.now()-new Date(u.last_seen).getTime()<5*60*1000;};
-  const filteredFriends=friends.filter(f=>!search.trim()||(f.display_name||f.full_name)?.toLowerCase().includes(search.toLowerCase()));
-  const filteredGroups=groups.filter(g=>!search.trim()||g.name?.toLowerCase().includes(search.toLowerCase()));
-  const openDM=(friend)=>{setActiveConvo({id:getDMConvoId(me.email,friend.email),type:"dm",otherUser:friend});setMobileView("chat");};
-  const openGroup=(group)=>{setActiveConvo({id:group.id,type:"group",group});setMobileView("chat");};
-  const deleteGroup=async(group)=>{if(!confirm("Delete this group?"))return;await base44.entities.GroupChat.delete(group.id);setActiveConvo(null);setMobileView("list");fetchData();};
+  const activeId = params.get("with") ? dmConversationId(me.email, params.get("with")) : params.get("c");
+  const active = conversations.find((c) => c.id === activeId) || null;
+  const open = (c) => setParams(c.type === "dm" ? { with: c.otherUser.email } : { c: c.id });
+  const close = () => setParams({});
+  useEffect(() => { setShowInfo(false); }, [activeId]);
 
-  const Sidebar=(
-    <div style={{ width:"100%",height:"100%",display:"flex",flexDirection:"column",background:"var(--surface)",borderRight:"1px solid var(--border-c)" }}>
-      <div style={{ flexShrink:0,padding:"16px",borderBottom:"1px solid var(--border-c)",display:"flex",alignItems:"center",gap:12 }}><MessageSquare className="w-5 h-5" style={{ color:"var(--accent-pink)",flexShrink:0 }}/><span style={{ fontWeight:600,fontSize:16,flex:1,color:"var(--text-primary)" }}>Messages</span><button onClick={()=>setShowCreateGroup(true)} className="btn text-xs px-3 py-1.5" style={{ gap:4 }}><Plus className="w-3.5 h-3.5"/> Group</button></div>
-      <div style={{ flexShrink:0,padding:"12px",borderBottom:"1px solid var(--border-c)" }}><div style={{ position:"relative" }}><Search style={{ position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",width:16,height:16,color:"var(--text-muted)" }}/><input className="input pl-9 text-xs py-2" placeholder="Search conversations..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div>
-      <div style={{ flex:1,overflowY:"auto",paddingBlock:8 }} className="scroll">
-        {loading?<div style={{ display:"flex",justifyContent:"center",paddingTop:32 }}><Loader2 className="w-4 h-4 animate-spin" style={{ color:"var(--accent-pink)" }}/></div>:<>
-          {filteredGroups.length>0&&<div style={{ marginBottom:8 }}><p style={{ fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em",padding:"8px 12px",color:"var(--text-muted)" }}>Groups ({filteredGroups.length})</p>{filteredGroups.map(g=>{const active=activeConvo?.id===g.id;return<motion.button key={g.id} onClick={()=>openGroup(g)} whileHover={{ x:2 }} style={{ width:"100%",display:"flex",alignItems:"center",gap:12,padding:"10px 12px",textAlign:"left",background:active?"var(--pink-soft)":"transparent",transition:"background 0.15s" }}><div style={{ width:40,height:40,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,background:"var(--pink-soft)",border:"1px solid var(--border-c)" }}>👥</div><div style={{ flex:1,minWidth:0 }}><p style={{ fontSize:13,fontWeight:500,color:"var(--text-primary)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{g.name}</p><p style={{ fontSize:11,color:"var(--text-muted)" }}>{g.member_emails?.length} members</p></div></motion.button>;})}</div>}
-          <p style={{ fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em",padding:"8px 12px",color:"var(--text-muted)" }}>Direct Messages ({filteredFriends.length})</p>
-          {filteredFriends.length===0?<div style={{ padding:"16px 12px",textAlign:"center" }}><p style={{ fontSize:12,color:"var(--text-muted)",marginBottom:12 }}>No friends yet.</p><Link to="/Friends" className="btn text-xs inline-flex" style={{ gap:6,padding:"6px 12px" }}><Users className="w-3 h-3"/> Add Friends</Link></div>
-            :filteredFriends.map(f=>{const convoId=getDMConvoId(me.email,f.email),active=activeConvo?.id===convoId,online=isOnline(f);return<motion.button key={f.email} onClick={()=>openDM(f)} whileHover={{ x:2 }} style={{ width:"100%",display:"flex",alignItems:"center",gap:12,padding:"10px 12px",textAlign:"left",background:active?"var(--pink-soft)":"transparent",transition:"background 0.15s" }}><div style={{ position:"relative",flexShrink:0 }}><Avatar user={f} size={40}/><div style={{ position:"absolute",bottom:0,right:0,width:10,height:10,borderRadius:"50%",background:online?"#22c55e":"#9ca3af",border:"2px solid var(--surface)" }}/></div><div style={{ flex:1,minWidth:0 }}><p style={{ fontSize:13,fontWeight:500,color:"var(--text-primary)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{f.display_name||f.full_name}</p><p style={{ fontSize:11,color:online?"#22c55e":"var(--text-muted)" }}>{online?"Online":"Offline"}</p></div></motion.button>;})}
-        </>}
+  const q = search.trim().toLowerCase();
+  const visible = conversations.filter((c) => !q || (c.type === "group" ? c.group.name : displayName(c.otherUser)).toLowerCase().includes(q));
+
+  const list = (
+    <div className="flex flex-col h-full min-h-0">
+      <div className="p-4 pb-3 flex items-center gap-3">
+        <h1 className="font-display text-2xl font-semibold flex-1" style={{ color: "var(--text-primary)" }}>Messages</h1>
+        <button onClick={() => setShowNewGroup(true)} className="btn !px-3 text-xs" title="New group"><Plus className="w-4 h-4" /> Group</button>
+      </div>
+      <div className="px-4 pb-3"><SearchInput value={search} onChange={setSearch} placeholder="Search conversations…" /></div>
+      <div className="flex-1 overflow-y-auto scroll px-2 pb-4">
+        {loading && conversations.length === 0 && <div className="space-y-2 px-2">{[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-16" />)}</div>}
+        {!loading && visible.length === 0 && (
+          <div className="text-center py-12 px-6">
+            <Users className="w-8 h-8 mx-auto mb-3" style={{ color: "var(--text-muted)" }} />
+            <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>{q ? "No conversations match." : "Add friends to start chatting."}</p>
+            {!q && <Link to="/Friends" className="btn text-xs"><UserPlus className="w-3.5 h-3.5" /> Find friends</Link>}
+          </div>
+        )}
+        {visible.map((c, i) => {
+          const isActive = c.id === activeId;
+          const title = c.type === "group" ? c.group.name : displayName(c.otherUser);
+          const preview = c.last ? `${c.last.user_email === me.email ? "You: " : c.type === "group" ? `${c.last.user_display_name?.split(" ")[0]}: ` : ""}${c.last.content || "📷 Image"}` : c.type === "group" ? `${c.group.member_emails.length} members` : "Say hi 👋";
+          return (
+            <motion.button key={c.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(i, 10) * 0.03 }} onClick={() => open(c)} className="relative w-full flex items-center gap-3 p-2.5 rounded-2xl text-left transition-colors hover:bg-[var(--surface-2)]">
+              {isActive && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 rounded-2xl" style={{ background: "var(--pink-soft)", boxShadow: "inset 0 0 0 1px rgb(var(--accent-rgb) / 0.2)" }} transition={{ type: "spring", stiffness: 420, damping: 34 }} />}
+              <span className="relative">{c.type === "group" ? <GroupIcon group={c.group} /> : <Avatar src={c.otherUser.profile_picture} name={title} size={44} online={isOnline(c.otherUser)} />}</span>
+              <span className="relative flex-1 min-w-0">
+                <span className="flex items-center gap-2">
+                  <span className="text-sm font-bold truncate flex-1" style={{ color: "var(--text-primary)" }}>{title}</span>
+                  {c.last && <span className="text-[10px] flex-shrink-0" style={{ color: "var(--text-muted)" }}>{timeAgo(c.last.created_date)}</span>}
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="text-xs truncate flex-1" style={{ color: c.unread ? "var(--text-primary)" : "var(--text-muted)", fontWeight: c.unread ? 700 : 400 }}>{preview}</span>
+                  {c.unread > 0 && <span className="min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold text-white flex items-center justify-center" style={{ background: "var(--accent-rose)" }}>{c.unread}</span>}
+                </span>
+              </span>
+            </motion.button>
+          );
+        })}
       </div>
     </div>
   );
 
-  const ChatPanel=(
-    <div style={{ flex:1,minWidth:0,height:"100%",minHeight:0,display:"flex",flexDirection:"column" }}>
-      {activeConvo?<>
-        <div style={{ flexShrink:0,height:56,padding:"0 16px",display:"flex",alignItems:"center",gap:12,background:"var(--surface)",borderBottom:"1px solid var(--border-c)" }}>
-          <button className="md:hidden" onClick={()=>setMobileView("list")} style={{ width:32,height:32,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",background:"var(--pink-soft)",flexShrink:0 }}><ArrowLeft className="w-4 h-4" style={{ color:"var(--text-secondary)" }}/></button>
-          {activeConvo.type==="group"?<><div style={{ width:40,height:40,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,background:"var(--pink-soft)",border:"1px solid var(--border-c)",flexShrink:0 }}>👥</div><div style={{ flex:1,minWidth:0 }}><p style={{ fontWeight:600,fontSize:14,color:"var(--text-primary)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{activeConvo.group?.name}</p><p style={{ fontSize:11,color:"var(--text-muted)" }}>{activeConvo.group?.member_emails?.length} members</p></div>{activeConvo.group?.owner_email===me.email&&<button onClick={()=>deleteGroup(activeConvo.group)} style={{ fontSize:11,color:"#e05a5a",padding:"6px 12px",borderRadius:8,background:"#fff0f0",flexShrink:0 }}>Delete</button>}</>
-            :<><div style={{ position:"relative",flexShrink:0 }}><Avatar user={activeConvo.otherUser} size={40}/><div style={{ position:"absolute",bottom:0,right:0,width:10,height:10,borderRadius:"50%",background:isOnline(activeConvo.otherUser)?"#22c55e":"#9ca3af",border:"2px solid var(--surface)" }}/></div><div style={{ flex:1,minWidth:0 }}><p style={{ fontWeight:600,fontSize:14,color:"var(--text-primary)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{activeConvo.otherUser?.display_name||activeConvo.otherUser?.full_name}</p><p style={{ fontSize:11,color:isOnline(activeConvo.otherUser)?"#22c55e":"var(--text-muted)" }}>{isOnline(activeConvo.otherUser)?"Online":"Offline"}</p></div><Link to={`/Profile?email=${encodeURIComponent(activeConvo.otherUser?.email)}`} className="btn-ghost text-xs" style={{ padding:"6px 12px",flexShrink:0 }}>Profile</Link></>}
-        </div>
-        <div style={{ flex:1,minHeight:0,overflow:"hidden" }}><DMChatWindow conversationId={activeConvo.id} me={me} otherUser={activeConvo.otherUser} isGroup={activeConvo.type==="group"} groupName={activeConvo.group?.name} groupMemberEmails={activeConvo.group?.member_emails || []}/></div>
-      </>:<div style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,padding:32,textAlign:"center" }}><div style={{ width:72,height:72,borderRadius:18,display:"flex",alignItems:"center",justifyContent:"center",background:"var(--pink-soft)" }}><MessageSquare className="w-8 h-8" style={{ color:"var(--accent-pink)" }}/></div><div><p style={{ fontWeight:600,fontSize:16,color:"var(--text-primary)",marginBottom:6 }}>Select a conversation</p><p style={{ fontSize:13,color:"var(--text-muted)" }}>Choose a friend or group to start messaging</p></div><Link to="/Friends" className="btn text-sm" style={{ gap:8,padding:"10px 18px" }}><Users className="w-4 h-4"/> Add Friends</Link></div>}
+  const chat = active ? (
+    <div className="flex flex-col h-full min-h-0">
+      <div className="h-16 flex-shrink-0 flex items-center gap-3 px-3 sm:px-5 glass" style={{ borderBottom: "1px solid var(--border-c)" }}>
+        <button onClick={close} className="icon-btn md:hidden" aria-label="Back to conversations"><ArrowLeft className="w-5 h-5" /></button>
+        {active.type === "group" ? (
+          <>
+            <GroupIcon group={active.group} size={40} />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{active.group.name}</p>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>{active.group.member_emails.length} members · {active.group.member_emails.filter((e) => isOnline(usersByEmail[e])).length} online</p>
+            </div>
+            <button onClick={() => setShowInfo(true)} className="icon-btn" aria-label="Group info"><Info className="w-5 h-5" /></button>
+          </>
+        ) : (
+          <>
+            <Link to={profileLink(active.otherUser.email)}><Avatar src={active.otherUser.profile_picture} name={displayName(active.otherUser)} size={40} online={isOnline(active.otherUser)} /></Link>
+            <div className="flex-1 min-w-0">
+              <Link to={profileLink(active.otherUser.email)} className="text-sm font-bold truncate block hover:underline" style={{ color: "var(--text-primary)" }}>{displayName(active.otherUser)}</Link>
+              <p className="text-xs" style={{ color: isOnline(active.otherUser) ? "var(--success)" : "var(--text-muted)" }}>{isOnline(active.otherUser) ? "Online" : active.otherUser.last_seen ? `Active ${timeAgo(active.otherUser.last_seen)}` : "Offline"}</p>
+            </div>
+          </>
+        )}
+      </div>
+      <div className="flex-1 min-h-0"><DMChatWindow key={active.id} conversation={active} me={me} /></div>
+    </div>
+  ) : (
+    <div className="h-full flex flex-col items-center justify-center text-center gap-4 p-8">
+      <motion.div animate={{ y: [0, -8, 0], rotate: [0, -4, 4, 0] }} transition={{ duration: 4, repeat: Infinity }} className="w-20 h-20 rounded-[1.75rem] flex items-center justify-center text-white" style={{ background: "var(--accent-grad)", boxShadow: "var(--shadow-accent)" }}><MessageSquare className="w-9 h-9" /></motion.div>
+      <p className="font-display text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>Your messages</p>
+      <p className="text-sm max-w-xs" style={{ color: "var(--text-muted)" }}>Pick a conversation, or start a group with a few friends.</p>
+      <button onClick={() => setShowNewGroup(true)} className="btn"><Plus className="w-4 h-4" /> New group</button>
     </div>
   );
 
-  return(
-    <><div className="hidden md:flex" style={{ height:"100%",overflow:"hidden",background:"var(--app-bg)" }}><div style={{ width:320,flexShrink:0,height:"100%",overflow:"hidden" }}>{Sidebar}</div>{ChatPanel}</div>
-    <div className="md:hidden" style={{ height:"100%",overflow:"hidden",background:"var(--app-bg)" }}>{mobileView==="list"?<div style={{ height:"100%",overflow:"hidden" }}>{Sidebar}</div>:<div style={{ height:"100%",overflow:"hidden",display:"flex",flexDirection:"column" }}>{ChatPanel}</div>}</div>
-    <AnimatePresence>{showCreateGroup&&<CreateGroupModal me={me} friends={friends} onClose={()=>setShowCreateGroup(false)} onCreated={fetchData}/>}</AnimatePresence></>
+  return (
+    <div className="h-full flex min-h-0">
+      <aside className={`${active ? "hidden md:flex" : "flex"} w-full md:w-[340px] flex-shrink-0 flex-col h-full glass`} style={{ borderRight: "1px solid var(--border-c)" }}>{list}</aside>
+      <section className={`${active ? "flex" : "hidden md:flex"} flex-1 min-w-0 flex-col h-full`}>{chat}</section>
+      <NewGroupModal open={showNewGroup} onClose={() => setShowNewGroup(false)} me={me} friends={friends} onCreated={(g) => setParams({ c: g.id })} />
+      <GroupInfoModal open={showInfo} onClose={() => setShowInfo(false)} group={active?.group} me={me} friends={friends} usersByEmail={usersByEmail} onLeft={close} />
+    </div>
   );
 }

@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:demo": "vite --mode demo",
+    "dev:emulator": "vite --mode emulator",
+    "emulators": "npx firebase-tools emulators:start --only auth,firestore,storage --project demo-mimilocks",
     "build": "vite build",
     "preview": "vite preview"
   },

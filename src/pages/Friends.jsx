@@ -1,64 +1,155 @@
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
+import { Check, Clock, Loader2, MessageSquare, UserCheck, UserMinus, UserPlus, Users, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { notify } from "../utils/notifications";
-import { UserPlus, UserCheck, Clock, Search, Loader2, Check, X, Users, MessageSquare, Trash2 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/lib/AuthContext";
+import { useLiveQuery } from "@/lib/useLiveQuery";
+import { useFriendships, splitFriendships } from "@/lib/social";
+import { toast } from "@/lib/toast";
+import { displayName, isOnline, profileLink, timeAgo } from "@/lib/format";
+import { notify } from "@/utils/notifications";
+import { Page, PageHeader, EmptyState } from "@/components/common/Page";
+import { SearchInput, Segmented } from "@/components/common/Controls";
+import { useConfirm } from "@/components/common/Modal";
+import Avatar from "@/components/common/Avatar";
 
-function Avatar({ user, size=40 }) {
-  const [err,setErr]=useState(false);
-  const style={width:size,height:size,borderRadius:"50%",objectFit:"cover",flexShrink:0};
-  if(user?.profile_picture&&!err)return<img src={user.profile_picture} onError={()=>setErr(true)} style={style} alt=""/>;
-  return<div style={{...style,background:"var(--accent-pink)",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:size/3,fontWeight:600}}>{user?.display_name?.[0]?.toUpperCase()||"?"}</div>;
+function PersonCard({ person, subtitle, children, index }) {
+  return (
+    <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ delay: Math.min(index, 12) * 0.03 }} className="card-sm p-4 flex items-center gap-3">
+      <Link to={profileLink(person.email)}><Avatar src={person.profile_picture} name={displayName(person)} size={48} online={isOnline(person)} nitro={person.nitro_active} /></Link>
+      <div className="flex-1 min-w-0">
+        <Link to={profileLink(person.email)} className="block text-sm font-bold truncate hover:underline" style={{ color: "var(--text-primary)" }}>{displayName(person)}</Link>
+        <p className="text-xs truncate" style={{ color: isOnline(person) ? "var(--success)" : "var(--text-muted)" }}>{subtitle}</p>
+      </div>
+      <div className="flex gap-1.5 flex-shrink-0">{children}</div>
+    </motion.div>
+  );
 }
 
-const TABS=[{id:"friends",label:"Friends",icon:UserCheck},{id:"requests",label:"Requests",icon:Clock},{id:"add",label:"Discover",icon:UserPlus}];
-
 export default function FriendsPage() {
-  const navigate=useNavigate();
-  const [me,setMe]=useState(null),[allUsers,setAllUsers]=useState([]),[friendships,setFriendships]=useState([]),[loading,setLoading]=useState(true),[tab,setTab]=useState("friends"),[search,setSearch]=useState("");
-  useEffect(()=>{fetchData();},[]);
-  const fetchData=async()=>{setLoading(true);const[meData,users,fs]=await Promise.all([base44.auth.me().catch(()=>null),base44.entities.User.list(),base44.entities.Friendship.list()]);setMe(meData);setAllUsers(users);setFriendships(fs);setLoading(false);};
-  const sendRequest=async(toUser)=>{await base44.entities.Friendship.create({requester_email:me.email,requester_display_name:me.display_name||me.full_name,requester_profile_picture:me.profile_picture||"",requester_profile_emoji:"",receiver_email:toUser.email,receiver_display_name:toUser.display_name||toUser.full_name,receiver_profile_picture:toUser.profile_picture||"",receiver_profile_emoji:"",status:"pending"});notify({to_email:toUser.email,from_email:me.email,from_display_name:me.display_name||me.full_name,from_profile_picture:me.profile_picture,type:"friend_request",message:`${me.display_name||me.full_name} sent you a friend request`,link:"/Friends"});fetchData();};
-  const respond=async(id,status)=>{const f=friendships.find(f=>f.id===id);await base44.entities.Friendship.update(id,{status});if(status==="accepted"&&f){notify({to_email:f.requester_email,from_email:me.email,from_display_name:me.display_name||me.full_name,from_profile_picture:me.profile_picture,type:"friend_accepted",message:`${me.display_name||me.full_name} accepted your friend request`,link:"/Friends"});}fetchData();};
-  const remove=async(id)=>{if(confirm("Remove this friend?"))await base44.entities.Friendship.delete(id);fetchData();};
+  const navigate = useNavigate();
+  const { user: me } = useAuth();
+  const confirm = useConfirm();
+  const [tab, setTab] = useState("friends");
+  const [search, setSearch] = useState("");
+  const [busy, setBusy] = useState(null);
+  const { data: users, loading: usersLoading } = useLiveQuery("User", null, { sort: "-last_seen" });
+  const { friendships, loading } = useFriendships(me?.email);
+  const { accepted, incoming, outgoing, other } = splitFriendships(friendships, me?.email);
+  const byEmail = useMemo(() => Object.fromEntries(users.map((u) => [u.email, u])), [users]);
+  const personFor = (f) => {
+    const email = other(f);
+    const incomingSide = f.requester_email === email;
+    return byEmail[email] || { email, display_name: incomingSide ? f.requester_display_name : f.receiver_display_name, profile_picture: incomingSide ? f.requester_profile_picture : f.receiver_profile_picture };
+  };
+  const q = search.trim().toLowerCase();
+  const matches = (p) => !q || displayName(p).toLowerCase().includes(q) || String(p.email || "").includes(q);
+  const connected = new Set(friendships.map(other));
+  const discover = users.filter((u) => u.email !== me?.email && !connected.has(u.email) && matches(u));
+  const friends = accepted.map((f) => ({ f, p: personFor(f) })).filter(({ p }) => matches(p)).sort((a, b) => Number(isOnline(b.p)) - Number(isOnline(a.p)));
 
-  if(loading||!me)return<div className="flex items-center justify-center h-full"><Loader2 className="w-5 h-5 animate-spin" style={{ color:"var(--accent-pink)" }}/></div>;
+  const run = async (key, fn) => { setBusy(key); try { await fn(); } catch (e) { toast.error(e?.message || "Something went wrong."); } setBusy(null); };
+  const sendRequest = (u) => run(u.email, async () => {
+    await base44.entities.Friendship.create({ requester_email: me.email, requester_display_name: displayName(me), requester_profile_picture: me.profile_picture || "", receiver_email: u.email, receiver_display_name: displayName(u), receiver_profile_picture: u.profile_picture || "", status: "pending" });
+    await notify({ to_email: u.email, from_email: me.email, from_display_name: displayName(me), from_profile_picture: me.profile_picture, type: "friend_request", message: `${displayName(me)} sent you a friend request`, link: "/Friends" });
+    toast.success(`Request sent to ${displayName(u)}`);
+  });
+  const respond = (f, status) => run(f.id, async () => {
+    if (status === "accepted") {
+      await base44.entities.Friendship.update(f.id, { status });
+      await notify({ to_email: f.requester_email, from_email: me.email, from_display_name: displayName(me), from_profile_picture: me.profile_picture, type: "friend_accepted", message: `${displayName(me)} accepted your friend request`, link: "/Friends" });
+      toast.success(`You're now friends with ${f.requester_display_name}`);
+    } else {
+      await base44.entities.Friendship.delete(f.id);
+    }
+  });
+  const remove = async (f, label) => {
+    const ok = await confirm({ title: label === "cancel" ? "Cancel request?" : `Remove ${displayName(personFor(f))}?`, message: label === "cancel" ? undefined : "You can always add them again later.", confirmLabel: label === "cancel" ? "Cancel request" : "Remove friend", danger: label !== "cancel" });
+    if (ok) run(f.id, () => base44.entities.Friendship.delete(f.id));
+  };
 
-  const friends=friendships.filter(f=>f.status==="accepted"&&(f.requester_email===me.email||f.receiver_email===me.email));
-  const incoming=friendships.filter(f=>f.status==="pending"&&f.receiver_email===me.email);
-  const outgoing=friendships.filter(f=>f.status==="pending"&&f.requester_email===me.email);
-  const friendEmails=new Set([...friends.map(f=>f.requester_email===me.email?f.receiver_email:f.requester_email),...outgoing.map(f=>f.receiver_email)]);
-  const addable=allUsers.filter(u=>u.email!==me.email&&!friendEmails.has(u.email)&&(!search.trim()||u.display_name?.toLowerCase().includes(search.toLowerCase())||u.email.includes(search.toLowerCase())));
-  const friendUsers=friends.map(f=>{const email=f.requester_email===me.email?f.receiver_email:f.requester_email;const name=f.requester_email===me.email?f.receiver_display_name:f.requester_display_name;const pic=f.requester_email===me.email?f.receiver_profile_picture:f.requester_profile_picture;const user=allUsers.find(u=>u.email===email);return{...f,otherEmail:email,otherName:name,otherPic:pic,user};});
+  const tabs = [
+    { id: "friends", label: "Friends", icon: UserCheck, count: accepted.length },
+    { id: "requests", label: "Requests", icon: Clock, count: incoming.length },
+    { id: "discover", label: "Discover", icon: UserPlus },
+  ];
 
   return (
-    <div className="h-full flex flex-col overflow-hidden" style={{ background:"var(--app-bg)" }}>
-      <div className="flex-shrink-0 px-4 sm:px-6 py-4 border-b flex items-center gap-3" style={{ background:"var(--surface)",borderColor:"var(--border-c)" }}>
-        <Users className="w-5 h-5" style={{ color:"var(--accent-pink)" }}/><div className="flex-1"><h1 className="text-lg font-bold" style={{ color:"var(--text-primary)" }}>Friends</h1><p className="text-xs" style={{ color:"var(--text-muted)" }}>{friends.length} friends</p></div>
-        {incoming.length>0&&<motion.span className="badge-pink" whileHover={{ scale:1.05 }}>{incoming.length}</motion.span>}
-      </div>
-      <div className="flex-shrink-0 border-b" style={{ background:"var(--surface)",borderColor:"var(--border-c)" }}>
-        <div className="flex">{TABS.map(t=>{const Icon=t.icon,count=t.id==="requests"?(incoming.length+outgoing.length):0,active=tab===t.id;return<button key={t.id} onClick={()=>setTab(t.id)} className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium border-b-2 transition-all" style={active?{borderColor:"var(--accent-pink)",color:"var(--accent-rose)"}:{borderColor:"transparent",color:"var(--text-muted)"}}><Icon className="w-4 h-4"/>{t.label}{count>0&&<span className="badge-pink px-1.5 py-0.5 text-[10px]">{count}</span>}</button>;})}</div>
-      </div>
-      <div className="flex-1 overflow-y-auto scroll" style={{ background:"var(--app-bg)" }}>
+    <Page width="max-w-4xl">
+      <PageHeader eyebrow="Your people" title="Friends" subtitle={`${accepted.length} friends · ${accepted.filter((f) => isOnline(personFor(f))).length} online now`} icon={Users}>
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+          <Segmented options={tabs} value={tab} onChange={setTab} size="sm" />
+          <SearchInput value={search} onChange={setSearch} placeholder="Search people…" className="sm:w-64 sm:ml-auto" />
+        </div>
+      </PageHeader>
+
+      {loading || usersLoading ? (
+        <div className="grid sm:grid-cols-2 gap-3">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-20" />)}</div>
+      ) : (
         <AnimatePresence mode="wait">
-          {tab==="friends"&&<motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} transition={{ duration:0.2 }} className="px-4 sm:px-6 py-4">
-            {friendUsers.length===0?<div className="flex flex-col items-center justify-center py-16 gap-3"><div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background:"var(--pink-soft)" }}><Users className="w-6 h-6" style={{ color:"var(--accent-pink)" }}/></div><p className="text-sm" style={{ color:"var(--text-muted)" }}>No friends yet. Discover people!</p></div>
-              :<div className="space-y-2">{friendUsers.map((f,i)=><motion.div key={f.id} initial={{ opacity:0,x:-10 }} animate={{ opacity:1,x:0 }} transition={{ delay:i*0.03 }} className="card-sm px-4 py-3 flex items-center gap-3 hover:shadow-sm transition-all"><Avatar user={{...f.user,profile_picture:f.otherPic}} size={40}/><div className="flex-1 min-w-0"><p className="text-sm font-semibold truncate" style={{ color:"var(--text-primary)" }}>{f.otherName||f.otherEmail}</p><p className="text-xs truncate" style={{ color:"var(--text-muted)" }}>{f.otherEmail}</p></div><button onClick={()=>navigate("/DirectMessages")} className="btn text-xs px-3 py-1.5 flex items-center gap-1.5"><MessageSquare className="w-3.5 h-3.5"/></button><button onClick={()=>remove(f.id)} className="text-xs py-1.5 px-2 rounded-lg" style={{ color:"var(--text-muted)" }}><Trash2 className="w-3.5 h-3.5" style={{ color:"#e05a5a" }}/></button></motion.div>)}</div>}
-          </motion.div>}
-          {tab==="requests"&&<motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} transition={{ duration:0.2 }} className="px-4 sm:px-6 py-4 space-y-6">
-            {incoming.length===0&&outgoing.length===0?<div className="flex flex-col items-center justify-center py-16 gap-3"><div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background:"var(--pink-soft)" }}><Clock className="w-6 h-6" style={{ color:"var(--accent-pink)" }}/></div><p className="text-sm" style={{ color:"var(--text-muted)" }}>No pending requests</p></div>
-              :<>{incoming.length>0&&<div><p className="text-xs font-semibold uppercase tracking-wider mb-3 px-1" style={{ color:"var(--text-muted)" }}>Incoming ({incoming.length})</p><div className="space-y-2">{incoming.map((f,i)=>{const u=allUsers.find(u=>u.email===f.requester_email);return<motion.div key={f.id} initial={{ opacity:0,x:-10 }} animate={{ opacity:1,x:0 }} transition={{ delay:i*0.05 }} className="card-sm px-4 py-3 flex items-center gap-3"><Avatar user={u} size={40}/><div className="flex-1 min-w-0"><p className="text-sm font-semibold" style={{ color:"var(--text-primary)" }}>{f.requester_display_name}</p><p className="text-xs" style={{ color:"var(--text-muted)" }}>Sent you a friend request</p></div><div className="flex gap-1"><button onClick={()=>respond(f.id,"accepted")} className="btn text-xs px-2.5 py-1.5"><Check className="w-3 h-3"/></button><button onClick={()=>respond(f.id,"rejected")} className="btn-outline text-xs px-2.5 py-1.5"><X className="w-3 h-3"/></button></div></motion.div>;})}</div></div>}
-              {outgoing.length>0&&<div><p className="text-xs font-semibold uppercase tracking-wider mb-3 px-1" style={{ color:"var(--text-muted)" }}>Sent ({outgoing.length})</p><div className="space-y-2">{outgoing.map((f,i)=>{const u=allUsers.find(u=>u.email===f.receiver_email);return<motion.div key={f.id} initial={{ opacity:0,x:-10 }} animate={{ opacity:1,x:0 }} transition={{ delay:i*0.05 }} className="card-sm px-4 py-3 flex items-center gap-3"><Avatar user={u} size={40}/><div className="flex-1 min-w-0"><p className="text-sm font-semibold" style={{ color:"var(--text-primary)" }}>{f.receiver_display_name}</p><p className="text-xs" style={{ color:"var(--text-muted)" }}>Awaiting response...</p></div><button onClick={()=>remove(f.id)} className="btn-outline text-xs px-2.5 py-1.5">Cancel</button></motion.div>;})}</div></div>}</>}
-          </motion.div>}
-          {tab==="add"&&<motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} transition={{ duration:0.2 }} className="px-4 sm:px-6 py-4 space-y-4">
-            <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color:"var(--text-muted)" }}/><input className="input pl-9 text-sm w-full" placeholder="Search by name or email..." value={search} onChange={e=>setSearch(e.target.value)}/></div>
-            {addable.length===0?<div className="flex flex-col items-center justify-center py-16 gap-3"><div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background:"var(--pink-soft)" }}><UserPlus className="w-6 h-6" style={{ color:"var(--accent-pink)" }}/></div><p className="text-sm" style={{ color:"var(--text-muted)" }}>{search?"No users found":"No users to discover"}</p></div>
-              :<div className="space-y-2">{addable.slice(0,50).map((u,i)=><motion.div key={u.email} initial={{ opacity:0,x:-10 }} animate={{ opacity:1,x:0 }} transition={{ delay:i*0.02 }} className="card-sm px-4 py-3 flex items-center gap-3"><Avatar user={u} size={40}/><div className="flex-1 min-w-0"><p className="text-sm font-semibold truncate" style={{ color:"var(--text-primary)" }}>{u.display_name||u.full_name}</p><p className="text-xs truncate" style={{ color:"var(--text-muted)" }}>{u.email}</p></div><button onClick={()=>sendRequest(u)} className="btn text-xs px-3 py-1.5"><UserPlus className="w-3.5 h-3.5"/></button></motion.div>)}</div>}
-          </motion.div>}
+          <motion.div key={tab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+            {tab === "friends" && (friends.length === 0 ? (
+              <EmptyState icon={Users} title={q ? "No matching friends" : "No friends yet"} text="Find people in Discover and send a friend request." action={<button className="btn" onClick={() => setTab("discover")}>Discover people</button>} />
+            ) : (
+              <div className="grid sm:grid-cols-2 gap-3">
+                <AnimatePresence>
+                  {friends.map(({ f, p }, i) => (
+                    <PersonCard key={f.id} person={p} index={i} subtitle={isOnline(p) ? "Online now" : `Active ${timeAgo(p.last_seen)}`}>
+                      <button onClick={() => navigate(`/DirectMessages?with=${encodeURIComponent(p.email)}`)} className="btn !px-3" aria-label={`Message ${displayName(p)}`}><MessageSquare className="w-4 h-4" /></button>
+                      <button onClick={() => remove(f)} disabled={busy === f.id} className="icon-btn icon-btn-bordered" aria-label={`Remove ${displayName(p)}`}><UserMinus className="w-4 h-4" /></button>
+                    </PersonCard>
+                  ))}
+                </AnimatePresence>
+              </div>
+            ))}
+
+            {tab === "requests" && (incoming.length === 0 && outgoing.length === 0 ? (
+              <EmptyState icon={Clock} title="No pending requests" text="Requests you send and receive show up here." />
+            ) : (
+              <div className="space-y-8">
+                {incoming.length > 0 && (
+                  <div>
+                    <p className="eyebrow mb-3">Received · {incoming.length}</p>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      {incoming.map((f, i) => (
+                        <PersonCard key={f.id} person={personFor(f)} index={i} subtitle={`Sent ${timeAgo(f.created_date)}`}>
+                          <button onClick={() => respond(f, "accepted")} disabled={busy === f.id} className="btn !px-3" aria-label="Accept">{busy === f.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button>
+                          <button onClick={() => respond(f, "rejected")} disabled={busy === f.id} className="icon-btn icon-btn-bordered" aria-label="Decline"><X className="w-4 h-4" /></button>
+                        </PersonCard>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {outgoing.length > 0 && (
+                  <div>
+                    <p className="eyebrow mb-3">Sent · {outgoing.length}</p>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      {outgoing.map((f, i) => (
+                        <PersonCard key={f.id} person={personFor(f)} index={i} subtitle="Waiting for a response…">
+                          <button onClick={() => remove(f, "cancel")} disabled={busy === f.id} className="btn-outline text-xs">Cancel</button>
+                        </PersonCard>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {tab === "discover" && (discover.length === 0 ? (
+              <EmptyState icon={UserPlus} title={q ? "No one found" : "You know everyone!"} text={q ? "Try a different name or email." : "Invite friends to join Mimi Locks."} />
+            ) : (
+              <div className="grid sm:grid-cols-2 gap-3">
+                {discover.slice(0, 60).map((u, i) => (
+                  <PersonCard key={u.email} person={u} index={i} subtitle={u.bio || (isOnline(u) ? "Online now" : `Active ${timeAgo(u.last_seen)}`)}>
+                    <button onClick={() => sendRequest(u)} disabled={busy === u.email} className="btn !px-3" aria-label={`Add ${displayName(u)}`}>{busy === u.email ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}</button>
+                  </PersonCard>
+                ))}
+              </div>
+            ))}
+          </motion.div>
         </AnimatePresence>
-      </div>
-    </div>
+      )}
+    </Page>
   );
 }

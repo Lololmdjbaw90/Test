@@ -1,7 +1,11 @@
 import React from "react";
 import { Sparkles } from "lucide-react";
-import { motion } from "framer-motion";
-export default function NitroBadge({active=false,size="sm"}){
-  if(!active)return null;const isLg=size==="lg";
-  return(<motion.div animate={{boxShadow:["0 0 8px #c084fc44","0 0 18px #c084fcaa","0 0 8px #c084fc44"]}} transition={{duration:2,repeat:Infinity}} className={`flex items-center gap-1 rounded-full font-bold ${isLg?"px-3 py-1 text-xs":"px-2 py-0.5 text-[10px]"}`} style={{background:"linear-gradient(135deg,#c084fc,#818cf8)",color:"white"}}><Sparkles className={isLg?"w-3.5 h-3.5":"w-3 h-3"}/>MimiNitro</motion.div>);
+
+export default function NitroBadge({ active = false }) {
+  if (!active) return null;
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold text-white" style={{ background: "linear-gradient(135deg,#8b5cf6,#c084fc,#ee8fae)", backgroundSize: "200% auto", animation: "gradient-pan 4s linear infinite", boxShadow: "0 4px 14px rgb(139 92 246 / 0.35)" }}>
+      <Sparkles className="w-3 h-3" /> Nitro
+    </span>
+  );
 }

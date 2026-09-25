@@ -1,55 +1,123 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
+import { AtSign, Bell, CheckCheck, Heart, MessageCircle, Trash2, UserCheck, UserPlus } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { Bell, Heart, MessageCircle, UserPlus, UserCheck, AtSign, Trash2, CheckCheck } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Link } from "react-router-dom";
-const TYPE_ICONS = { like:Heart, comment:MessageCircle, friend_request:UserPlus, friend_accepted:UserCheck, mention:AtSign, dm:MessageCircle, ping:Bell };
-const TYPE_COLORS = { like:"#e8a0b4", comment:"#818cf8", friend_request:"#f59e0b", friend_accepted:"#22c55e", mention:"#e8a0b4", dm:"#818cf8", ping:"#e8a0b4" };
-function timeAgo(date) { const diff=Date.now()-new Date(date).getTime(),m=Math.floor(diff/60000); if(m<1)return"just now";if(m<60)return`${m}m ago`;const h=Math.floor(m/60);if(h<24)return`${h}h ago`;return`${Math.floor(h/24)}d ago`; }
+import { useLiveQuery } from "@/lib/useLiveQuery";
+import { toast } from "@/lib/toast";
+import { timeAgo } from "@/lib/format";
+import Avatar from "@/components/common/Avatar";
+
+const TYPE_ICONS = { follow: UserPlus, like: Heart, comment: MessageCircle, friend_request: UserPlus, friend_accepted: UserCheck, mention: AtSign, dm: MessageCircle, ping: Bell };
+const TYPE_COLORS = { follow: "#7c5cf0", like: "#e0526b", comment: "#7c5cf0", friend_request: "#f0a020", friend_accepted: "#17a673", mention: "var(--accent-rose)", dm: "#2f80e0", ping: "var(--accent-rose)" };
+
 export default function NotificationBell({ me }) {
-  const [notifications, setNotifications] = useState([]); const [open, setOpen] = useState(false); const ref = useRef(null);
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const { data: notifications, setData } = useLiveQuery("Notification", me?.email ? { to_email: me.email } : null, {
+    sort: "-created_date",
+    limit: 50,
+    enabled: !!me?.email,
+    onEvent: (ev) => { if (ev.type === "create" && ev.data?.message) toast(ev.data.message, { icon: <Bell className="w-5 h-5" /> }); },
+  });
+
   useEffect(() => {
-    if (!me?.email) return;
-    base44.entities.Notification.filter({to_email:me.email},"-created_date",50).catch(()=>[]).then(setNotifications);
-    const unsub = base44.entities.Notification.subscribe(ev => {
-      if(ev.type==="create"&&ev.data?.to_email===me.email)setNotifications(p=>[ev.data,...p]);
-      else if(ev.type==="update"&&ev.data?.to_email===me.email)setNotifications(p=>p.map(n=>n.id===ev.data.id?ev.data:n));
-      else if(ev.type==="delete")setNotifications(p=>p.filter(n=>n.id!==ev.id));
-    });
-    return unsub;
-  }, [me?.email]);
-  useEffect(() => { const h=(e)=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);}; document.addEventListener("mousedown",h); return()=>document.removeEventListener("mousedown",h); }, []);
-  const unread = notifications.filter(n=>!n.is_read).length;
-  const markAllRead = async()=>{await Promise.all(notifications.filter(n=>!n.is_read).map(n=>base44.entities.Notification.update(n.id,{is_read:true})));setNotifications(p=>p.map(n=>({...n,is_read:true})));};
-  const markRead = async(id)=>{await base44.entities.Notification.update(id,{is_read:true});setNotifications(p=>p.map(n=>n.id===id?{...n,is_read:true}:n));};
-  const del = async(id,e)=>{e.stopPropagation();await base44.entities.Notification.delete(id);setNotifications(p=>p.filter(n=>n.id!==id));};
-  const clearAll = async()=>{await Promise.all(notifications.map(n=>base44.entities.Notification.delete(n.id)));setNotifications([]);};
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  const unread = notifications.filter((n) => !n.is_read).length;
+  const markAllRead = async () => {
+    const pending = notifications.filter((n) => !n.is_read);
+    setData((p) => p.map((n) => ({ ...n, is_read: true })));
+    await Promise.all(pending.map((n) => base44.entities.Notification.update(n.id, { is_read: true }).catch(() => {})));
+  };
+  const openItem = (n) => {
+    if (!n.is_read) { base44.entities.Notification.update(n.id, { is_read: true }).catch(() => {}); setData((p) => p.map((x) => (x.id === n.id ? { ...x, is_read: true } : x))); }
+    setOpen(false);
+    if (n.link) navigate(n.link);
+  };
+  const del = async (id, e) => {
+    e.stopPropagation();
+    setData((p) => p.filter((n) => n.id !== id));
+    await base44.entities.Notification.delete(id).catch(() => {});
+  };
+  const clearAll = async () => {
+    const all = notifications;
+    setData([]);
+    await Promise.all(all.map((n) => base44.entities.Notification.delete(n.id).catch(() => {})));
+  };
+
   return (
-    <div ref={ref} style={{position:"relative"}}>
-      <button onClick={()=>setOpen(v=>!v)} style={{width:36,height:36,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",background:open?"var(--pink-soft)":"transparent",border:"1px solid var(--border-c)",cursor:"pointer",position:"relative"}}>
-        <Bell style={{width:18,height:18,color:"var(--text-secondary)"}}/>
-        {unread>0&&<motion.span initial={{scale:0}} animate={{scale:1}} style={{position:"absolute",top:-4,right:-4,background:"var(--accent-rose)",color:"white",fontSize:10,fontWeight:700,minWidth:18,height:18,borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 4px",border:"2px solid var(--surface)"}}>{unread>9?"9+":unread}</motion.span>}
+    <div ref={ref} className="relative">
+      <button onClick={() => setOpen((v) => !v)} className="icon-btn icon-btn-bordered relative" data-active={open} aria-label={`Notifications${unread ? ` (${unread} unread)` : ""}`}>
+        <motion.span animate={unread ? { rotate: [0, -14, 12, -8, 6, 0] } : {}} transition={{ duration: 0.8, repeat: unread ? Infinity : 0, repeatDelay: 4 }} className="inline-flex"><Bell className="w-[18px] h-[18px]" /></motion.span>
+        <AnimatePresence>
+          {unread > 0 && (
+            <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center" style={{ background: "var(--accent-rose)", border: "2px solid var(--surface)" }}>
+              {unread > 9 ? "9+" : unread}
+            </motion.span>
+          )}
+        </AnimatePresence>
       </button>
       <AnimatePresence>
-        {open&&<motion.div initial={{opacity:0,y:8,scale:0.97}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:8,scale:0.97}} transition={{type:"spring",stiffness:400,damping:30}}
-          style={{position:"absolute",top:"calc(100% + 8px)",right:0,zIndex:100,width:340,maxHeight:440,display:"flex",flexDirection:"column",background:"var(--surface)",border:"1px solid var(--border-c)",borderRadius:16,boxShadow:"0 8px 32px rgba(0,0,0,0.12)",overflow:"hidden"}}>
-          <div style={{padding:"12px 16px",borderBottom:"1px solid var(--border-c)",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-            <span style={{fontWeight:700,fontSize:14,flex:1,color:"var(--text-primary)"}}>Notifications</span>
-            {unread>0&&<button onClick={markAllRead} style={{display:"flex",alignItems:"center",gap:4,fontSize:11,fontWeight:600,color:"var(--accent-rose)",cursor:"pointer",padding:"4px 8px",borderRadius:8,background:"var(--pink-soft)"}}><CheckCheck style={{width:12,height:12}}/>Mark all read</button>}
-            {notifications.length>0&&<button onClick={clearAll} style={{fontSize:11,color:"var(--text-muted)",cursor:"pointer",padding:"4px 8px",borderRadius:8}}>Clear all</button>}
-          </div>
-          <div style={{flex:1,overflowY:"auto"}} className="scroll">
-            {notifications.length===0?<div style={{padding:32,textAlign:"center"}}><Bell style={{width:32,height:32,color:"var(--border-c)",margin:"0 auto 8px"}}/><p style={{fontSize:13,color:"var(--text-muted)"}}>No notifications yet</p></div>
-              :notifications.map(n=>{const Icon=TYPE_ICONS[n.type]||Bell,color=TYPE_COLORS[n.type]||"var(--accent-pink)",Wrapper=n.link?Link:"div";return(
-                <Wrapper key={n.id} to={n.link||undefined} onClick={()=>{markRead(n.id);setOpen(false);}} style={{display:"flex",alignItems:"flex-start",gap:12,padding:"12px 16px",background:n.is_read?"transparent":"var(--pink-soft)",cursor:"pointer",textDecoration:"none",borderBottom:"1px solid var(--border-c)"}}>
-                  <div style={{width:32,height:32,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,background:`${color}20`}}><Icon style={{width:15,height:15,color}}/></div>
-                  <div style={{flex:1,minWidth:0}}><p style={{fontSize:13,color:"var(--text-primary)",lineHeight:1.4,marginBottom:2}}>{n.message}</p><p style={{fontSize:11,color:"var(--text-muted)"}}>{timeAgo(n.created_date)}</p></div>
-                  {!n.is_read&&<div style={{width:7,height:7,borderRadius:"50%",background:"var(--accent-rose)",flexShrink:0,marginTop:4}}/>}
-                  <button onClick={e=>del(n.id,e)} style={{width:24,height:24,borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",opacity:0.5}}><Trash2 style={{width:12,height:12,color:"#e05a5a"}}/></button>
-                </Wrapper>
-              );})}
-          </div>
-        </motion.div>}
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: 8, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 420, damping: 32 }}
+            className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 top-16 sm:top-[calc(100%+10px)] z-[100] sm:w-[380px] max-h-[70vh] flex flex-col rounded-3xl overflow-hidden"
+            style={{ background: "var(--surface)", border: "1px solid var(--border-c)", boxShadow: "var(--shadow-lg)", transformOrigin: "top right" }}
+          >
+            <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: "var(--border-c)" }}>
+              <span className="font-display text-lg font-semibold flex-1" style={{ color: "var(--text-primary)" }}>Notifications</span>
+              {unread > 0 && <button onClick={markAllRead} className="chip-sm"><CheckCheck className="w-3 h-3" /> Mark read</button>}
+              {notifications.length > 0 && <button onClick={clearAll} className="text-xs font-semibold px-2 py-1 rounded-lg hover:bg-[var(--pink-soft)]" style={{ color: "var(--text-muted)" }}>Clear</button>}
+            </div>
+            <div className="flex-1 overflow-y-auto scroll">
+              {notifications.length === 0 ? (
+                <div className="py-14 text-center px-6">
+                  <Bell className="w-8 h-8 mx-auto mb-3" style={{ color: "var(--border-strong)" }} />
+                  <p className="text-sm font-semibold" style={{ color: "var(--text-secondary)" }}>You're all caught up</p>
+                  <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Likes, comments and friend requests show up here.</p>
+                </div>
+              ) : (
+                <AnimatePresence initial={false}>
+                  {notifications.map((n) => {
+                    const Icon = TYPE_ICONS[n.type] || Bell;
+                    const color = TYPE_COLORS[n.type] || "var(--accent-rose)";
+                    return (
+                      <motion.div
+                        key={n.id}
+                        layout
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 30, height: 0 }}
+                        onClick={() => openItem(n)}
+                        className="group flex items-start gap-3 px-5 py-3.5 cursor-pointer transition-colors hover:bg-[var(--surface-2)]"
+                        style={{ background: n.is_read ? "transparent" : "var(--pink-soft)" }}
+                      >
+                        <span className="relative flex-shrink-0">
+                          <Avatar src={n.from_profile_picture} name={n.from_display_name} size={38} />
+                          <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: color, border: "2px solid var(--surface)" }}><Icon className="w-2.5 h-2.5 text-white" /></span>
+                        </span>
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-sm leading-snug" style={{ color: "var(--text-primary)" }}>{n.message}</span>
+                          <span className="block text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>{timeAgo(n.created_date)}</span>
+                        </span>
+                        {!n.is_read && <span className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ background: "var(--accent-rose)" }} />}
+                        <button onClick={(e) => del(n.id, e)} className="icon-btn w-7 h-7 opacity-0 group-hover:opacity-100 focus:opacity-100" aria-label="Delete notification"><Trash2 className="w-3.5 h-3.5" style={{ color: "var(--danger)" }} /></button>
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+              )}
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   );

@@ -1,45 +1,52 @@
-import React, { useState } from "react";
-import { Hash } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Hash, Loader2, Volume2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import SimpleModal from "@/components/common/SimpleModal";
-import { Button } from "@/components/ui/button";
+import { toast } from "@/lib/toast";
+import Modal from "@/components/common/Modal";
 
-// Reconstructed fallback (full source: Base44 Code tab → components/server/AddChannelModal.jsx).
-export default function AddChannelModal({ communityId, channelCount = 0, onClose, onCreated }) {
+export const channelSlug = (name, type) => (type === "voice" ? name.trim() : name.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9_-]/g, ""));
+
+export default function AddChannelModal({ open, communityId, channelCount = 0, defaultType = "text", onClose, onCreated }) {
   const [name, setName] = useState("");
-  const [type, setType] = useState("text");
+  const [type, setType] = useState(defaultType);
+  const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  useEffect(() => { if (open) { setType(defaultType); setName(""); setDescription(""); } }, [open, defaultType]);
+
   const create = async () => {
-    const clean = name.trim().toLowerCase().replace(/\s+/g, "-");
-    if (!clean) { setError("Channel name is required."); return; }
-    setSaving(true); setError("");
+    const clean = channelSlug(name, type);
+    if (!clean) return;
+    setSaving(true);
     try {
-      await base44.entities.ServerChannel.create({ community_id: communityId, name: clean, type, position: channelCount });
-      onCreated?.();
-    } catch (e) { setError(e?.message || "Could not create channel."); setSaving(false); }
+      const ch = await base44.entities.ServerChannel.create({ community_id: communityId, name: clean, type, description: description.trim(), position: channelCount, allowed_roles: [] });
+      toast.success(`${type === "voice" ? "🔊" : "#"}${clean} created`);
+      onCreated?.(ch);
+      onClose();
+    } catch (e) { toast.error(e?.message || "Could not create channel."); }
+    setSaving(false);
   };
+
   return (
-    <SimpleModal title="Create Channel" onClose={onClose}
-      footer={<><Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button><Button size="sm" onClick={create} disabled={saving}>{saving ? "Creating\u2026" : "Create"}</Button></>}>
-      <div className="p-5 space-y-4">
-        <div>
-          <label className="block text-xs font-semibold mb-1.5" style={{ color: "var(--text-secondary)" }}>Channel name</label>
-          <div className="flex items-center gap-2 rounded-lg border px-3 py-2" style={{ borderColor: "var(--border-c)" }}>
-            <Hash className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
-            <input autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && create()} placeholder="new-channel" className="flex-1 bg-transparent outline-none text-sm" style={{ color: "var(--text-primary)" }} />
-          </div>
+    <Modal open={open} onClose={onClose} title="Create channel" footer={<><button className="btn-ghost" onClick={onClose}>Cancel</button><button className="btn" onClick={create} disabled={saving || !channelSlug(name, type)}>{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create channel"}</button></>}>
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-2">
+          {[{ id: "text", label: "Text", desc: "Messages, images, reactions", icon: Hash }, { id: "voice", label: "Voice", desc: "Talk with your mic", icon: Volume2 }].map((t) => (
+            <button key={t.id} onClick={() => setType(t.id)} className="card-sm p-3 text-left" style={type === t.id ? { borderColor: "var(--accent-rose)", boxShadow: "0 0 0 3px rgb(var(--accent-rgb) / 0.15)" } : undefined}>
+              <t.icon className="w-5 h-5 mb-2" style={{ color: type === t.id ? "var(--accent-rose)" : "var(--text-muted)" }} />
+              <span className="block text-sm font-bold" style={{ color: "var(--text-primary)" }}>{t.label}</span>
+              <span className="block text-xs" style={{ color: "var(--text-muted)" }}>{t.desc}</span>
+            </button>
+          ))}
         </div>
         <div>
-          <label className="block text-xs font-semibold mb-1.5" style={{ color: "var(--text-secondary)" }}>Type</label>
-          <div className="flex gap-2">
-            {["text", "voice"].map((t) => (
-              <button key={t} onClick={() => setType(t)} className="flex-1 py-2 rounded-lg text-sm capitalize border transition-colors" style={type === t ? { background: "var(--pink-soft)", borderColor: "var(--accent-pink)", color: "var(--accent-rose)" } : { borderColor: "var(--border-c)", color: "var(--text-secondary)" }}>{t}</button>
-            ))}
+          <label className="label" htmlFor="ch-name">Channel name</label>
+          <div className="relative">
+            {type === "text" ? <Hash className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "var(--text-muted)" }} /> : <Volume2 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "var(--text-muted)" }} />}
+            <input id="ch-name" className="input pl-10" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && create()} placeholder={type === "text" ? "new-channel" : "Lounge"} maxLength={32} />
           </div>
         </div>
-        {error && <p className="text-xs" style={{ color: "hsl(var(--destructive))" }}>{error}</p>}
+        <div><label className="label" htmlFor="ch-desc">Topic (optional)</label><input id="ch-desc" className="input" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What's this channel for?" maxLength={120} /></div>
       </div>
-    </SimpleModal>
+    </Modal>
   );
 }

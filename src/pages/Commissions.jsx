@@ -1,92 +1,213 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useMemo, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
+import { Clock, ExternalLink, ImagePlus, Loader2, MessageSquare, Plus, Store, Trash2, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-const UploadFile = (args) => base44.integrations.Core.UploadFile(args);
-import { Plus, Search, Loader2, Trash2, ExternalLink, X, ImageIcon } from "lucide-react";
-import { motion } from "framer-motion";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Link } from "react-router-dom";
+import { useAuth } from "@/lib/AuthContext";
+import { useLiveQuery } from "@/lib/useLiveQuery";
+import { checkText } from "@/lib/moderation";
+import { toast } from "@/lib/toast";
+import { displayName, profileLink } from "@/lib/format";
+import { Page, PageHeader, EmptyState } from "@/components/common/Page";
+import { SearchInput, Segmented, Toggle } from "@/components/common/Controls";
+import Modal, { useConfirm } from "@/components/common/Modal";
+import Avatar from "@/components/common/Avatar";
 
-function ArtistAvatar({ commission }) {
-  const [err,setErr]=useState(false);
-  if(commission.artist_profile_picture&&!err)return<img src={commission.artist_profile_picture} onError={()=>setErr(true)} className="w-8 h-8 rounded-full object-cover flex-shrink-0" alt=""/>;
-  return<div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0" style={{ background:"var(--accent-pink)" }}>{commission.artist_display_name?.[0]?.toUpperCase()||"?"}</div>;
-}
+const minPrice = (c) => (c.tiers?.length ? Math.min(...c.tiers.map((t) => Number(t.price) || 0)) : null);
+const isOpen = (c) => c.is_open ?? c.status === "open";
 
-function CommissionCard({ commission, me, onUpdate, onClick }) {
-  const isOwner=me?.email===commission.artist_email,[deleting,setDeleting]=useState(false);
-  const del=async(e)=>{e.stopPropagation();setDeleting(true);await base44.entities.Commission.delete(commission.id).catch(()=>{});setDeleting(false);onUpdate();};
-  const minPrice=commission.tiers?.length>0?Math.min(...commission.tiers.map(t=>Number(t.price)||0)):null;
-  return(
-    <motion.div initial={{ opacity:0,y:10 }} animate={{ opacity:1,y:0 }} className="card overflow-hidden cursor-pointer hover:shadow-md transition-shadow group" onClick={onClick}>
-      <div className="relative h-44 overflow-hidden" style={{ background:"var(--pink-soft)" }}>
-        {commission.samples?.length>0?<img src={commission.samples[0]} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/>:<div className="w-full h-full flex items-center justify-center"><ImageIcon className="w-8 h-8" style={{ color:"var(--text-muted)" }}/></div>}
-        <div className="absolute top-2 right-2"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={commission.is_open?{background:"rgba(34,197,94,0.15)",color:"#16a34a"}:{background:"rgba(0,0,0,0.1)",color:"#888"}}>{commission.is_open?"● Open":"Closed"}</span></div>
-      </div>
-      <div className="p-3 space-y-2">
-        <div className="flex items-center gap-2"><ArtistAvatar commission={commission}/><div className="flex-1 min-w-0"><p className="font-semibold text-sm truncate" style={{ color:"var(--text-primary)" }}>{commission.title}</p><Link to={`/Profile?email=${encodeURIComponent(commission.artist_email)}`} onClick={e=>e.stopPropagation()} className="text-[10px]" style={{ color:"var(--text-muted)" }}>{commission.artist_display_name}</Link></div>{isOwner&&<button onClick={del} disabled={deleting} className="w-6 h-6 flex items-center justify-center flex-shrink-0"><Trash2 className="w-3.5 h-3.5 text-red-400"/></button>}</div>
-        {commission.description&&<p className="text-xs leading-relaxed line-clamp-2" style={{ color:"var(--text-secondary)" }}>{commission.description}</p>}
-        {minPrice!==null&&<p className="text-xs font-semibold" style={{ color:"var(--accent-rose)" }}>Starting at ${minPrice}</p>}
-      </div>
-    </motion.div>
+function StatusPill({ open }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full glass" style={{ color: open ? "var(--success)" : "var(--text-muted)", border: "1px solid var(--border-c)" }}>
+      <span className="w-1.5 h-1.5 rounded-full" style={{ background: open ? "var(--success)" : "var(--text-muted)", boxShadow: open ? "0 0 0 3px rgb(23 166 115 / 0.2)" : "none" }} />{open ? "Open" : "Closed"}
+    </span>
   );
 }
 
-function CommissionDetail({ commission, me, onClose, onUpdate }) {
-  const isOwner=me?.email===commission.artist_email,[deleting,setDeleting]=useState(false);
-  const del=async()=>{setDeleting(true);await base44.entities.Commission.delete(commission.id).catch(()=>{});setDeleting(false);onClose();onUpdate();};
-  return(
-    <DialogContent className="max-w-lg w-[95vw] max-h-[90vh] rounded-2xl border-0 p-0 overflow-hidden" style={{ background:"var(--surface)",border:"1px solid var(--border-c)" }}>
-      <div className="flex flex-col max-h-[90vh]">
-        {commission.samples?.length>0&&<div className="flex-shrink-0 h-52 overflow-hidden relative"><img src={commission.samples[0]} className="w-full h-full object-cover" alt=""/><div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"/></div>}
-        <div className="flex-1 overflow-y-auto scroll p-5 space-y-4">
-          <div className="flex items-start justify-between gap-3">
-            <div><h2 className="font-semibold text-base" style={{ color:"var(--text-primary)" }}>{commission.title}</h2><Link to={`/Profile?email=${encodeURIComponent(commission.artist_email)}`} className="text-xs flex items-center gap-1.5 mt-1" style={{ color:"var(--accent-rose)" }}><ArtistAvatar commission={commission}/>{commission.artist_display_name}</Link></div>
-            <span className="text-[10px] font-semibold px-2 py-1 rounded-full flex-shrink-0" style={commission.is_open?{background:"rgba(34,197,94,0.1)",color:"#16a34a",border:"1px solid rgba(34,197,94,0.2)"}:{background:"var(--gray-100)",color:"var(--text-muted)"}}>{commission.is_open?"Open for commissions":"Currently closed"}</span>
+function CreateModal({ open, onClose }) {
+  const { user } = useAuth();
+  const [form, setForm] = useState({ title: "", description: "", paypal_link: "", is_open: true, tags: "" });
+  const [tiers, setTiers] = useState([{ name: "", price: "", description: "", delivery_days: "" }]);
+  const [samples, setSamples] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const setTier = (i, k, v) => setTiers((t) => t.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
+  const submit = async () => {
+    if (!form.title.trim()) return;
+    setBusy(true);
+    try {
+      const mod = await checkText(`${form.title} ${form.description}`, { user, where: "commission" });
+      if (!mod.safe) { toast.error("Listing blocked", { description: mod.reason }); setBusy(false); return; }
+      const urls = await Promise.all(samples.map((s) => base44.integrations.Core.UploadFile({ file: s.file }).then((r) => r.file_url)));
+      const link = form.paypal_link.trim();
+      await base44.entities.Commission.create({
+        title: form.title.trim(), description: form.description.trim(), is_open: form.is_open,
+        paypal_link: link && !/^https?:\/\//i.test(link) ? `https://${link}` : link,
+        tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean).slice(0, 6),
+        tiers: tiers.filter((t) => t.name.trim() && t.price !== "").map((t) => ({ ...t, price: Number(t.price), delivery_days: t.delivery_days ? Number(t.delivery_days) : null })),
+        samples: urls, artist_email: user.email, artist_display_name: displayName(user), artist_profile_picture: user.profile_picture || "",
+      });
+      toast.success("Commission listed!");
+      setForm({ title: "", description: "", paypal_link: "", is_open: true, tags: "" });
+      setTiers([{ name: "", price: "", description: "", delivery_days: "" }]);
+      setSamples([]);
+      onClose();
+    } catch (e) { toast.error(e?.message || "Could not publish."); }
+    setBusy(false);
+  };
+  return (
+    <Modal open={open} onClose={onClose} title="List a commission" subtitle="Tell people what you offer and how much it costs." size="lg" footer={<><button className="btn-ghost" onClick={onClose}>Cancel</button><button className="btn" disabled={busy || !form.title.trim()} onClick={submit}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Publish"}</button></>}>
+      <div className="space-y-4">
+        <div><label className="label" htmlFor="cm-title">Title</label><input id="cm-title" className="input" placeholder="e.g. Watercolor pet portraits" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} maxLength={80} /></div>
+        <div><label className="label" htmlFor="cm-desc">Description</label><textarea id="cm-desc" className="input resize-none" rows={3} placeholder="Style, what's included, turnaround…" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} maxLength={600} /></div>
+        <div>
+          <p className="label">Samples</p>
+          <div className="flex gap-2 flex-wrap">
+            {samples.map((s, i) => (
+              <motion.div key={s.url} initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="relative w-20 h-20">
+                <img src={s.url} alt="" className="w-full h-full rounded-2xl object-cover" />
+                <button onClick={() => setSamples((x) => x.filter((_, j) => j !== i))} className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full flex items-center justify-center text-white" style={{ background: "var(--text-primary)" }} aria-label="Remove sample"><X className="w-3 h-3" /></button>
+              </motion.div>
+            ))}
+            {samples.length < 6 && (
+              <label className="w-20 h-20 rounded-2xl flex items-center justify-center cursor-pointer" style={{ border: "2px dashed var(--border-strong)", color: "var(--text-muted)" }}>
+                <ImagePlus className="w-5 h-5" />
+                <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => { const files = [...(e.target.files || [])].slice(0, 6 - samples.length); setSamples((x) => [...x, ...files.map((file) => ({ file, url: URL.createObjectURL(file) }))]); e.target.value = ""; }} />
+              </label>
+            )}
           </div>
-          {commission.description&&<p className="text-sm leading-relaxed" style={{ color:"var(--text-secondary)" }}>{commission.description}</p>}
-          {commission.tiers?.length>0&&<div><p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color:"var(--text-muted)" }}>Pricing</p><div className="space-y-2">{commission.tiers.map((t,i)=><div key={i} className="flex items-center justify-between p-3 rounded-xl" style={{ background:"var(--pink-soft)",border:"1px solid var(--border-c)" }}><div><p className="text-sm font-semibold" style={{ color:"var(--text-primary)" }}>{t.name}</p>{t.description&&<p className="text-xs mt-0.5" style={{ color:"var(--text-muted)" }}>{t.description}</p>}{t.delivery_days&&<p className="text-[10px] mt-0.5" style={{ color:"var(--text-muted)" }}>{t.delivery_days} day delivery</p>}</div><p className="text-base font-bold" style={{ color:"var(--accent-rose)" }}>${t.price}</p></div>)}</div></div>}
-          <div className="flex gap-2 pt-1">{commission.paypal_link&&commission.is_open&&<a href={commission.paypal_link} target="_blank" rel="noopener noreferrer" className="btn flex-1 justify-center"><ExternalLink className="w-3.5 h-3.5"/> Commission Now</a>}{isOwner&&<button onClick={del} disabled={deleting} className="px-4 py-2 rounded-full text-xs font-semibold text-white flex-shrink-0" style={{ background:"#e05a5a" }}>{deleting?"...":"Delete"}</button>}</div>
+        </div>
+        <div>
+          <p className="label">Pricing tiers</p>
+          <div className="space-y-2">
+            {tiers.map((t, i) => (
+              <div key={i} className="card-sm p-3 grid grid-cols-[1fr_90px_90px_auto] gap-2 items-center">
+                <input className="input !min-h-[2.2rem] !py-1.5" placeholder="Tier name" value={t.name} onChange={(e) => setTier(i, "name", e.target.value)} />
+                <input className="input !min-h-[2.2rem] !py-1.5" placeholder="$ price" type="number" min="0" value={t.price} onChange={(e) => setTier(i, "price", e.target.value)} />
+                <input className="input !min-h-[2.2rem] !py-1.5" placeholder="days" type="number" min="1" value={t.delivery_days} onChange={(e) => setTier(i, "delivery_days", e.target.value)} />
+                <button onClick={() => setTiers((x) => (x.length > 1 ? x.filter((_, j) => j !== i) : x))} className="icon-btn w-8 h-8" aria-label="Remove tier" disabled={tiers.length === 1}><X className="w-4 h-4" /></button>
+                <input className="input !min-h-[2.2rem] !py-1.5 col-span-4" placeholder="What's included (optional)" value={t.description} onChange={(e) => setTier(i, "description", e.target.value)} />
+              </div>
+            ))}
+          </div>
+          <button className="btn-ghost text-xs mt-2" onClick={() => setTiers((x) => [...x, { name: "", price: "", description: "", delivery_days: "" }])}><Plus className="w-3.5 h-3.5" /> Add tier</button>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div><label className="label" htmlFor="cm-link">Payment link (optional)</label><input id="cm-link" className="input" placeholder="paypal.me/you" value={form.paypal_link} onChange={(e) => setForm((f) => ({ ...f, paypal_link: e.target.value }))} /></div>
+          <div><label className="label" htmlFor="cm-tags">Tags</label><input id="cm-tags" className="input" placeholder="portrait, anime, pets" value={form.tags} onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))} /></div>
+        </div>
+        <div className="card-sm p-3.5"><Toggle checked={form.is_open} onChange={(v) => setForm((f) => ({ ...f, is_open: v }))} label="Open for commissions" description="You can close it any time." /></div>
+      </div>
+    </Modal>
+  );
+}
+
+function DetailModal({ commission, onClose }) {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const confirm = useConfirm();
+  const [idx, setIdx] = useState(0);
+  if (!commission) return <Modal open={false} onClose={onClose} />;
+  const owner = user?.email === commission.artist_email || user?.role === "admin";
+  const open = isOpen(commission);
+  const toggle = () => base44.entities.Commission.update(commission.id, { is_open: !open }).then(() => toast.success(open ? "Marked as closed" : "Open for commissions")).catch((e) => toast.error(e?.message || "Could not update."));
+  const del = async () => {
+    if (!(await confirm({ title: "Delete listing?", confirmLabel: "Delete", danger: true }))) return;
+    try { await base44.entities.Commission.delete(commission.id); toast.success("Listing deleted"); onClose(); } catch (e) { toast.error(e?.message || "Could not delete."); }
+  };
+  return (
+    <Modal open onClose={onClose} size="xl" padded={false} hideHeader>
+      {commission.samples?.length > 0 && (
+        <div className="relative h-64 sm:h-80 overflow-hidden" style={{ background: "var(--surface-2)" }}>
+          <AnimatePresence mode="wait"><motion.img key={idx} src={commission.samples[idx]} alt="" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 w-full h-full object-cover" /></AnimatePresence>
+          <div className="absolute top-4 left-4"><StatusPill open={open} /></div>
+          {commission.samples.length > 1 && <div className="absolute bottom-3 inset-x-0 flex justify-center gap-1.5">{commission.samples.map((s, i) => <button key={s} onClick={() => setIdx(i)} className="w-12 h-12 rounded-xl overflow-hidden transition-transform" style={{ boxShadow: i === idx ? "0 0 0 2px #fff" : "none", transform: i === idx ? "scale(1.08)" : "none" }}><img src={s} alt="" className="w-full h-full object-cover" /></button>)}</div>}
+        </div>
+      )}
+      <div className="p-5 sm:p-7 space-y-5">
+        <div>
+          <h2 className="font-display text-3xl font-semibold pr-10" style={{ color: "var(--text-primary)" }}>{commission.title}</h2>
+          <Link to={profileLink(commission.artist_email)} onClick={onClose} className="flex items-center gap-2 mt-2 w-fit group">
+            <Avatar src={commission.artist_profile_picture} name={commission.artist_display_name} size={28} />
+            <span className="text-sm font-semibold group-hover:underline" style={{ color: "var(--text-secondary)" }}>{commission.artist_display_name}</span>
+          </Link>
+        </div>
+        {commission.description && <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>{commission.description}</p>}
+        {commission.tags?.length > 0 && <div className="flex flex-wrap gap-1.5">{commission.tags.map((t) => <span key={t} className="badge-pink">#{t}</span>)}</div>}
+        {commission.tiers?.length > 0 && (
+          <div className="grid sm:grid-cols-2 gap-3">
+            {commission.tiers.map((t, i) => (
+              <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }} className="card-sm p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-bold" style={{ color: "var(--text-primary)" }}>{t.name}</p>
+                  <p className="font-display text-2xl font-semibold gradient-text">${t.price}</p>
+                </div>
+                {t.description && <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{t.description}</p>}
+                {t.delivery_days && <p className="text-[11px] mt-2 flex items-center gap-1" style={{ color: "var(--text-muted)" }}><Clock className="w-3 h-3" /> {t.delivery_days}-day delivery</p>}
+              </motion.div>
+            ))}
+          </div>
+        )}
+        <div className="flex flex-wrap gap-2">
+          {!owner && open && commission.paypal_link && <a href={commission.paypal_link} target="_blank" rel="noopener noreferrer" className="btn flex-1"><ExternalLink className="w-4 h-4" /> Commission now</a>}
+          {!owner && <button onClick={() => { onClose(); navigate(`/DirectMessages?with=${encodeURIComponent(commission.artist_email)}`); }} className={commission.paypal_link && open ? "btn-outline" : "btn flex-1"}><MessageSquare className="w-4 h-4" /> Message artist</button>}
+          {owner && <button onClick={toggle} className="btn-outline flex-1">{open ? "Close commissions" : "Reopen commissions"}</button>}
+          {owner && <button onClick={del} className="btn-outline" style={{ color: "var(--danger)" }}><Trash2 className="w-4 h-4" /> Delete</button>}
         </div>
       </div>
-    </DialogContent>
-  );
-}
-
-function CreateModal({ me, onCreated, onClose }) {
-  const [form,setForm]=useState({title:"",description:"",paypal_link:"",is_open:true}),[tiers,setTiers]=useState([{name:"",price:"",description:""}]),[sampleFiles,setSampleFiles]=useState([]),[samplePreviews,setSamplePreviews]=useState([]),[submitting,setSubmitting]=useState(false);
-  const fileRef=useRef(null);
-  const addSample=(e)=>{const f=e.target.files?.[0];if(!f)return;setSampleFiles(prev=>[...prev,f]);setSamplePreviews(prev=>[...prev,URL.createObjectURL(f)]);};
-  const submit=async(e)=>{e.preventDefault();if(!form.title.trim())return;setSubmitting(true);const sampleUrls=await Promise.all(sampleFiles.map(f=>UploadFile({file:f}).then(r=>r.file_url)));await base44.entities.Commission.create({...form,artist_email:me.email,artist_display_name:me.display_name||me.full_name,artist_profile_picture:me.profile_picture||"",tiers:tiers.filter(t=>t.name&&t.price),samples:sampleUrls,tags:[]});onCreated();onClose();setSubmitting(false);};
-  return(
-    <DialogContent className="max-w-sm w-[92vw] rounded-2xl border-0 p-0 max-h-[88vh] overflow-y-auto scroll" style={{ background:"var(--surface)",border:"1px solid var(--border-c)" }}>
-      <div className="p-5">
-        <div className="flex items-center justify-between mb-4"><h2 className="font-semibold text-sm" style={{ color:"var(--text-primary)" }}>List Commission</h2><button onClick={onClose}><X className="w-4 h-4" style={{ color:"var(--text-muted)" }}/></button></div>
-        <form onSubmit={submit} className="space-y-3">
-          <input className="input text-sm" placeholder="Title *" value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))}/>
-          <textarea className="input text-sm resize-none" rows={3} placeholder="Describe what you offer..." value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))}/>
-          <input className="input text-sm" placeholder="PayPal.me link" value={form.paypal_link} onChange={e=>setForm(f=>({...f,paypal_link:e.target.value}))}/>
-          <div><p className="text-xs font-medium mb-1.5" style={{ color:"var(--text-secondary)" }}>Sample Images</p><div className="flex gap-2 flex-wrap">{samplePreviews.map((p,i)=><img key={i} src={p} className="w-14 h-14 rounded-xl object-cover"/>)}<button type="button" onClick={()=>fileRef.current?.click()} className="w-14 h-14 rounded-xl border-2 border-dashed flex items-center justify-center" style={{ borderColor:"var(--border-c)" }}><Plus className="w-4 h-4" style={{ color:"var(--text-muted)" }}/></button></div><input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={addSample}/></div>
-          <div><p className="text-xs font-medium mb-1.5" style={{ color:"var(--text-secondary)" }}>Pricing Tiers</p><div className="space-y-2">{tiers.map((t,i)=><div key={i} className="flex gap-2 items-center"><input className="input text-xs flex-1" placeholder="e.g. Sketch" value={t.name} onChange={e=>{const n=[...tiers];n[i].name=e.target.value;setTiers(n);}}/><input className="input text-xs w-20" placeholder="$" type="number" value={t.price} onChange={e=>{const n=[...tiers];n[i].price=e.target.value;setTiers(n);}}/>{tiers.length>1&&<button type="button" onClick={()=>setTiers(tiers.filter((_,j)=>j!==i))}><X className="w-3.5 h-3.5" style={{ color:"var(--text-muted)" }}/></button>}</div>)}</div><button type="button" className="btn-ghost text-xs mt-1.5" onClick={()=>setTiers([...tiers,{name:"",price:"",description:""}])}><Plus className="w-3 h-3"/> Add tier</button></div>
-          <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.is_open} onChange={e=>setForm(f=>({...f,is_open:e.target.checked}))} className="w-4 h-4"/><span className="text-xs" style={{ color:"var(--text-secondary)" }}>Open for commissions</span></label>
-          <div className="flex gap-2 pt-1"><button type="button" className="flex-1 btn-ghost" onClick={onClose}>Cancel</button><button type="submit" disabled={submitting||!form.title.trim()} className="flex-1 btn justify-center">{submitting?<Loader2 className="w-3.5 h-3.5 animate-spin"/>:"Publish"}</button></div>
-        </form>
-      </div>
-    </DialogContent>
+    </Modal>
   );
 }
 
 export default function CommissionsPage() {
-  const [commissions,setCommissions]=useState([]),[me,setMe]=useState(null),[loading,setLoading]=useState(true),[search,setSearch]=useState(""),[showCreate,setShowCreate]=useState(false),[selected,setSelected]=useState(null);
-  useEffect(()=>{fetchData();},[]);
-  const fetchData=async()=>{setLoading(true);const[cs,me]=await Promise.all([base44.entities.Commission.list("-created_date"),base44.auth.me().catch(()=>null)]);setCommissions(cs);setMe(me);setLoading(false);};
-  const filtered=commissions.filter(c=>!search.trim()||c.title?.toLowerCase().includes(search.toLowerCase())||c.artist_display_name?.toLowerCase().includes(search.toLowerCase()));
-  return(
-    <div className="h-full flex flex-col overflow-hidden">
-      <div className="flex-shrink-0 px-4 sm:px-6 py-4 border-b flex items-center gap-3" style={{ background:"var(--surface)",borderColor:"var(--border-c)" }}><div className="flex-1"><h1 className="text-base font-semibold" style={{ color:"var(--text-primary)" }}>Commissions</h1><p className="text-xs" style={{ color:"var(--text-muted)" }}>{commissions.filter(c=>c.is_open).length} open</p></div>{me&&<button className="btn text-xs px-3 py-2" onClick={()=>setShowCreate(true)}><Plus className="w-3.5 h-3.5"/> List</button>}</div>
-      <div className="flex-shrink-0 px-4 sm:px-6 py-3 border-b" style={{ background:"var(--surface)",borderColor:"var(--border-c)" }}><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color:"var(--text-muted)" }}/><input className="input pl-9 text-sm" placeholder="Search artists or styles..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div>
-      <div className="flex-1 overflow-y-auto scroll px-4 sm:px-6 py-4">{loading?<div className="flex justify-center py-12"><Loader2 className="w-5 h-5 animate-spin" style={{ color:"var(--accent-pink)" }}/></div>:<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-6">{filtered.map(c=><CommissionCard key={c.id} commission={c} me={me} onUpdate={fetchData} onClick={()=>setSelected(c)}/>)}{filtered.length===0&&<p className="col-span-full text-center text-sm py-12" style={{ color:"var(--text-muted)" }}>No commissions yet.</p>}</div>}</div>
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>{showCreate&&me&&<CreateModal me={me} onCreated={fetchData} onClose={()=>setShowCreate(false)}/>}</Dialog>
-      <Dialog open={!!selected} onOpenChange={v=>!v&&setSelected(null)}>{selected&&<CommissionDetail commission={selected} me={me} onClose={()=>setSelected(null)} onUpdate={fetchData}/>}</Dialog>
-    </div>
+  const { user } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("open");
+  const { data: commissions, loading } = useLiveQuery("Commission", null, { sort: "-created_date" });
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return commissions.filter((c) => (filter === "all" || (filter === "open" ? isOpen(c) : c.artist_email === user.email)) && (!q || [c.title, c.description, c.artist_display_name, ...(c.tags || [])].some((f) => String(f || "").toLowerCase().includes(q))));
+  }, [commissions, search, filter, user.email]);
+  const selected = commissions.find((c) => c.id === params.get("c")) || null;
+
+  return (
+    <Page width="max-w-6xl">
+      <PageHeader eyebrow="Hire an artist" title="Commissions" subtitle={`${commissions.filter(isOpen).length} artists open for work`} icon={Store} actions={<button className="btn" onClick={() => setParams({ create: "1" })}><Plus className="w-4 h-4" /> List yours</button>}>
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+          <Segmented options={[{ id: "open", label: "Open now" }, { id: "all", label: "All" }, { id: "mine", label: "Mine" }]} value={filter} onChange={setFilter} size="sm" />
+          <SearchInput value={search} onChange={setSearch} placeholder="Search styles, artists, tags…" className="sm:w-72 sm:ml-auto" />
+        </div>
+      </PageHeader>
+      {loading ? (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton h-80 !rounded-3xl" />)}</div>
+      ) : filtered.length === 0 ? (
+        <EmptyState icon={Store} title="No commissions here" text={filter === "mine" ? "List your first commission to start getting requests." : "Try another filter."} action={<button className="btn" onClick={() => setParams({ create: "1" })}>List a commission</button>} />
+      ) : (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filtered.map((c, i) => {
+            const price = minPrice(c);
+            return (
+              <motion.button key={c.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 9) * 0.05 }} whileHover={{ y: -5 }} onClick={() => setParams({ c: c.id })} className="card !rounded-3xl overflow-hidden text-left group">
+                <div className="relative h-52 overflow-hidden" style={{ background: "var(--surface-2)" }}>
+                  {c.samples?.[0] ? <img src={c.samples[0]} alt="" loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" /> : <div className="w-full h-full flex items-center justify-center"><Store className="w-8 h-8" style={{ color: "var(--text-muted)" }} /></div>}
+                  <div className="absolute top-3 left-3"><StatusPill open={isOpen(c)} /></div>
+                  {price !== null && <div className="absolute bottom-3 right-3 glass rounded-2xl px-3 py-1.5 text-right" style={{ border: "1px solid var(--border-c)" }}><p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>from</p><p className="font-display text-xl font-semibold leading-none" style={{ color: "var(--text-primary)" }}>${price}</p></div>}
+                </div>
+                <div className="p-4">
+                  <p className="font-display text-lg font-semibold truncate" style={{ color: "var(--text-primary)" }}>{c.title}</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Avatar src={c.artist_profile_picture} name={c.artist_display_name} size={24} />
+                    <span className="text-xs font-semibold truncate" style={{ color: "var(--text-secondary)" }}>{c.artist_display_name}</span>
+                    <span className="text-xs ml-auto" style={{ color: "var(--text-muted)" }}>{c.tiers?.length || 0} tier{c.tiers?.length === 1 ? "" : "s"}</span>
+                  </div>
+                </div>
+              </motion.button>
+            );
+          })}
+        </div>
+      )}
+      <CreateModal open={params.get("create") === "1"} onClose={() => setParams({})} />
+      {selected && <DetailModal key={selected.id} commission={selected} onClose={() => setParams({})} />}
+    </Page>
   );
 }

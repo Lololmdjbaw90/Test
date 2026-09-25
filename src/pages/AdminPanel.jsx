@@ -1,90 +1,216 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { animate, motion } from "framer-motion";
+import { Activity, BarChart3, Image as ImageIcon, MessageSquare, Music, Server, Settings as SettingsIcon, Shield, ShieldCheck, ShieldOff, Trash2, Users } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import AdminSiteSettings from "../components/admin/AdminSiteSettings";
-import { BarChart3, Loader2, Shield, Trash2, Users, Image as ImageIcon, MessageSquare, Server, Settings as SettingsIcon } from "lucide-react";
+import { useAuth } from "@/lib/AuthContext";
+import { toast } from "@/lib/toast";
+import { displayName, isOnline, profileLink, timeAgo } from "@/lib/format";
+import { Page, PageHeader, EmptyState, CenterSpinner } from "@/components/common/Page";
+import { SearchInput, Segmented, ChipRow } from "@/components/common/Controls";
+import { useConfirm } from "@/components/common/Modal";
+import Avatar from "@/components/common/Avatar";
+import AdminSiteSettings from "@/components/admin/AdminSiteSettings";
 
-const collections = ["User", "Artwork", "CommunityPost", "Comment", "CommunityComment", "ChannelMessage", "Community", "ServerChannel", "Friendship", "MusicReview"];
+const COLLECTIONS = ["User", "Artwork", "CommunityPost", "Comment", "CommunityComment", "ChannelMessage", "Community", "ServerChannel", "MusicReview", "Commission"];
 
-function Stat({ icon: Icon, label, value }) {
-  return <div className="card p-4 flex items-center gap-3"><div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: "var(--pink-soft)", color: "var(--accent-rose)" }}><Icon className="w-5 h-5" /></div><div><p className="text-xs" style={{ color: "var(--text-muted)" }}>{label}</p><p className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>{value}</p></div></div>;
+function CountUp({ value }) {
+  const [n, setN] = useState(0);
+  useEffect(() => { const c = animate(0, value, { duration: 1, ease: "easeOut", onUpdate: (v) => setN(Math.round(v)) }); return () => c.stop(); }, [value]);
+  return <>{n.toLocaleString()}</>;
 }
 
-export default function AdminPanel() {
-  const [me, setMe] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState({});
-  const [tab, setTab] = useState("overview");
-
-  const load = async () => {
-    setLoading(true);
-    const current = await base44.auth.me().catch(() => null);
-    setMe(current);
-    if (current?.role !== "admin") { setLoading(false); return; }
-    const entries = await Promise.all(collections.map(async name => [name, await base44.entities[name].list("-created_date").catch(() => [])]));
-    setData(Object.fromEntries(entries));
-    setLoading(false);
-  };
-  useEffect(() => { load(); }, []);
-
-  const feed = useMemo(() => {
-    return [
-      ...(data.Artwork || []).map(x => ({ type: "Artwork", text: x.title, by: x.user_display_name || x.created_by, date: x.created_date })),
-      ...(data.CommunityPost || []).map(x => ({ type: "Feed post", text: x.title || x.description, by: x.user_display_name || x.created_by, date: x.created_date })),
-      ...(data.ChannelMessage || []).map(x => ({ type: "Message", text: x.content || "Image message", by: x.user_display_name || x.created_by, date: x.created_date })),
-      ...(data.Comment || []).map(x => ({ type: "Comment", text: x.content, by: x.user_display_name || x.created_by, date: x.created_date })),
-    ].sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 30);
-  }, [data]);
-
-  const remove = async (name, id) => {
-    if (!confirm(`Delete this ${name}?`)) return;
-    await base44.entities[name].delete(id);
-    load();
-  };
-
-  if (loading) return <div className="h-full flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin" style={{ color: "var(--accent-pink)" }} /></div>;
-  if (me?.role !== "admin") return <div className="h-full flex items-center justify-center p-6 text-center"><div className="card p-6 max-w-sm"><Shield className="w-10 h-10 mx-auto mb-3" style={{ color: "var(--accent-rose)" }} /><h1 className="font-semibold mb-1" style={{ color: "var(--text-primary)" }}>Admin only</h1><p className="text-sm" style={{ color: "var(--text-muted)" }}>This panel is locked to site admins.</p></div></div>;
-
+function StatCard({ icon: Icon, label, value, sub, delay }) {
   return (
-    <div className="h-full overflow-y-auto scroll px-4 sm:px-6 py-6 max-w-6xl mx-auto w-full">
-      <div className="flex items-center gap-3 mb-5">
-        <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white" style={{ background: "linear-gradient(135deg,var(--accent-pink),var(--accent-rose))" }}><Shield className="w-6 h-6" /></div>
-        <div><h1 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>Admin Panel</h1><p className="text-xs" style={{ color: "var(--text-muted)" }}>Manage users, feed content, servers, settings and moderation.</p></div>
+    <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay }} className="card p-5">
+      <div className="flex items-center justify-between mb-3">
+        <span className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: "var(--pink-soft)", color: "var(--accent-rose)" }}><Icon className="w-5 h-5" /></span>
+        {sub && <span className="text-[11px] font-bold" style={{ color: "var(--success)" }}>{sub}</span>}
       </div>
+      <p className="font-display text-3xl font-semibold" style={{ color: "var(--text-primary)" }}><CountUp value={value} /></p>
+      <p className="text-xs font-semibold mt-0.5" style={{ color: "var(--text-muted)" }}>{label}</p>
+    </motion.div>
+  );
+}
 
-      <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
-        {[{id:"overview",label:"Overview",icon:BarChart3},{id:"users",label:"Users",icon:Users},{id:"content",label:"Content",icon:ImageIcon},{id:"servers",label:"Servers",icon:Server},{id:"settings",label:"Site Settings",icon:SettingsIcon}].map(t => <button key={t.id} onClick={() => setTab(t.id)} className="px-3 py-2 rounded-full text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap" style={tab===t.id?{background:"var(--accent-pink)",color:"white"}:{background:"var(--pink-soft)",color:"var(--text-secondary)"}}><t.icon className="w-3.5 h-3.5" />{t.label}</button>)}
+function ActivityChart({ data }) {
+  const days = useMemo(() => {
+    const out = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86400000);
+      const key = d.toISOString().slice(0, 10);
+      const count = data.filter((x) => (x.created_date || "").slice(0, 10) === key).length;
+      out.push({ key, count, label: d.toLocaleDateString(undefined, { weekday: "narrow" }), full: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) });
+    }
+    return out;
+  }, [data]);
+  const max = Math.max(1, ...days.map((d) => d.count));
+  return (
+    <div className="card p-5">
+      <div className="flex items-center gap-2 mb-5"><Activity className="w-4 h-4" style={{ color: "var(--accent-rose)" }} /><h2 className="font-display text-lg font-semibold flex-1" style={{ color: "var(--text-primary)" }}>Activity · last 14 days</h2><span className="text-xs" style={{ color: "var(--text-muted)" }}>posts, art, comments, messages</span></div>
+      <div className="flex items-end gap-1.5 sm:gap-2 h-40">
+        {days.map((d, i) => (
+          <div key={d.key} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group">
+            <span className="text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: "var(--text-secondary)" }}>{d.count}</span>
+            <motion.div initial={{ height: 0 }} animate={{ height: `${Math.max(3, (d.count / max) * 100)}%` }} transition={{ delay: 0.2 + i * 0.03, type: "spring", stiffness: 140, damping: 18 }} className="w-full rounded-t-xl rounded-b-md" style={{ background: d.count ? "var(--accent-grad)" : "var(--border-c)" }} title={`${d.full}: ${d.count}`} />
+            <span className="text-[10px] font-semibold" style={{ color: "var(--text-muted)" }}>{d.label}</span>
+          </div>
+        ))}
       </div>
-
-      {tab === "overview" && <>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-          <Stat icon={Users} label="Users" value={(data.User || []).length} />
-          <Stat icon={ImageIcon} label="Artworks" value={(data.Artwork || []).length} />
-          <Stat icon={MessageSquare} label="Messages" value={(data.ChannelMessage || []).length} />
-          <Stat icon={Server} label="Servers" value={(data.Community || []).length} />
-        </div>
-        <div className="card p-4"><h2 className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Real Feed Activity</h2><div className="space-y-2">{feed.map((item, i) => <div key={i} className="flex items-start gap-3 rounded-xl p-3" style={{ background: "var(--pink-soft)" }}><span className="text-[10px] font-bold px-2 py-1 rounded-full" style={{ background: "var(--surface)", color: "var(--accent-rose)" }}>{item.type}</span><div className="min-w-0 flex-1"><p className="text-sm truncate" style={{ color: "var(--text-primary)" }}>{item.text}</p><p className="text-[11px]" style={{ color: "var(--text-muted)" }}>by {item.by} • {new Date(item.date).toLocaleString()}</p></div></div>)}</div></div>
-      </>}
-
-      {tab === "users" && <div className="card overflow-hidden"><div className="p-4 border-b" style={{ borderColor: "var(--border-c)" }}><h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Users</h2></div>{(data.User || []).map(u => <div key={u.id} className="p-4 border-b flex items-center gap-3" style={{ borderColor: "var(--border-c)" }}><img src={u.profile_picture} className="w-9 h-9 rounded-full object-cover" alt=""/><div className="flex-1 min-w-0"><p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>{u.display_name || u.full_name}</p><p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>{u.email}</p></div><span className="text-[10px] px-2 py-1 rounded-full" style={{ background: "var(--pink-soft)", color: "var(--accent-rose)" }}>{u.role}</span></div>)}</div>}
-
-      {tab === "content" && <ContentTable data={data} remove={remove} />}
-      {tab === "servers" && <ServerTable communities={data.Community || []} channels={data.ServerChannel || []} remove={remove} />}
-      {tab === "settings" && <AdminSiteSettings />}
     </div>
   );
 }
 
-function ContentTable({ data, remove }) {
-  const items = [
-    ...(data.Artwork || []).map(x => ({ collection: "Artwork", id: x.id, title: x.title, owner: x.user_email, date: x.created_date })),
-    ...(data.CommunityPost || []).map(x => ({ collection: "CommunityPost", id: x.id, title: x.title || x.description, owner: x.user_email, date: x.created_date })),
-    ...(data.MusicReview || []).map(x => ({ collection: "MusicReview", id: x.id, title: x.title, owner: x.user_email, date: x.created_date })),
-    ...(data.Comment || []).map(x => ({ collection: "Comment", id: x.id, title: x.content, owner: x.user_email, date: x.created_date })),
-    ...(data.CommunityComment || []).map(x => ({ collection: "CommunityComment", id: x.id, title: x.content, owner: x.user_email, date: x.created_date })),
-  ].sort((a,b) => new Date(b.date) - new Date(a.date));
-  return <div className="card overflow-hidden"><div className="p-4 border-b" style={{ borderColor: "var(--border-c)" }}><h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Content moderation</h2></div>{items.map(x => <div key={x.collection + x.id} className="p-4 border-b flex items-center gap-3" style={{ borderColor: "var(--border-c)" }}><div className="flex-1 min-w-0"><p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>{x.title || "Untitled"}</p><p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>{x.collection} • {x.owner}</p></div><button className="btn-outline text-xs text-red-500" onClick={() => remove(x.collection, x.id)}><Trash2 className="w-3.5 h-3.5" /> Delete</button></div>)}</div>;
-}
+export default function AdminPanel() {
+  const { user: me, isAdmin } = useAuth();
+  const confirm = useConfirm();
+  const [data, setData] = useState(null);
+  const [tab, setTab] = useState("overview");
+  const [search, setSearch] = useState("");
+  const [contentType, setContentType] = useState("all");
 
-function ServerTable({ communities, channels, remove }) {
-  return <div className="space-y-3">{communities.map(c => <div key={c.id} className="card p-4"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "var(--pink-soft)" }}>{c.icon_url ? <img src={c.icon_url} className="w-full h-full object-cover rounded-xl" alt="" /> : c.icon_emoji || "💬"}</div><div className="flex-1 min-w-0"><p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{c.name}</p><p className="text-xs" style={{ color: "var(--text-muted)" }}>{c.member_emails?.length || 0} members • owner {c.owner_email}</p></div><button className="btn-outline text-xs text-red-500" onClick={() => remove("Community", c.id)}><Trash2 className="w-3.5 h-3.5" /> Delete</button></div><div className="mt-3 flex flex-wrap gap-2">{channels.filter(ch => ch.community_id === c.id).map(ch => <span key={ch.id} className="text-[11px] px-2 py-1 rounded-full" style={{ background: "var(--pink-soft)", color: "var(--text-secondary)" }}>{ch.type === "voice" ? "🔊" : "#"} {ch.name}</span>)}</div></div>)}</div>;
+  const load = async () => {
+    const entries = await Promise.all(COLLECTIONS.map(async (name) => [name, await base44.entities[name].list("-created_date", 500).catch(() => [])]));
+    setData(Object.fromEntries(entries));
+  };
+  useEffect(() => { if (isAdmin) load(); }, [isAdmin]);
+
+  const content = useMemo(() => {
+    if (!data) return [];
+    return [
+      ...data.Artwork.map((x) => ({ collection: "Artwork", label: "Artwork", id: x.id, title: x.title, owner: x.user_display_name || x.created_by, date: x.created_date, image: x.image_url, link: `/Gallery?art=${x.id}` })),
+      ...data.CommunityPost.map((x) => ({ collection: "CommunityPost", label: "Post", id: x.id, title: x.title || x.description, owner: x.user_display_name, date: x.created_date, image: x.image_url, link: `/Community?post=${x.id}` })),
+      ...data.MusicReview.map((x) => ({ collection: "MusicReview", label: "Track", id: x.id, title: x.title, owner: x.user_display_name, date: x.created_date, link: `/Music?track=${x.id}` })),
+      ...data.Comment.map((x) => ({ collection: "Comment", label: "Comment", id: x.id, title: x.content, owner: x.user_display_name || x.user_full_name, date: x.created_date })),
+      ...data.CommunityComment.map((x) => ({ collection: "CommunityComment", label: "Comment", id: x.id, title: x.content, owner: x.user_display_name, date: x.created_date })),
+      ...data.ChannelMessage.filter((x) => x.type !== "join").map((x) => ({ collection: "ChannelMessage", label: "Message", id: x.id, title: x.content || "📷 Image", owner: x.user_display_name, date: x.created_date, image: x.image_url })),
+      ...data.Commission.map((x) => ({ collection: "Commission", label: "Commission", id: x.id, title: x.title, owner: x.artist_display_name, date: x.created_date })),
+    ].sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [data]);
+
+  if (!isAdmin) return <Page><EmptyState icon={Shield} title="Admins only" text="This panel is locked to site admins." action={<Link to="/" className="btn">Go home</Link>} /></Page>;
+  if (!data) return <CenterSpinner />;
+
+  const remove = async (collection, id, label) => {
+    if (!(await confirm({ title: `Delete this ${label.toLowerCase()}?`, confirmLabel: "Delete", danger: true }))) return;
+    try {
+      await base44.entities[collection].delete(id);
+      base44.entities.Log.create({ action: "moderation_delete", details: `Deleted ${label.toLowerCase()} ${id}`, user_email: me.email }).catch(() => {});
+      toast.success(`${label} deleted`);
+      load();
+    } catch (e) { toast.error(e?.message || "Could not delete."); }
+  };
+  const setRole = async (u, role) => {
+    if (u.email === me.email) { toast.error("You can't change your own role"); return; }
+    if (!(await confirm({ title: role === "admin" ? `Make ${displayName(u)} an admin?` : `Remove admin from ${displayName(u)}?`, message: role === "admin" ? "Admins can moderate all content and change site settings." : undefined, confirmLabel: "Confirm", danger: role !== "admin" }))) return;
+    try {
+      await base44.entities.User.update(u.id, { role });
+      base44.entities.Log.create({ action: "role_change", details: `${u.email} → ${role}`, user_email: me.email }).catch(() => {});
+      toast.success("Role updated");
+      load();
+    } catch (e) { toast.error(e?.message || "Could not change role."); }
+  };
+
+  const q = search.trim().toLowerCase();
+  const users = data.User.filter((u) => !q || [u.display_name, u.email].some((f) => String(f || "").toLowerCase().includes(q)));
+  const contentFiltered = content.filter((c) => (contentType === "all" || c.label === contentType) && (!q || [c.title, c.owner].some((f) => String(f || "").toLowerCase().includes(q))));
+  const weekAgo = Date.now() - 7 * 86400000;
+  const newThisWeek = (list) => list.filter((x) => new Date(x.created_date).getTime() > weekAgo).length;
+
+  return (
+    <Page width="max-w-6xl">
+      <PageHeader eyebrow="Mission control" title="Admin panel" subtitle="Moderate content, manage people and tune the site." icon={Shield} actions={<Link to="/Logs" className="btn-outline">Activity logs</Link>}>
+        <Segmented options={[{ id: "overview", label: "Overview", icon: BarChart3 }, { id: "users", label: "Users", icon: Users, count: data.User.length }, { id: "content", label: "Content", icon: ImageIcon }, { id: "servers", label: "Servers", icon: Server }, { id: "settings", label: "Site", icon: SettingsIcon }]} value={tab} onChange={(t) => { setTab(t); setSearch(""); }} size="sm" />
+      </PageHeader>
+
+      {tab === "overview" && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard icon={Users} label="Members" value={data.User.length} sub={`${data.User.filter(isOnline).length} online`} delay={0} />
+            <StatCard icon={ImageIcon} label="Posts & artworks" value={data.CommunityPost.length + data.Artwork.length} sub={`+${newThisWeek([...data.CommunityPost, ...data.Artwork])} this week`} delay={0.05} />
+            <StatCard icon={MessageSquare} label="Messages & comments" value={data.ChannelMessage.length + data.Comment.length + data.CommunityComment.length} sub={`+${newThisWeek([...data.ChannelMessage, ...data.Comment, ...data.CommunityComment])} this week`} delay={0.1} />
+            <StatCard icon={Music} label="Tracks & servers" value={data.MusicReview.length + data.Community.length} delay={0.15} />
+          </div>
+          <ActivityChart data={[...data.CommunityPost, ...data.Artwork, ...data.Comment, ...data.CommunityComment, ...data.ChannelMessage]} />
+          <div className="card p-5">
+            <h2 className="font-display text-lg font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Latest content</h2>
+            <div className="divide-y" style={{ borderColor: "var(--border-c)" }}>
+              {content.slice(0, 8).map((c) => (
+                <div key={c.collection + c.id} className="flex items-center gap-3 py-2.5">
+                  <span className="badge-pink w-24 justify-center">{c.label}</span>
+                  <span className="flex-1 min-w-0 text-sm truncate" style={{ color: "var(--text-primary)" }}>{c.title}</span>
+                  <span className="text-xs hidden sm:block" style={{ color: "var(--text-muted)" }}>{c.owner} · {timeAgo(c.date)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === "users" && (
+        <div className="space-y-4">
+          <SearchInput value={search} onChange={setSearch} placeholder="Search users…" className="max-w-sm" />
+          <div className="card overflow-hidden">
+            {users.map((u, i) => (
+              <motion.div key={u.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: Math.min(i, 15) * 0.02 }} className="flex items-center gap-3 p-4 border-b last:border-0" style={{ borderColor: "var(--border-c)" }}>
+                <Link to={profileLink(u.email)}><Avatar src={u.profile_picture} name={displayName(u)} size={40} online={isOnline(u)} /></Link>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{displayName(u)}</p>
+                  <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>{u.email} · joined {timeAgo(u.created_date)}</p>
+                </div>
+                <span className="badge-pink hidden sm:inline-flex" style={u.role === "admin" ? undefined : { color: "var(--text-muted)", background: "var(--surface-2)", borderColor: "var(--border-c)" }}>{u.role || "user"}</span>
+                {u.email !== me.email && (u.role === "admin"
+                  ? <button onClick={() => setRole(u, "user")} className="btn-ghost text-xs" title="Remove admin"><ShieldOff className="w-4 h-4" /><span className="hidden md:inline">Remove admin</span></button>
+                  : <button onClick={() => setRole(u, "admin")} className="btn-ghost text-xs" title="Make admin"><ShieldCheck className="w-4 h-4" /><span className="hidden md:inline">Make admin</span></button>)}
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === "content" && (
+        <div className="space-y-4">
+          <div className="flex flex-col md:flex-row gap-3 md:items-center">
+            <ChipRow options={["all", "Artwork", "Post", "Track", "Comment", "Message", "Commission"].map((x) => ({ id: x, label: x === "all" ? "All" : x }))} value={contentType} onChange={setContentType} className="flex-1" />
+            <SearchInput value={search} onChange={setSearch} placeholder="Search content…" className="md:w-64" />
+          </div>
+          {contentFiltered.length === 0 ? <EmptyState icon={ImageIcon} title="Nothing to moderate" /> : (
+            <div className="card overflow-hidden">
+              {contentFiltered.slice(0, 200).map((c) => (
+                <div key={c.collection + c.id} className="flex items-center gap-3 p-3.5 border-b last:border-0" style={{ borderColor: "var(--border-c)" }}>
+                  {c.image ? <img src={c.image} alt="" className="w-11 h-11 rounded-xl object-cover flex-shrink-0" /> : <span className="w-11 h-11 rounded-xl flex-shrink-0" style={{ background: "var(--surface-2)" }} />}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>{c.title || "Untitled"}</p>
+                    <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>{c.label} · {c.owner} · {timeAgo(c.date)}</p>
+                  </div>
+                  {c.link && <Link to={c.link} className="btn-ghost text-xs hidden sm:inline-flex">View</Link>}
+                  <button className="icon-btn" onClick={() => remove(c.collection, c.id, c.label)} aria-label={`Delete ${c.label}`}><Trash2 className="w-4 h-4" style={{ color: "var(--danger)" }} /></button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "servers" && (
+        <div className="grid md:grid-cols-2 gap-4">
+          {data.Community.map((c) => (
+            <div key={c.id} className="card p-4">
+              <div className="flex items-center gap-3">
+                <span className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl overflow-hidden flex-shrink-0" style={{ background: "var(--pink-soft)" }}>{c.icon_url ? <img src={c.icon_url} alt="" className="w-full h-full object-cover" /> : c.icon_emoji || "💬"}</span>
+                <div className="flex-1 min-w-0">
+                  <Link to={`/CommunityChat?id=${c.id}`} className="text-sm font-bold truncate block hover:underline" style={{ color: "var(--text-primary)" }}>{c.name}</Link>
+                  <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>{c.member_emails?.length || 0} members · owner {c.owner_display_name || c.owner_email}</p>
+                </div>
+                <button className="icon-btn" onClick={() => remove("Community", c.id, "Server")} aria-label={`Delete ${c.name}`}><Trash2 className="w-4 h-4" style={{ color: "var(--danger)" }} /></button>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-1.5">{data.ServerChannel.filter((ch) => ch.community_id === c.id).map((ch) => <span key={ch.id} className="text-[11px] px-2 py-1 rounded-full" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>{ch.type === "voice" ? "🔊" : "#"} {ch.name}</span>)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === "settings" && <div className="max-w-2xl"><AdminSiteSettings /></div>}
+    </Page>
+  );
 }

@@ -1,18 +1,20 @@
 // Firebase backend for Mimi Locks.
 // -----------------------------------------------------------------------------
-// This keeps the same `base44` API shape used by the app, but stores data in:
+// Same `base44` API shape as the local backend, backed by:
 // - Firebase Authentication for real email/password accounts
-// - Cloud Firestore for users, artworks, posts, comments, follows, likes, servers,
-//   channels, messages, settings and logs
-// - Firebase Storage for uploaded images/audio when a storage bucket is configured
+// - Cloud Firestore for every entity (one collection per entity name)
+// - Firebase Storage for uploaded images/audio when a bucket is configured
+//
+// Queries are written so they satisfy firestore.rules (e.g. private collections
+// are always filtered by the signed-in user's email). Filtered + sorted queries
+// use the composite indexes in firestore.indexes.json; if an index has not been
+// deployed yet we fall back to an unsorted query and sort on the client, so the
+// site keeps working either way.
 //
 // Required Vite env vars:
-// VITE_FIREBASE_API_KEY
-// VITE_FIREBASE_AUTH_DOMAIN
-// VITE_FIREBASE_PROJECT_ID
-// VITE_FIREBASE_STORAGE_BUCKET
-// VITE_FIREBASE_MESSAGING_SENDER_ID
-// VITE_FIREBASE_APP_ID
+// VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID,
+// VITE_FIREBASE_STORAGE_BUCKET, VITE_FIREBASE_MESSAGING_SENDER_ID, VITE_FIREBASE_APP_ID
+// Optional: VITE_FIREBASE_EMULATOR_HOST=127.0.0.1 to use local emulators.
 // -----------------------------------------------------------------------------
 
 import { initializeApp } from "firebase/app";
@@ -21,13 +23,16 @@ import {
   onAuthStateChanged,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut,
   updateProfile,
+  connectAuthEmulator,
 } from "firebase/auth";
 import {
   getFirestore,
   collection,
   doc,
+  documentId,
   addDoc,
   setDoc,
   getDoc,
@@ -40,24 +45,16 @@ import {
   limit as qLimit,
   onSnapshot,
   serverTimestamp,
+  connectFirestoreEmulator,
 } from "firebase/firestore";
-import {
-  getStorage,
-  ref,
-  uploadBytes,
-  getDownloadURL,
-} from "firebase/storage";
+import { getStorage, ref, uploadBytes, getDownloadURL, connectStorageEmulator } from "firebase/storage";
 import { moderate } from "../utils/profanity.js";
+import { isOperator, sortAndLimit } from "./queryUtils.js";
+import { ENTITY_NAMES } from "./localBackend.js";
 
-const ENTITY_NAMES = [
-  "Artwork", "ArtworkPing", "ChannelMessage", "Comment", "Commission", "Community",
-  "CommunityComment", "CommunityPost", "DirectMessage", "Friendship", "GroupChat", "Log", "MusicReview",
-  "Notification", "ServerChannel", "ServerMember", "ServerRole", "SiteConfig", "User",
-];
-
-const FIREBASE_COLLECTIONS = Object.fromEntries(ENTITY_NAMES.map((name) => [name, name]));
 const normalizeEmail = (email) => String(email || "").trim().toLowerCase();
 const nowISO = () => new Date().toISOString();
+
 function firebaseConfigFromEnv() {
   return {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -76,46 +73,54 @@ export function hasFirebaseConfig() {
 
 function cleanObject(obj) {
   const out = {};
-  Object.entries(obj || {}).forEach(([k, v]) => {
-    if (v !== undefined) out[k] = v;
-  });
+  Object.entries(obj || {}).forEach(([k, v]) => { if (v !== undefined) out[k] = v; });
   return out;
 }
 
+const convertValue = (v) => (v && typeof v.toDate === "function" ? v.toDate().toISOString() : v);
 function serializeDoc(snapshot) {
   if (!snapshot.exists()) return null;
   const data = snapshot.data() || {};
-  const convert = (v) => v && typeof v.toDate === "function" ? v.toDate().toISOString() : v;
-  const converted = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, convert(v)]));
-  return { id: snapshot.id, ...converted };
+  return { id: snapshot.id, ...Object.fromEntries(Object.entries(data).map(([k, v]) => [k, convertValue(v)])) };
 }
-
-function serializeQuerySnapshot(snapshot) {
-  return snapshot.docs.map(serializeDoc).filter(Boolean);
-}
+const serializeQuerySnapshot = (snapshot) => snapshot.docs.map(serializeDoc).filter(Boolean);
+// Drop server-timestamp sentinels before handing a freshly written object to the UI.
+const withoutSentinels = ({ created_at, updated_at, ...rest }) => rest;
 
 function publicUserFromFirebaseUser(firebaseUser, profile = {}) {
   if (!firebaseUser) return null;
   const email = normalizeEmail(firebaseUser.email);
+  const name = profile.display_name || firebaseUser.displayName || email.split("@")[0];
   return {
     id: firebaseUser.uid,
     email,
-    full_name: profile.full_name || firebaseUser.displayName || email.split("@")[0],
-    display_name: profile.display_name || firebaseUser.displayName || email.split("@")[0],
-    profile_picture: profile.profile_picture || firebaseUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(email.split("@")[0])}&background=d4708a&color=fff&bold=true`,
-    role: profile.role || "user",
-    bio: profile.bio || "",
-    following: profile.following || [],
-    followers: profile.followers || [],
-    xp: profile.xp || 0,
-    coins: profile.coins || 0,
-    nitro_until: profile.nitro_until || null,
-    onboarding_completed: profile.onboarding_completed ?? false,
-    theme: profile.theme || "light",
-    last_seen: profile.last_seen || nowISO(),
-    created_date: profile.created_date || nowISO(),
-    updated_date: profile.updated_date || nowISO(),
+    full_name: profile.full_name || name,
+    display_name: name,
+    profile_picture: profile.profile_picture || firebaseUser.photoURL || "",
+    role: "user",
+    bio: "",
+    following: [],
+    xp: 0,
+    coins: 0,
+    nitro_until: null,
+    nitro_active: false,
+    onboarding_completed: false,
+    theme: "light",
+    accent: "rose",
+    saved_artworks: [],
+    last_seen: nowISO(),
+    created_date: nowISO(),
+    updated_date: nowISO(),
   };
+}
+
+const isIndexError = (e) => e?.code === "failed-precondition" || /requires an index/i.test(e?.message || "");
+const warnedIndexes = new Set();
+function warnMissingIndex(name, e) {
+  const key = `${name}:${e?.message}`;
+  if (warnedIndexes.has(key)) return;
+  warnedIndexes.add(key);
+  console.info(`[firebase] ${name}: composite index missing, sorting on the client instead. Deploy firestore.indexes.json to speed this up.`, e?.message);
 }
 
 export function createFirebaseClient() {
@@ -123,6 +128,13 @@ export function createFirebaseClient() {
   const authSdk = getAuth(app);
   const db = getFirestore(app);
   const storage = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ? getStorage(app) : null;
+
+  const emulatorHost = import.meta.env.VITE_FIREBASE_EMULATOR_HOST;
+  if (emulatorHost) {
+    connectAuthEmulator(authSdk, `http://${emulatorHost}:9099`, { disableWarnings: true });
+    connectFirestoreEmulator(db, emulatorHost, 8080);
+    if (storage) connectStorageEmulator(storage, emulatorHost, 9199);
+  }
 
   let authReadyPromise = null;
   function waitForAuthReady() {
@@ -133,7 +145,6 @@ export function createFirebaseClient() {
     }
     return authReadyPromise;
   }
-
   async function currentFirebaseUser() {
     return authSdk.currentUser || await waitForAuthReady();
   }
@@ -144,89 +155,59 @@ export function createFirebaseClient() {
     const refDoc = doc(db, "User", firebaseUser.uid);
     const snap = await getDoc(refDoc);
     if (snap.exists()) return serializeDoc(snap);
-
-    const profile = publicUserFromFirebaseUser(firebaseUser, { role: "user" });
-    await setDoc(refDoc, cleanObject({ ...profile, created_date: nowISO(), updated_date: nowISO() }));
+    const profile = publicUserFromFirebaseUser(firebaseUser);
+    await setDoc(refDoc, cleanObject(profile));
     return profile;
   }
 
-  function isAdminUser(user) { return user?.role === "admin"; }
-  function isOwner(user, record) {
-    const email = normalizeEmail(user?.email);
-    return [record?.created_by, record?.user_email, record?.owner_email, record?.artist_email, record?.requester_email].some((v) => normalizeEmail(v) === email);
-  }
-  async function canManageCommunity(user, communityId) {
-    if (!user || !communityId) return false;
-    if (isAdminUser(user)) return true;
-    const snap = await getDoc(doc(db, "Community", communityId));
-    const comm = serializeDoc(snap);
-    return normalizeEmail(comm?.owner_email) === normalizeEmail(user.email);
-  }
-  async function canUpdateEntity(user, name, current, data = {}) {
-    if (!user) return false;
-    if (isAdminUser(user)) return true;
-    if (name === "SiteConfig" || name === "Log" || name === "User") return false;
-    if (["ServerChannel", "ServerRole", "ServerMember"].includes(name)) return canManageCommunity(user, current?.community_id || data.community_id);
-    if (name === "Community") {
-      const keys = Object.keys(data || {});
-      if (keys.length === 1 && keys[0] === "member_emails") return true;
-      return normalizeEmail(current?.owner_email) === normalizeEmail(user.email);
-    }
-    if (name === "ChannelMessage") {
-      const keys = Object.keys(data || {});
-      if (keys.every((k) => ["reactions", "thread_count"].includes(k))) return true;
-      if (data.is_pinned !== undefined && await canManageCommunity(user, current?.community_id)) return true;
-      return normalizeEmail(current?.user_email) === normalizeEmail(user.email);
-    }
-    if (["Artwork", "CommunityPost", "MusicReview", "Comment", "CommunityComment", "Commission", "GroupChat", "DirectMessage", "ProfileMessage"].includes(name)) {
-      const keys = Object.keys(data || {});
-      if (keys.length === 1 && keys[0] === "likes") return true;
-      return isOwner(user, current);
-    }
-    return true;
-  }
-  async function canDeleteEntity(user, name, current) {
-    if (!user) return false;
-    if (isAdminUser(user)) return true;
-    if (name === "SiteConfig" || name === "Log" || name === "User") return false;
-    if (["ServerChannel", "ServerRole", "ServerMember"].includes(name)) return canManageCommunity(user, current?.community_id);
-    if (name === "Community") return normalizeEmail(current?.owner_email) === normalizeEmail(user.email);
-    if (name === "ChannelMessage") return normalizeEmail(current?.user_email) === normalizeEmail(user.email) || await canManageCommunity(user, current?.community_id);
-    return isOwner(user, current);
-  }
-
-  function buildQuery(name, queryObject, sort, limitAmount) {
+  function buildConstraints(queryObject) {
     const constraints = [];
     Object.entries(queryObject || {}).forEach(([field, value]) => {
-      constraints.push(where(field, "==", value));
+      const path = field === "id" ? documentId() : field;
+      if (isOperator(value)) {
+        if ("$contains" in value) constraints.push(where(path, "array-contains", value.$contains));
+        if ("$in" in value) constraints.push(where(path, "in", value.$in.length ? value.$in : ["__none__"]));
+      } else {
+        constraints.push(where(path, "==", value));
+      }
     });
+    return constraints;
+  }
+  function buildQuery(name, queryObject, sort, limitAmount) {
+    const constraints = buildConstraints(queryObject);
     if (sort) {
       const desc = sort.startsWith("-");
       constraints.push(orderBy(desc ? sort.slice(1) : sort, desc ? "desc" : "asc"));
     }
     if (limitAmount != null) constraints.push(qLimit(limitAmount));
-    return query(collection(db, FIREBASE_COLLECTIONS[name]), ...constraints);
+    return query(collection(db, name), ...constraints);
+  }
+  const hasFilters = (queryObject) => Object.keys(queryObject || {}).length > 0;
+
+  async function runQuery(name, queryObject, sort, limitAmount) {
+    if (hasFilters(queryObject) && sort) {
+      try {
+        return serializeQuerySnapshot(await getDocs(buildQuery(name, queryObject, sort, limitAmount)));
+      } catch (e) {
+        if (!isIndexError(e)) throw e;
+        warnMissingIndex(name, e);
+      }
+      const all = serializeQuerySnapshot(await getDocs(buildQuery(name, queryObject, null, null)));
+      return sortAndLimit(all, sort, limitAmount);
+    }
+    return serializeQuerySnapshot(await getDocs(buildQuery(name, queryObject, sort, limitAmount)));
   }
 
   function makeEntity(name) {
-    const colName = FIREBASE_COLLECTIONS[name];
     return {
-      async list(sort, limitAmount) {
-        const snap = await getDocs(buildQuery(name, null, sort, limitAmount));
-        return serializeQuerySnapshot(snap);
-      },
-      async filter(queryObject, sort, limitAmount) {
-        const snap = await getDocs(buildQuery(name, queryObject, sort, limitAmount));
-        return serializeQuerySnapshot(snap);
-      },
+      list(sort, limitAmount) { return runQuery(name, null, sort, limitAmount); },
+      filter(queryObject, sort, limitAmount) { return runQuery(name, queryObject, sort, limitAmount); },
       async get(id) {
-        const snap = await getDoc(doc(db, colName, id));
-        return serializeDoc(snap);
+        if (!id) return null;
+        return serializeDoc(await getDoc(doc(db, name, id)));
       },
       async create(data) {
         const me = await currentUser();
-        if (name === "SiteConfig" && !isAdminUser(me)) throw new Error("permission_denied");
-        if (["ServerChannel", "ServerRole", "ServerMember"].includes(name) && !await canManageCommunity(me, data?.community_id)) throw new Error("permission_denied");
         const payload = cleanObject({
           created_date: nowISO(),
           updated_date: nowISO(),
@@ -235,25 +216,20 @@ export function createFirebaseClient() {
           created_by: me.email,
           ...data,
         });
-        const refDoc = await addDoc(collection(db, colName), payload);
-        return { id: refDoc.id, ...payload };
+        const refDoc = await addDoc(collection(db, name), payload);
+        return { id: refDoc.id, ...withoutSentinels(payload) };
       },
       async update(id, data) {
-        const me = await currentUser();
-        const refDoc = doc(db, colName, id);
-        const current = serializeDoc(await getDoc(refDoc));
-        if (!current) return null;
-        if (!await canUpdateEntity(me, name, current, data)) throw new Error("permission_denied");
+        await currentUser();
+        const refDoc = doc(db, name, id);
         const payload = cleanObject({ ...data, updated_date: nowISO(), updated_at: serverTimestamp() });
         await updateDoc(refDoc, payload);
-        return { ...current, ...data, updated_date: payload.updated_date };
+        const snap = await getDoc(refDoc).catch(() => null);
+        return (snap && serializeDoc(snap)) || { id, ...withoutSentinels(payload) };
       },
       async delete(id) {
-        const me = await currentUser();
-        const refDoc = doc(db, colName, id);
-        const current = serializeDoc(await getDoc(refDoc));
-        if (current && !await canDeleteEntity(me, name, current)) throw new Error("permission_denied");
-        await deleteDoc(refDoc);
+        await currentUser();
+        await deleteDoc(doc(db, name, id));
         return { id, success: true };
       },
       async bulkCreate(items) {
@@ -261,10 +237,30 @@ export function createFirebaseClient() {
         for (const item of items || []) created.push(await this.create(item));
         return created;
       },
-      subscribe(callback, queryObject = null, sort = "-created_date", limitAmount = 200) {
-        return onSnapshot(buildQuery(name, queryObject, sort, limitAmount), (snap) => {
-          callback({ type: "snapshot", data: serializeQuerySnapshot(snap) });
-        });
+      // callback({ type: "create" | "update" | "delete", id, data, initial })
+      // Documents already present when the listener attaches arrive once as
+      // `create` events flagged `initial: true`.
+      subscribe(callback, queryObject = null, { sort = null, limit = null } = {}) {
+        let unsub = () => {};
+        let cancelled = false;
+        const listen = (useSort) => {
+          let first = true;
+          const q = useSort ? buildQuery(name, queryObject, sort, limit) : buildQuery(name, queryObject, null, null);
+          unsub = onSnapshot(q, (snap) => {
+            const initial = first;
+            first = false;
+            snap.docChanges().forEach((change) => {
+              const data = serializeDoc(change.doc);
+              const type = change.type === "added" ? "create" : change.type === "modified" ? "update" : "delete";
+              callback({ type, id: change.doc.id, data, initial });
+            });
+          }, (e) => {
+            if (!cancelled && useSort && isIndexError(e)) { warnMissingIndex(name, e); listen(false); return; }
+            console.warn(`[firebase] ${name} subscription error:`, e?.message || e);
+          });
+        };
+        listen(!!(sort || limit));
+        return () => { cancelled = true; unsub(); };
       },
     };
   }
@@ -277,30 +273,29 @@ export function createFirebaseClient() {
     async register({ email, password, display_name, full_name }) {
       email = normalizeEmail(email);
       if (!email || !password || password.length < 6) throw new Error("Email and a 6+ character password are required.");
-      const cred = await createUserWithEmailAndPassword(authSdk, email, password);
+      const cred = await createUserWithEmailAndPassword(authSdk, email, password).catch((e) => { throw friendlyAuthError(e); });
       const name = (display_name || full_name || email.split("@")[0]).trim();
       await updateProfile(cred.user, { displayName: name });
-      const profile = publicUserFromFirebaseUser(cred.user, {
-        full_name: name,
-        display_name: name,
-        role: "user",
-      });
+      const profile = publicUserFromFirebaseUser(cred.user, { full_name: name, display_name: name });
       await setDoc(doc(db, "User", cred.user.uid), cleanObject(profile));
       return profile;
     },
     async login({ email, password } = {}) {
-      const cred = await signInWithEmailAndPassword(authSdk, normalizeEmail(email), password || "");
+      const cred = await signInWithEmailAndPassword(authSdk, normalizeEmail(email), password || "").catch((e) => { throw friendlyAuthError(e); });
       const profile = await currentUser();
-      await updateDoc(doc(db, "User", cred.user.uid), { last_seen: nowISO(), updated_date: nowISO(), updated_at: serverTimestamp() }).catch(() => {});
+      await updateDoc(doc(db, "User", cred.user.uid), { last_seen: nowISO(), updated_date: nowISO() }).catch(() => {});
       return profile;
     },
     async updateMe(data) {
       const me = await currentUser();
       const safeData = cleanObject({ ...data });
-      delete safeData.role; delete safeData.email; delete safeData.id;
-      const next = { ...safeData, updated_date: nowISO(), updated_at: serverTimestamp() };
+      ["role", "email", "id"].forEach((k) => delete safeData[k]);
+      const next = { ...safeData, updated_date: nowISO() };
       await updateDoc(doc(db, "User", me.id), next);
-      return { ...me, ...safeData, updated_date: next.updated_date };
+      return { ...me, ...next };
+    },
+    async resetPassword(email) {
+      await sendPasswordResetEmail(authSdk, normalizeEmail(email)).catch((e) => { throw friendlyAuthError(e); });
     },
     async logout() {
       await signOut(authSdk);
@@ -317,7 +312,7 @@ export function createFirebaseClient() {
         if (!file) return { file_url: "" };
         const me = await currentUser();
         if (!storage) {
-          // Storage bucket missing: keep the app usable while config is incomplete.
+          // No bucket configured: keep the app usable with an inline data URL.
           return await new Promise((resolve, reject) => {
             const fr = new FileReader();
             fr.onload = () => resolve({ file_url: fr.result });
@@ -347,5 +342,20 @@ export function createFirebaseClient() {
     },
   };
 
-  return { entities, auth, integrations, firebase: { app, auth: authSdk, db, storage } };
+  return { entities, auth, integrations, mode: "firebase", firebase: { app, auth: authSdk, db, storage } };
+}
+
+function friendlyAuthError(e) {
+  const map = {
+    "auth/invalid-credential": "Email or password is incorrect.",
+    "auth/wrong-password": "Email or password is incorrect.",
+    "auth/user-not-found": "No account found for that email.",
+    "auth/email-already-in-use": "An account with this email already exists.",
+    "auth/invalid-email": "That email address doesn't look right.",
+    "auth/weak-password": "Password should be at least 6 characters.",
+    "auth/too-many-requests": "Too many attempts. Please wait a minute and try again.",
+    "auth/network-request-failed": "Network error. Check your connection and try again.",
+    "auth/operation-not-allowed": "Email/password sign-in is not enabled in the Firebase console.",
+  };
+  return new Error(map[e?.code] || e?.message || "Something went wrong.");
 }

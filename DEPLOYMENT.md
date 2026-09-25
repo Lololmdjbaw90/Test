@@ -8,7 +8,7 @@ Run these commands from the project folder:
 npm install
 npm install -g firebase-tools
 firebase login
-firebase deploy --only firestore:rules,storage
+firebase deploy --only firestore:rules,firestore:indexes,storage
 npm run build
 firebase deploy
 ```
@@ -39,6 +39,11 @@ Storage
 4. Open your user document.
 5. Set `role` to `admin`.
 6. Log out and back in.
+7. Promote other admins from **Admin Panel → Users** inside the app.
+
+## Vercel / Netlify
+
+Both configs are included (`vercel.json`, `netlify.toml`) with SPA rewrites. They build with `npm run build` and read the Firebase config from `.env`. Remember to deploy Firestore rules + indexes with the Firebase CLI as shown above.
 
 ## Production build
 

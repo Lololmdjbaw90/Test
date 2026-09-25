@@ -1,28 +1,175 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowLeft, ArrowRight, Camera, Check, Loader2, Moon, Monitor, Sun } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-const UploadFile = (args) => base44.integrations.Core.UploadFile(args);
-import { Loader2, Upload, ArrowRight, ArrowLeft, Check } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import ImageCropper from "../components/common/ImageCropper";
-const STEPS=["Profile","Photo","Theme","Done"];
+import { useAuth } from "@/lib/AuthContext";
+import { ACCENTS, applyTheme } from "@/lib/theme";
+import { toast } from "@/lib/toast";
+import Avatar from "@/components/common/Avatar";
+import ImageCropper from "@/components/common/ImageCropper";
+import Confetti from "@/components/common/Confetti";
+
+const STEPS = ["You", "Photo", "Interests", "Style"];
+const INTERESTS = ["Painting", "Digital art", "Drawing", "Photography", "3D", "Pixel art", "Animation", "Music", "Lo-fi", "Writing", "Crafts", "Fashion"];
+
 export default function OnboardingPage() {
-  const fileRef=useRef(null);
-  const [step,setStep]=useState(0),[user,setUser]=useState(null),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[form,setForm]=useState({display_name:"",bio:"",theme:"light",profile_picture:""}),[picFile,setPicFile]=useState(null),[picPreview,setPicPreview]=useState(null),[cropSrc,setCropSrc]=useState(null);
-  useEffect(()=>{base44.auth.me().then(u=>{setUser(u);setForm(f=>({...f,display_name:u.display_name||"",bio:u.bio||"",theme:u.theme||"light",profile_picture:u.profile_picture||""}));if(u.profile_picture)setPicPreview(u.profile_picture);if(u.onboarding_completed)window.location.href="/";}).catch(()=>{}).finally(()=>setLoading(false));},[]);
-  const handleComplete=async()=>{setSaving(true);let pic=form.profile_picture;if(picFile){const{file_url}=await UploadFile({file:picFile});pic=file_url;}await base44.auth.updateMe({...form,profile_picture:pic,onboarding_completed:true});window.location.href="/";};
-  if(loading)return<div className="min-h-screen flex items-center justify-center" style={{background:"var(--off-white)"}}><Loader2 className="w-6 h-6 animate-spin" style={{color:"var(--accent-pink)"}}/></div>;
-  return(
-    <div className="min-h-screen flex items-center justify-center p-4" style={{background:"var(--pink-soft)"}}>
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8"><div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-3 text-white font-bold text-xl" style={{background:"var(--accent-pink)"}}>M</div><h1 className="text-xl font-semibold" style={{color:"var(--text-primary)"}}>Welcome to Mimi Locks</h1><p className="text-sm mt-1" style={{color:"var(--text-muted)"}}>Let's set up your profile</p></div>
-        <div className="flex items-center gap-1.5 mb-8 justify-center">{STEPS.map((s,i)=><React.Fragment key={s}><div className="flex items-center gap-1"><div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold transition-all" style={i<step?{background:"var(--accent-pink)",color:"white"}:i===step?{background:"var(--accent-pink)",color:"white",boxShadow:"0 0 0 3px rgba(232,160,180,0.25)"}:{background:"var(--pink-muted)",color:"var(--text-muted)"}}>{i<step?<Check className="w-3 h-3"/>:i+1}</div></div>{i<STEPS.length-1&&<div className="flex-1 h-px" style={{background:i<step?"var(--accent-pink)":"var(--border-c)"}}/>}</React.Fragment>)}</div>
-        <div className="card p-6 shadow-sm">
-          <AnimatePresence mode="wait">
-            {step===0&&<motion.div key="s0" initial={{opacity:0,x:20}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-20}} className="space-y-4"><div><h2 className="font-semibold text-base mb-4" style={{color:"var(--text-primary)"}}>Your Profile</h2><label className="text-xs font-medium block mb-1.5" style={{color:"var(--text-secondary)"}}>Display Name *</label><input className="input" placeholder="How should we call you?" value={form.display_name} onChange={e=>setForm(f=>({...f,display_name:e.target.value}))}/></div><div><label className="text-xs font-medium block mb-1.5" style={{color:"var(--text-secondary)"}}>Bio</label><textarea className="input resize-none" rows={3} placeholder="Tell us a bit about yourself..." value={form.bio} onChange={e=>setForm(f=>({...f,bio:e.target.value}))}/></div><button className="btn w-full justify-center" disabled={!form.display_name.trim()} onClick={()=>setStep(1)}>Continue <ArrowRight className="w-4 h-4"/></button></motion.div>}
-            {step===1&&<motion.div key="s1" initial={{opacity:0,x:20}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-20}} className="space-y-4"><h2 className="font-semibold text-base" style={{color:"var(--text-primary)"}}>Profile Photo</h2><div className="flex flex-col items-center gap-4"><div className="w-24 h-24 rounded-full overflow-hidden flex items-center justify-center" style={{background:"var(--pink-soft)"}}>{picPreview?<img src={picPreview} className="w-full h-full object-cover" alt=""/>:<span className="text-3xl font-semibold" style={{color:"var(--accent-pink)"}}>{form.display_name?.[0]?.toUpperCase()||"?"}</span>}</div><input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={e=>{const f=e.target.files?.[0];if(f){setCropSrc(URL.createObjectURL(f));e.target.value="";}}}/>{cropSrc?<div className="w-full"><ImageCropper imageSrc={cropSrc} onCrop={(file,url)=>{setPicFile(file);setPicPreview(url);setCropSrc(null);}} onCancel={()=>setCropSrc(null)}/></div>:<button className="btn-outline text-sm" onClick={()=>fileRef.current?.click()}><Upload className="w-4 h-4"/> {picPreview?"Change photo":"Upload photo"}</button>}</div><div className="flex gap-2 pt-2"><button className="btn-ghost flex-1 justify-center" onClick={()=>setStep(0)}><ArrowLeft className="w-4 h-4"/> Back</button><button className="btn flex-1 justify-center" onClick={()=>setStep(2)}>Continue <ArrowRight className="w-4 h-4"/></button></div></motion.div>}
-            {step===2&&<motion.div key="s2" initial={{opacity:0,x:20}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-20}} className="space-y-4"><h2 className="font-semibold text-base" style={{color:"var(--text-primary)"}}>Choose Theme</h2><div className="grid grid-cols-2 gap-3">{[{id:"light",label:"Light",desc:"Clean & bright",preview:"#fdf0f4"},{id:"dark",label:"Dark",desc:"Sleek & minimal",preview:"#100a0d"}].map(t=><button key={t.id} onClick={()=>setForm(f=>({...f,theme:t.id}))} className="p-3 rounded-xl border-2 text-left transition-all" style={form.theme===t.id?{borderColor:"var(--accent-pink)",background:"var(--pink-soft)"}:{borderColor:"var(--border-c)",background:"var(--surface)"}}><div className="w-full h-10 rounded-lg mb-2" style={{background:t.preview}}/><p className="text-xs font-semibold" style={{color:"var(--text-primary)"}}>{t.label}</p><p className="text-[10px]" style={{color:"var(--text-muted)"}}>{t.desc}</p></button>)}</div><div className="flex gap-2 pt-2"><button className="btn-ghost flex-1 justify-center" onClick={()=>setStep(1)}><ArrowLeft className="w-4 h-4"/> Back</button><button className="btn flex-1 justify-center" onClick={()=>setStep(3)}>Continue <ArrowRight className="w-4 h-4"/></button></div></motion.div>}
-            {step===3&&<motion.div key="s3" initial={{opacity:0,x:20}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-20}} className="space-y-4 text-center"><div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto" style={{background:"var(--pink-soft)"}}>{picPreview?<img src={picPreview} className="w-full h-full object-cover rounded-full" alt=""/>:<span className="text-2xl font-semibold" style={{color:"var(--accent-pink)"}}>{form.display_name?.[0]?.toUpperCase()||"?"}</span>}</div><div><h2 className="font-semibold text-base" style={{color:"var(--text-primary)"}}>{form.display_name}</h2>{form.bio&&<p className="text-xs mt-1" style={{color:"var(--text-muted)"}}>{form.bio}</p>}</div><div className="divider"/><div className="flex gap-2"><button className="btn-ghost flex-1 justify-center" onClick={()=>setStep(2)}><ArrowLeft className="w-4 h-4"/> Back</button><button className="btn flex-1 justify-center" disabled={saving} onClick={handleComplete}>{saving?<Loader2 className="w-4 h-4 animate-spin"/>:<><Check className="w-4 h-4"/> Finish</>}</button></div></motion.div>}
+  const navigate = useNavigate();
+  const { user, updateMe } = useAuth();
+  const fileRef = useRef(null);
+  const [step, setStep] = useState(0);
+  const [dir, setDir] = useState(1);
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+  const [form, setForm] = useState({ display_name: "", bio: "", theme: "light", accent: "rose", interests: [] });
+  const [picFile, setPicFile] = useState(null);
+  const [picPreview, setPicPreview] = useState(null);
+  const [cropSrc, setCropSrc] = useState(null);
+
+  useEffect(() => {
+    if (!user) return;
+    if (user.onboarding_completed) { navigate("/", { replace: true }); return; }
+    setForm((f) => ({ ...f, display_name: user.display_name || "", bio: user.bio || "", theme: user.theme || "light", accent: user.accent || "rose", interests: user.interests || [] }));
+    if (user.profile_picture && !user.profile_picture.includes("ui-avatars.com")) setPicPreview(user.profile_picture);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  const go = (n) => { setDir(n > step ? 1 : -1); setStep(n); };
+  const setStyle = (patch) => { setForm((f) => ({ ...f, ...patch })); applyTheme({ theme: patch.theme ?? form.theme, accent: patch.accent ?? form.accent }); };
+  const toggleInterest = (i) => setForm((f) => ({ ...f, interests: f.interests.includes(i) ? f.interests.filter((x) => x !== i) : [...f.interests, i] }));
+
+  const finish = async () => {
+    setSaving(true);
+    try {
+      let profile_picture = user?.profile_picture || "";
+      if (picFile) profile_picture = (await base44.integrations.Core.UploadFile({ file: picFile })).file_url;
+      setDone(true);
+      await updateMe({ ...form, display_name: form.display_name.trim(), profile_picture, onboarding_completed: true, coins: (user?.coins || 0) + 50 });
+      toast.success("Welcome to Mimi Locks!", { description: "You earned 50 coins for setting up your profile." });
+      setTimeout(() => navigate("/", { replace: true }), 1400);
+    } catch (e) {
+      setDone(false);
+      toast.error(e?.message || "Could not save your profile.");
+      setSaving(false);
+    }
+  };
+
+  const variants = {
+    enter: (d) => ({ opacity: 0, x: d * 40 }),
+    center: { opacity: 1, x: 0 },
+    exit: (d) => ({ opacity: 0, x: d * -40 }),
+  };
+
+  return (
+    <div className="min-h-[100dvh] flex items-center justify-center p-4 app-shell relative overflow-hidden">
+      <div className="orb orb-a w-96 h-96 -top-24 -left-24" />
+      <div className="orb orb-b w-[30rem] h-[30rem] -bottom-32 -right-32" />
+      <div className="relative w-full max-w-lg">
+        <div className="text-center mb-8">
+          <motion.div initial={{ scale: 0.6, rotate: -20 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", stiffness: 260, damping: 14 }} className="w-14 h-14 rounded-[18px] mx-auto mb-4 flex items-center justify-center text-white font-display italic text-2xl font-bold" style={{ background: "var(--accent-grad)", boxShadow: "var(--shadow-accent)" }}>M</motion.div>
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold" style={{ color: "var(--text-primary)" }}>Let's set up your space</h1>
+          <p className="text-sm mt-2" style={{ color: "var(--text-muted)" }}>Four quick steps — you can change everything later.</p>
+        </div>
+
+        <div className="flex items-center gap-2 mb-6 px-2">
+          {STEPS.map((s, i) => (
+            <div key={s} className="flex-1">
+              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--border-c)" }}>
+                <motion.div className="h-full rounded-full" style={{ background: "var(--accent-grad)" }} initial={false} animate={{ width: i <= step ? "100%" : "0%" }} transition={{ duration: 0.4 }} />
+              </div>
+              <p className="text-[11px] font-semibold mt-1.5" style={{ color: i <= step ? "var(--accent-rose)" : "var(--text-muted)" }}>{s}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="card p-6 sm:p-8 relative overflow-hidden" style={{ boxShadow: "var(--shadow-lg)" }}>
+          {done && <Confetti />}
+          <AnimatePresence mode="wait" custom={dir}>
+            <motion.div key={step} custom={dir} variants={variants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.25 }}>
+              {step === 0 && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="label" htmlFor="ob-name">Display name</label>
+                    <input id="ob-name" className="input" placeholder="What should we call you?" value={form.display_name} onChange={(e) => setForm((f) => ({ ...f, display_name: e.target.value }))} maxLength={40} autoFocus />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="ob-bio">Bio</label>
+                    <textarea id="ob-bio" className="input resize-none" rows={3} placeholder="A line or two about you and your art…" value={form.bio} onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))} maxLength={200} />
+                    <p className="text-[11px] text-right mt-1" style={{ color: "var(--text-muted)" }}>{form.bio.length}/200</p>
+                  </div>
+                </div>
+              )}
+
+              {step === 1 && (
+                <div className="flex flex-col items-center gap-5">
+                  {cropSrc ? (
+                    <ImageCropper imageSrc={cropSrc} onCrop={(file, url) => { setPicFile(file); setPicPreview(url); setCropSrc(null); }} onCancel={() => setCropSrc(null)} />
+                  ) : (
+                    <>
+                      <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }} onClick={() => fileRef.current?.click()} className="relative rounded-full">
+                        <Avatar src={picPreview} name={form.display_name} size={132} />
+                        <span className="absolute bottom-1 right-1 w-10 h-10 rounded-full flex items-center justify-center text-white" style={{ background: "var(--accent-grad)", border: "3px solid var(--surface)" }}><Camera className="w-4 h-4" /></span>
+                      </motion.button>
+                      <p className="text-sm" style={{ color: "var(--text-muted)" }}>Add a photo so friends recognise you.</p>
+                      <button className="btn-outline" onClick={() => fileRef.current?.click()}>{picPreview ? "Choose another" : "Upload photo"}</button>
+                    </>
+                  )}
+                  <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setCropSrc(URL.createObjectURL(f)); e.target.value = ""; }} />
+                </div>
+              )}
+
+              {step === 2 && (
+                <div>
+                  <p className="text-sm mb-4" style={{ color: "var(--text-secondary)" }}>What are you into? Pick as many as you like.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {INTERESTS.map((i, idx) => (
+                      <motion.button key={i} initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: idx * 0.025 }} whileTap={{ scale: 0.92 }} className="chip" data-active={form.interests.includes(i)} onClick={() => toggleInterest(i)}>
+                        {form.interests.includes(i) && <Check className="w-3.5 h-3.5" />}{i}
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {step === 3 && (
+                <div className="space-y-5">
+                  <div>
+                    <p className="label">Appearance</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[{ id: "light", label: "Light", icon: Sun }, { id: "dark", label: "Dark", icon: Moon }, { id: "system", label: "System", icon: Monitor }].map((t) => (
+                        <button key={t.id} onClick={() => setStyle({ theme: t.id })} className="card-sm p-3 flex flex-col items-center gap-2 text-sm font-semibold" style={form.theme === t.id ? { borderColor: "var(--accent-rose)", boxShadow: "0 0 0 3px rgb(var(--accent-rgb) / 0.15)", color: "var(--accent-rose)" } : { color: "var(--text-secondary)" }}>
+                          <t.icon className="w-5 h-5" />{t.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="label">Accent color</p>
+                    <div className="flex gap-3">
+                      {ACCENTS.map((a) => (
+                        <motion.button key={a.id} whileHover={{ y: -3 }} whileTap={{ scale: 0.9 }} onClick={() => setStyle({ accent: a.id })} className="flex flex-col items-center gap-1.5" aria-label={a.label}>
+                          <span className="w-11 h-11 rounded-2xl flex items-center justify-center text-white" style={{ background: a.swatch, boxShadow: form.accent === a.id ? "0 0 0 3px var(--surface), 0 0 0 5px rgb(var(--accent-rgb))" : "none" }}>{form.accent === a.id && <Check className="w-4 h-4" />}</span>
+                          <span className="text-[11px] font-semibold" style={{ color: "var(--text-muted)" }}>{a.label}</span>
+                        </motion.button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </motion.div>
           </AnimatePresence>
+
+          {!cropSrc && (
+            <div className="flex gap-2 mt-8">
+              {step > 0 && <button className="btn-ghost" onClick={() => go(step - 1)}><ArrowLeft className="w-4 h-4" /> Back</button>}
+              <div className="flex-1" />
+              {step < STEPS.length - 1 ? (
+                <button className="btn" disabled={step === 0 && !form.display_name.trim()} onClick={() => go(step + 1)}>Continue <ArrowRight className="w-4 h-4" /></button>
+              ) : (
+                <button className="btn" disabled={saving} onClick={finish}>{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Check className="w-4 h-4" /> Finish</>}</button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

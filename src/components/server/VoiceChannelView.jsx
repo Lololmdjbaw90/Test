@@ -85,21 +85,7 @@ export default function VoiceChannelView({ channel, me }) {
   const handleJoin = useCallback(() => { voice.join(channel, me); }, [channel, me]);
 
   return (
-    <div className="flex-1 flex flex-col min-h-0" style={{ background: "var(--app-bg)" }}>
-      {/* header */}
-      <div className="flex-shrink-0 h-12 flex items-center gap-2 px-4 border-b" style={{ background: "var(--surface)", borderColor: "var(--border-c)" }}>
-        <Volume2 className="w-4 h-4" style={{ color: "var(--accent-rose)" }} />
-        <span className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>{channel?.name || "Voice"}</span>
-        {joinedHere && (
-          <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "var(--pink-soft)", color: "var(--accent-rose)" }}>
-            {vs.participants.length} in voice
-          </span>
-        )}
-        <div className="flex-1" />
-        {vs.connecting && <span className="text-xs flex items-center gap-1" style={{ color: "var(--text-muted)" }}><Loader2 className="w-3 h-3 animate-spin" /> connecting</span>}
-        {joinedHere && <span className="text-xs flex items-center gap-1" style={{ color: "#16a34a" }}><span className="w-1.5 h-1.5 rounded-full" style={{ background: "#16a34a" }} /> connected</span>}
-      </div>
-
+    <div className="flex-1 flex flex-col min-h-0 h-full">
       {/* body */}
       <div className="flex-1 overflow-y-auto p-5 scroll">
         {!joinedHere ? (
@@ -110,7 +96,7 @@ export default function VoiceChannelView({ channel, me }) {
             <div>
               <p className="font-bold text-base" style={{ color: "var(--text-primary)" }}>{channel?.name || "Voice channel"}</p>
               <p className="text-xs mt-1 max-w-xs" style={{ color: "var(--text-muted)" }}>
-                {channel?.description || "Join the call to talk with others here."} Open a second tab and join to hear a real call.
+                {channel?.description || "Join the call to talk with others here."}
               </p>
             </div>
             <button onClick={handleJoin} disabled={vs.connecting} className="btn px-6 py-3">
@@ -124,6 +110,9 @@ export default function VoiceChannelView({ channel, me }) {
                 <AlertTriangle className="w-4 h-4 flex-shrink-0" /> Microphone unavailable — you're connected as a listener.
               </div>
             )}
+            <div className="flex items-center gap-2 mb-4 text-xs font-semibold" style={{ color: "var(--success)" }}>
+              <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: "var(--success)" }} /> Connected · {vs.participants.length} in voice
+            </div>
             <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))" }}>
               <AnimatePresence>
                 {vs.participants.map((p) => <ParticipantTile key={p.peerId} p={p} />)}

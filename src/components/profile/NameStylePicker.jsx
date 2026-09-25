@@ -1,20 +1,64 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
-import { Palette, Check } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
+import { Check, Lock, Palette, Sparkles } from "lucide-react";
+import { useAuth } from "@/lib/AuthContext";
+import { toast } from "@/lib/toast";
+import { isNitro } from "@/lib/format";
+
+const base = { fontFamily: "var(--font-display)", fontWeight: 600 };
 export const NAME_STYLES = [
-  {id:"default",label:"Default",preview:()=>({fontFamily:"Inter,sans-serif",fontWeight:700,color:"var(--text-primary)",fontSize:"1.25rem"})},
-  {id:"glow-pink",label:"Pink Glow",preview:()=>({fontFamily:"Inter,sans-serif",fontWeight:700,color:"#e8a0b4",textShadow:"0 0 12px rgba(232,160,180,0.9),0 0 30px rgba(232,160,180,0.5)",fontSize:"1.25rem"})},
-  {id:"glow-purple",label:"Purple Glow",preview:()=>({fontFamily:"Inter,sans-serif",fontWeight:700,color:"#c084fc",textShadow:"0 0 12px rgba(192,132,252,0.9),0 0 30px rgba(192,132,252,0.5)",fontSize:"1.25rem"})},
-  {id:"glow-gold",label:"Gold Glow",preview:()=>({fontFamily:"Inter,sans-serif",fontWeight:700,color:"#fbbf24",textShadow:"0 0 12px rgba(251,191,36,0.9),0 0 30px rgba(251,191,36,0.4)",fontSize:"1.25rem"})},
-  {id:"aurora",label:"Aurora",preview:()=>({fontFamily:"Inter,sans-serif",fontWeight:800,background:"linear-gradient(90deg,#e8a0b4,#c084fc,#60a5fa,#e8a0b4)",backgroundSize:"200%",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",fontSize:"1.25rem"})},
-  {id:"neon",label:"Neon",preview:()=>({fontFamily:"Inter,sans-serif",fontWeight:900,color:"#fff",textShadow:"0 0 6px #fff,0 0 20px #e8a0b4,0 0 40px #d4708a,0 0 80px #c0526e",fontSize:"1.25rem"})},
-  {id:"italic-serif",label:"Italic Serif",preview:()=>({fontFamily:"'Playfair Display',Georgia,serif",fontWeight:700,fontStyle:"italic",color:"var(--text-primary)",fontSize:"1.3rem"})},
-  {id:"bold-serif",label:"Bold Serif",preview:()=>({fontFamily:"'Playfair Display',Georgia,serif",fontWeight:900,color:"var(--accent-rose)",textShadow:"0 0 16px rgba(212,112,138,0.35)",fontSize:"1.3rem"})},
+  { id: "default", label: "Classic", preview: () => ({ ...base, color: "var(--text-primary)" }) },
+  { id: "glow-pink", label: "Pink glow", preview: () => ({ ...base, color: "#e86d98", textShadow: "0 0 14px rgba(232,109,152,0.65)" }) },
+  { id: "glow-purple", label: "Violet glow", preview: () => ({ ...base, color: "#a67cf7", textShadow: "0 0 14px rgba(166,124,247,0.65)" }) },
+  { id: "italic-serif", label: "Editorial", preview: () => ({ ...base, fontStyle: "italic", color: "var(--text-primary)" }) },
+  { id: "bold-serif", label: "Rose serif", preview: () => ({ ...base, fontWeight: 800, color: "var(--accent-rose)" }) },
+  { id: "glow-gold", label: "Gold", premium: true, preview: () => ({ ...base, color: "#e6a31c", textShadow: "0 0 16px rgba(240,160,32,0.6)" }) },
+  { id: "aurora", label: "Aurora", premium: true, preview: () => ({ ...base, fontWeight: 700, background: "linear-gradient(90deg,#ee8fae,#b19cff,#7cbeff,#ee8fae)", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", animation: "gradient-pan 5s linear infinite" }) },
+  { id: "neon", label: "Neon", premium: true, preview: () => ({ ...base, fontWeight: 700, color: "#fff", textShadow: "0 0 4px #fff, 0 0 14px #ee8fae, 0 0 30px #d9577f, 0 0 50px #d9577f" }) },
 ];
-export function getNameStyle(styleId){return NAME_STYLES.find(s=>s.id===styleId)||NAME_STYLES[0];}
-export default function NameStylePicker({currentStyle,name,onSave}){
-  const[open,setOpen]=useState(false);const[saving,setSaving]=useState(false);const[selected,setSelected]=useState(currentStyle||"default");
-  const handleSave=async(styleId)=>{setSaving(true);setSelected(styleId);await base44.auth.updateMe({name_style:styleId});onSave(styleId);setSaving(false);setOpen(false);};
-  return(<div className="relative"><button onClick={()=>setOpen(o=>!o)} className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full" style={{background:"var(--pink-soft)",color:"var(--accent-rose)",border:"1px solid var(--border-c)"}}><Palette className="w-3 h-3"/>Style</button><AnimatePresence>{open&&<motion.div initial={{opacity:0,y:8,scale:0.95}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:8,scale:0.95}} className="absolute left-0 top-8 z-50 w-72 rounded-2xl shadow-2xl overflow-hidden" style={{background:"var(--surface)",border:"1px solid var(--border-c)"}}><div className="px-4 py-3 border-b" style={{borderColor:"var(--border-c)"}}><p className="text-xs font-semibold" style={{color:"var(--text-primary)"}}>Choose name style</p></div><div className="p-2 space-y-1 max-h-72 overflow-y-auto scroll">{NAME_STYLES.map(style=>{const isActive=selected===style.id;return(<button key={style.id} onClick={()=>handleSave(style.id)} disabled={saving} className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left" style={isActive?{background:"var(--pink-soft)"}:{}} onMouseEnter={e=>!isActive&&(e.currentTarget.style.background="var(--pink-soft)")} onMouseLeave={e=>!isActive&&(e.currentTarget.style.background="transparent")}><span style={style.preview()}>{name}</span>{isActive&&<Check className="w-3.5 h-3.5 flex-shrink-0" style={{color:"var(--accent-pink)"}}/>}</button>);})}</div></motion.div>}</AnimatePresence>{open&&<div className="fixed inset-0 z-40" onClick={()=>setOpen(false)}/>}</div>);
+
+export function getNameStyle(styleId) {
+  return NAME_STYLES.find((s) => s.id === styleId) || NAME_STYLES[0];
+}
+
+export default function NameStylePicker({ currentStyle, name, onSave }) {
+  const { user, updateMe } = useAuth();
+  const [open, setOpen] = useState(false);
+  const nitro = isNitro(user);
+  const pick = async (style) => {
+    if (style.premium && !nitro) { toast("MimiNitro style", { description: "Get Nitro from the shop on your profile to unlock this.", icon: <Sparkles className="w-5 h-5" /> }); return; }
+    try {
+      await updateMe({ name_style: style.id });
+      onSave?.(style.id);
+      setOpen(false);
+    } catch (e) { toast.error(e?.message || "Could not save style."); }
+  };
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((o) => !o)} className="chip !py-1.5" aria-expanded={open}><Palette className="w-3.5 h-3.5" /> Name style</button>
+      <AnimatePresence>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <motion.div initial={{ opacity: 0, y: 8, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.96 }} className="absolute left-0 top-11 z-50 w-72 rounded-3xl overflow-hidden" style={{ background: "var(--surface)", border: "1px solid var(--border-c)", boxShadow: "var(--shadow-lg)" }}>
+              <p className="eyebrow px-4 pt-4 pb-2">Choose a name style</p>
+              <div className="p-2 pt-0 max-h-80 overflow-y-auto scroll">
+                {NAME_STYLES.map((style) => {
+                  const active = (currentStyle || "default") === style.id;
+                  const locked = style.premium && !nitro;
+                  return (
+                    <button key={style.id} onClick={() => pick(style)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-left transition-colors hover:bg-[var(--surface-2)]" style={active ? { background: "var(--pink-soft)" } : undefined}>
+                      <span className="flex-1 min-w-0 truncate text-lg" style={style.preview()}>{name}</span>
+                      <span className="text-[10px] font-bold flex items-center gap-1" style={{ color: "var(--text-muted)" }}>{style.premium && (locked ? <Lock className="w-3 h-3" /> : <Sparkles className="w-3 h-3" style={{ color: "#a67cf7" }} />)}{style.label}</span>
+                      {active && <Check className="w-4 h-4" style={{ color: "var(--accent-rose)" }} />}
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }

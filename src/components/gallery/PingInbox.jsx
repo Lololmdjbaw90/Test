@@ -1,12 +1,57 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
+import { BellRing, Trash2, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { Bell, X, Trash2 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-export default function PingInbox({currentUser}){
-  const[pings,setPings]=useState([]);const[open,setOpen]=useState(false);
-  useEffect(()=>{if(currentUser?.email)load();},[currentUser]);
-  const load=async()=>{const data=await base44.entities.ArtworkPing.filter({to_email:currentUser.email},"-created_date",30).catch(()=>[]);setPings(data);};
-  const del=async(id)=>{await base44.entities.ArtworkPing.delete(id).catch(()=>{});setPings(p=>p.filter(x=>x.id!==id));};
-  if(!currentUser)return null;
-  return(<div className="relative"><button onClick={()=>{setOpen(o=>!o);if(!open)load();}} className="relative w-9 h-9 rounded-xl flex items-center justify-center transition-all border" style={open?{background:"var(--accent-pink)",borderColor:"var(--accent-pink)"}:{background:"var(--surface)",borderColor:"var(--border-c)"}}><Bell className="w-4 h-4" style={{color:open?"white":"var(--text-muted)"}}/>{pings.length>0&&<span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 bg-red-400 text-white text-[8px] font-semibold rounded-full flex items-center justify-center px-0.5">{pings.length>9?"9+":pings.length}</span>}</button><AnimatePresence>{open&&(<><div className="fixed inset-0 z-30" onClick={()=>setOpen(false)}/><motion.div initial={{opacity:0,y:6,scale:0.97}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:6}} className="absolute right-0 top-11 z-40 w-64 rounded-2xl shadow-lg overflow-hidden" style={{background:"var(--surface)",border:"1px solid var(--border-c)"}}><div className="px-3 py-2.5 border-b flex items-center justify-between" style={{borderColor:"var(--border-c)"}}><span className="text-xs font-semibold" style={{color:"var(--text-primary)"}}>Pings</span><button onClick={()=>setOpen(false)} className="w-5 h-5 flex items-center justify-center"><X className="w-3.5 h-3.5" style={{color:"var(--text-muted)"}}/></button></div><div className="max-h-60 overflow-y-auto scroll">{pings.length===0?<div className="text-center py-8"><Bell className="w-5 h-5 mx-auto mb-2" style={{color:"var(--text-muted)"}}/><p className="text-xs" style={{color:"var(--text-muted)"}}>No pings yet</p></div>:pings.map(ping=><div key={ping.id} className="flex items-start gap-2.5 px-3 py-2.5 group border-b" style={{borderColor:"var(--border-c)"}}><div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-semibold" style={{background:"var(--accent-pink)"}}>{ping.from_display_name?.[0]?.toUpperCase()||"?"}</div><div className="flex-1 min-w-0"><p className="text-[10px] font-semibold truncate" style={{color:"var(--text-primary)"}}>{ping.from_display_name}</p><p className="text-[10px]" style={{color:"var(--text-muted)"}}>pinged about an artwork</p>{ping.message&&<p className="text-[10px] mt-0.5 italic" style={{color:"var(--text-secondary)"}}>"{ping.message}"</p>}</div><button onClick={()=>del(ping.id)} className="w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 flex-shrink-0"><Trash2 className="w-3 h-3 text-red-400"/></button></div>)}</div></motion.div></>)}</AnimatePresence></div>);
+import { useAuth } from "@/lib/AuthContext";
+import { useLiveQuery } from "@/lib/useLiveQuery";
+import { timeAgo } from "@/lib/format";
+import Avatar from "@/components/common/Avatar";
+
+export default function PingInbox() {
+  const { user } = useAuth();
+  const [open, setOpen] = useState(false);
+  const { data: pings, setData } = useLiveQuery("ArtworkPing", user ? { to_email: user.email } : null, { sort: "-created_date", limit: 30, enabled: !!user });
+  if (!user) return null;
+  const del = async (id) => { setData((p) => p.filter((x) => x.id !== id)); await base44.entities.ArtworkPing.delete(id).catch(() => {}); };
+
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((o) => !o)} className="btn-outline relative" aria-expanded={open}>
+        <BellRing className="w-4 h-4" /> Pings
+        {pings.length > 0 && <span className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center" style={{ background: "var(--accent-rose)" }}>{pings.length > 9 ? "9+" : pings.length}</span>}
+      </button>
+      <AnimatePresence>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+            <motion.div initial={{ opacity: 0, y: 8, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8 }} className="absolute right-0 top-12 z-40 w-80 rounded-3xl overflow-hidden" style={{ background: "var(--surface)", border: "1px solid var(--border-c)", boxShadow: "var(--shadow-lg)" }}>
+              <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: "var(--border-c)" }}>
+                <span className="font-display font-semibold" style={{ color: "var(--text-primary)" }}>Pings</span>
+                <button onClick={() => setOpen(false)} className="icon-btn w-7 h-7" aria-label="Close"><X className="w-4 h-4" /></button>
+              </div>
+              <div className="max-h-72 overflow-y-auto scroll">
+                {pings.length === 0 ? (
+                  <div className="text-center py-10 px-4">
+                    <BellRing className="w-6 h-6 mx-auto mb-2" style={{ color: "var(--text-muted)" }} />
+                    <p className="text-sm" style={{ color: "var(--text-muted)" }}>No pings yet</p>
+                  </div>
+                ) : pings.map((ping) => (
+                  <div key={ping.id} className="flex items-start gap-3 px-4 py-3 group border-b last:border-0" style={{ borderColor: "var(--border-c)" }}>
+                    <Avatar src={ping.from_profile_picture} name={ping.from_display_name} size={32} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm" style={{ color: "var(--text-primary)" }}><strong>{ping.from_display_name}</strong> pinged you{ping.artwork_title ? <> about <Link className="font-semibold hover:underline" style={{ color: "var(--accent-rose)" }} to={`/Gallery?art=${ping.artwork_id}`} onClick={() => setOpen(false)}>{ping.artwork_title}</Link></> : ""}</p>
+                      {ping.message && <p className="text-xs mt-1 italic" style={{ color: "var(--text-secondary)" }}>“{ping.message}”</p>}
+                      <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>{timeAgo(ping.created_date)}</p>
+                    </div>
+                    <button onClick={() => del(ping.id)} className="icon-btn w-7 h-7 opacity-0 group-hover:opacity-100 focus:opacity-100" aria-label="Delete ping"><Trash2 className="w-3.5 h-3.5" style={{ color: "var(--danger)" }} /></button>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }

@@ -3,28 +3,40 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Mimi Locks — a cozy home for artists: gallery, community feed, music, servers and messages." />
+    <meta name="theme-color" content="#fbf7f6" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#110a0f" media="(prefers-color-scheme: dark)" />
     <link rel="manifest" href="/manifest.json" />
-    <link rel="stylesheet" href="/rendered-styles.css" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..800;1,9..144,400..700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Mimi Locks" />
     <title>Mimi Locks</title>
+    <script>
+      // Apply the saved theme before first paint to avoid a light/dark flash.
+      (function () {
+        try {
+          var t = JSON.parse(localStorage.getItem("mimilocks:__theme") || "{}");
+          var dark = t.theme === "dark" || (t.theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
+          if (t.accent) document.documentElement.setAttribute("data-accent", t.accent);
+        } catch (e) {}
+      })();
+    </script>
     <style>
-      #app-loading{position:fixed;inset:0;z-index:99999;background:#fdf8f9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;font-family:'Inter','Segoe UI',sans-serif;transition:opacity 0.4s;}
-      #app-loading .logo{width:56px;height:56px;border-radius:16px;background:#e8a0b4;display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;color:white;}
-      #app-loading .spinner{width:20px;height:20px;border:2px solid #f0e4ea;border-top-color:#e8a0b4;border-radius:50%;animation:spin 0.8s linear infinite;}
-      @keyframes spin{to{transform:rotate(360deg);}}
+      #app-loading{position:fixed;inset:0;z-index:99999;background:#fbf7f6;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;font-family:'Plus Jakarta Sans',system-ui,sans-serif;transition:opacity .45s ease}
+      .dark #app-loading{background:#110a0f}
+      #app-loading .logo{width:60px;height:60px;border-radius:20px;background:linear-gradient(135deg,#ee8fae,#d9577f);display:flex;align-items:center;justify-content:center;font:italic 700 30px Fraunces,Georgia,serif;color:#fff;box-shadow:0 14px 34px rgba(217,87,127,.35);animation:pulse 1.6s ease-in-out infinite}
+      #app-loading p{font-size:.78rem;color:#9c8a93;font-weight:600;letter-spacing:.12em;text-transform:uppercase;margin:0}
+      @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
     </style>
   </head>
   <body>
-    <div id="app-loading"><div class="logo">M</div><div class="spinner"></div><p style="font-size:0.8rem;color:#999;font-weight:500">Mimi Locks</p></div>
+    <div id="app-loading"><div class="logo">M</div><p>Mimi Locks</p></div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
-    <script>
-      document.addEventListener('DOMContentLoaded',function(){
-        var o=new MutationObserver(function(){var r=document.getElementById('root');if(r&&r.children.length>0){setTimeout(function(){var l=document.getElementById('app-loading');if(l){l.style.opacity='0';setTimeout(function(){l.style.display='none';},400);}},300);o.disconnect();}});
-        o.observe(document.getElementById('root'),{childList:true});
-      });
-    </script>
   </body>
 </html>

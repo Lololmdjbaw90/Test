@@ -1,53 +1,59 @@
-import React, { useState } from "react";
-import { Trash2 } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Loader2, Lock, Trash2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import SimpleModal from "@/components/common/SimpleModal";
-import { Button } from "@/components/ui/button";
+import { toast } from "@/lib/toast";
+import Modal, { useConfirm } from "@/components/common/Modal";
+import { channelSlug } from "./AddChannelModal";
 
-// Reconstructed fallback (full source: Base44 Code tab → components/server/ChannelSettingsModal.jsx).
-export default function ChannelSettingsModal({ channel, roles = [], onClose, onUpdated, onDeleted }) {
-  const [name, setName] = useState(channel?.name || "");
-  const [description, setDescription] = useState(channel?.description || "");
+export default function ChannelSettingsModal({ channel, roles = [], onClose, onDeleted }) {
+  const confirm = useConfirm();
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [allowed, setAllowed] = useState([]);
   const [saving, setSaving] = useState(false);
-  const [confirmDel, setConfirmDel] = useState(false);
-  const [error, setError] = useState("");
+  useEffect(() => {
+    if (!channel) return;
+    setName(channel.name || "");
+    setDescription(channel.description || "");
+    setAllowed(channel.allowed_roles || []);
+  }, [channel?.id]);
+
   const save = async () => {
-    setSaving(true); setError("");
+    setSaving(true);
     try {
-      await base44.entities.ServerChannel.update(channel.id, { name: name.trim().toLowerCase().replace(/\s+/g, "-"), description });
-      onUpdated?.(); onClose?.();
-    } catch (e) { setError(e?.message || "Could not save changes."); setSaving(false); }
+      await base44.entities.ServerChannel.update(channel.id, { name: channelSlug(name, channel.type) || channel.name, description: description.trim(), allowed_roles: allowed });
+      toast.success("Channel updated");
+      onClose();
+    } catch (e) { toast.error(e?.message || "Could not save."); }
+    setSaving(false);
   };
   const del = async () => {
-    setSaving(true); setError("");
-    try { await base44.entities.ServerChannel.delete(channel.id); onDeleted?.(); onClose?.(); }
-    catch (e) { setError(e?.message || "Could not delete channel."); setSaving(false); }
+    if (!(await confirm({ title: `Delete ${channel.type === "voice" ? "" : "#"}${channel.name}?`, message: "Messages in this channel will no longer be reachable.", confirmLabel: "Delete channel", danger: true }))) return;
+    try { await base44.entities.ServerChannel.delete(channel.id); toast.success("Channel deleted"); onDeleted?.(channel); onClose(); } catch (e) { toast.error(e?.message || "Could not delete."); }
   };
+
   return (
-    <SimpleModal title={`# ${channel?.name || "channel"}`} onClose={onClose}
-      footer={<><Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button><Button size="sm" onClick={save} disabled={saving}>{saving ? "Saving\u2026" : "Save"}</Button></>}>
-      <div className="p-5 space-y-4">
-        <div>
-          <label className="block text-xs font-semibold mb-1.5" style={{ color: "var(--text-secondary)" }}>Channel name</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent outline-none" style={{ borderColor: "var(--border-c)", color: "var(--text-primary)" }} />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold mb-1.5" style={{ color: "var(--text-secondary)" }}>Description</label>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="What's this channel about?" className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent outline-none resize-none" style={{ borderColor: "var(--border-c)", color: "var(--text-primary)" }} />
-        </div>
-        {error && <p className="text-xs" style={{ color: "hsl(var(--destructive))" }}>{error}</p>}
-        <div className="pt-3 border-t" style={{ borderColor: "var(--border-c)" }}>
-          {!confirmDel ? (
-            <button onClick={() => setConfirmDel(true)} className="flex items-center gap-2 text-sm font-medium" style={{ color: "hsl(var(--destructive))" }}><Trash2 className="w-4 h-4" /> Delete channel</button>
-          ) : (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs" style={{ color: "var(--text-secondary)" }}>Delete this channel?</span>
-              <Button variant="destructive" size="sm" onClick={del} disabled={saving}>Delete</Button>
-              <Button variant="ghost" size="sm" onClick={() => setConfirmDel(false)}>Cancel</Button>
+    <Modal open={!!channel} onClose={onClose} title="Channel settings" subtitle={channel ? `${channel.type === "voice" ? "🔊" : "#"}${channel.name}` : ""}
+      footer={<><button className="btn-ghost mr-auto" style={{ color: "var(--danger)" }} onClick={del}><Trash2 className="w-4 h-4" /> Delete</button><button className="btn-ghost" onClick={onClose}>Cancel</button><button className="btn" onClick={save} disabled={saving}>{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}</button></>}>
+      {channel && (
+        <div className="space-y-4">
+          <div><label className="label" htmlFor="cs-name">Name</label><input id="cs-name" className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={32} /></div>
+          <div><label className="label" htmlFor="cs-desc">Topic</label><textarea id="cs-desc" className="input resize-none" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={120} /></div>
+          {channel.type !== "voice" && (
+            <div>
+              <p className="label flex items-center gap-1.5"><Lock className="w-3.5 h-3.5" /> Who can post</p>
+              <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>{allowed.length ? "Only members with these roles (and server managers) can send messages." : "Everyone in the server can post."}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {roles.map((r) => {
+                  const on = allowed.includes(r.name);
+                  return <button key={r.id} onClick={() => setAllowed((a) => (on ? a.filter((x) => x !== r.name) : [...a, r.name]))} className="text-xs font-bold px-2.5 py-1.5 rounded-full transition-colors" style={on ? { background: r.color, color: "#fff" } : { border: `1px solid ${r.color}`, color: r.color }}>{r.name}</button>;
+                })}
+                {roles.length === 0 && <p className="text-xs" style={{ color: "var(--text-muted)" }}>Create roles in server settings first.</p>}
+              </div>
             </div>
           )}
         </div>
-      </div>
-    </SimpleModal>
+      )}
+    </Modal>
   );
 }

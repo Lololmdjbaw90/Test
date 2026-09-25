@@ -1,24 +1,59 @@
-import React, { useState } from "react";
-import { motion } from "framer-motion";
-import { Heart, Trash2, Play, Pause, Crown } from "lucide-react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { base44 } from "@/api/base44Client";
+import React from "react";
 import { Link } from "react-router-dom";
-import CommunityCommentSection from "./CommunityCommentSection";
-import { notify } from "../../utils/notifications";
-export default function PostCard({ post, index, onUpdate, currentUser, isTopArtist }) {
-  const [showDetail,setShowDetail]=useState(false),[showDelete,setShowDelete]=useState(false),[deleting,setDeleting]=useState(false),[likes,setLikes]=useState(post.likes||[]),[playing,setPlaying]=useState(false),[audio,setAudio]=useState(null);
-  const liked=currentUser?likes.includes(currentUser.email):false;
-  const canDelete=currentUser&&(currentUser.email===post.user_email||currentUser.role==="admin");
-  const handleLike=async(e)=>{e?.stopPropagation();if(!currentUser)return;const wasLiked=liked;const next=wasLiked?likes.filter(e=>e!==currentUser.email):[...likes,currentUser.email];setLikes(next);await base44.entities.CommunityPost.update(post.id,{likes:next}).catch(()=>setLikes(post.likes||[]));if(!wasLiked&&post.user_email!==currentUser.email){notify({to_email:post.user_email,from_email:currentUser.email,from_display_name:currentUser.display_name||currentUser.full_name,from_profile_picture:currentUser.profile_picture,type:"like",message:(currentUser.display_name||currentUser.full_name)+" liked your post"+(post.title?(' "'+post.title+'"'):""),link:"/Community",entity_id:post.id});}};
-  const handleDelete=async()=>{setDeleting(true);await base44.entities.CommunityPost.delete(post.id).catch(()=>{});setDeleting(false);setShowDelete(false);onUpdate();};
-  const togglePlay=(e)=>{e?.stopPropagation();if(!audio)return;if(playing){audio.pause();setPlaying(false);}else{audio.play();setPlaying(true);}};
-  return(
-    <><motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{delay:index*0.03}} className="card-sm overflow-hidden cursor-pointer group" onClick={()=>setShowDetail(true)}>
-      <div className="relative overflow-hidden"><img src={post.image_url} alt={post.title} className="w-full object-cover transition-transform duration-500 group-hover:scale-105"/></div>
-      <div className="p-2.5">{post.title&&<p className="text-xs font-semibold truncate mb-1" style={{color:"var(--text-primary)"}}>{post.title}</p>}<div className="flex items-center justify-between"><div className="flex items-center gap-1 min-w-0">{isTopArtist&&<Crown className="w-3 h-3 flex-shrink-0" style={{color:"#f59e0b"}}/>}<Link to={"/Profile?email="+encodeURIComponent(post.user_email)} onClick={e=>e.stopPropagation()} className="text-[10px] font-medium truncate" style={{color:"var(--text-muted)"}}>{post.user_display_name}</Link></div><button onClick={handleLike} disabled={!currentUser} className="flex items-center gap-0.5 text-[10px] font-medium" style={{color:liked?"var(--accent-rose)":"var(--text-muted)"}}><Heart className={`w-3 h-3 ${liked?"fill-current":""}`}/> {likes.length}</button></div></div>
-    </motion.div>
-    <Dialog open={showDetail} onOpenChange={setShowDetail}><DialogContent className="max-w-2xl w-[95vw] max-h-[88vh] p-0 overflow-hidden rounded-2xl border-0" style={{background:"var(--surface)",border:"1px solid var(--border-c)"}}><div className="flex flex-col max-h-[88vh]"><div className="flex-shrink-0 px-4 py-3 border-b flex items-center justify-between" style={{borderColor:"var(--border-c)"}}><Link to={"/Profile?email="+encodeURIComponent(post.user_email)} className="text-xs font-medium" style={{color:"var(--text-secondary)"}}>{post.user_display_name}</Link>{canDelete&&<button onClick={()=>setShowDelete(true)} className="w-7 h-7 rounded-full flex items-center justify-center" style={{background:"#fff0f0"}}><Trash2 className="w-3.5 h-3.5 text-red-400"/></button>}</div><div className="flex-1 overflow-y-auto scroll"><img src={post.image_url} alt={post.title} className="w-full object-cover max-h-72"/><div className="p-4 space-y-3">{post.title&&<h2 className="font-semibold text-sm" style={{color:"var(--text-primary)"}}>{post.title}</h2>}{post.description&&<p className="text-xs leading-relaxed" style={{color:"var(--text-secondary)"}}>{post.description}</p>}{post.music_url&&<div className="rounded-xl p-3 flex items-center gap-3" style={{background:"var(--pink-soft)"}}><button onClick={togglePlay} className="w-8 h-8 rounded-full flex items-center justify-center text-white flex-shrink-0" style={{background:"var(--accent-pink)"}}>{playing?<Pause className="w-3.5 h-3.5"/>:<Play className="w-3.5 h-3.5 ml-0.5"/>}</button><div className="flex-1 min-w-0"><audio ref={setAudio} src={post.music_url} onEnded={()=>setPlaying(false)} className="w-full h-5" controls/></div></div>}<button onClick={handleLike} disabled={!currentUser} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium" style={liked?{background:"var(--accent-pink)",color:"white"}:{background:"var(--pink-soft)",color:"var(--accent-rose)",border:"1px solid var(--border-c)"}}><Heart className={`w-3.5 h-3.5 ${liked?"fill-current":""}`}/> {likes.length} likes</button><CommunityCommentSection postId={post.id} currentUser={currentUser} postOwnerEmail={post.user_email}/></div></div></div></DialogContent></Dialog>
-    <Dialog open={showDelete} onOpenChange={setShowDelete}><DialogContent className="max-w-xs rounded-2xl border-0" style={{background:"var(--surface)",border:"1px solid var(--border-c)"}}><div className="p-4 text-center"><div className="w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-3" style={{background:"#fff0f0"}}><Trash2 className="w-4 h-4 text-red-400"/></div><p className="font-medium text-sm mb-1" style={{color:"var(--text-primary)"}}>Delete post?</p><div className="flex gap-2"><button onClick={()=>setShowDelete(false)} className="flex-1 btn-outline text-sm py-2">Cancel</button><button onClick={handleDelete} disabled={deleting} className="flex-1 text-sm py-2 rounded-full font-semibold text-white" style={{background:"#e05a5a"}}>{deleting?"...":"Delete"}</button></div></div></DialogContent></Dialog></>
+import { motion } from "framer-motion";
+import { Crown, MessageCircle } from "lucide-react";
+import Avatar from "@/components/common/Avatar";
+import LikeButton from "@/components/common/LikeButton";
+import { profileLink, timeAgo } from "@/lib/format";
+
+const TEXT_BACKGROUNDS = [
+  "linear-gradient(145deg, rgb(var(--accent-2-rgb) / 0.35), rgb(var(--accent-rgb) / 0.12))",
+  "linear-gradient(145deg, #e9e1ff, #c9b8ff)",
+  "linear-gradient(145deg, #dff7ee, #a7e8d2)",
+  "linear-gradient(145deg, #ffe9dc, #ffc4a6)",
+];
+
+export default function PostCard({ post, index = 0, onOpen, liked, likeCount, onLike, isTopArtist }) {
+  const bg = TEXT_BACKGROUNDS[(post.id || "").charCodeAt(0) % TEXT_BACKGROUNDS.length || 0];
+  return (
+    <motion.article
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={{ delay: Math.min(index, 12) * 0.04, type: "spring", stiffness: 260, damping: 26 }}
+      whileHover={{ y: -4 }}
+      className="card-sm !rounded-3xl overflow-hidden group cursor-pointer"
+      onClick={onOpen}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === "Enter") onOpen?.(); }}
+    >
+      {post.image_url ? (
+        <div className="relative overflow-hidden" style={{ background: "var(--surface-2)" }}>
+          <img src={post.image_url} alt={post.title || ""} loading="lazy" className="w-full object-cover transition-transform duration-700 group-hover:scale-[1.05]" style={{ minHeight: 120 }} />
+        </div>
+      ) : (
+        <div className="p-5 pb-3" style={{ background: bg }}>
+          <p className="font-display text-xl leading-snug line-clamp-6" style={{ color: "#2a1620" }}>“{post.description || post.title}”</p>
+        </div>
+      )}
+      <div className="p-4">
+        {post.title && post.image_url && <h3 className="font-semibold text-sm mb-1 line-clamp-1" style={{ color: "var(--text-primary)" }}>{post.title}</h3>}
+        {post.description && post.image_url && <p className="text-xs line-clamp-2 mb-3" style={{ color: "var(--text-secondary)" }}>{post.description}</p>}
+        <div className="flex items-center gap-2">
+          <Link to={profileLink(post.user_email)} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 min-w-0 flex-1 group/author">
+            <Avatar src={post.user_profile_picture} name={post.user_display_name} size={28} />
+            <span className="min-w-0">
+              <span className="text-xs font-bold truncate flex items-center gap-1 group-hover/author:underline" style={{ color: "var(--text-primary)" }}>
+                {isTopArtist && <Crown className="w-3 h-3 flex-shrink-0" style={{ color: "#f0a020" }} />}{post.user_display_name}
+              </span>
+              <span className="block text-[10px]" style={{ color: "var(--text-muted)" }}>{timeAgo(post.created_date)}</span>
+            </span>
+          </Link>
+          <span className="icon-btn w-8 h-8 pointer-events-none" aria-hidden="true"><MessageCircle className="w-4 h-4" /></span>
+          <LikeButton liked={liked} count={likeCount} onToggle={onLike} variant="plain" />
+        </div>
+      </div>
+    </motion.article>
   );
 }

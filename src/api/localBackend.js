@@ -1,28 +1,24 @@
-// Local, in-browser replacement for the Base44 SDK.
+// Local, in-browser backend.
 // -----------------------------------------------------------------------------
-// This makes the app completely independent of Base44: there is no SDK, no app
-// id, and no remote backend. Everything the app used to call on `base44` is
-// reimplemented here against the browser's localStorage:
+// Implements the same `base44` API as the Firebase backend against the
+// browser's localStorage, so the whole site runs with zero setup:
 //
 //   base44.entities.<Name>.{ list, filter, get, create, update, delete, subscribe, bulkCreate }
-//   base44.auth.{ me, updateMe, login, logout, redirectToLogin }
+//   base44.auth.{ me, register, login, logout, updateMe, resetPassword, redirectToLogin }
 //   base44.integrations.Core.{ UploadFile, InvokeLLM }
 //
-// Data persists in localStorage under the "mimilocks:" prefix and survives
-// reloads. To wipe everything, clear site data for this origin (or run
-// `localStorage.clear()` in the console).
+// Permission checks mirror firestore.rules so behaviour is the same in both
+// modes. Data persists under the "mimilocks:" prefix; realtime events are
+// shared between open tabs through the `storage` event.
 //
-// Notes / limitations of running fully local:
-//  - Auth now supports real local accounts with email/password stored in this
-//    browser. For true cross-device production auth, connect the same app shape
-//    to Supabase/Firebase or your own API.
-//  - File "uploads" are stored as data URLs inside the records (fine for small
-//    images; very large files can exceed the localStorage quota).
-//  - There is no AI offline, so `InvokeLLM` returns a safe, schema-shaped
-//    placeholder (content-moderation calls therefore always pass).
+// Limitations of running fully local:
+//  - accounts only exist in this browser (use Firebase for real multi-user)
+//  - uploads are stored as data URLs (very large files can hit the quota)
+//  - InvokeLLM only supports moderation, answered by the local word filter
 // -----------------------------------------------------------------------------
 
 import { moderate } from "../utils/profanity.js";
+import { matchesQuery, sortAndLimit } from "./queryUtils.js";
 
 const PREFIX = "mimilocks";
 const isBrowser = typeof window !== "undefined" && !!window.localStorage;
@@ -36,7 +32,10 @@ function readRaw(key) {
 function writeRaw(key, val) {
   if (isBrowser) {
     try { window.localStorage.setItem(key, val); }
-    catch (e) { console.warn("[localBackend] localStorage write failed (quota?):", e); }
+    catch (e) {
+      console.warn("[localBackend] localStorage write failed (quota?):", e);
+      throw new Error("Browser storage is full. Try a smaller image or clear old data in Settings.");
+    }
   } else {
     memFallback.set(key, val);
   }
@@ -65,7 +64,6 @@ async function hashPassword(password, salt) {
     const hash = await window.crypto.subtle.digest("SHA-256", data);
     return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
   }
-  // Build-time fallback only, not used in the browser.
   let h = 0;
   for (let i = 0; i < input.length; i++) h = Math.imul(31, h) + input.charCodeAt(i) | 0;
   return String(h);
@@ -80,50 +78,81 @@ function requireAuthSync() {
   if (!u) throw new Error("auth_required");
   return u;
 }
-function isAdminUser(user) { return user?.role === "admin"; }
+
+// ---------- permissions (mirror firestore.rules) ----------
+const same = (a, b) => normalizeEmail(a) === normalizeEmail(b) && !!normalizeEmail(a);
+const isAdminUser = (user) => user?.role === "admin";
 function isOwner(user, record) {
   if (!user || !record) return false;
-  const email = normalizeEmail(user.email);
-  return [record.created_by, record.user_email, record.owner_email, record.artist_email, record.requester_email].some((v) => normalizeEmail(v) === email);
+  return [record.created_by, record.user_email, record.owner_email, record.artist_email, record.requester_email].some((v) => same(v, user.email));
 }
-function canManageCommunity(user, communityId) {
+function onlyChanged(data, allowed) {
+  return Object.keys(data || {}).every((k) => allowed.includes(k) || k === "updated_date");
+}
+function managesCommunity(user, communityId) {
   if (!user || !communityId) return false;
   if (isAdminUser(user)) return true;
   const comm = loadCollection("Community").find((c) => c.id === communityId);
-  return normalizeEmail(comm?.owner_email) === normalizeEmail(user.email);
+  return same(comm?.owner_email, user.email);
 }
-function canUpdateEntity(user, name, current, data = {}) {
+const LIKEABLE = ["Artwork", "CommunityPost", "MusicReview"];
+
+function canCreate(user, name, data) {
   if (!user) return false;
   if (isAdminUser(user)) return true;
   if (name === "SiteConfig" || name === "Log" || name === "User") return false;
-  if (["ServerChannel", "ServerRole", "ServerMember"].includes(name)) return canManageCommunity(user, current?.community_id || data.community_id);
-  if (name === "Community") {
-    const keys = Object.keys(data || {});
-    if (keys.length === 1 && keys[0] === "member_emails") return true; // join/leave only
-    return normalizeEmail(current?.owner_email) === normalizeEmail(user.email);
-  }
-  if (name === "ChannelMessage") {
-    const keys = Object.keys(data || {});
-    const publicActions = keys.every((k) => ["reactions", "thread_count"].includes(k));
-    if (publicActions) return true;
-    if (data.is_pinned !== undefined && canManageCommunity(user, current?.community_id)) return true;
-    return normalizeEmail(current?.user_email) === normalizeEmail(user.email);
-  }
-  if (["Artwork", "CommunityPost", "MusicReview", "Comment", "CommunityComment", "Commission", "GroupChat", "DirectMessage", "ProfileMessage"].includes(name)) {
-    const keys = Object.keys(data || {});
-    if (keys.length === 1 && keys[0] === "likes") return true;
-    return isOwner(user, current);
-  }
+  if (name === "ServerChannel" || name === "ServerRole") return managesCommunity(user, data?.community_id);
+  if (name === "ServerMember") return managesCommunity(user, data?.community_id) || same(data?.user_email, user.email);
+  if (name === "DirectMessage") return (data?.member_emails || []).includes(user.email) && same(data?.user_email, user.email);
+  if (name === "GroupChat") return (data?.member_emails || []).includes(user.email);
+  if (name === "VoicePresence" || name === "VoiceSignal") return same(data?.user_email, user.email);
   return true;
 }
-function canDeleteEntity(user, name, current) {
+function canUpdate(user, name, current, data = {}) {
   if (!user) return false;
   if (isAdminUser(user)) return true;
-  if (name === "SiteConfig" || name === "Log" || name === "User") return false;
-  if (["ServerChannel", "ServerRole", "ServerMember"].includes(name)) return canManageCommunity(user, current?.community_id);
-  if (name === "Community") return normalizeEmail(current?.owner_email) === normalizeEmail(user.email);
-  if (name === "ChannelMessage") return normalizeEmail(current?.user_email) === normalizeEmail(user.email) || canManageCommunity(user, current?.community_id);
-  return isOwner(user, current);
+  const email = user.email;
+  switch (name) {
+    case "SiteConfig": case "Log": case "User": return false;
+    case "ServerChannel": case "ServerRole": return managesCommunity(user, current?.community_id);
+    case "ServerMember": return managesCommunity(user, current?.community_id) || same(current?.user_email, email);
+    case "Community": return same(current?.owner_email, email) || onlyChanged(data, ["member_emails"]);
+    case "ChannelMessage":
+      return same(current?.user_email, email) || managesCommunity(user, current?.community_id) || onlyChanged(data, ["reactions", "thread_count"]);
+    case "DirectMessage":
+      return (same(current?.user_email, email) && onlyChanged(data, ["content", "is_edited", "read_by", "reactions"])) ||
+        ((current?.member_emails || []).includes(email) && onlyChanged(data, ["read_by", "reactions"]));
+    case "Friendship": return same(current?.requester_email, email) || same(current?.receiver_email, email);
+    case "GroupChat":
+      return same(current?.owner_email, email) ||
+        ((current?.member_emails || []).includes(email) && onlyChanged(data, ["member_emails", "member_display_names"]) && !(data.member_emails || []).includes(email));
+    case "Notification": return same(current?.to_email, email);
+    case "ArtworkPing": return same(current?.from_email, email) || same(current?.to_email, email);
+    default:
+      if (LIKEABLE.includes(name) && onlyChanged(data, ["likes"])) return true;
+      return isOwner(user, current);
+  }
+}
+function canDelete(user, name, current) {
+  if (!user) return false;
+  if (isAdminUser(user)) return true;
+  const email = user.email;
+  switch (name) {
+    case "SiteConfig": case "Log": case "User": return false;
+    case "ServerChannel": case "ServerRole": return managesCommunity(user, current?.community_id);
+    case "ServerMember": return managesCommunity(user, current?.community_id) || same(current?.user_email, email);
+    case "Community": return same(current?.owner_email, email);
+    case "ChannelMessage": return same(current?.user_email, email) || managesCommunity(user, current?.community_id);
+    case "DirectMessage": return same(current?.user_email, email);
+    case "Friendship": return same(current?.requester_email, email) || same(current?.receiver_email, email);
+    case "GroupChat": return same(current?.owner_email, email);
+    case "Notification": return same(current?.to_email, email);
+    case "ArtworkPing": return same(current?.from_email, email) || same(current?.to_email, email);
+    case "CommunityComment": return isOwner(user, current) || current?.post_id === `profile_${email}`;
+    case "VoicePresence": return isOwner(user, current) || (current?.last_active || 0) < Date.now() - 60000;
+    case "VoiceSignal": return isOwner(user, current) || same(current?.to_email, email);
+    default: return isOwner(user, current);
+  }
 }
 
 // ---------- pub/sub (per entity) + cross-tab bus ----------
@@ -133,17 +162,11 @@ function emit(name, event) {
   if (!set) return;
   set.forEach((cb) => { try { cb(event); } catch (e) { console.error("[localBackend] subscriber error:", e); } });
 }
-function subscribe(name, cb) {
-  if (!listeners[name]) listeners[name] = new Set();
-  listeners[name].add(cb);
-  return () => { if (listeners[name]) listeners[name].delete(cb); };
-}
 const BUS_KEY = `${PREFIX}:__bus`;
 function broadcast(name, event) {
   if (!isBrowser) return;
-  // Writing a changing value triggers a `storage` event in OTHER tabs, which
-  // lets multiple open tabs stay in sync (handy for testing the chat).
-  try { writeRaw(BUS_KEY, JSON.stringify({ name, event, t: Date.now() + Math.random() })); } catch { /* ignore */ }
+  // Writing a changing value fires a `storage` event in OTHER tabs.
+  try { window.localStorage.setItem(BUS_KEY, JSON.stringify({ name, event, t: Date.now() + Math.random() })); } catch { /* ignore */ }
 }
 if (isBrowser) {
   window.addEventListener("storage", (e) => {
@@ -151,66 +174,28 @@ if (isBrowser) {
     try { const { name, event } = JSON.parse(e.newValue); emit(name, event); } catch { /* ignore */ }
   });
 }
-
-// ---------- query + sort helpers (mirrors Base44 filter/list semantics) ----------
-function matches(record, query) {
-  if (!query) return true;
-  return Object.keys(query).every((k) => {
-    const qv = query[k];
-    const rv = record[k];
-    if (Array.isArray(qv)) return JSON.stringify(qv) === JSON.stringify(rv);
-    return rv === qv;
-  });
-}
-function sortRecords(arr, sort) {
-  if (!sort) return arr;
-  const desc = sort.charAt(0) === "-";
-  const field = desc ? sort.slice(1) : sort;
-  const sorted = [...arr].sort((a, b) => {
-    const av = a[field], bv = b[field];
-    if (av == null && bv == null) return 0;
-    if (av == null) return -1;
-    if (bv == null) return 1;
-    if (typeof av === "number" && typeof bv === "number") return av - bv;
-    const as = String(av), bs = String(bv);
-    return as < bs ? -1 : as > bs ? 1 : 0;
-  });
-  return desc ? sorted.reverse() : sorted;
-}
+function publish(name, event) { emit(name, event); broadcast(name, event); }
 
 // ---------- entity factory ----------
 function makeEntity(name) {
   return {
     async list(sort, limit) {
-      let arr = sortRecords(loadCollection(name), sort);
-      if (limit != null) arr = arr.slice(0, limit);
-      return arr;
+      return sortAndLimit(loadCollection(name), sort, limit);
     },
     async filter(query, sort, limit) {
-      let arr = loadCollection(name).filter((r) => matches(r, query));
-      arr = sortRecords(arr, sort);
-      if (limit != null) arr = arr.slice(0, limit);
-      return arr;
+      return sortAndLimit(loadCollection(name).filter((r) => matchesQuery(r, query)), sort, limit);
     },
     async get(id) {
       return loadCollection(name).find((r) => r.id === id) || null;
     },
     async create(data) {
-      const arr = loadCollection(name);
       const me = requireAuthSync();
-      if (name === "SiteConfig" && !isAdminUser(me)) throw new Error("permission_denied");
-      if (["ServerChannel", "ServerRole", "ServerMember"].includes(name) && !canManageCommunity(me, data?.community_id)) throw new Error("permission_denied");
-      const record = {
-        id: uid(),
-        created_date: nowISO(),
-        updated_date: nowISO(),
-        created_by: me ? me.email : null,
-        ...data,
-      };
+      if (!canCreate(me, name, data)) throw new Error("permission_denied");
+      const arr = loadCollection(name);
+      const record = { id: uid(), created_date: nowISO(), updated_date: nowISO(), created_by: me.email, ...data };
       arr.push(record);
       saveCollection(name, arr);
-      const ev = { type: "create", data: record };
-      emit(name, ev); broadcast(name, ev);
+      publish(name, { type: "create", id: record.id, data: record });
       return record;
     },
     async update(id, data) {
@@ -218,45 +203,43 @@ function makeEntity(name) {
       const i = arr.findIndex((r) => r.id === id);
       if (i === -1) return null;
       const me = requireAuthSync();
-      if (!canUpdateEntity(me, name, arr[i], data)) throw new Error("permission_denied");
+      if (!canUpdate(me, name, arr[i], data)) throw new Error("permission_denied");
       arr[i] = { ...arr[i], ...data, updated_date: nowISO() };
       saveCollection(name, arr);
-      const ev = { type: "update", data: arr[i] };
-      emit(name, ev); broadcast(name, ev);
+      publish(name, { type: "update", id, data: arr[i] });
       return arr[i];
     },
     async delete(id) {
       const arr = loadCollection(name);
       const i = arr.findIndex((r) => r.id === id);
-      let removed = null;
       const me = requireAuthSync();
-      if (i !== -1 && !canDeleteEntity(me, name, arr[i])) throw new Error("permission_denied");
-      if (i !== -1) { removed = arr[i]; arr.splice(i, 1); saveCollection(name, arr); }
-      const ev = { type: "delete", id, data: removed };
-      emit(name, ev); broadcast(name, ev);
+      if (i === -1) return { id, success: true };
+      if (!canDelete(me, name, arr[i])) throw new Error("permission_denied");
+      const [removed] = arr.splice(i, 1);
+      saveCollection(name, arr);
+      publish(name, { type: "delete", id, data: removed });
       return { id, success: true };
     },
     async bulkCreate(items) {
-      const arr = loadCollection(name);
-      const me = requireAuthSync();
-      const created = (items || []).map((data) => ({
-        id: uid(), created_date: nowISO(), updated_date: nowISO(),
-        created_by: me ? me.email : null, ...data,
-      }));
-      created.forEach((r) => arr.push(r));
-      saveCollection(name, arr);
-      created.forEach((record) => { const ev = { type: "create", data: record }; emit(name, ev); broadcast(name, ev); });
+      const created = [];
+      for (const item of items || []) created.push(await this.create(item));
       return created;
     },
-    subscribe(cb) { return subscribe(name, cb); },
+    // callback({ type: "create" | "update" | "delete", id, data })
+    subscribe(callback, query = null) {
+      if (!listeners[name]) listeners[name] = new Set();
+      const handler = (event) => { if (!query || matchesQuery(event.data, query)) callback(event); };
+      listeners[name].add(handler);
+      return () => listeners[name]?.delete(handler);
+    },
   };
 }
 
-// The full set of entities the app uses.
-const ENTITY_NAMES = [
+export const ENTITY_NAMES = [
   "Artwork", "ArtworkPing", "ChannelMessage", "Comment", "Commission", "Community",
   "CommunityComment", "CommunityPost", "DirectMessage", "Friendship", "GroupChat", "Log", "MusicReview",
   "Notification", "ServerChannel", "ServerMember", "ServerRole", "SiteConfig", "User",
+  "VoicePresence", "VoiceSignal",
 ];
 const entities = {};
 ENTITY_NAMES.forEach((n) => { entities[n] = makeEntity(n); });
@@ -276,46 +259,39 @@ function loadAccounts() {
   catch { return []; }
 }
 function saveAccounts(arr) { writeRaw(ACCOUNTS_KEY, JSON.stringify(arr)); }
-function avatarFor(name) {
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || "User")}&background=d4708a&color=fff&bold=true`;
-}
-async function ensureDefaultAdminAccount() {
-  let accounts = loadAccounts();
-  if (accounts.length > 0) return;
-  const salt = uid();
-  const admin = {
-    id: uid(),
-    email: "admin@mimilocks.local",
-    full_name: "Mimi Admin",
-    display_name: "Mimi Admin",
-    role: "admin",
-    password_salt: salt,
-    password_hash: await hashPassword("admin123", salt),
-    profile_picture: avatarFor("Mimi Admin"),
-    bio: "Site owner account.",
-    following: [],
-    followers: [],
-    xp: 0,
-    coins: 0,
-    nitro_until: null,
-    onboarding_completed: true,
-    theme: "light",
-    last_seen: nowISO(),
-    created_date: nowISO(),
-    updated_date: nowISO(),
+function newProfile(fields) {
+  return {
+    bio: "", following: [], xp: 0, coins: 0, nitro_until: null, nitro_active: false,
+    onboarding_completed: false, theme: "light", accent: "rose", saved_artworks: [],
+    last_seen: nowISO(), created_date: nowISO(), updated_date: nowISO(),
+    ...fields,
   };
-  accounts = [admin];
-  saveAccounts(accounts);
-  const users = loadCollection("User");
-  if (!users.find((x) => normalizeEmail(x.email) === normalizeEmail(admin.email))) users.push(publicUser(admin));
-  saveCollection("User", users);
+}
+let adminReady = null;
+function ensureDefaultAdminAccount() {
+  if (!adminReady) {
+    adminReady = (async () => {
+      if (loadAccounts().length > 0) return;
+      const salt = uid();
+      const admin = newProfile({
+        id: uid(), email: "admin@mimilocks.local", full_name: "Mimi Admin", display_name: "Mimi Admin", role: "admin",
+        password_salt: salt, password_hash: await hashPassword("admin123", salt),
+        profile_picture: "", bio: "Site owner account.", onboarding_completed: true,
+        xp: 1800, coins: 250,
+      });
+      saveAccounts([admin]);
+      syncUserRecord(admin);
+    })();
+  }
+  return adminReady;
 }
 function syncUserRecord(account) {
   const safe = publicUser(account);
   const users = loadCollection("User");
-  const i = users.findIndex((x) => normalizeEmail(x.email) === normalizeEmail(safe.email) || x.id === safe.id);
+  const i = users.findIndex((x) => same(x.email, safe.email) || x.id === safe.id);
   if (i === -1) users.push(safe); else users[i] = { ...users[i], ...safe };
   saveCollection("User", users);
+  publish("User", { type: i === -1 ? "create" : "update", id: safe.id, data: safe });
   return safe;
 }
 const auth = {
@@ -323,47 +299,50 @@ const auth = {
     await ensureDefaultAdminAccount();
     const u = currentUserSync();
     if (!u) throw new Error("auth_required");
-    return publicUser(u);
+    // Prefer the shared User record so admin edits (e.g. role changes) apply.
+    const record = loadCollection("User").find((x) => x.id === u.id);
+    return publicUser({ ...u, ...(record || {}) });
   },
   async register({ email, password, display_name, full_name }) {
     await ensureDefaultAdminAccount();
     email = normalizeEmail(email);
     if (!email || !password || password.length < 6) throw new Error("Email and a 6+ character password are required.");
     const accounts = loadAccounts();
-    if (accounts.find((x) => normalizeEmail(x.email) === email)) throw new Error("An account with this email already exists.");
+    if (accounts.find((x) => same(x.email, email))) throw new Error("An account with this email already exists.");
     const name = (display_name || full_name || email.split("@")[0]).trim();
     const salt = uid();
-    const account = {
+    const account = newProfile({
       id: uid(), email, full_name: name, display_name: name, role: "user",
-      password_salt: salt, password_hash: await hashPassword(password, salt),
-      profile_picture: avatarFor(name), bio: "", following: [], followers: [], xp: 0, coins: 0,
-      nitro_until: null, onboarding_completed: false, theme: "light", last_seen: nowISO(),
-      created_date: nowISO(), updated_date: nowISO(),
-    };
+      password_salt: salt, password_hash: await hashPassword(password, salt), profile_picture: "",
+    });
     accounts.push(account); saveAccounts(accounts); syncUserRecord(account);
-    writeRaw(AUTH_KEY, JSON.stringify(account));
+    writeRaw(AUTH_KEY, JSON.stringify(publicUser(account)));
     return publicUser(account);
   },
   async login({ email, password } = {}) {
     await ensureDefaultAdminAccount();
     email = normalizeEmail(email);
-    const account = loadAccounts().find((x) => normalizeEmail(x.email) === email);
+    const account = loadAccounts().find((x) => same(x.email, email));
     if (!account) throw new Error("No account found for that email.");
     const expected = await hashPassword(password || "", account.password_salt);
     if (expected !== account.password_hash) throw new Error("Wrong password.");
     const next = { ...account, last_seen: nowISO() };
-    const accounts = loadAccounts().map((x) => normalizeEmail(x.email) === email ? next : x);
-    saveAccounts(accounts); syncUserRecord(next); writeRaw(AUTH_KEY, JSON.stringify(next));
+    saveAccounts(loadAccounts().map((x) => same(x.email, email) ? next : x));
+    syncUserRecord(next);
+    writeRaw(AUTH_KEY, JSON.stringify(publicUser(next)));
     return publicUser(next);
   },
   async updateMe(data) {
     const current = requireAuthSync();
     const safeData = { ...data };
-    delete safeData.role; delete safeData.email; delete safeData.password_hash; delete safeData.password_salt;
+    ["role", "email", "id", "password_hash", "password_salt"].forEach((k) => delete safeData[k]);
     const updated = { ...current, ...safeData, updated_date: nowISO() };
-    writeRaw(AUTH_KEY, JSON.stringify(updated));
-    saveAccounts(loadAccounts().map((x) => x.id === updated.id ? { ...x, ...updated } : x));
+    writeRaw(AUTH_KEY, JSON.stringify(publicUser(updated)));
+    saveAccounts(loadAccounts().map((x) => x.id === updated.id ? { ...x, ...safeData, updated_date: updated.updated_date } : x));
     return syncUserRecord(updated);
+  },
+  async resetPassword() {
+    throw new Error("Password reset emails need Firebase. In local demo mode, create a new account instead.");
   },
   logout() {
     if (isBrowser) { window.localStorage.removeItem(AUTH_KEY); window.location.href = "/Login"; }
@@ -388,7 +367,7 @@ function schemaDefaults(schema) {
   const props = (schema && schema.properties) || {};
   Object.keys(props).forEach((key) => {
     const t = props[key] && props[key].type;
-    if (t === "boolean") out[key] = true;            // e.g. moderation "safe" -> allow
+    if (t === "boolean") out[key] = true;
     else if (t === "number" || t === "integer") out[key] = 0;
     else if (t === "array") out[key] = [];
     else if (t === "object") out[key] = {};
@@ -401,20 +380,14 @@ const integrations = {
     async UploadFile(args) {
       const file = args && args.file;
       if (!file) return { file_url: "" };
-      const dataUrl = await fileToDataUrl(file);
-      return { file_url: dataUrl };
+      return { file_url: await fileToDataUrl(file) };
     },
     async InvokeLLM(args) {
       const schema = args && args.response_json_schema;
       const prompt = (args && args.prompt) || "";
-      // The app uses InvokeLLM only for content moderation (schema with a
-      // boolean "safe"). Run the local bad-word flagger over the prompt (which
-      // embeds the user's text) and return a real verdict.
-      if (schema && schema.properties && schema.properties.safe) {
-        return moderate(prompt);
-      }
+      if (schema && schema.properties && schema.properties.safe) return moderate(prompt);
       if (schema) return schemaDefaults(schema);
-      return ""; // offline: no text generation
+      return "";
     },
   },
 };
@@ -425,130 +398,168 @@ function seedIfEmpty() {
   if (readRaw(`${PREFIX}:__seeded`)) return;
   try {
     const accounts = loadAccounts();
-    const me = publicUser(accounts.find(a => a.role === "admin") || accounts[0]);
+    const me = publicUser(accounts.find((a) => a.role === "admin") || accounts[0]);
     const ago = (m) => new Date(Date.now() - m * 60000).toISOString();
-    const av = (name, bg) => `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=${bg}&color=fff&bold=true`;
     const pic = (seed, w, h) => `https://picsum.photos/seed/${seed}/${w || 640}/${h || 480}`;
+    const base = (email, mins) => ({ id: uid(), created_date: ago(mins), updated_date: ago(mins), created_by: email });
 
     // --- demo users ---
     const demo = [
-      { email: "aria@mimilocks.local", display_name: "Aria", full_name: "Aria Ven", role: "user", profile_picture: av("Aria", "e8a0b4"), bio: "Watercolor & ink.", xp: 1240, coins: 320 },
-      { email: "kai@mimilocks.local", display_name: "Kai", full_name: "Kai Mori", role: "user", profile_picture: av("Kai", "7aa2f7"), bio: "3D + neon.", xp: 860, coins: 140 },
-      { email: "luna@mimilocks.local", display_name: "Luna", full_name: "Luna Sol", role: "user", profile_picture: av("Luna", "b794f6"), bio: "Dreamy landscapes.", xp: 2010, coins: 540 },
-      { email: "max@mimilocks.local", display_name: "Max", full_name: "Max Lo", role: "user", profile_picture: av("Max", "68d391"), bio: "Lo-fi beats.", xp: 430, coins: 60 },
-    ].map((u) => ({ id: uid(), created_date: ago(60 * 24 * 14), updated_date: nowISO(), created_by: u.email, following: [], followers: [], nitro_until: null, onboarding_completed: true, theme: "light", ...u }));
+      { email: "aria@mimilocks.local", display_name: "Aria", full_name: "Aria Ven", bio: "Watercolor & ink. Koi enthusiast.", xp: 1240, coins: 320, profile_picture: "", name_style: "glow-pink" },
+      { email: "kai@mimilocks.local", display_name: "Kai", full_name: "Kai Mori", bio: "3D + neon. Night owl.", xp: 860, coins: 140, profile_picture: "" },
+      { email: "luna@mimilocks.local", display_name: "Luna", full_name: "Luna Sol", bio: "Dreamy landscapes and soft light.", xp: 3120, coins: 540, profile_picture: "", nitro_active: true, nitro_until: ago(-60 * 24 * 20), name_style: "aurora" },
+      { email: "max@mimilocks.local", display_name: "Max", full_name: "Max Lo", bio: "Lo-fi beats for drawing sessions.", xp: 430, coins: 60, profile_picture: "" },
+    ].map((u, i) => newProfile({ ...base(u.email, 60 * 24 * (14 - i)), role: "user", onboarding_completed: true, last_seen: ago(i * 3), ...u }));
     const users = loadCollection("User");
     demo.forEach((u) => { if (!users.find((x) => x.email === u.email)) users.push(u); });
     saveCollection("User", users);
 
-    const E = { you: me.email, aria: "aria@mimilocks.local", kai: "kai@mimilocks.local", luna: "luna@mimilocks.local", max: "max@mimilocks.local" };
-    const N = { [E.you]: me.display_name || "You", [E.aria]: "Aria", [E.kai]: "Kai", [E.luna]: "Luna", [E.max]: "Max" };
-    const P = {}; demo.forEach((u) => { P[u.email] = u.profile_picture; }); P[E.you] = me.profile_picture || "";
+    const E = { you: me.email, aria: demo[0].email, kai: demo[1].email, luna: demo[2].email, max: demo[3].email };
+    const N = { [E.you]: me.display_name || "You" }; demo.forEach((u) => { N[u.email] = u.display_name; });
+    const P = { [E.you]: me.profile_picture || "" }; demo.forEach((u) => { P[u.email] = u.profile_picture; });
+    const author = (email) => ({ user_email: email, user_display_name: N[email], user_profile_picture: P[email] || "" });
 
     // --- communities ---
     const c1 = uid(), c2 = uid();
     saveCollection("Community", [
-      { id: c1, created_date: ago(60 * 24 * 10), updated_date: nowISO(), created_by: E.you, name: "Mimi Locks", description: "The main hangout \u2014 art, music & good vibes.", icon_emoji: "\u{1F338}", icon_url: "", banner_url: pic("mimibanner", 1200, 300), owner_email: E.you, owner_display_name: N[E.you], member_emails: [E.you, E.aria, E.kai, E.luna, E.max], welcome_message: "Welcome to Mimi Locks \u{1F338} introduce yourself in #general!" },
-      { id: c2, created_date: ago(60 * 24 * 6), updated_date: nowISO(), created_by: E.aria, name: "Pixel Pals", description: "Pixel art & game-dev corner.", icon_emoji: "\u{1F3AE}", icon_url: "", banner_url: pic("pixelbanner", 1200, 300), owner_email: E.aria, owner_display_name: "Aria", member_emails: [E.aria, E.you, E.kai], welcome_message: "gm pixel pals \u{1F3AE}" },
+      { ...base(E.you, 60 * 24 * 10), id: c1, name: "Mimi Locks", description: "The main hangout — art, music & good vibes.", icon_emoji: "\u{1F338}", icon_url: "", banner_url: pic("mimibanner", 1200, 300), owner_email: E.you, owner_display_name: N[E.you], member_emails: [E.you, E.aria, E.kai, E.luna, E.max], welcome_message: "Welcome to Mimi Locks \u{1F338} introduce yourself in #general!" },
+      { ...base(E.aria, 60 * 24 * 6), id: c2, name: "Pixel Pals", description: "Pixel art & game-dev corner.", icon_emoji: "\u{1F3AE}", icon_url: "", banner_url: pic("pixelbanner", 1200, 300), owner_email: E.aria, owner_display_name: N[E.aria], member_emails: [E.aria, E.you, E.kai], welcome_message: "gm pixel pals \u{1F3AE}" },
     ]);
 
     // --- roles ---
-    const rOwner = uid(), rArtist = uid(), rMember = uid(), r2Member = uid();
+    const rMod = uid(), rArtist = uid(), rMember = uid(), r2Member = uid();
     saveCollection("ServerRole", [
-      { id: rOwner, created_date: ago(1000), updated_date: nowISO(), created_by: E.you, community_id: c1, name: "Owner", color: "#d4708a", permissions: ["manage"], position: 0 },
-      { id: rArtist, created_date: ago(1000), updated_date: nowISO(), created_by: E.you, community_id: c1, name: "Artist", color: "#e8a0b4", permissions: [], position: 1 },
-      { id: rMember, created_date: ago(1000), updated_date: nowISO(), created_by: E.you, community_id: c1, name: "Member", color: "#9ca3af", permissions: [], position: 2 },
-      { id: r2Member, created_date: ago(1000), updated_date: nowISO(), created_by: E.aria, community_id: c2, name: "Member", color: "#a78bfa", permissions: [], position: 0 },
+      { ...base(E.you, 1000), id: rMod, community_id: c1, name: "Moderator", color: "#d4708a", permissions: { can_pin_messages: true, can_manage_messages: true }, position: 0 },
+      { ...base(E.you, 1000), id: rArtist, community_id: c1, name: "Artist", color: "#a78bfa", permissions: {}, position: 1 },
+      { ...base(E.you, 1000), id: rMember, community_id: c1, name: "Member", color: "#64748b", permissions: {}, position: 2 },
+      { ...base(E.aria, 1000), id: r2Member, community_id: c2, name: "Member", color: "#38bdf8", permissions: {}, position: 0 },
     ]);
 
-    // --- channels (text + voice) ---
+    // --- channels ---
     const gen = uid(), show = uid(), off = uid(), v1 = uid(), v2 = uid(), c2gen = uid(), c2v = uid();
+    const channel = (cid, owner, id, name, type, description, position, extra) => ({ ...base(owner, 1000), id, community_id: cid, name, type, description, position, allowed_roles: [], ...extra });
     saveCollection("ServerChannel", [
-      { id: gen, created_date: ago(1000), updated_date: nowISO(), created_by: E.you, community_id: c1, name: "general", type: "text", description: "Main chat", position: 0, allowed_roles: [] },
-      { id: show, created_date: ago(1000), updated_date: nowISO(), created_by: E.you, community_id: c1, name: "showcase", type: "text", description: "Share your work", position: 1, allowed_roles: [] },
-      { id: off, created_date: ago(1000), updated_date: nowISO(), created_by: E.you, community_id: c1, name: "off-topic", type: "text", description: "Anything goes", position: 2, allowed_roles: [] },
-      { id: v1, created_date: ago(1000), updated_date: nowISO(), created_by: E.you, community_id: c1, name: "General Voice", type: "voice", description: "Hop in and chat", position: 3, allowed_roles: [] },
-      { id: v2, created_date: ago(1000), updated_date: nowISO(), created_by: E.you, community_id: c1, name: "Music Lounge", type: "voice", description: "Listen together", position: 4, allowed_roles: [] },
-      { id: c2gen, created_date: ago(1000), updated_date: nowISO(), created_by: E.aria, community_id: c2, name: "general", type: "text", description: "", position: 0, allowed_roles: [] },
-      { id: c2v, created_date: ago(1000), updated_date: nowISO(), created_by: E.aria, community_id: c2, name: "Hangout", type: "voice", description: "", position: 1, allowed_roles: [] },
+      channel(c1, E.you, gen, "general", "text", "Main chat", 0),
+      channel(c1, E.you, show, "showcase", "text", "Share your work", 1, { allowed_roles: ["Artist", "Moderator"] }),
+      channel(c1, E.you, off, "off-topic", "text", "Anything goes", 2),
+      channel(c1, E.you, v1, "General Voice", "voice", "Hop in and chat", 3),
+      channel(c1, E.you, v2, "Music Lounge", "voice", "Listen together", 4),
+      channel(c2, E.aria, c2gen, "general", "text", "", 0),
+      channel(c2, E.aria, c2v, "Hangout", "voice", "", 1),
     ]);
 
     // --- members ---
-    const member = (cid, email, roles) => ({ id: uid(), created_date: ago(1000), updated_date: nowISO(), created_by: email, community_id: cid, user_email: email, user_display_name: N[email], user_profile_picture: P[email] || "", roles, nickname: "" });
+    const member = (cid, email, roles) => ({ ...base(email, 1000), community_id: cid, ...author(email), roles, nickname: "" });
     saveCollection("ServerMember", [
-      member(c1, E.you, [rOwner]), member(c1, E.aria, [rArtist]), member(c1, E.kai, [rArtist]), member(c1, E.luna, [rMember]), member(c1, E.max, [rMember]),
+      member(c1, E.you, [rMod]), member(c1, E.aria, [rArtist, rMod]), member(c1, E.kai, [rArtist]), member(c1, E.luna, [rArtist]), member(c1, E.max, [rMember]),
       member(c2, E.aria, [r2Member]), member(c2, E.you, [r2Member]), member(c2, E.kai, [r2Member]),
     ]);
 
     // --- channel messages ---
-    const msg = (cid, chid, email, content, mins, extra) => Object.assign({ id: uid(), created_date: ago(mins), updated_date: ago(mins), created_by: email, channel_id: chid, community_id: cid, content, image_url: "", user_email: email, user_display_name: N[email], user_profile_picture: P[email] || "", reply_to_id: "", reply_to_preview: "", reactions: {}, is_pinned: false, is_edited: false }, extra || {});
+    const msg = (cid, chid, email, content, mins, extra) => ({ ...base(email, mins), channel_id: chid, community_id: cid, content, image_url: "", ...author(email), reply_to_id: "", reply_to_preview: "", reactions: {}, is_pinned: false, is_edited: false, ...extra });
     saveCollection("ChannelMessage", [
       msg(c1, gen, E.aria, "hey everyone! welcome to Mimi Locks \u{1F338}", 240, { is_pinned: true }),
-      msg(c1, gen, E.kai, "this place looks so clean \u2728", 180),
-      msg(c1, gen, E.luna, "just posted a new piece in #showcase \u{1F440}", 90, { reactions: { "\u2764\uFE0F": [E.aria, E.kai] } }),
+      msg(c1, gen, E.kai, "this place looks so clean ✨", 180),
+      msg(c1, gen, E.luna, "just posted a new piece in #showcase \u{1F440}", 90, { reactions: { "❤️": [E.aria, E.kai], "\u{1F525}": [E.max] } }),
       msg(c1, gen, E.max, "lofi set later in Music Lounge?", 35),
       msg(c1, gen, E.you, "let's goooo \u{1F525}", 6),
-      msg(c1, show, E.luna, "Wildflower \u2014 watercolor, finished today", 88, { image_url: pic("art-luna", 800, 600) }),
+      msg(c1, show, E.luna, "Wildflower — watercolor, finished today", 88, { image_url: pic("art-luna", 800, 600), reactions: { "✨": [E.aria, E.you] } }),
+      msg(c2, c2gen, E.aria, "gm pixel pals \u{1F3AE}", 400),
+      msg(c2, c2gen, E.kai, "anyone doing the 16x16 challenge this week?", 300),
     ]);
 
-    // --- artworks ---
-    const art = (title, desc, medium, email, seed, likes, featured) => ({ id: uid(), created_date: ago(Math.floor(Math.random() * 6000) + 60), updated_date: nowISO(), created_by: email, title, description: desc, medium, year: "2024", featured: !!featured, image_url: pic(seed, 640, 480), music_url: "", likes: likes || [], user_email: email, user_display_name: N[email], user_profile_picture: P[email] || "" });
+    // --- artworks (curated gallery) ---
+    const art = (title, description, medium, email, seed, likes, mins, extra) => ({ ...base(email, mins), title, description, medium, year: "2025", featured: false, image_url: pic(seed, 640, [480, 800, 640, 560][title.length % 4]), music_url: "", likes: likes || [], ...author(email), ...extra });
     saveCollection("Artwork", [
-      art("Sunset Koi", "Koi under a warm sky.", "watercolor", E.aria, "koi", [E.you, E.kai, E.luna], true),
-      art("Neon Alley", "Late-night rain in the city.", "digital", E.kai, "neon", [E.aria, E.you]),
-      art("Quiet Morning", "Coffee and soft light.", "oil", E.luna, "morning", [E.max]),
-      art("Wildflower", "Field study.", "watercolor", E.luna, "flower", [E.you, E.aria]),
-      art("City Rain", "Umbrellas and reflections.", "ink", E.kai, "rain", []),
-      art("Dreamscape", "Between sleep and waking.", "digital", E.aria, "dream", [E.you]),
+      art("Sunset Koi", "Koi circling under a warm evening sky.", "painting", E.aria, "koi", [E.you, E.kai, E.luna], 300, { featured: true, music_url: "demo:sunset-koi" }),
+      art("Neon Alley", "Late-night rain in the city, reflections everywhere.", "digital", E.kai, "neon", [E.aria, E.you], 900, { featured: true }),
+      art("Quiet Morning", "Coffee and soft light.", "painting", E.luna, "morning", [E.max], 1400),
+      art("Wildflower", "Field study in watercolor.", "painting", E.luna, "flower", [E.you, E.aria], 2200, { featured: true }),
+      art("City Rain", "Umbrellas and reflections.", "drawing", E.kai, "rain", [], 3000),
+      art("Dreamscape", "Between sleep and waking.", "digital", E.aria, "dream", [E.you], 3600),
+      art("Harbor Light", "Golden hour at the old harbor.", "photography", E.max, "harbor", [E.luna, E.aria], 4200),
+      art("Paper Moons", "Collage of cut paper and ink.", "mixed_media", E.luna, "moons", [E.kai], 5000),
     ]);
 
     // --- community posts ---
-    const post = (email, title, desc, seed, likes, mins) => ({ id: uid(), created_date: ago(mins), updated_date: nowISO(), created_by: email, title, description: desc, image_url: seed ? pic(seed, 720, 480) : "", user_email: email, user_display_name: N[email], user_profile_picture: P[email] || "", likes: likes || [] });
-    saveCollection("CommunityPost", [
-      post(E.max, "New mix dropping", "Working on a chill lo-fi set for the Music Lounge tonight \u{1F3A7}", "post-mix", [E.you, E.luna], 120),
-      post(E.aria, "WIP", "Sketching some koi studies, thoughts?", "post-koi", [E.kai], 300),
-      post(E.luna, "Finished!", "So happy with how Wildflower turned out \u{1F33C}", "post-flower", [E.you, E.aria, E.kai], 600),
-      post(E.you, "Hello Mimi Locks", "Excited to be here \u2014 let's make cool stuff \u2728", "", [E.aria, E.luna], 30),
+    const post = (email, title, description, seed, likes, mins) => ({ ...base(email, mins), title, description, image_url: seed ? pic(seed, 720, 520) : "", ...author(email), likes: likes || [] });
+    const p1 = post(E.max, "New mix dropping", "Working on a chill lo-fi set for the Music Lounge tonight \u{1F3A7}", "post-mix", [E.you, E.luna], 120);
+    const p2 = post(E.aria, "WIP koi studies", "Sketching some koi studies, thoughts?", "post-koi", [E.kai, E.luna, E.you], 300);
+    const p3 = post(E.luna, "Finished!", "So happy with how Wildflower turned out \u{1F33C}", "post-flower", [E.you, E.aria, E.kai, E.max], 600);
+    const p4 = post(E.kai, "Neon study #4", "Trying a new glow brush, feedback welcome.", "post-neon", [E.aria], 900);
+    const p5 = post(E.you, "Hello Mimi Locks", "Excited to be here — let's make cool stuff ✨", "post-hello", [E.aria, E.luna], 30);
+    saveCollection("CommunityPost", [p1, p2, p3, p4, p5]);
+    const comment = (postId, email, content, mins) => ({ ...base(email, mins), post_id: postId, content, gif_url: "", ...author(email), likes: [] });
+    saveCollection("CommunityComment", [
+      comment(p2.id, E.luna, "the scales are gorgeous \u{1F60D}", 280),
+      comment(p2.id, E.kai, "love the palette", 250),
+      comment(p3.id, E.aria, "this is so dreamy", 580),
+      comment(`profile_${E.you}`, E.aria, "welcome to the site! \u{1F338}", 2000),
     ]);
 
-    // --- music reviews ---
-    const review = (email, title, genre, mood, text, likes, mins) => ({ id: uid(), created_date: ago(mins), updated_date: nowISO(), created_by: email, title, music_url: "", genre, mood, ai_review: text, identified_song: "", user_email: email, user_display_name: N[email], likes: likes || [] });
+    // --- music ---
+    const review = (email, title, genre, mood, text, likes, mins) => ({ ...base(email, mins), title, music_url: `demo:${title.toLowerCase().replace(/\s+/g, "-")}`, cover_url: pic("cover-" + title.length, 400, 400), genre, mood, ai_review: text, identified_song: "", ...author(email), likes: likes || [] });
     saveCollection("MusicReview", [
-      review(E.max, "Midnight Tape", "Lo-fi", "Chill", "Warm, dusty keys over a lazy beat \u2014 perfect background music.", [E.you, E.aria], 200),
+      review(E.max, "Midnight Tape", "Lo-fi", "Chill", "Warm, dusty keys over a lazy beat — perfect background music.", [E.you, E.aria], 200),
       review(E.kai, "Neon Drive", "Synthwave", "Energetic", "Pulsing arps and big drums; very 80s in the best way.", [E.luna], 800),
       review(E.aria, "Rainy Window", "Ambient", "Calm", "Soft pads and field recordings; great for focus.", [], 1500),
+      review(E.luna, "Paper Lanterns", "Dream pop", "Dreamy", "Floaty melody that sounds like a summer evening.", [E.aria, E.kai, E.you], 2600),
     ]);
 
     // --- commissions ---
-    const comm = (email, title, desc, tiers, mins) => ({ id: uid(), created_date: ago(mins), updated_date: nowISO(), created_by: email, title, description: desc, artist_email: email, artist_display_name: N[email], artist_profile_picture: P[email] || "", tiers, samples: [pic("samp-" + email.split("@")[0], 400, 400)], tags: [], status: "open" });
+    const comm = (email, title, description, tiers, mins, isOpen) => ({ ...base(email, mins), title, description, artist_email: email, artist_display_name: N[email], artist_profile_picture: P[email] || "", tiers, samples: [pic("samp-" + email.split("@")[0], 600, 600)], tags: [], is_open: isOpen, paypal_link: "" });
     saveCollection("Commission", [
-      comm(E.aria, "Watercolor Portraits", "Soft, hand-painted portraits from your photo.", [{ name: "Bust", price: 25, description: "Head & shoulders" }, { name: "Half Body", price: 45, description: "Waist up" }], 400),
-      comm(E.kai, "Neon Character Art", "Stylised digital character with neon lighting.", [{ name: "Sketch", price: 20, description: "Lineart" }, { name: "Full Color", price: 60, description: "Rendered + background" }], 900),
+      comm(E.aria, "Watercolor Portraits", "Soft, hand-painted portraits from your photo.", [{ name: "Bust", price: 25, description: "Head & shoulders" }, { name: "Half Body", price: 45, description: "Waist up" }], 400, true),
+      comm(E.kai, "Neon Character Art", "Stylised digital character with neon lighting.", [{ name: "Sketch", price: 20, description: "Lineart" }, { name: "Full Color", price: 60, description: "Rendered + background" }], 900, true),
+      comm(E.luna, "Dreamy Landscapes", "Custom landscape of a place you love.", [{ name: "Small", price: 40, description: "A5 digital" }, { name: "Large", price: 90, description: "A3 print-ready" }], 1300, false),
     ]);
 
     // --- friendships ---
-    const fr = (reqEmail, recEmail, status, mins) => ({ id: uid(), created_date: ago(mins), updated_date: nowISO(), created_by: reqEmail, requester_email: reqEmail, requester_display_name: N[reqEmail], requester_profile_picture: P[reqEmail] || "", requester_profile_emoji: "", receiver_email: recEmail, receiver_display_name: N[recEmail], receiver_profile_picture: P[recEmail] || "", receiver_profile_emoji: "", status });
-    saveCollection("Friendship", [
-      fr(E.aria, E.you, "accepted", 5000),
-      fr(E.kai, E.you, "pending", 40),
-      fr(E.you, E.luna, "pending", 100),
+    const fr = (req, rec, status, mins) => ({ ...base(req, mins), requester_email: req, requester_display_name: N[req], requester_profile_picture: P[req] || "", receiver_email: rec, receiver_display_name: N[rec], receiver_profile_picture: P[rec] || "", status });
+    saveCollection("Friendship", [fr(E.aria, E.you, "accepted", 5000), fr(E.luna, E.you, "accepted", 4000), fr(E.kai, E.you, "pending", 40)]);
+
+    // --- direct messages + a group ---
+    const dmId = [E.you, E.aria].sort().join("__dm__");
+    const dm = (convo, members, email, content, mins, type = "dm", group_name = "") => ({ ...base(email, mins), conversation_id: convo, conversation_type: type, group_name, content, image_url: "", ...author(email), member_emails: members, read_by: [email], reactions: {}, is_edited: false });
+    const g1 = uid();
+    const groupMembers = [E.you, E.aria, E.luna].sort();
+    saveCollection("GroupChat", [{ ...base(E.aria, 3000), id: g1, name: "Art Squad", owner_email: E.aria, member_emails: groupMembers, member_display_names: { [E.you]: N[E.you], [E.aria]: N[E.aria], [E.luna]: N[E.luna] } }]);
+    saveCollection("DirectMessage", [
+      dm(dmId, [E.you, E.aria].sort(), E.aria, "hey! loved your latest post \u{1F338}", 50),
+      dm(dmId, [E.you, E.aria].sort(), E.you, "thank you!! your koi piece is amazing", 45),
+      dm(dmId, [E.you, E.aria].sort(), E.aria, "we should collab sometime ✨", 12),
+      dm(g1, groupMembers, E.luna, "art jam this weekend?", 100, "group", "Art Squad"),
+      dm(g1, groupMembers, E.aria, "yes!! I'll bring snacks", 95, "group", "Art Squad"),
     ]);
 
-    // --- notifications (for you) ---
-    const notif = (fromEmail, type, message, read, mins) => ({ id: uid(), created_date: ago(mins), updated_date: nowISO(), created_by: fromEmail, to_email: E.you, from_email: fromEmail, from_display_name: N[fromEmail], from_profile_picture: P[fromEmail] || "", type, message, link: "", entity_id: "", is_read: !!read });
+    // --- notifications ---
+    const notif = (from, type, message, read, mins, link = "") => ({ ...base(from, mins), to_email: E.you, from_email: from, from_display_name: N[from], from_profile_picture: P[from] || "", type, message, link, entity_id: "", is_read: !!read });
     saveCollection("Notification", [
-      notif(E.aria, "like", "liked your artwork", false, 20),
-      notif(E.kai, "friend_request", "sent you a friend request", false, 40),
-      notif(E.luna, "comment", "commented on your post", true, 200),
+      notif(E.aria, "like", "Aria liked your post \"Hello Mimi Locks\"", false, 20, "/Community"),
+      notif(E.kai, "friend_request", "Kai sent you a friend request", false, 40, "/Friends"),
+      notif(E.luna, "comment", "Luna commented on your post", true, 200, "/Community"),
     ]);
 
-    writeRaw(`${PREFIX}:__seeded`, "1");
+    saveCollection("SiteConfig", [{ ...base(E.you, 100), key: "global", announcement: "Welcome to the new Mimi Locks ✨ Press Ctrl+K to search anything.", announcement_active: true, announcement_color: "#d4708a", primary_color: "" }]);
+
+    writeRaw(`${PREFIX}:__seeded`, "2");
   } catch (e) {
     console.warn("[localBackend] seed skipped:", e);
   }
 }
 
+// Wipes every local record (used by the "Reset demo data" button in Settings).
+export function resetLocalData() {
+  if (!isBrowser) return;
+  Object.keys(window.localStorage).filter((k) => k.startsWith(`${PREFIX}:`)).forEach((k) => window.localStorage.removeItem(k));
+}
+
 export function createLocalClient() {
-  if (isBrowser) { ensureDefaultAdminAccount().then(seedIfEmpty).catch((e) => console.warn("[localBackend] init skipped:", e)); }
-  return { entities, auth, integrations };
+  const ready = isBrowser ? ensureDefaultAdminAccount().then(seedIfEmpty).catch((e) => console.warn("[localBackend] init skipped:", e)) : Promise.resolve();
+  const withReady = (fn) => async (...args) => { await ready; return fn(...args); };
+  // Make sure the first query after page load sees the seeded demo data.
+  Object.values(entities).forEach((entity) => {
+    ["list", "filter", "get"].forEach((m) => { entity[m] = withReady(entity[m].bind(entity)); });
+  });
+  return { entities, auth, integrations, mode: "local", resetLocalData };
 }

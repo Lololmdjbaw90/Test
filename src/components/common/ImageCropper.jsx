@@ -1,49 +1,95 @@
 import React, { useRef, useState, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Check, X, ZoomIn, ZoomOut } from "lucide-react";
-const SIZE = 280;
-export default function ImageCropper({ imageSrc, onCrop, onCancel }) {
-  const canvasRef = useRef(null); const imgRef = useRef(null);
-  const [scale, setScale] = useState(1); const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [dragging, setDragging] = useState(false); const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  useEffect(() => { const img = new Image(); img.onload = () => { imgRef.current = img; setScale(Math.max(SIZE/img.naturalWidth, SIZE/img.naturalHeight)); setOffset({x:0,y:0}); }; img.src = imageSrc; }, [imageSrc]);
-  const draw = useCallback(() => {
-    const canvas = canvasRef.current; if (!canvas || !imgRef.current) return;
-    const ctx = canvas.getContext("2d"); ctx.clearRect(0,0,SIZE,SIZE);
-    const w=imgRef.current.naturalWidth*scale, h=imgRef.current.naturalHeight*scale, x=SIZE/2-w/2+offset.x, y=SIZE/2-h/2+offset.y;
-    ctx.fillStyle="rgba(0,0,0,0.5)"; ctx.fillRect(0,0,SIZE,SIZE);
-    ctx.save(); ctx.beginPath(); ctx.arc(SIZE/2,SIZE/2,SIZE/2-2,0,Math.PI*2); ctx.clip(); ctx.clearRect(0,0,SIZE,SIZE); ctx.drawImage(imgRef.current,x,y,w,h); ctx.restore();
-    ctx.beginPath(); ctx.arc(SIZE/2,SIZE/2,SIZE/2-2,0,Math.PI*2); ctx.strokeStyle="#ff6eb5"; ctx.lineWidth=3; ctx.stroke();
+
+const SIZE = 260;
+
+// Circular avatar cropper: drag to reposition, wheel/slider to zoom.
+export default function ImageCropper({ imageSrc, onCrop, onCancel, output = 400 }) {
+  const canvasRef = useRef(null);
+  const imgRef = useRef(null);
+  const drag = useRef(null);
+  const [scale, setScale] = useState(1);
+  const [minScale, setMinScale] = useState(0.3);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const img = new Image();
+    img.onload = () => {
+      imgRef.current = img;
+      const fit = Math.max(SIZE / img.naturalWidth, SIZE / img.naturalHeight);
+      setMinScale(fit * 0.5);
+      setScale(fit);
+      setOffset({ x: 0, y: 0 });
+    };
+    img.src = imageSrc;
+  }, [imageSrc]);
+
+  const geometry = useCallback((size) => {
+    const img = imgRef.current;
+    const ratio = size / SIZE;
+    const w = img.naturalWidth * scale * ratio;
+    const h = img.naturalHeight * scale * ratio;
+    return { w, h, x: size / 2 - w / 2 + offset.x * ratio, y: size / 2 - h / 2 + offset.y * ratio };
   }, [scale, offset]);
-  useEffect(() => { draw(); }, [draw]);
-  const pt = (e) => e.touches ? e.touches[0] : e;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !imgRef.current) return;
+    const ctx = canvas.getContext("2d");
+    const { w, h, x, y } = geometry(SIZE);
+    ctx.clearRect(0, 0, SIZE, SIZE);
+    ctx.globalAlpha = 0.35;
+    ctx.drawImage(imgRef.current, x, y, w, h);
+    ctx.globalAlpha = 1;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2 - 6, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(imgRef.current, x, y, w, h);
+    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2 - 6, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }, [geometry, scale, offset]);
+
   const handleCrop = () => {
-    const out = document.createElement("canvas"); out.width=300; out.height=300;
-    const ctx=out.getContext("2d"), ratio=300/SIZE, w=imgRef.current.naturalWidth*scale, h=imgRef.current.naturalHeight*scale, x=SIZE/2-w/2+offset.x, y=SIZE/2-h/2+offset.y;
-    ctx.beginPath(); ctx.arc(150,150,150,0,Math.PI*2); ctx.clip(); ctx.drawImage(imgRef.current,x*ratio,y*ratio,w*ratio,h*ratio);
-    out.toBlob(blob=>{ const file=new File([blob],"profile.jpg",{type:"image/jpeg"}); onCrop(file,URL.createObjectURL(blob)); },"image/jpeg",0.92);
+    if (!imgRef.current) return;
+    const out = document.createElement("canvas");
+    out.width = output;
+    out.height = output;
+    const ctx = out.getContext("2d");
+    const { w, h, x, y } = geometry(output);
+    ctx.drawImage(imgRef.current, x, y, w, h);
+    out.toBlob((blob) => {
+      const file = new File([blob], "avatar.jpg", { type: "image/jpeg" });
+      onCrop(file, URL.createObjectURL(blob));
+    }, "image/jpeg", 0.9);
   };
+
   return (
-    <motion.div initial={{opacity:0,scale:0.9}} animate={{opacity:1,scale:1}} className="flex flex-col items-center gap-4">
-      <p className="text-sm font-semibold" style={{color:"var(--text-muted)"}}>Drag to reposition · Scroll to zoom</p>
-      <div className="cursor-grab active:cursor-grabbing select-none rounded-full overflow-hidden shadow-2xl" style={{width:SIZE,height:SIZE,border:"4px solid rgba(255,110,181,0.4)"}}
-        onMouseDown={e=>{setDragging(true);setDragStart({x:pt(e).clientX-offset.x,y:pt(e).clientY-offset.y});}}
-        onMouseMove={e=>{if(!dragging)return;setOffset({x:pt(e).clientX-dragStart.x,y:pt(e).clientY-dragStart.y});}}
-        onMouseUp={()=>setDragging(false)} onMouseLeave={()=>setDragging(false)}
-        onTouchStart={e=>{setDragging(true);setDragStart({x:pt(e).clientX-offset.x,y:pt(e).clientY-offset.y});}}
-        onTouchMove={e=>{if(!dragging)return;setOffset({x:pt(e).clientX-dragStart.x,y:pt(e).clientY-dragStart.y});}}
-        onTouchEnd={()=>setDragging(false)}
-        onWheel={e=>{e.preventDefault();setScale(s=>Math.max(0.3,Math.min(5,s-e.deltaY*0.002)));}}>
-        <canvas ref={canvasRef} width={SIZE} height={SIZE}/>
+    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center gap-4">
+      <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Drag to reposition · scroll to zoom</p>
+      <div
+        className="rounded-3xl overflow-hidden cursor-grab active:cursor-grabbing select-none touch-none"
+        style={{ width: SIZE, height: SIZE, background: "#1b1016", boxShadow: "var(--shadow-md)" }}
+        onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); drag.current = { x: e.clientX - offset.x, y: e.clientY - offset.y }; }}
+        onPointerMove={(e) => { if (drag.current) setOffset({ x: e.clientX - drag.current.x, y: e.clientY - drag.current.y }); }}
+        onPointerUp={() => { drag.current = null; }}
+        onWheel={(e) => setScale((s) => Math.max(minScale, Math.min(minScale * 10, s * (e.deltaY > 0 ? 0.94 : 1.06))))}
+      >
+        <canvas ref={canvasRef} width={SIZE} height={SIZE} />
       </div>
-      <div className="flex items-center gap-3 w-full max-w-xs">
-        <ZoomOut className="w-4 h-4 flex-shrink-0" style={{color:"var(--text-muted)"}}/>
-        <input type="range" min="0.3" max="5" step="0.01" value={scale} onChange={e=>setScale(parseFloat(e.target.value))} className="flex-1" style={{accentColor:"#ff3da0"}}/>
-        <ZoomIn className="w-4 h-4 flex-shrink-0" style={{color:"var(--text-muted)"}}/>
+      <div className="flex items-center gap-3 w-full max-w-[260px]">
+        <ZoomOut className="w-4 h-4 flex-shrink-0" style={{ color: "var(--text-muted)" }} />
+        <input type="range" min={minScale} max={minScale * 10} step={0.001} value={scale} onChange={(e) => setScale(parseFloat(e.target.value))} className="flex-1" style={{ accentColor: "var(--accent-rose)" }} aria-label="Zoom" />
+        <ZoomIn className="w-4 h-4 flex-shrink-0" style={{ color: "var(--text-muted)" }} />
       </div>
-      <div className="flex gap-3 w-full max-w-xs">
-        <button type="button" onClick={onCancel} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-full font-bold text-sm" style={{border:"2px solid rgba(255,110,181,0.4)",color:"var(--text-secondary)"}}><X className="w-4 h-4"/>Cancel</button>
-        <button type="button" onClick={handleCrop} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-full text-white font-bold text-sm" style={{background:"linear-gradient(135deg,#ff3da0,#ff6eb5)"}}><Check className="w-4 h-4"/>Use Photo</button>
+      <div className="flex gap-2 w-full max-w-[260px]">
+        <button type="button" onClick={onCancel} className="btn-outline flex-1"><X className="w-4 h-4" /> Cancel</button>
+        <button type="button" onClick={handleCrop} className="btn flex-1"><Check className="w-4 h-4" /> Use photo</button>
       </div>
     </motion.div>
   );

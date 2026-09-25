@@ -1,67 +1,105 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { AnimatePresence } from "framer-motion";
+import { Download, Flame, Shield, Sparkles, UserCheck, Users } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-const UploadFile = (args) => base44.integrations.Core.UploadFile(args);
-const InvokeLLM = (args) => base44.integrations.Core.InvokeLLM(args);
-import { ImageIcon, Loader2, Search, Shield, X, Download } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
-import PostCard from "../components/community/PostCard";
-import { exportToCsv } from "../utils/exportCsv";
-import { sendModerationStrike } from "../utils/discordWebhook";
+import { useAuth } from "@/lib/AuthContext";
+import { useLiveQuery } from "@/lib/useLiveQuery";
+import { toggleLike } from "@/lib/likes";
+import { toast } from "@/lib/toast";
+import { exportToCsv } from "@/utils/exportCsv";
+import { Page, PageHeader, EmptyState } from "@/components/common/Page";
+import { SearchInput, Segmented } from "@/components/common/Controls";
+import { useConfirm } from "@/components/common/Modal";
+import PostCard from "@/components/community/PostCard";
+import PostComposer from "@/components/community/PostComposer";
+import PostViewer from "@/components/community/PostViewer";
 
-async function moderate(text, imageUrl) {
-  try {
-    const prompt = `Content moderator. JSON only. Text: "${text||""}" Image: "${imageUrl||""}". Flag hate speech, explicit NSFW, violence. Art is fine. {"safe": true/false, "reason": ""}`;
-    const r = await InvokeLLM({ prompt, response_json_schema: { type: "object", properties: { safe: { type: "boolean" }, reason: { type: "string" } } } });
-    return r;
-  } catch { return { safe: true }; }
-}
-
-function PostForm({ user, onPosted }) {
-  const [img,setImg]=useState(null),[preview,setPreview]=useState(null),[title,setTitle]=useState(""),[desc,setDesc]=useState(""),[submitting,setSubmitting]=useState(false),[error,setError]=useState(null),[expanded,setExpanded]=useState(false);
-  const imgRef=useRef(null);
-  const submit=async(e)=>{
-    e.preventDefault(); if(!img)return; setSubmitting(true); setError(null);
-    const{file_url}=await UploadFile({file:img});
-    const mod=await moderate(title+" "+desc,file_url);
-    if(!mod.safe){setError("Blocked: "+mod.reason);sendModerationStrike({userEmail:user.email,displayName:user.display_name||user.full_name,reason:mod.reason,content:(title+" "+desc).trim()});setSubmitting(false);return;}
-    await base44.entities.CommunityPost.create({title,description:desc,image_url:file_url,user_display_name:user.display_name||user.full_name,user_email:user.email});
-    await base44.auth.updateMe({xp:(user.xp||0)+20,coins:(user.coins||0)+5});
-    setImg(null);setPreview(null);setTitle("");setDesc("");setExpanded(false);
-    if(imgRef.current)imgRef.current.value=""; onPosted(); setSubmitting(false);
-  };
-  return(
-    <div className="card mb-4 overflow-hidden">
-      <div className="p-3 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center font-semibold text-white text-xs" style={{background:"var(--accent-pink)"}}>{user.display_name?.[0]?.toUpperCase()||"?"}</div>
-        <div className="flex-1 px-3 py-2 rounded-full text-sm cursor-pointer" style={{background:"var(--pink-soft)",color:"var(--text-muted)"}} onClick={()=>imgRef.current?.click()}>Share your artwork...</div>
-        <button onClick={()=>imgRef.current?.click()} className="btn text-xs px-3 py-2"><ImageIcon className="w-3.5 h-3.5"/> Upload</button>
-        <input ref={imgRef} type="file" accept="image/*" className="hidden" onChange={e=>{const f=e.target.files?.[0];if(f?.type.startsWith("image/")){setImg(f);setPreview(URL.createObjectURL(f));setExpanded(true);setError(null);}}}/>
-      </div>
-      <AnimatePresence>{expanded&&<motion.div initial={{height:0}} animate={{height:"auto"}} exit={{height:0}} className="overflow-hidden"><form onSubmit={submit} className="px-3 pb-3 space-y-2">{error&&<p className="text-xs text-red-500 px-1">{error}</p>}{preview&&<div className="relative rounded-xl overflow-hidden"><img src={preview} className="w-full max-h-48 object-cover" alt=""/><button type="button" onClick={()=>{setImg(null);setPreview(null);}} className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center bg-white shadow"><X className="w-3.5 h-3.5 text-gray-500"/></button></div>}<input className="input text-sm" placeholder="Title (optional)" value={title} onChange={e=>setTitle(e.target.value)}/><textarea className="input text-sm resize-none" rows={2} placeholder="Description..." value={desc} onChange={e=>setDesc(e.target.value)}/><div className="flex gap-2 justify-end"><button type="button" className="btn-ghost text-xs" onClick={()=>{setExpanded(false);setImg(null);setPreview(null);}}>Cancel</button><button type="submit" disabled={submitting||!img} className="btn text-xs">{submitting?<Loader2 className="w-3.5 h-3.5 animate-spin"/>:"Post"}</button></div></form></motion.div>}</AnimatePresence>
-    </div>
-  );
-}
+const TABS = [
+  { id: "latest", label: "Latest", icon: Sparkles },
+  { id: "top", label: "Top this week", icon: Flame },
+  { id: "following", label: "Following", icon: UserCheck },
+];
 
 export default function CommunityPage() {
-  const [posts,setPosts]=useState([]),[filtered,setFiltered]=useState([]),[loading,setLoading]=useState(true),[search,setSearch]=useState(""),[user,setUser]=useState(null),[topEmail,setTopEmail]=useState(null);
-  useEffect(()=>{fetchData();},[]);
-  useEffect(()=>{const q=search.trim().toLowerCase();setFiltered(q?posts.filter(p=>p.title?.toLowerCase().includes(q)||p.user_display_name?.toLowerCase().includes(q)):posts);},[search,posts]);
-  const fetchData=async()=>{setLoading(true);const[ps,me]=await Promise.all([base44.entities.CommunityPost.list("-created_date"),base44.auth.me().catch(()=>null)]);setPosts(ps);setFiltered(ps);setUser(me);const stats={};ps.forEach(p=>{if(!p.user_email)return;if(!stats[p.user_email])stats[p.user_email]=0;stats[p.user_email]+=p.likes?.length||0;});const top=Object.entries(stats).sort((a,b)=>b[1]-a[1])[0];setTopEmail(top?.[0]||null);setLoading(false);};
-  return(
-    <div className="h-full flex flex-col overflow-hidden">
-      <div className="flex-shrink-0 px-4 sm:px-6 py-4 border-b flex items-center gap-3" style={{background:"var(--surface)",borderColor:"var(--border-c)"}}>
-        <div className="flex-1"><h1 className="text-base font-semibold" style={{color:"var(--text-primary)"}}>Community</h1><p className="text-xs" style={{color:"var(--text-muted)"}}>{posts.length} posts</p></div>
-        <div className="flex items-center gap-2">
-          <button onClick={()=>exportToCsv(filtered.map(p=>({title:p.title||"",user:p.user_display_name,likes:p.likes?.length||0})),"community")} className="btn-outline text-xs px-3 py-2"><Download className="w-3.5 h-3.5"/></button>
-          <div className="flex items-center gap-1.5 text-[10px] font-medium px-2 py-1 rounded-full" style={{background:"rgba(34,197,94,0.08)",color:"#16a34a"}}><Shield className="w-3 h-3"/> AI Moderated</div>
+  const { user } = useAuth();
+  const confirm = useConfirm();
+  const [params, setParams] = useSearchParams();
+  const [tab, setTab] = useState("latest");
+  const [search, setSearch] = useState("");
+  const { data: posts, setData, loading } = useLiveQuery("CommunityPost", null, { sort: "-created_date", limit: 300 });
+
+  const topEmail = useMemo(() => {
+    const stats = {};
+    posts.forEach((p) => { if (p.user_email) stats[p.user_email] = (stats[p.user_email] || 0) + (p.likes?.length || 0); });
+    return Object.entries(stats).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+  }, [posts]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    let list = posts.filter((p) => !q || [p.title, p.description, p.user_display_name].some((f) => String(f || "").toLowerCase().includes(q)));
+    if (tab === "following") list = list.filter((p) => (user?.following || []).includes(p.user_email));
+    if (tab === "top") {
+      const weekAgo = Date.now() - 7 * 86400000;
+      list = list.filter((p) => new Date(p.created_date).getTime() > weekAgo).sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0));
+    }
+    return list;
+  }, [posts, search, tab, user?.following]);
+
+  const openId = params.get("post");
+  const open = posts.find((p) => p.id === openId) || null;
+  const setOpen = (id) => setParams((p) => { const n = new URLSearchParams(p); if (id) n.set("post", id); else n.delete("post"); n.delete("compose"); return n; });
+
+  const like = (post) => toggleLike({ entity: "CommunityPost", record: post, user, setData, message: `liked your post${post.title ? ` "${post.title}"` : ""}`, link: `/Community?post=${post.id}` });
+  const remove = async (post) => {
+    const ok = await confirm({ title: "Delete post?", message: "This can't be undone.", confirmLabel: "Delete", danger: true });
+    if (!ok) return;
+    try { await base44.entities.CommunityPost.delete(post.id); setOpen(null); toast.success("Post deleted"); } catch (e) { toast.error(e?.message || "Could not delete."); }
+  };
+
+  return (
+    <Page width="max-w-7xl">
+      <PageHeader
+        eyebrow="Share & discover"
+        title="Community"
+        subtitle={`${posts.length} posts from ${new Set(posts.map((p) => p.user_email)).size} artists`}
+        icon={Users}
+        actions={<>
+          <span className="badge-pink !py-1.5" style={{ color: "var(--success)", background: "rgb(23 166 115 / 0.1)", borderColor: "rgb(23 166 115 / 0.25)" }}><Shield className="w-3.5 h-3.5" /> Moderated</span>
+          <button onClick={() => exportToCsv(filtered.map((p) => ({ title: p.title || "", user: p.user_display_name, likes: p.likes?.length || 0, date: p.created_date })), "community")} className="icon-btn icon-btn-bordered" title="Export CSV" aria-label="Export CSV"><Download className="w-4 h-4" /></button>
+        </>}
+      >
+        <div className="flex flex-col md:flex-row gap-3 md:items-center">
+          <Segmented options={TABS} value={tab} onChange={setTab} size="sm" />
+          <SearchInput value={search} onChange={setSearch} placeholder="Search posts and artists…" className="md:w-72 md:ml-auto" />
         </div>
-      </div>
-      <div className="flex-shrink-0 px-4 sm:px-6 py-3 border-b" style={{background:"var(--surface)",borderColor:"var(--border-c)"}}><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{color:"var(--text-muted)"}}/><input className="input pl-9 text-sm" placeholder="Search posts..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div>
-      <div className="flex-1 overflow-y-auto scroll px-4 sm:px-6 py-4">
-        {user?.display_name&&<PostForm user={user} onPosted={fetchData}/>}
-        {!user?.display_name&&user&&<div className="card p-3 mb-4 text-sm text-center" style={{color:"var(--text-muted)"}}>Set a display name in <a href="/Settings" className="underline" style={{color:"var(--accent-rose)"}}>Settings</a> to post.</div>}
-        {loading?<div className="flex justify-center py-12"><Loader2 className="w-5 h-5 animate-spin" style={{color:"var(--accent-pink)"}}/></div>:<div className="columns-1 sm:columns-2 lg:columns-3 gap-4 pb-6">{filtered.map((post,i)=><div key={post.id} className="break-inside-avoid mb-4"><PostCard post={post} index={i} onUpdate={fetchData} currentUser={user} isTopArtist={post.user_email===topEmail}/></div>)}</div>}
-      </div>
-    </div>
+      </PageHeader>
+
+      {user && <PostComposer autoOpen={params.get("compose") === "1"} />}
+
+      {loading ? (
+        <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-5">
+          {Array.from({ length: 8 }).map((_, i) => <div key={i} className="skeleton mb-5 break-inside-avoid" style={{ height: 200 + (i % 3) * 80 }} />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon={tab === "following" ? UserCheck : Users}
+          title={tab === "following" ? "Nothing from people you follow" : tab === "top" ? "No posts this week yet" : "No posts found"}
+          text={tab === "following" ? "Follow artists from their profile to see their posts here." : "Be the first to share something!"}
+        />
+      ) : (
+        <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-5">
+          <AnimatePresence>
+            {filtered.map((p, i) => (
+              <div key={p.id} className="break-inside-avoid mb-5">
+                <PostCard post={p} index={i} onOpen={() => setOpen(p.id)} liked={!!user && (p.likes || []).includes(user.email)} likeCount={p.likes?.length || 0} onLike={() => like(p)} isTopArtist={p.user_email === topEmail} />
+              </div>
+            ))}
+          </AnimatePresence>
+        </div>
+      )}
+
+      <PostViewer post={open} onClose={() => setOpen(null)} liked={!!open && !!user && (open.likes || []).includes(user.email)} likeCount={open?.likes?.length || 0} onLike={() => open && like(open)} onDelete={() => open && remove(open)} />
+    </Page>
   );
 }

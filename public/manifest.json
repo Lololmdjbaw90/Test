@@ -1,11 +1,13 @@
 {
   "name": "Mimi Locks",
   "short_name": "Mimi Locks",
-  "description": "Mimi Locks",
+  "description": "A cozy home for artists: gallery, community feed, music, servers and messages.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#fdf8f9",
-  "theme_color": "#e8a0b4",
-  "icons": []
+  "background_color": "#fbf7f6",
+  "theme_color": "#d9577f",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
 }

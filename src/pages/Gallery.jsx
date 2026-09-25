@@ -1,64 +1,163 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { AnimatePresence } from "framer-motion";
+import { Bookmark, Download, Grid2X2, Plus } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { Link } from "react-router-dom";
-import { Plus, Loader2, Search, Star, Download } from "lucide-react";
-import { motion } from "framer-motion";
-import ArtworkCard from "../components/gallery/ArtworkCard";
-import PingInbox from "../components/gallery/PingInbox";
-import { exportToCsv } from "../utils/exportCsv";
+import { useAuth } from "@/lib/AuthContext";
+import { useLiveQuery } from "@/lib/useLiveQuery";
+import { toast } from "@/lib/toast";
+import { displayName } from "@/lib/format";
+import { exportToCsv } from "@/utils/exportCsv";
+import { notify } from "@/utils/notifications";
+import { Page, PageHeader, EmptyState } from "@/components/common/Page";
+import { ChipRow, SearchInput, Segmented } from "@/components/common/Controls";
+import { useConfirm } from "@/components/common/Modal";
+import ArtworkCard from "@/components/gallery/ArtworkCard";
+import ArtworkViewer from "@/components/gallery/ArtworkViewer";
+import PingInbox from "@/components/gallery/PingInbox";
 
-const MEDIA = ["All","Painting","Digital","Drawing","Photography","Sculpture","Mixed Media","Other"];
+const MEDIA = [
+  { id: "all", label: "All" },
+  { id: "painting", label: "Painting" },
+  { id: "digital", label: "Digital" },
+  { id: "drawing", label: "Drawing" },
+  { id: "photography", label: "Photography" },
+  { id: "sculpture", label: "Sculpture" },
+  { id: "mixed_media", label: "Mixed media" },
+  { id: "other", label: "Other" },
+];
+const SORTS = [{ id: "new", label: "Newest" }, { id: "liked", label: "Most liked" }, { id: "featured", label: "Featured" }];
 
 export default function Gallery() {
-  const [artworks, setArtworks] = useState([]);
-  const [filtered, setFiltered] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [medium, setMedium] = useState("All");
+  const { user, isAdmin, updateMe } = useAuth();
+  const confirm = useConfirm();
+  const [params, setParams] = useSearchParams();
+  const [medium, setMedium] = useState("all");
+  const [sort, setSort] = useState("new");
   const [search, setSearch] = useState("");
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [user, setUser] = useState(null);
+  const [savedOnly, setSavedOnly] = useState(false);
+  const { data: artworks, setData, loading } = useLiveQuery("Artwork", null, { sort: "-created_date" });
+  const saved = user?.saved_artworks || [];
 
-  useEffect(() => { fetchData(); }, []);
-  useEffect(() => {
-    let list = artworks;
-    if (medium !== "All") list = list.filter(a => a.medium?.toLowerCase().replace("_"," ") === medium.toLowerCase());
-    if (search.trim()) list = list.filter(a => a.title?.toLowerCase().includes(search.toLowerCase()));
-    setFiltered(list);
-  }, [medium, search, artworks]);
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    let list = artworks.filter((a) =>
+      (medium === "all" || (a.medium || "other") === medium) &&
+      (!savedOnly || saved.includes(a.id)) &&
+      (!q || [a.title, a.description, a.user_display_name, a.medium].some((f) => String(f || "").toLowerCase().includes(q))));
+    if (sort === "liked") list = [...list].sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0));
+    if (sort === "featured") list = [...list].sort((a, b) => Number(!!b.featured) - Number(!!a.featured));
+    return list;
+  }, [artworks, medium, search, sort, savedOnly, saved]);
 
-  const fetchData = async () => {
-    setLoading(true);
-    const [art, me] = await Promise.all([base44.entities.Artwork.list("-created_date"), base44.auth.me().catch(() => null)]);
-    setArtworks(art); setFiltered(art); setUser(me); setIsAdmin(me?.role === "admin"); setLoading(false);
+  const openId = params.get("art");
+  const openIndex = filtered.findIndex((a) => a.id === openId);
+  const open = openIndex >= 0 ? filtered[openIndex] : artworks.find((a) => a.id === openId) || null;
+  const setOpen = useCallback((id) => {
+    setParams((p) => { const n = new URLSearchParams(p); if (id) n.set("art", id); else n.delete("art"); return n; }, { replace: !!openId });
+  }, [setParams, openId]);
+
+  const like = async (art) => {
+    if (!user) return;
+    const likes = art.likes || [];
+    const liked = likes.includes(user.email);
+    const next = liked ? likes.filter((e) => e !== user.email) : [...likes, user.email];
+    setData((list) => list.map((a) => (a.id === art.id ? { ...a, likes: next } : a)));
+    try {
+      await base44.entities.Artwork.update(art.id, { likes: next });
+      const owner = art.user_email || art.created_by;
+      if (!liked && owner && owner !== user.email) await notify({ to_email: owner, from_email: user.email, from_display_name: displayName(user), from_profile_picture: user.profile_picture, type: "like", message: `${displayName(user)} liked "${art.title}"`, link: `/Gallery?art=${art.id}`, entity_id: art.id });
+    } catch (e) {
+      setData((list) => list.map((a) => (a.id === art.id ? { ...a, likes } : a)));
+      toast.error(e?.message || "Could not like artwork.");
+    }
+  };
+
+  const toggleSave = async (art) => {
+    const next = saved.includes(art.id) ? saved.filter((id) => id !== art.id) : [...saved, art.id];
+    try {
+      await updateMe({ saved_artworks: next });
+      toast.success(next.includes(art.id) ? "Saved to your collection" : "Removed from saved");
+    } catch (e) { toast.error(e?.message || "Could not save."); }
+  };
+
+  const toggleFeatured = async (art) => {
+    try { await base44.entities.Artwork.update(art.id, { featured: !art.featured }); } catch (e) { toast.error(e?.message || "Could not update."); }
+  };
+
+  const remove = async (art) => {
+    const ok = await confirm({ title: "Delete artwork?", message: `"${art.title}" will be permanently removed.`, confirmLabel: "Delete", danger: true });
+    if (!ok) return;
+    try {
+      await base44.entities.Artwork.delete(art.id);
+      base44.entities.Log.create({ action: "artwork_deleted", details: `Deleted: "${art.title}"`, user_email: user.email }).catch(() => {});
+      setOpen(null);
+      toast.success("Artwork deleted");
+    } catch (e) { toast.error(e?.message || "Could not delete."); }
   };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      <div className="flex-shrink-0 px-4 sm:px-6 py-4 border-b flex items-center gap-3" style={{ background: "var(--surface)", borderColor: "var(--border-c)" }}>
-        <div className="flex-1"><h1 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>Gallery</h1><p className="text-xs" style={{ color: "var(--text-muted)" }}>{filtered.length} artworks</p></div>
-        <div className="flex items-center gap-2">
-          <PingInbox currentUser={user} />
-          <button onClick={() => exportToCsv(filtered.map(a => ({ title: a.title, medium: a.medium, year: a.year, likes: a.likes?.length || 0 })), "gallery")} className="btn-outline text-xs px-3 py-2"><Download className="w-3.5 h-3.5" /></button>
-          {isAdmin && <Link to="/Upload" className="btn text-xs px-3 py-2"><Plus className="w-3.5 h-3.5" /> Add</Link>}
+    <Page width="max-w-7xl">
+      <PageHeader
+        eyebrow="Curated showcase"
+        title="Gallery"
+        subtitle={`${artworks.length} artworks · ${artworks.filter((a) => a.featured).length} featured`}
+        icon={Grid2X2}
+        actions={<>
+          <PingInbox />
+          <button onClick={() => exportToCsv(filtered.map((a) => ({ title: a.title, artist: a.user_display_name || "", medium: a.medium, year: a.year, likes: a.likes?.length || 0 })), "gallery")} className="icon-btn icon-btn-bordered" title="Export CSV" aria-label="Export CSV"><Download className="w-4 h-4" /></button>
+          {isAdmin && <Link to="/Upload" className="btn"><Plus className="w-4 h-4" /> Add artwork</Link>}
+        </>}
+      >
+        <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
+          <SearchInput value={search} onChange={setSearch} placeholder="Search titles, artists, mediums…" className="lg:w-80" />
+          <Segmented options={SORTS} value={sort} onChange={setSort} size="sm" />
+          <button className="chip self-start lg:self-auto" data-active={savedOnly} onClick={() => setSavedOnly((v) => !v)}><Bookmark className={`w-3.5 h-3.5 ${savedOnly ? "fill-current" : ""}`} /> Saved {saved.length ? `(${saved.length})` : ""}</button>
         </div>
-      </div>
-      <div className="flex-shrink-0 px-4 sm:px-6 py-3 space-y-3 border-b" style={{ background: "var(--surface)", borderColor: "var(--border-c)" }}>
-        <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "var(--text-muted)" }} /><input className="input pl-9 text-sm" placeholder="Search artworks..." value={search} onChange={e => setSearch(e.target.value)} /></div>
-        <div className="flex gap-2 overflow-x-auto pb-1 scroll" style={{ scrollbarWidth: "none" }}>
-          {MEDIA.map(m => <button key={m} onClick={() => setMedium(m)} className="flex-shrink-0 text-xs px-3.5 py-1.5 rounded-full font-medium transition-all" style={medium === m ? { background: "var(--accent-pink)", color: "white" } : { background: "var(--pink-soft)", color: "var(--text-secondary)" }}>{m}</button>)}
+        <ChipRow className="mt-3" options={MEDIA} value={medium} onChange={setMedium} />
+      </PageHeader>
+
+      {loading ? (
+        <div className="columns-2 sm:columns-3 lg:columns-4 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => <div key={i} className="skeleton mb-4 break-inside-avoid" style={{ height: 180 + (i % 3) * 70 }} />)}
         </div>
-      </div>
-      <div className="flex-1 overflow-y-auto scroll px-4 sm:px-6 py-4">
-        {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">{Array.from({ length: 8 }).map((_, i) => <div key={i} className="rounded-2xl overflow-hidden"><div className="skeleton h-40" /><div className="p-2 space-y-1.5"><div className="skeleton h-3 w-3/4" /><div className="skeleton h-3 w-1/2" /></div></div>)}</div>
-        ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-3"><div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: "var(--pink-soft)" }}><Star className="w-7 h-7" style={{ color: "var(--accent-pink)" }} /></div><p className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>No artworks found</p>{isAdmin && <Link to="/Upload" className="btn text-sm">Upload first artwork</Link>}</div>
-        ) : (
-          <div className="columns-2 sm:columns-3 lg:columns-4 gap-3 pb-6">
-            {filtered.map((artwork, i) => <div key={artwork.id} className="break-inside-avoid mb-3"><ArtworkCard artwork={artwork} index={i} onUpdate={fetchData} isAdmin={isAdmin} currentUser={user} /></div>)}
-          </div>
-        )}
-      </div>
-    </div>
+      ) : filtered.length === 0 ? (
+        <EmptyState icon={savedOnly ? Bookmark : Grid2X2} title={savedOnly ? "Nothing saved yet" : "No artworks found"} text={savedOnly ? "Tap the bookmark on any piece to keep it here." : "Try a different filter or search term."} action={isAdmin && !savedOnly ? <Link to="/Upload" className="btn">Upload artwork</Link> : null} />
+      ) : (
+        <div className="columns-2 sm:columns-3 lg:columns-4 gap-4">
+          <AnimatePresence>
+            {filtered.map((a, i) => (
+              <div key={a.id} className="break-inside-avoid mb-4">
+                <ArtworkCard
+                  artwork={a}
+                  index={i}
+                  onOpen={() => setOpen(a.id)}
+                  liked={!!user && (a.likes || []).includes(user.email)}
+                  likeCount={a.likes?.length || 0}
+                  onLike={() => like(a)}
+                  saved={saved.includes(a.id)}
+                  onSave={() => toggleSave(a)}
+                />
+              </div>
+            ))}
+          </AnimatePresence>
+        </div>
+      )}
+
+      <ArtworkViewer
+        artwork={open}
+        onClose={() => setOpen(null)}
+        onPrev={openIndex > 0 ? () => setOpen(filtered[openIndex - 1].id) : null}
+        onNext={openIndex >= 0 && openIndex < filtered.length - 1 ? () => setOpen(filtered[openIndex + 1].id) : null}
+        liked={!!open && !!user && (open.likes || []).includes(user.email)}
+        likeCount={open?.likes?.length || 0}
+        onLike={() => open && like(open)}
+        saved={!!open && saved.includes(open.id)}
+        onSave={() => open && toggleSave(open)}
+        isAdmin={isAdmin}
+        onToggleFeatured={() => open && toggleFeatured(open)}
+        onDelete={() => open && remove(open)}
+      />
+    </Page>
   );
 }

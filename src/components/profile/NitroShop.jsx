@@ -1,24 +1,90 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
-import { Sparkles, Check, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
-import { getLevelInfo } from "./LevelBadge";
-const COIN_PACKS=[{id:"starter",label:"Starter Pack",coins:100,price:"Free",free:true,icon:"🪙"},{id:"small",label:"Small Pack",coins:500,price:"$0.99",icon:"💰"},{id:"medium",label:"Medium Pack",coins:1500,price:"$2.49",icon:"💎"},{id:"big",label:"Big Pack",coins:5000,price:"$6.99",icon:"🏆"}];
-const NITRO_COST=800;
-export default function NitroShop({user,onUpdate}){
-  const[loading,setLoading]=useState(null);const[claimedFree,setClaimedFree]=useState(false);
-  const coins=user?.coins||0;const isNitro=user?.nitro_active;const{current}=getLevelInfo(user?.xp||0);
-  const claimFreeCoins=async()=>{setLoading("starter");const newCoins=coins+100;await base44.auth.updateMe({coins:newCoins});onUpdate({coins:newCoins});setClaimedFree(true);setLoading(null);};
-  const buyNitro=async()=>{if(coins<NITRO_COST)return;setLoading("nitro");const until=new Date(Date.now()+30*24*60*60*1000).toISOString();await base44.auth.updateMe({nitro_active:true,nitro_until:until,coins:coins-NITRO_COST});onUpdate({nitro_active:true,nitro_until:until,coins:coins-NITRO_COST});setLoading(null);};
-  return(
-    <div className="space-y-5">
-      <div className="rounded-2xl p-4 flex items-center gap-4" style={{background:"linear-gradient(135deg,#c084fc22,#818cf822)",border:"1px solid #c084fc44"}}>
-        <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0" style={{background:"linear-gradient(135deg,#c084fc,#818cf8)"}}><Sparkles className="w-6 h-6 text-white"/></div>
-        <div><p className="font-bold text-sm" style={{color:"var(--text-primary)"}}>{isNitro?"✨ MimiNitro Active!":"Get MimiNitro"}</p><p className="text-xs" style={{color:"var(--text-muted)"}}>{isNitro?`Expires ${new Date(user.nitro_until).toLocaleDateString()}`:"Unlock animated banners, exclusive badges & more!"}</p></div>
-        {!isNitro&&<button onClick={buyNitro} disabled={coins<NITRO_COST||loading==="nitro"} className="ml-auto text-xs font-bold px-4 py-2 rounded-full text-white disabled:opacity-50" style={{background:"linear-gradient(135deg,#c084fc,#818cf8)"}}>{loading==="nitro"?<Loader2 className="w-4 h-4 animate-spin"/>:`🪙 ${NITRO_COST} Coins`}</button>}
+import { Check, Coins, Crown, Gift, Loader2, Palette, Sparkles, Zap } from "lucide-react";
+import { useAuth } from "@/lib/AuthContext";
+import { toast } from "@/lib/toast";
+import { isNitro } from "@/lib/format";
+import Confetti from "@/components/common/Confetti";
+
+const NITRO_COST = 800;
+const XP_BOOST_COST = 150;
+const PERKS = [
+  { icon: Palette, text: "Premium name styles (Gold, Aurora, Neon)" },
+  { icon: Crown, text: "Animated avatar ring & profile badge" },
+  { icon: Sparkles, text: "Animated banner on your profile" },
+];
+
+// Coin shop: MimiNitro and small boosts, all paid with coins earned on the site.
+export default function NitroShop() {
+  const { user, updateMe } = useAuth();
+  const [busy, setBusy] = useState(null);
+  const [burst, setBurst] = useState(false);
+  const coins = user?.coins || 0;
+  const nitro = isNitro(user);
+
+  const buy = async (id, cost, patch, message) => {
+    if (coins < cost) { toast.error(`You need ${cost - coins} more coins`, { description: "Earn coins with daily rewards and by posting." }); return; }
+    setBusy(id);
+    try {
+      await updateMe({ coins: coins - cost, ...patch });
+      setBurst(true);
+      setTimeout(() => setBurst(false), 1800);
+      toast.success(message);
+    } catch (e) { toast.error(e?.message || "Purchase failed."); }
+    setBusy(null);
+  };
+  const buyNitro = () => {
+    const from = nitro ? new Date(user.nitro_until).getTime() : Date.now();
+    return buy("nitro", NITRO_COST, { nitro_active: true, nitro_until: new Date(from + 30 * 86400000).toISOString() }, nitro ? "Nitro extended by 30 days ✨" : "Welcome to MimiNitro ✨");
+  };
+
+  return (
+    <div className="space-y-5 relative">
+      {burst && <Confetti />}
+      <div className="rounded-3xl p-6 relative overflow-hidden text-white grain" style={{ background: "linear-gradient(135deg,#8b5cf6,#c084fc 45%,#ee8fae)", boxShadow: "0 20px 50px rgb(139 92 246 / 0.3)" }}>
+        <div className="orb w-64 h-64 -right-16 -top-16" style={{ background: "rgb(255 255 255 / 0.3)" }} />
+        <div className="relative flex flex-col sm:flex-row sm:items-center gap-5">
+          <motion.div animate={{ rotate: [0, 8, -8, 0] }} transition={{ duration: 4, repeat: Infinity }} className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "rgb(255 255 255 / 0.2)" }}><Sparkles className="w-8 h-8" /></motion.div>
+          <div className="flex-1">
+            <p className="font-display text-2xl font-semibold">{nitro ? "MimiNitro is active" : "MimiNitro"}</p>
+            <p className="text-sm opacity-90">{nitro ? `Renews until ${new Date(user.nitro_until).toLocaleDateString()}` : "30 days of premium perks, paid with coins."}</p>
+            <ul className="mt-3 space-y-1">{PERKS.map((p) => <li key={p.text} className="text-xs flex items-center gap-2 opacity-95"><p.icon className="w-3.5 h-3.5" />{p.text}</li>)}</ul>
+          </div>
+          <button onClick={buyNitro} disabled={busy === "nitro"} className="px-5 py-3 rounded-full bg-white font-bold text-sm flex items-center gap-2 justify-center disabled:opacity-60" style={{ color: "#7c3aed" }}>
+            {busy === "nitro" ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Coins className="w-4 h-4" /> {nitro ? "Extend" : "Get"} · {NITRO_COST}</>}
+          </button>
+        </div>
       </div>
-      <div className="rounded-2xl p-4 flex items-center gap-4" style={{background:"linear-gradient(135deg,#f59e0b22,#fbbf2422)",border:"1px solid #f59e0b44"}}><span className="text-3xl">🪙</span><div><p className="font-bold text-lg" style={{color:"var(--text-primary)"}}>{coins.toLocaleString()} MimiCoins</p><p className="text-xs" style={{color:"var(--text-muted)"}}>Your current balance</p></div></div>
-      <div className="grid grid-cols-2 gap-3">{COIN_PACKS.map(pack=>(<motion.div key={pack.id} whileHover={{scale:1.02}} className="rounded-xl p-3 text-center border" style={{background:"var(--surface)",borderColor:"var(--border-c)"}}><div className="text-2xl mb-1">{pack.icon}</div><p className="text-xs font-bold" style={{color:"var(--text-primary)"}}>{pack.label}</p><p className="text-sm font-bold" style={{color:"#f59e0b"}}>{pack.coins} coins</p>{pack.free?<button onClick={claimFreeCoins} disabled={claimedFree||loading===pack.id} className="mt-2 w-full text-[10px] font-bold py-1.5 rounded-full text-white disabled:opacity-50" style={{background:claimedFree?"#34d399":"linear-gradient(135deg,#f59e0b,#fbbf24)"}}>{claimedFree?<><Check className="w-3 h-3 inline"/>Claimed!</>:"Claim Free"}</button>:<button className="mt-2 w-full text-[10px] font-bold py-1.5 rounded-full text-white opacity-50 cursor-not-allowed" style={{background:"linear-gradient(135deg,#f59e0b,#fbbf24)"}}>{pack.price} (Soon)</button>}</motion.div>))}</div>
+
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="card p-5 flex items-center gap-4">
+          <span className="w-12 h-12 rounded-2xl flex items-center justify-center text-white" style={{ background: "linear-gradient(135deg,#ffd166,#f0a020)" }}><Coins className="w-6 h-6" /></span>
+          <div>
+            <p className="font-display text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>{coins.toLocaleString()}</p>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>MimiCoins balance</p>
+          </div>
+        </div>
+        <div className="card p-5 flex items-center gap-4">
+          <span className="w-12 h-12 rounded-2xl flex items-center justify-center text-white" style={{ background: "var(--accent-grad)" }}><Zap className="w-6 h-6" /></span>
+          <div className="flex-1">
+            <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>XP boost</p>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>+100 XP instantly</p>
+          </div>
+          <button className="btn-outline text-xs" disabled={busy === "xp"} onClick={() => buy("xp", XP_BOOST_COST, { xp: (user?.xp || 0) + 100 }, "+100 XP")}>{busy === "xp" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <>{XP_BOOST_COST} <Coins className="w-3.5 h-3.5" /></>}</button>
+        </div>
+      </div>
+
+      <div className="card p-5">
+        <p className="eyebrow mb-3">How to earn coins</p>
+        <div className="grid sm:grid-cols-3 gap-3 text-sm">
+          {[{ icon: Gift, t: "Daily reward", d: "25–55 coins, bigger with streaks" }, { icon: Sparkles, t: "Post to Community", d: "+5 coins per post" }, { icon: Check, t: "Finish onboarding", d: "+50 coins once" }].map((x) => (
+            <div key={x.t} className="flex items-start gap-3 p-3 rounded-2xl" style={{ background: "var(--surface-2)" }}>
+              <x.icon className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: "var(--accent-rose)" }} />
+              <span><span className="block font-semibold" style={{ color: "var(--text-primary)" }}>{x.t}</span><span className="block text-xs" style={{ color: "var(--text-muted)" }}>{x.d}</span></span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
