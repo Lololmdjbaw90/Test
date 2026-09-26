@@ -27,15 +27,29 @@ Demo login (offline mode only): **admin@mimilocks.local / admin123**.
 - **Gallery** — masonry grid with 3D tilt, filters, sorting, search, saved
   collection, full-screen viewer (← / → keys), comments, pings, share links,
   soundtrack playback. Admins upload and feature pieces.
-- **Community** — post images or text, likes with a heart burst, comments,
-  Latest / Top this week / Following tabs, deep links to posts, moderation.
-- **Music** — upload tracks with cover, genre and mood; a global mini player
-  keeps playing while you browse; shuffle, queue, seek.
+- **Community** — a social feed: story-style row of people who posted recently,
+  double-tap to like, "liked by" friends, inline comments, save, share,
+  hashtags with trending tags, suggested people and servers, and
+  For you / Following / Latest / Top / Saved tabs.
+- **Smart recommendations** — the "For you" feed, suggested people, servers
+  and music are ranked from who you follow and befriend, what you like,
+  comment on and listen to, your interests, engagement, freshness and
+  variety. Every pick shows why ("Liked by Luna", "Follows you"…), and
+  "Not interested" tunes it. See `src/lib/ranking.js`.
+- **Music** — a streaming-style home: picked-for-you hero, Made for you,
+  trending chart with play counts, browse by mood, artists, friend activity
+  (what friends are listening to); a global mini player keeps playing while
+  you browse; shuffle, queue, seek.
 - **Servers** — templates, text + voice channels, roles with colors,
   role-restricted channels, pins, replies, reactions, @mentions (with
-  notifications), search, member list, invites, kick, server settings.
-- **Voice channels** — WebRTC calls with speaking indicators, mute/deafen and
-  live "who's in voice" in the channel list. Works across devices with Firebase.
+  notifications), search, member list with profile cards (roles, bio, join
+  dates, quick message), invites, kick, server settings.
+- **Voice channels & calls** — WebRTC voice/video with camera, screen
+  sharing, speaking indicators, mute/deafen, per-person volume and device
+  picker. Voice channels show who's inside before you join; DMs and group
+  chats have voice/video calls with ringing, decline, missed-call and
+  duration messages. The call keeps running while you browse (a "return to
+  call" bar sits at the top). Works across devices with Firebase.
 - **Messages** — DMs and group chats with read receipts, reactions, images,
   emoji picker, unread badges and new-message toasts.
 - **Friends, profiles, followers** — friend requests, follow, guestbook, name

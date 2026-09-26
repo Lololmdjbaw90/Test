@@ -6,6 +6,7 @@ import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { useFriendships, splitFriendships } from "@/lib/social";
+import { buildTaste, suggestPeople } from "@/lib/ranking";
 import { toast } from "@/lib/toast";
 import { displayName, isOnline, profileLink, timeAgo } from "@/lib/format";
 import { notify } from "@/utils/notifications";
@@ -46,7 +47,11 @@ export default function FriendsPage() {
   const q = search.trim().toLowerCase();
   const matches = (p) => !q || displayName(p).toLowerCase().includes(q) || String(p.email || "").includes(q);
   const connected = new Set(friendships.map(other));
-  const discover = users.filter((u) => u.email !== me?.email && !connected.has(u.email) && matches(u));
+  // Discover is ranked by the recommendation engine (mutual follows, shared
+  // interests, activity...) and shows why each person is suggested.
+  const { friendEmails } = splitFriendships(friendships, me?.email);
+  const taste = useMemo(() => buildTaste({ me, friends: friendEmails }), [me, friendEmails]);
+  const discover = useMemo(() => suggestPeople(users.filter(matches), { me, taste, limit: 60, exclude: connected }), [users, me, taste, connected.size, q]); // eslint-disable-line react-hooks/exhaustive-deps
   const friends = accepted.map((f) => ({ f, p: personFor(f) })).filter(({ p }) => matches(p)).sort((a, b) => Number(isOnline(b.p)) - Number(isOnline(a.p)));
 
   const run = async (key, fn) => { setBusy(key); try { await fn(); } catch (e) { toast.error(e?.message || "Something went wrong."); } setBusy(null); };
@@ -140,8 +145,8 @@ export default function FriendsPage() {
               <EmptyState icon={UserPlus} title={q ? "No one found" : "You know everyone!"} text={q ? "Try a different name or email." : "Invite friends to join Mimi Locks."} />
             ) : (
               <div className="grid sm:grid-cols-2 gap-3">
-                {discover.slice(0, 60).map((u, i) => (
-                  <PersonCard key={u.email} person={u} index={i} subtitle={u.bio || (isOnline(u) ? "Online now" : `Active ${timeAgo(u.last_seen)}`)}>
+                {discover.map(({ user: u, reason }, i) => (
+                  <PersonCard key={u.email} person={u} index={i} subtitle={reason === "Suggested for you" || reason === "Recently active" ? u.bio || (isOnline(u) ? "Online now" : `Active ${timeAgo(u.last_seen)}`) : reason}>
                     <button onClick={() => sendRequest(u)} disabled={busy === u.email} className="btn !px-3" aria-label={`Add ${displayName(u)}`}>{busy === u.email ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}</button>
                   </PersonCard>
                 ))}

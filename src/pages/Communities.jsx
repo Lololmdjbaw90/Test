@@ -1,12 +1,14 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Check, Compass, Crown, ImagePlus, Loader2, LogIn, Plus, Server, Users } from "lucide-react";
+import { ArrowRight, Check, Compass, Crown, ImagePlus, Loader2, LogIn, Plus, Server, Sparkles, Users } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { SERVER_TEMPLATES, createServer, joinServer } from "@/lib/servers";
 import { toast } from "@/lib/toast";
+import { splitFriendships, useFriendships } from "@/lib/social";
+import { buildTaste, suggestServers } from "@/lib/ranking";
 import { Page, PageHeader, EmptyState } from "@/components/common/Page";
 import { SearchInput, Segmented } from "@/components/common/Controls";
 import Modal from "@/components/common/Modal";
@@ -91,13 +93,26 @@ export default function CommunitiesPage() {
   const { data: servers, loading } = useLiveQuery("Community", null, { sort: "-created_date" });
   const { data: users } = useLiveQuery("User", null, { live: false });
   const usersByEmail = useMemo(() => Object.fromEntries(users.map((u) => [u.email, u])), [users]);
+  const { friendships } = useFriendships(user?.email);
+  const { friendEmails } = splitFriendships(friendships, user?.email);
+  const taste = useMemo(() => buildTaste({ me: user, friends: friendEmails }), [user, friendEmails]);
+  // Discover: servers you haven't joined, ranked for you (friends inside,
+  // your interests, size, freshness), followed by the ones you're in.
+  const ranked = useMemo(() => {
+    const scored = suggestServers(servers, { me: user, taste, limit: 999, includeJoined: true });
+    return Object.fromEntries(scored.map((x, i) => [x.community.id, { ...x, rank: i }]));
+  }, [servers, user, taste]);
 
   const filtered = servers.filter((c) => {
     if (search.trim() && ![c.name, c.description].some((f) => String(f || "").toLowerCase().includes(search.trim().toLowerCase()))) return false;
     if (tab === "joined") return c.member_emails?.includes(user.email);
     if (tab === "mine") return c.owner_email === user.email;
     return true;
-  }).sort((a, b) => (tab === "discover" ? (b.member_emails?.length || 0) - (a.member_emails?.length || 0) : 0));
+  }).sort((a, b) => {
+    if (tab !== "discover") return 0;
+    const joined = (c) => Number(!!c.member_emails?.includes(user.email));
+    return joined(a) - joined(b) || (ranked[a.id]?.rank ?? 999) - (ranked[b.id]?.rank ?? 999);
+  });
 
   const join = async (e, c) => {
     e.stopPropagation();
@@ -142,6 +157,12 @@ export default function CommunitiesPage() {
                   </div>
                   <h3 className="font-display text-xl font-semibold truncate" style={{ color: "var(--text-primary)" }}>{c.name}</h3>
                   <p className="text-sm line-clamp-2 mt-1 min-h-[2.5rem]" style={{ color: "var(--text-muted)" }}>{c.description || "A cozy place to hang out."}</p>
+                  {!member && ranked[c.id] && tab === "discover" && (
+                    <p className="text-xs font-semibold mt-2 flex items-center gap-1.5" style={{ color: "var(--accent-rose)" }}>
+                      <Sparkles className="w-3.5 h-3.5" /> {ranked[c.id].reason}
+                      {ranked[c.id].friendsIn.length > 0 && <span className="flex -space-x-1.5 ml-1">{ranked[c.id].friendsIn.slice(0, 3).map((e) => <Avatar key={e} src={usersByEmail[e]?.profile_picture} name={usersByEmail[e]?.display_name || e} size={18} style={{ boxShadow: "0 0 0 2px var(--surface)", borderRadius: 9999 }} />)}</span>}
+                    </p>
+                  )}
                   <div className="flex items-center gap-3 mt-4">
                     <div className="flex -space-x-2">
                       {(c.member_emails || []).slice(0, 4).map((e) => <Avatar key={e} src={usersByEmail[e]?.profile_picture} name={usersByEmail[e]?.display_name || e} size={28} style={{ boxShadow: "0 0 0 2px var(--surface)", borderRadius: 9999 }} />)}

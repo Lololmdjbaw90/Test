@@ -1,5 +1,21 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { resolveAudioUrl } from "@/lib/demoAudio";
+import { base44 } from "@/api/base44Client";
+import { recordPlay } from "@/lib/ranking";
+
+// Listening history feeds music recommendations; shared tracks ({ kind: "track" })
+// also get a public play count, bumped once per track per session.
+const countedPlays = new Set();
+function onTrackStart(t) {
+  recordPlay(t);
+  // "Friend activity" on the Music page shows what people are listening to.
+  if (t.kind === "track") base44.auth.updateMe({ listening: { id: t.id, title: t.title, artist: t.artist, cover: t.cover || "", at: Date.now() } }).catch(() => {});
+  if (t.kind !== "track" || countedPlays.has(t.id)) return;
+  countedPlays.add(t.id);
+  base44.entities.MusicReview.get(t.id)
+    .then((row) => row && base44.entities.MusicReview.update(t.id, { plays: (row.plays || 0) + 1 }))
+    .catch(() => {});
+}
 
 // Global audio player: tracks keep playing while you move around the site.
 // track = { id, title, artist, src, cover }
@@ -27,6 +43,7 @@ export function PlayerProvider({ children }) {
     setDuration(0);
     audio.src = resolveAudioUrl(next.src);
     audio.play().catch(() => setPlaying(false));
+    onTrackStart(next);
   }, []);
 
   const play = useCallback((next, list) => {

@@ -11,6 +11,33 @@ import { displayName, profileLink, timeAgo } from "@/lib/format";
 import { notify } from "@/utils/notifications";
 import Avatar from "@/components/common/Avatar";
 
+// Moderates and posts a comment, notifying the owner. Returns true on success.
+export async function sendComment({ entity = "Comment", field = "artwork_id", targetId, content, user, ownerEmail, link }) {
+  content = String(content || "").trim();
+  if (!user || !content) return false;
+  const mod = await checkText(content, { user, where: "comment" });
+  if (!mod.safe) { toast.error("Comment blocked", { description: mod.reason }); return false; }
+  try {
+    await base44.entities[entity].create({
+      [field]: targetId,
+      content,
+      gif_url: "",
+      user_email: user.email,
+      user_display_name: displayName(user),
+      user_full_name: displayName(user),
+      user_profile_picture: user.profile_picture || "",
+      likes: [],
+    });
+    if (ownerEmail && ownerEmail !== user.email) {
+      await notify({ to_email: ownerEmail, from_email: user.email, from_display_name: displayName(user), from_profile_picture: user.profile_picture, type: "comment", message: `${displayName(user)} commented: "${content.slice(0, 60)}"`, link, entity_id: targetId });
+    }
+    return true;
+  } catch (err) {
+    toast.error(err?.message || "Could not post comment.");
+    return false;
+  }
+}
+
 // Live comment thread. `entity` is "Comment" (artworks) or "CommunityComment" (posts).
 export default function CommentSection({ entity = "Comment", field = "artwork_id", targetId, ownerEmail, link, compact = false }) {
   const { user } = useAuth();
@@ -20,29 +47,9 @@ export default function CommentSection({ entity = "Comment", field = "artwork_id
 
   const send = async (e) => {
     e?.preventDefault();
-    const content = text.trim();
-    if (!user || !content || sending) return;
+    if (!user || !text.trim() || sending) return;
     setSending(true);
-    const mod = await checkText(content, { user, where: "comment" });
-    if (!mod.safe) { toast.error("Comment blocked", { description: mod.reason }); setSending(false); return; }
-    try {
-      await base44.entities[entity].create({
-        [field]: targetId,
-        content,
-        gif_url: "",
-        user_email: user.email,
-        user_display_name: displayName(user),
-        user_full_name: displayName(user),
-        user_profile_picture: user.profile_picture || "",
-        likes: [],
-      });
-      setText("");
-      if (ownerEmail && ownerEmail !== user.email) {
-        await notify({ to_email: ownerEmail, from_email: user.email, from_display_name: displayName(user), from_profile_picture: user.profile_picture, type: "comment", message: `${displayName(user)} commented: "${content.slice(0, 60)}"`, link, entity_id: targetId });
-      }
-    } catch (err) {
-      toast.error(err?.message || "Could not post comment.");
-    }
+    if (await sendComment({ entity, field, targetId, content: text, user, ownerEmail, link })) setText("");
     setSending(false);
   };
 

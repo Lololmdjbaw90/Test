@@ -1,5 +1,23 @@
 # Changes
 
+## Calls, social feed and recommendations (this update)
+
+### New
+- **Voice & video calls** in DMs and group chats: ringing card with accept / accept with video / decline, 45s ring timeout, "call in progress" banner to join, and call summaries in the chat (missed, declined, duration).
+- **Voice channels rebuilt**: lobby showing who's inside, call stage with video tiles, spotlight for screen shares, picture-in-picture self view, per-person volume, mic/camera picker, join/leave sounds. The connection survives navigation, with a "return to call" bar at the top of the app.
+- **Social Community feed**: stories-style row, double-tap to like, "liked by", inline comments, save/bookmarks, share, hashtags, trending tags, suggested people and servers, "Not interested".
+- **Recommendation engine** (`src/lib/ranking.js`) for the feed, Home, suggested people, Friends → Discover, Servers → Discover and Music.
+- **Music home**: picked-for-you hero, Made for you shelf, trending chart with play counts, moods, artists, friend activity.
+- **Server member profile cards** from the member list and chat avatars (roles, bio, join dates, message, kick).
+- Mobile: "More" sheet with every page, bottom-sheet menus, tap-to-show message actions.
+
+### Fixed
+- Open/close animations that stuttered or froze (CSS hover effects fought framer-motion transforms; dialogs emptied while closing; menus got clipped or landed off-screen on phones).
+- Profile stats overflowing on narrow phones.
+
+### Firebase
+- New `Call` collection with rules and an index, and a rule letting anyone bump a track's play count by exactly one. Redeploy: `firebase deploy --only firestore:rules,firestore:indexes`.
+
 ## Redesign + everything working (this update)
 
 ### Fixed

@@ -107,9 +107,9 @@ role: "admin"
 
 Log out and log back in. The Admin Panel will unlock. From then on you can promote other members from **Admin Panel → Users → Make admin** — no console needed.
 
-## 8. Voice channels
+## 8. Voice channels and calls
 
-Voice uses WebRTC with signalling through Firestore (`VoicePresence` and `VoiceSignal` collections, covered by the rules above). Public STUN servers are used by default. If some members can't hear each other (strict corporate/mobile networks), add a TURN server in `.env`:
+Voice channels and DM/group calls use WebRTC with signalling through Firestore (`VoicePresence` and `VoiceSignal` collections; calls also use a `Call` document for ringing and status). All are covered by the rules and indexes above, so redeploy them after updating. Public STUN servers are used by default. If some members can't hear each other (strict corporate/mobile networks), add a TURN server in `.env`:
 
 ```text
 VITE_TURN_URL=turn:turn.example.com:3478

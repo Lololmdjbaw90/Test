@@ -38,9 +38,9 @@ function Banner({ profile }) {
 
 function Stat({ value, label, delay }) {
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay }} className="text-center px-3">
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay }} className="text-center px-1 sm:px-3 min-w-0">
       <p className="font-display text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>{compactNumber(value)}</p>
-      <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>{label}</p>
+      <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wide sm:tracking-wider truncate" style={{ color: "var(--text-muted)" }}>{label}</p>
     </motion.div>
   );
 }
@@ -150,12 +150,12 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div className="grid md:grid-cols-[1fr_auto] gap-5 mt-6 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-5 mt-6 items-start">
           <div>
             {profile.bio ? <p className="text-sm leading-relaxed max-w-2xl" style={{ color: "var(--text-secondary)" }}>{profile.bio}</p> : isOwn && <Link to="/Settings" className="text-sm font-semibold" style={{ color: "var(--accent-rose)" }}>+ Add a bio</Link>}
             {profile.interests?.length > 0 && <div className="flex flex-wrap gap-1.5 mt-3">{profile.interests.map((i) => <span key={i} className="badge-pink">{i}</span>)}</div>}
           </div>
-          <div className="card-sm flex divide-x py-3" style={{ borderColor: "var(--border-c)" }}>
+          <div className="card-sm grid grid-cols-4 md:flex divide-x py-3 min-w-0" style={{ borderColor: "var(--border-c)" }}>
             <Stat value={posts.length} label="Posts" delay={0.1} />
             <Stat value={totalLikes} label="Likes" delay={0.15} />
             <Stat value={followers.length} label="Followers" delay={0.2} />

@@ -134,6 +134,7 @@ function canUpdate(user, name, current, data = {}) {
         ((current?.member_emails || []).includes(email) && onlyChanged(data, ["status", "declined_by", "joined_emails", "answered_at", "ended_at"]));
     default:
       if (LIKEABLE.includes(name) && onlyChanged(data, ["likes"])) return true;
+      if (name === "MusicReview" && onlyChanged(data, ["plays"]) && data.plays === (current?.plays || 0) + 1) return true;
       return isOwner(user, current);
   }
 }
@@ -488,27 +489,31 @@ function seedIfEmpty() {
 
     // --- community posts ---
     const post = (email, title, description, seed, likes, mins) => ({ ...base(email, mins), title, description, image_url: seed ? pic(seed, 720, 520) : "", ...author(email), likes: likes || [] });
-    const p1 = post(E.max, "New mix dropping", "Working on a chill lo-fi set for the Music Lounge tonight \u{1F3A7}", "post-mix", [E.you, E.luna], 120);
-    const p2 = post(E.aria, "WIP koi studies", "Sketching some koi studies, thoughts?", "post-koi", [E.kai, E.luna, E.you], 300);
-    const p3 = post(E.luna, "Finished!", "So happy with how Wildflower turned out \u{1F33C}", "post-flower", [E.you, E.aria, E.kai, E.max], 600);
-    const p4 = post(E.kai, "Neon study #4", "Trying a new glow brush, feedback welcome.", "post-neon", [E.aria], 900);
-    const p5 = post(E.you, "Hello Mimi Locks", "Excited to be here — let's make cool stuff ✨", "post-hello", [E.aria, E.luna], 30);
-    saveCollection("CommunityPost", [p1, p2, p3, p4, p5]);
+    const p1 = post(E.max, "New mix dropping", "Working on a chill lo-fi set for the Music Lounge tonight \u{1F3A7} #lofi #music", "post-mix", [E.you, E.luna], 120);
+    const p2 = post(E.aria, "WIP koi studies", "Sketching some koi studies, thoughts? #wip #koi", "post-koi", [E.kai, E.luna, E.you], 300);
+    const p3 = post(E.luna, "Finished!", "So happy with how Wildflower turned out \u{1F33C} #watercolor #finished", "post-flower", [E.you, E.aria, E.kai, E.max], 600);
+    const p4 = post(E.kai, "Neon study #4", "Trying a new glow brush, feedback welcome. #digitalart #neon #wip", "post-neon", [E.aria], 900);
+    const p5 = post(E.you, "Hello Mimi Locks", "Excited to be here — let's make cool stuff ✨ #hello", "post-hello", [E.aria, E.luna], 30);
+    const p6 = post(E.aria, "", "Art challenge this week: draw your favourite snack as a character \u{1F369} Tag it #snackchallenge!", null, [E.luna, E.kai, E.max], 180);
+    const p7 = post(E.luna, "", "What's everyone listening to while drawing today? Paper Lanterns has been on repeat \u{1F3B6} #music", null, [E.aria], 1400);
+    saveCollection("CommunityPost", [p1, p2, p3, p4, p5, p6, p7]);
     const comment = (postId, email, content, mins) => ({ ...base(email, mins), post_id: postId, content, gif_url: "", ...author(email), likes: [] });
     saveCollection("CommunityComment", [
       comment(p2.id, E.luna, "the scales are gorgeous \u{1F60D}", 280),
       comment(p2.id, E.kai, "love the palette", 250),
       comment(p3.id, E.aria, "this is so dreamy", 580),
+      comment(p6.id, E.kai, "a sentient boba tea incoming", 160),
+      comment(p6.id, E.max, "count me in \u{1F369}", 140),
       comment(`profile_${E.you}`, E.aria, "welcome to the site! \u{1F338}", 2000),
     ]);
 
     // --- music ---
-    const review = (email, title, genre, mood, text, likes, mins) => ({ ...base(email, mins), title, music_url: `demo:${title.toLowerCase().replace(/\s+/g, "-")}`, cover_url: pic("cover-" + title.length, 400, 400), genre, mood, ai_review: text, identified_song: "", ...author(email), likes: likes || [] });
+    const review = (email, title, genre, mood, text, likes, mins, plays = 0) => ({ ...base(email, mins), plays, title, music_url: `demo:${title.toLowerCase().replace(/\s+/g, "-")}`, cover_url: pic("cover-" + title.length, 400, 400), genre, mood, ai_review: text, identified_song: "", ...author(email), likes: likes || [] });
     saveCollection("MusicReview", [
-      review(E.max, "Midnight Tape", "Lo-fi", "Chill", "Warm, dusty keys over a lazy beat — perfect background music.", [E.you, E.aria], 200),
-      review(E.kai, "Neon Drive", "Synthwave", "Energetic", "Pulsing arps and big drums; very 80s in the best way.", [E.luna], 800),
+      review(E.max, "Midnight Tape", "Lo-fi", "Chill", "Warm, dusty keys over a lazy beat — perfect background music.", [E.you, E.aria], 200, 42),
+      review(E.kai, "Neon Drive", "Synthwave", "Energetic", "Pulsing arps and big drums; very 80s in the best way.", [E.luna], 800, 17),
       review(E.aria, "Rainy Window", "Ambient", "Calm", "Soft pads and field recordings; great for focus.", [], 1500),
-      review(E.luna, "Paper Lanterns", "Dream pop", "Dreamy", "Floaty melody that sounds like a summer evening.", [E.aria, E.kai, E.you], 2600),
+      review(E.luna, "Paper Lanterns", "Dream pop", "Dreamy", "Floaty melody that sounds like a summer evening.", [E.aria, E.kai, E.you], 2600, 64),
     ]);
 
     // --- commissions ---

@@ -69,7 +69,9 @@ service cloud.firestore {
     match /MusicReview/{id} {
       allow read: if signedIn();
       allow create: if ownsIncomingData();
-      allow update: if isAdmin() || ownsResource() || onlyChanged(['likes', 'updated_date', 'updated_at']);
+      // Anyone may like, or bump the play counter by exactly one.
+      allow update: if isAdmin() || ownsResource() || onlyChanged(['likes', 'updated_date', 'updated_at'])
+        || (signedIn() && onlyChanged(['plays', 'updated_date', 'updated_at']) && request.resource.data.plays == resource.data.get('plays', 0) + 1);
       allow delete: if isAdmin() || ownsResource();
     }
 

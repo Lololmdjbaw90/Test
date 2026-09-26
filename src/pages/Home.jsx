@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { ArrowRight, Crown, Flame, Gift, Heart, Image as ImageIcon, MessageCircle, Music2, Pause, Play, Server, Sparkles, Star, Users } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import { buildTaste, rankFeed } from "@/lib/ranking";
 import { useFriendships, splitFriendships } from "@/lib/social";
 import { usePlayer } from "@/lib/player";
 import { toast } from "@/lib/toast";
@@ -128,7 +129,9 @@ export default function Home() {
     // Featured pieces first, then the newest work.
     return [...artworks.filter((a) => a.featured), ...artworks.filter((a) => !a.featured)].slice(0, 10);
   }, [artworks]);
-  const trending = useMemo(() => [...posts].sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0) || new Date(b.created_date) - new Date(a.created_date)).slice(0, 6), [posts]);
+  // Same engine as the Community "For you" feed, so Home shows what you'd most likely enjoy.
+  const taste = useMemo(() => buildTaste({ me: user, friends: friendEmails, posts }), [user, friendEmails, posts]);
+  const trending = useMemo(() => rankFeed(posts.filter((p) => p.user_email !== user?.email), { taste }).slice(0, 6).map((x) => x.post), [posts, taste, user?.email]);
   const topArtists = useMemo(() => {
     const stats = {};
     posts.forEach((p) => { if (!p.user_email) return; stats[p.user_email] = (stats[p.user_email] || 0) + (p.likes?.length || 0); });
@@ -164,7 +167,7 @@ export default function Home() {
 
         <div className="grid lg:grid-cols-3 gap-8 lg:gap-10">
           <motion.section variants={fadeUp} className="lg:col-span-2">
-            <SectionTitle icon={Flame} title="Trending in the community" to="/Community" />
+            <SectionTitle icon={Flame} title="For you in the community" to="/Community" />
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {trending.map((p, i) => (
                 <motion.div key={p.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 + i * 0.05 }}>
