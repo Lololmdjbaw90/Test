@@ -129,8 +129,8 @@ export default function SettingsPage() {
               </div>
               <input ref={bannerRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setBannerFile(f); setBannerPreview(URL.createObjectURL(f)); } e.target.value = ""; }} />
               <div className="absolute -bottom-12 left-6">
-                <label className="relative block cursor-pointer group rounded-full" style={{ boxShadow: "0 0 0 5px var(--surface)" }}>
-                  <Avatar src={picPreview} name={form.display_name} size={96} />
+                <label className="relative flex cursor-pointer group rounded-full">
+                  <Avatar src={picPreview} name={form.display_name} size={96} ring={5} />
                   <span className="absolute inset-0 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: "rgb(20 8 14 / 0.45)" }}><Camera className="w-6 h-6" /></span>
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setCropSrc(URL.createObjectURL(f)); e.target.value = ""; }} />
                 </label>

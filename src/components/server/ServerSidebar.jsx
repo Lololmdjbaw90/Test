@@ -34,7 +34,7 @@ function ChannelRow({ ch, active, canManage, onSelect, onSettings, voicePeers, l
             const muted = l ? l.muted : p.muted;
             return (
               <div key={p.id} className="flex items-center gap-2 py-1 text-xs" style={{ color: l?.speaking ? "var(--text-primary)" : "var(--text-secondary)" }}>
-                <span className="rounded-full transition-shadow duration-150" style={{ boxShadow: l?.speaking ? "0 0 0 2px #3ddc97" : "none" }}><Avatar src={p.user?.profile_picture} name={p.user?.display_name} size={20} /></span>
+                <Avatar src={p.user?.profile_picture} name={p.user?.display_name} size={20} ring={l?.speaking ? 2 : 0} ringColor="#3ddc97" className="transition-shadow duration-150" />
                 <span className="truncate flex-1" style={{ fontWeight: l?.speaking ? 700 : 500 }}>{p.user?.display_name || "Someone"}</span>
                 {p.video && <Video className="w-3 h-3 flex-shrink-0 opacity-70" />}
                 {muted && <MicOff className="w-3 h-3 flex-shrink-0" style={{ color: "var(--danger)" }} aria-label="Muted" />}

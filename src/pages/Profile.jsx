@@ -119,8 +119,8 @@ export default function ProfilePage() {
       <Banner profile={profile} />
       <div className="px-2 sm:px-6 -mt-16 sm:-mt-20 relative">
         <div className="flex flex-col sm:flex-row sm:items-start gap-4 sm:gap-6">
-          <motion.div initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 260, damping: 18 }} className="rounded-full w-fit" style={{ boxShadow: "0 0 0 6px var(--app-bg)" }}>
-            <Avatar src={profile.profile_picture} name={name} size={132} nitro={nitro} online={isOnline(profile)} />
+          <motion.div initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 260, damping: 18 }} className="flex w-fit">
+            <Avatar src={profile.profile_picture} name={name} size={132} nitro={nitro} online={isOnline(profile)} ring={6} ringColor="var(--app-bg)" />
           </motion.div>
           <div className="flex-1 min-w-0 sm:pt-[92px]">
             <div className="flex flex-wrap items-center gap-3">

@@ -13,9 +13,9 @@ export function ActiveCreators({ me, creators, onOpen, onCompose }) {
     <div className="flex gap-3.5 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 pb-1">
       {me && (
         <button onClick={onCompose} className="flex flex-col items-center gap-1.5 w-[68px] flex-shrink-0" aria-label="Create a post">
-          <span className="relative p-[3px] rounded-full" style={{ background: "var(--border-c)" }}>
-            <span className="block rounded-full p-[2px]" style={{ background: "var(--surface)" }}><Avatar src={me.profile_picture} name={displayName(me)} size={58} /></span>
-            <span className="absolute bottom-0 right-0 w-6 h-6 rounded-full flex items-center justify-center text-white" style={{ background: "var(--accent-grad)", boxShadow: "0 0 0 3px var(--bg, var(--surface))" }}><Plus className="w-3.5 h-3.5" /></span>
+          <span className="relative flex p-[5px] rounded-full" style={{ background: "var(--border-c)" }}>
+            <Avatar src={me.profile_picture} name={displayName(me)} size={58} ring={2} ringColor="var(--app-bg)" />
+            <span className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full flex items-center justify-center text-white" style={{ background: "var(--accent-grad)", boxShadow: "0 0 0 3px var(--app-bg)" }}><Plus className="w-3.5 h-3.5" /></span>
           </span>
           <span className="text-[11px] font-semibold truncate w-full text-center" style={{ color: "var(--text-secondary)" }}>Your post</span>
         </button>
@@ -30,10 +30,8 @@ export function ActiveCreators({ me, creators, onOpen, onCompose }) {
           className="flex flex-col items-center gap-1.5 w-[68px] flex-shrink-0"
           aria-label={`${c.name}'s latest post`}
         >
-          <span className="p-[3px] rounded-full" style={{ background: c.unseen ? "conic-gradient(from 200deg, #f59e0b, rgb(var(--accent-rgb)), #a855f7, #f59e0b)" : "var(--border-strong)" }}>
-            <span className="block rounded-full p-[2px]" style={{ background: "var(--surface)" }}>
-              <Avatar src={c.user?.profile_picture || c.picture} name={c.name} size={58} online={c.user ? (isOnline(c.user) || undefined) : undefined} />
-            </span>
+          <span className="flex p-[5px] rounded-full" style={{ background: c.unseen ? "conic-gradient(from 200deg, #f59e0b, rgb(var(--accent-rgb)), #a855f7, #f59e0b)" : "var(--border-strong)" }}>
+            <Avatar src={c.user?.profile_picture || c.picture} name={c.name} size={58} ring={2} ringColor="var(--app-bg)" online={c.user ? (isOnline(c.user) || undefined) : undefined} />
           </span>
           <span className="text-[11px] font-semibold truncate w-full text-center" style={{ color: c.unseen ? "var(--text-primary)" : "var(--text-muted)" }}>{c.name.split(" ")[0]}</span>
         </motion.button>

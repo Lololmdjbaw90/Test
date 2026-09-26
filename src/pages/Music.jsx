@@ -394,7 +394,7 @@ export default function MusicPage() {
                           const u = usersByEmail[a.email];
                           return (
                             <Link key={a.email} to={profileLink(a.email)} className="flex flex-col items-center gap-2 w-24 flex-shrink-0 group">
-                              <span className="rounded-full p-[3px] transition-[scale] duration-200 group-hover:scale-105" style={{ background: "var(--accent-grad)" }}><span className="block rounded-full p-[2px]" style={{ background: "var(--surface)" }}><Avatar src={u?.profile_picture || a.picture} name={u ? displayName(u) : a.name} size={80} /></span></span>
+                              <span className="flex rounded-full p-[5px] transition-[scale] duration-200 group-hover:scale-105" style={{ background: "var(--accent-grad)" }}><Avatar src={u?.profile_picture || a.picture} name={u ? displayName(u) : a.name} size={80} ring={2} ringColor="var(--app-bg)" /></span>
                               <span className="text-xs font-bold truncate w-full text-center" style={{ color: "var(--text-primary)" }}>{u ? displayName(u) : a.name}</span>
                               <span className="text-[10px] -mt-1.5" style={{ color: "var(--text-muted)" }}>{a.tracks} track{a.tracks === 1 ? "" : "s"}</span>
                             </Link>

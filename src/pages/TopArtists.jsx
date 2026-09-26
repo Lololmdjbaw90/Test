@@ -30,8 +30,8 @@ function Podium({ artists }) {
           <div key={a.email} className="flex flex-col items-center w-24 sm:w-36">
             <motion.div initial={{ opacity: 0, y: 20, scale: 0.8 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: 0.5 + i * 0.15, type: "spring", stiffness: 260, damping: 18 }} className="flex flex-col items-center mb-3">
               {rank === 1 && <motion.div animate={{ y: [0, -4, 0], rotate: [0, -6, 6, 0] }} transition={{ duration: 2.5, repeat: Infinity }}><Crown className="w-7 h-7 mb-1" style={{ color: m.color, fill: m.color }} /></motion.div>}
-              <Link to={profileLink(a.email)} className="rounded-full" style={{ boxShadow: `0 0 0 4px var(--surface), 0 0 0 7px ${m.color}` }}>
-                <Avatar src={a.profile_picture} name={displayName(a)} size={rank === 1 ? 84 : 66} />
+              <Link to={profileLink(a.email)} className="flex rounded-full">
+                <Avatar src={a.profile_picture} name={displayName(a)} size={rank === 1 ? 84 : 66} style={{ boxShadow: `0 0 0 4px var(--surface), 0 0 0 7px ${m.color}` }} />
               </Link>
               <p className="font-bold text-sm mt-3 truncate max-w-full" style={{ color: "var(--text-primary)" }}>{displayName(a)}</p>
               <p className="text-xs font-bold flex items-center gap-1" style={{ color: "var(--accent-rose)" }}><Heart className="w-3 h-3 fill-current" />{a.likes}</p>

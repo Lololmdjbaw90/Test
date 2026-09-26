@@ -40,7 +40,7 @@ function IncomingCall({ call, me, onAccept, onDecline }) {
             role="alertdialog"
             aria-label={`Incoming call from ${call.caller_name}`}
           >
-            <span className="relative flex-shrink-0">
+            <span className="relative flex flex-shrink-0">
               <span className="ripple" /><span className="ripple" />
               <Avatar src={call.caller_picture} name={call.caller_name} size={52} />
             </span>

@@ -85,9 +85,7 @@ function Tile({ p, size = "md", onMenu, className = "", style }) {
       ) : (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 50% 45%, ${tint(p.email)}, transparent 70%)` }} />
-          <span className="relative rounded-full transition-shadow duration-150" style={{ boxShadow: p.speaking ? "0 0 0 4px #3ddc97, 0 0 30px rgb(61 220 151 / 0.45)" : "0 0 0 4px rgb(255 255 255 / 0.08)" }}>
-            <Avatar src={p.user?.profile_picture} name={nameOf(p)} size={avatar} />
-          </span>
+          <Avatar src={p.user?.profile_picture} name={nameOf(p)} size={avatar} className="transition-shadow duration-150" style={{ boxShadow: p.speaking ? "0 0 0 4px #3ddc97, 0 0 30px rgb(61 220 151 / 0.45)" : "0 0 0 4px rgb(255 255 255 / 0.08)" }} />
         </div>
       )}
       <div className="absolute left-2 right-2 bottom-2 flex items-end gap-1.5">
@@ -120,7 +118,7 @@ function RingingTile({ person, size = "md", className = "", style }) {
   return (
     <div className={`call-tile ${className}`} style={style}>
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-        <span className="relative">
+        <span className="relative flex">
           <span className="ripple" /><span className="ripple" />
           <Avatar src={person.picture} name={person.name} size={size === "sm" ? 44 : 72} />
         </span>
@@ -215,7 +213,7 @@ export default function CallStage({ vs, ringing = [], calling, onLeave, classNam
       <div className="flex-1 min-h-0 relative flex flex-col items-center justify-center gap-5 px-6 text-center">
         <div className="flex -space-x-6">
           {calling.people.slice(0, 3).map((person) => (
-            <span key={person.email} className="relative rounded-full" style={{ boxShadow: "0 0 0 4px #140f17" }}>
+            <span key={person.email} className="relative flex rounded-full" style={{ boxShadow: "0 0 0 4px #140f17" }}>
               <span className="ripple" /><span className="ripple" /><span className="ripple" />
               <Avatar src={person.picture} name={person.name} size={calling.people.length > 1 ? 96 : 128} />
             </span>

@@ -47,9 +47,7 @@ export default function VoiceDock() {
               </span>
               <span className="hidden sm:flex -space-x-2 ml-auto pl-2">
                 {vs.participants.slice(0, 5).map((p) => (
-                  <span key={p.peerId} className="rounded-full transition-shadow" style={{ boxShadow: p.speaking ? "0 0 0 2px #fff" : "0 0 0 2px #16a34a" }}>
-                    <Avatar src={p.user?.profile_picture} name={p.user?.display_name} size={26} />
-                  </span>
+                  <Avatar key={p.peerId} src={p.user?.profile_picture} name={p.user?.display_name} size={26} ring={2} ringColor={p.speaking ? "#fff" : "#16a34a"} className="transition-shadow" />
                 ))}
               </span>
               {vs.video && <Video className="w-4 h-4 flex-shrink-0 opacity-90" />}

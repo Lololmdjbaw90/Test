@@ -33,9 +33,9 @@ export default function ProfileCard({ target, onClose, user, member, roles = [],
           </div>
           <div className="px-5 pb-5 -mt-11">
             <div className="flex items-end justify-between">
-              <motion.span initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 400, damping: 22 }} className="rounded-full" style={{ boxShadow: "0 0 0 5px var(--surface)" }}>
-                <Avatar src={u.profile_picture} name={name} size={84} online={online} nitro={nitro} />
-              </motion.span>
+              <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 400, damping: 22 }} className="flex">
+                <Avatar src={u.profile_picture} name={name} size={84} online={online} nitro={nitro} ring={6} />
+              </motion.div>
               <div className="flex gap-1 pb-1">
                 {isOwner && <span className="badge-pink" title="Server owner"><Crown className="w-3 h-3" /> Owner</span>}
                 <NitroBadge active={nitro} />
