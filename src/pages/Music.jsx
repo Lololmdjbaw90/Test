@@ -68,7 +68,7 @@ function UploadModal({ open, onClose }) {
           <div>
             <p className="label">Cover</p>
             <label className="block w-[120px] h-[120px] rounded-2xl overflow-hidden cursor-pointer relative" style={{ background: "var(--surface-2)", border: "1px dashed var(--border-strong)" }}>
-              {coverPreview ? <img src={coverPreview} alt="" className="w-full h-full object-cover" /> : <span className="absolute inset-0 flex items-center justify-center" style={{ color: "var(--text-muted)" }}><ImagePlus className="w-5 h-5" /></span>}
+              {coverPreview ? <img loading="lazy" decoding="async" src={coverPreview} alt="" className="w-full h-full object-cover" /> : <span className="absolute inset-0 flex items-center justify-center" style={{ color: "var(--text-muted)" }}><ImagePlus className="w-5 h-5" /></span>}
               <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setCover(f); setCoverPreview(URL.createObjectURL(f)); } }} />
             </label>
           </div>
@@ -94,12 +94,12 @@ function UploadModal({ open, onClose }) {
 function NowPlaying({ track, playing, time, duration, onToggle }) {
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="relative overflow-hidden rounded-[2rem] p-6 sm:p-8 mb-8 grain" style={{ background: "linear-gradient(135deg, rgb(var(--accent-rgb) / 0.9), rgb(var(--accent-2-rgb) / 0.85))", color: "#fff", boxShadow: "var(--shadow-accent)" }}>
-      <div className="orb w-72 h-72 -right-16 -top-20" style={{ background: "rgb(255 255 255 / 0.25)" }} />
+      <div className="orb w-72 h-72 -right-16 -top-20" style={{ "--orb": "rgb(255 255 255 / 0.25)" }} />
       <div className="relative flex items-center gap-6">
         <div className="relative flex-shrink-0 w-28 h-28 sm:w-36 sm:h-36">
-          <motion.div animate={{ rotate: playing ? 360 : 0 }} transition={playing ? { duration: 6, repeat: Infinity, ease: "linear" } : { duration: 0.5 }} className="absolute inset-0 rounded-full" style={{ background: "repeating-radial-gradient(circle, #1a1017 0 2px, #2a1a24 2px 4px)", boxShadow: "0 20px 40px rgb(0 0 0 / 0.3)" }}>
-            <div className="absolute inset-[30%] rounded-full overflow-hidden" style={{ background: "var(--accent-grad)" }}>{track.cover && <img src={track.cover} alt="" className="w-full h-full object-cover" />}</div>
-          </motion.div>
+          <div data-paused={!playing} className="anim-spin absolute inset-0 rounded-full" style={{ animationDuration: "6s", background: "repeating-radial-gradient(circle, #1a1017 0 2px, #2a1a24 2px 4px)", boxShadow: "0 20px 40px rgb(0 0 0 / 0.3)" }}>
+            <div className="absolute inset-[30%] rounded-full overflow-hidden" style={{ background: "var(--accent-grad)" }}>{track.cover && <img loading="lazy" decoding="async" src={track.cover} alt="" className="w-full h-full object-cover" />}</div>
+          </div>
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-[11px] font-bold uppercase tracking-[0.2em] opacity-80 flex items-center gap-2"><span className={`equalizer ${playing ? "" : "paused"}`}><span /><span /><span /></span> Now playing</p>
@@ -168,7 +168,7 @@ function TrackCard({ track, reason, player, queue, index }) {
   const playing = player.isPlaying(track.id);
   const current = player.isCurrent(track.id);
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index, 8) * 0.04 }} className="group w-[150px] sm:w-[172px] flex-shrink-0 snap-start">
+    <motion.div className="enter group w-[150px] sm:w-[172px] flex-shrink-0 snap-start" style={{ "--d": `${Math.round((Math.min(index, 8) * 0.04) * 1000)}ms`, "--enter-y": "12px" }}>
       <div className="relative cursor-pointer" onClick={() => player.toggle(asQueueItem(track), queue)}>
         <Cover track={track} className="aspect-square w-full card-hover" rounded="rounded-[1.4rem]" />
         {playing && <span className="absolute top-2.5 left-2.5 px-2 py-1 rounded-full text-white" style={{ background: "rgb(0 0 0 / 0.5)" }}><span className="equalizer"><span /><span /><span /></span></span>}
@@ -186,7 +186,7 @@ function Hero({ pick, player, queue }) {
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="relative overflow-hidden rounded-[2rem] mb-9 grain" style={{ color: "#fff", boxShadow: "var(--shadow-accent)" }}>
       <div className="absolute inset-0" style={{ background: MOOD_STYLES[t.mood] || "var(--accent-grad)" }} />
-      {t.cover_url && <img src={t.cover_url} alt="" aria-hidden="true" className="absolute inset-0 w-full h-full object-cover opacity-35 blur-2xl scale-125" />}
+      {t.cover_url && <img loading="lazy" decoding="async" src={t.cover_url} alt="" aria-hidden="true" className="absolute inset-0 w-full h-full object-cover opacity-35 blur-2xl scale-125" />}
       <div className="absolute inset-0" style={{ background: "linear-gradient(90deg, rgb(0 0 0 / 0.35), transparent)" }} />
       <div className="relative flex items-center gap-4 sm:gap-6 p-5 sm:p-8">
         <Cover track={t} className="w-24 h-24 sm:w-44 sm:h-44 flex-shrink-0 shadow-2xl" rounded="rounded-2xl sm:rounded-3xl" />
@@ -372,7 +372,7 @@ export default function MusicPage() {
                       <Shelf title="Browse by mood" icon={Disc3}>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                           {moods.map((m, i) => (
-                            <motion.button key={m} initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.04 }} whileHover={{ y: -3 }} whileTap={{ scale: 0.96 }} onClick={() => pickMood(m)} className="relative h-20 rounded-2xl overflow-hidden text-left p-3 text-white font-display text-lg font-semibold" style={{ background: MOOD_STYLES[m] || "var(--accent-grad)", boxShadow: "var(--shadow-sm)" }}>
+                            <motion.button key={m} whileHover={{ y: -3 }} whileTap={{ scale: 0.96 }} onClick={() => pickMood(m)} className="enter-pop relative h-20 rounded-2xl overflow-hidden text-left p-3 text-white font-display text-lg font-semibold" style={{ "--d": `${Math.round((i * 0.04) * 1000)}ms`, background: MOOD_STYLES[m] || "var(--accent-grad)", boxShadow: "var(--shadow-sm)" }}>
                               {m}
                               <span className="absolute right-2 bottom-1 text-[11px] font-sans font-bold opacity-85">{plural(tracks.filter((t) => t.mood === m).length, "track")}</span>
                             </motion.button>
@@ -430,11 +430,8 @@ export default function MusicPage() {
                         <motion.div
                           key={t.id}
                           ref={highlight === t.id ? highlightRef : null}
-                          initial={{ opacity: 0, x: -12 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: Math.min(i, 10) * 0.03 }}
-                          className="group flex items-center gap-3 sm:gap-4 p-2.5 sm:p-3 rounded-2xl transition-colors hover:bg-[var(--surface-2)]"
-                          style={isCurrent || highlight === t.id ? { background: "var(--pink-soft)" } : undefined}
+                          className="enter-side group flex items-center gap-3 sm:gap-4 p-2.5 sm:p-3 rounded-2xl transition-colors hover:bg-[var(--surface-2)]"
+                          style={{ "--d": `${Math.min(i, 10) * 30}ms`, ...(isCurrent || highlight === t.id ? { background: "var(--pink-soft)" } : {}) }}
                         >
                           <span className="hidden sm:flex w-6 justify-center text-sm font-semibold tabular-nums" style={{ color: isCurrent ? "var(--accent-rose)" : "var(--text-muted)" }}>
                             {playing ? <span className="equalizer"><span /><span /><span /></span> : i + 1}

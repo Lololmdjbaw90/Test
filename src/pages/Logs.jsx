@@ -29,7 +29,7 @@ export default function LogsPage() {
           {filtered.map((l, i) => {
             const Icon = ICONS[l.action] || ClipboardList;
             return (
-              <motion.div key={l.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(i, 15) * 0.03 }} className="relative mb-3">
+              <motion.div key={l.id} className="enter-side relative mb-3" style={{ "--d": `${Math.round((Math.min(i, 15) * 0.03) * 1000)}ms`, "--enter-x": "-10px" }}>
                 <span className="absolute -left-8 top-3 w-[30px] h-[30px] rounded-full flex items-center justify-center" style={{ background: "var(--surface)", border: "1px solid var(--border-c)", color: "var(--accent-rose)" }}><Icon className="w-3.5 h-3.5" /></span>
                 <div className="card-sm p-3.5">
                   <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{l.details}</p>

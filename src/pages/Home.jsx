@@ -54,9 +54,9 @@ function DailyReward() {
         className="relative flex items-center gap-3 rounded-2xl px-4 py-3 text-left w-full sm:w-auto"
         style={claimed ? { background: "var(--surface)", border: "1px solid var(--border-c)" } : { background: "var(--accent-grad)", color: "#fff", boxShadow: "var(--shadow-accent)" }}
       >
-        <motion.span animate={!claimed ? { rotate: [0, -12, 12, -6, 0] } : {}} transition={{ duration: 1, repeat: Infinity, repeatDelay: 2 }} className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: claimed ? "var(--pink-soft)" : "rgb(255 255 255 / 0.2)", color: claimed ? "var(--accent-rose)" : "#fff" }}>
+        <span className={`${claimed ? "" : "anim-wiggle"} w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0`} style={{ animationDuration: "3s", background: claimed ? "var(--pink-soft)" : "rgb(255 255 255 / 0.2)", color: claimed ? "var(--accent-rose)" : "#fff" }}>
           <Gift className="w-5 h-5" />
-        </motion.span>
+        </span>
         <span>
           <span className="block text-sm font-bold" style={{ color: claimed ? "var(--text-primary)" : "#fff" }}>{claimed ? "Daily reward claimed" : "Claim daily reward"}</span>
           <span className="block text-xs flex items-center gap-1" style={{ color: claimed ? "var(--text-muted)" : "rgb(255 255 255 / 0.85)" }}>
@@ -81,7 +81,7 @@ function Hero({ stats }) {
           <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-semibold leading-[1.02] text-balance" style={{ color: "var(--text-primary)" }}>
             {greeting()},<br /><em className="gradient-text" style={{ paddingRight: 4 }}>{displayName(user)}</em>
           </h1>
-          <p className="mt-4 text-sm sm:text-base max-w-lg" style={{ color: "var(--text-secondary)" }}>Here's what's happening across Mimi Locks today — fresh art, new tracks and friends online.</p>
+          <p className="mt-4 text-sm sm:text-base max-w-lg" style={{ color: "var(--text-secondary)" }}>Here's what's happening across Sugerly today — fresh art, new tracks and friends online.</p>
           <div className="mt-6 flex flex-wrap gap-3 items-center">
             <DailyReward />
             <Link to="/Community?compose=1" className="btn-outline"><ImageIcon className="w-4 h-4" /> Share something</Link>
@@ -151,7 +151,7 @@ export default function Home() {
           <div className="flex gap-4 overflow-x-auto no-scrollbar snap-x snap-mandatory -mx-4 px-4 sm:mx-0 sm:px-0 pb-2">
             {artLoading && Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton flex-shrink-0 w-60 h-72 rounded-3xl" />)}
             {featured.map((a, i) => (
-              <motion.div key={a.id} initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 + i * 0.05 }} className="snap-start flex-shrink-0">
+              <motion.div key={a.id} className="enter-side snap-start flex-shrink-0" style={{ "--d": `${Math.round((0.1 + i * 0.05) * 1000)}ms`, "--enter-x": "30px" }}>
                 <Link to={`/Gallery?art=${a.id}`} className="group relative block w-60 h-72 rounded-3xl overflow-hidden" style={{ boxShadow: "var(--shadow-md)" }}>
                   <img src={a.image_url} alt={a.title} loading="lazy" className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                   <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgb(20 8 14 / 0.75), transparent 55%)" }} />
@@ -170,7 +170,7 @@ export default function Home() {
             <SectionTitle icon={Flame} title="For you in the community" to="/Community" />
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {trending.map((p, i) => (
-                <motion.div key={p.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 + i * 0.05 }}>
+                <motion.div className="enter" style={{ "--d": `${Math.round((0.15 + i * 0.05) * 1000)}ms`, "--enter-y": "20px" }} key={p.id}>
                   <Link to={`/Community?post=${p.id}`} className="group card-sm overflow-hidden block card-hover">
                     <div className="aspect-[4/5] overflow-hidden" style={{ background: "var(--surface-2)" }}>
                       {p.image_url ? <img src={p.image_url} alt={p.title || ""} loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" /> : <div className="w-full h-full p-4 flex items-end font-display text-lg leading-snug" style={{ color: "var(--text-secondary)" }}>“{p.description?.slice(0, 90)}”</div>}
@@ -252,7 +252,7 @@ export default function Home() {
             <div className="grid grid-cols-2 gap-3">
               {myServers.map((s) => (
                 <Link key={s.id} to={`/CommunityChat?id=${s.id}`} className="card-sm card-hover p-3 flex items-center gap-3">
-                  <span className="w-11 h-11 rounded-2xl flex items-center justify-center text-xl overflow-hidden flex-shrink-0" style={{ background: "var(--pink-soft)" }}>{s.icon_url ? <img src={s.icon_url} alt="" className="w-full h-full object-cover" /> : s.icon_emoji || "💬"}</span>
+                  <span className="w-11 h-11 rounded-2xl flex items-center justify-center text-xl overflow-hidden flex-shrink-0" style={{ background: "var(--pink-soft)" }}>{s.icon_url ? <img loading="lazy" decoding="async" src={s.icon_url} alt="" className="w-full h-full object-cover" /> : s.icon_emoji || "💬"}</span>
                   <span className="min-w-0">
                     <span className="block text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{s.name}</span>
                     <span className="block text-[11px]" style={{ color: "var(--text-muted)" }}>{s.member_emails?.length || 0} members</span>

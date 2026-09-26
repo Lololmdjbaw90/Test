@@ -18,11 +18,9 @@ export default function CreateMenu({ onDone, isAdmin, className = "" }) {
       {actions.map((a, i) => (
         <motion.button
           key={a.to}
-          initial={{ opacity: 0, x: -8 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: i * 0.03 }}
           onClick={() => { navigate(a.to); onDone?.(); }}
-          className="w-full flex items-center gap-3 p-2.5 rounded-2xl text-left transition-colors hover:bg-[var(--pink-soft)]"
+          className="enter-side w-full flex items-center gap-3 p-2.5 rounded-2xl text-left transition-colors hover:bg-[var(--pink-soft)]"
+          style={{ "--d": `${i * 30}ms`, "--enter-x": "-8px" }}
         >
           <span className="w-10 h-10 rounded-xl flex items-center justify-center text-white flex-shrink-0" style={{ background: "var(--accent-grad)" }}><a.icon className="w-4 h-4" /></span>
           <span className="min-w-0">

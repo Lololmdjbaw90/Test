@@ -65,7 +65,7 @@ function CreateServerModal({ open, onClose }) {
           <motion.div key="f" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 16 }} className="space-y-4">
             <div className="flex items-center gap-4">
               <label className="relative w-20 h-20 rounded-3xl flex items-center justify-center text-4xl cursor-pointer overflow-hidden flex-shrink-0 group" style={{ background: "var(--pink-soft)" }}>
-                {iconPreview ? <img src={iconPreview} alt="" className="w-full h-full object-cover" /> : form.icon_emoji}
+                {iconPreview ? <img loading="lazy" decoding="async" src={iconPreview} alt="" className="w-full h-full object-cover" /> : form.icon_emoji}
                 <span className="absolute inset-0 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: "rgb(20 8 14 / 0.45)" }}><ImagePlus className="w-5 h-5" /></span>
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setCropSrc(URL.createObjectURL(f)); e.target.value = ""; }} />
               </label>
@@ -146,14 +146,14 @@ export default function CommunitiesPage() {
           {filtered.map((c, i) => {
             const member = c.member_emails?.includes(user.email);
             return (
-              <motion.div key={c.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 9) * 0.05 }} whileHover={{ y: -4 }} onClick={() => navigate(`/CommunityChat?id=${c.id}`)} className="card !rounded-3xl overflow-hidden cursor-pointer group" role="link" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") navigate(`/CommunityChat?id=${c.id}`); }}>
+              <motion.div key={c.id} whileHover={{ y: -4 }} onClick={() => navigate(`/CommunityChat?id=${c.id}`)} className="enter card !rounded-3xl overflow-hidden cursor-pointer group" style={{ "--d": `${Math.round((Math.min(i, 9) * 0.05) * 1000)}ms`, "--enter-y": "20px" }} role="link" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") navigate(`/CommunityChat?id=${c.id}`); }}>
                 <div className="h-28 relative overflow-hidden" style={{ background: "var(--accent-grad)" }}>
-                  {c.banner_url && <img src={c.banner_url} alt="" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />}
+                  {c.banner_url && <img loading="lazy" decoding="async" src={c.banner_url} alt="" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />}
                   {c.owner_email === user.email && <span className="absolute top-3 right-3 badge-pink glass"><Crown className="w-3 h-3" /> Owner</span>}
                 </div>
                 <div className="px-5 pb-5 -mt-8 relative">
                   <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl overflow-hidden mb-3" style={{ background: "var(--surface)", boxShadow: "0 0 0 4px var(--surface), var(--shadow-md)" }}>
-                    {c.icon_url ? <img src={c.icon_url} alt="" className="w-full h-full object-cover" /> : c.icon_emoji || "💬"}
+                    {c.icon_url ? <img loading="lazy" decoding="async" src={c.icon_url} alt="" className="w-full h-full object-cover" /> : c.icon_emoji || "💬"}
                   </div>
                   <h3 className="font-display text-xl font-semibold truncate" style={{ color: "var(--text-primary)" }}>{c.name}</h3>
                   <p className="text-sm line-clamp-2 mt-1 min-h-[2.5rem]" style={{ color: "var(--text-muted)" }}>{c.description || "A cozy place to hang out."}</p>

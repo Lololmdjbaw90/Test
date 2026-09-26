@@ -32,7 +32,7 @@ export default function AdminSiteSettings() {
         <span className="w-10 h-10 rounded-2xl flex items-center justify-center text-white" style={{ background: "var(--accent-grad)" }}><Megaphone className="w-5 h-5" /></span>
         <div>
           <p className="font-display text-lg font-semibold" style={{ color: "var(--text-primary)" }}>Site settings</p>
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>Applies to everyone on Mimi Locks.</p>
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>Applies to everyone on Sugerly.</p>
         </div>
       </div>
       <div>

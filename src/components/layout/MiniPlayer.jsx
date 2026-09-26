@@ -21,14 +21,13 @@ export default function MiniPlayer({ raised }) {
           aria-label="Music player"
         >
           <div className="flex items-center gap-3 p-3 pb-2">
-            <motion.div
-              animate={{ rotate: p.playing ? 360 : 0 }}
-              transition={p.playing ? { duration: 8, repeat: Infinity, ease: "linear" } : { duration: 0.4 }}
-              className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center text-white"
+            <div
+              data-paused={!p.playing}
+              className="anim-spin w-12 h-12 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center text-white"
               style={{ background: "var(--accent-grad)", boxShadow: "0 0 0 3px var(--surface), 0 0 0 4px var(--border-c)" }}
             >
-              {p.track.cover ? <img src={p.track.cover} alt="" className="w-full h-full object-cover" /> : <Music2 className="w-5 h-5" />}
-            </motion.div>
+              {p.track.cover ? <img loading="lazy" decoding="async" src={p.track.cover} alt="" className="w-full h-full object-cover" /> : <Music2 className="w-5 h-5" />}
+            </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{p.track.title}</p>
               <p className="text-xs truncate flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>

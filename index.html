@@ -3,12 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="Mimi Locks — a cozy home for artists: gallery, community feed, music, servers and messages." />
+    <meta name="description" content="Sugerly — a cozy home for artists: gallery, community feed, music, servers and messages." />
     <meta name="theme-color" content="#fbf7f6" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#110a0f" media="(prefers-color-scheme: dark)" />
     <link rel="manifest" href="/manifest.json" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/icons/favicon-64.png" sizes="64x64" type="image/png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -17,8 +17,8 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="format-detection" content="telephone=no" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Mimi Locks" />
-    <title>Mimi Locks</title>
+    <meta name="apple-mobile-web-app-title" content="Sugerly" />
+    <title>Sugerly</title>
     <script>
       // Apply the saved theme before first paint to avoid a light/dark flash.
       (function () {
@@ -33,13 +33,12 @@
     <style>
       #app-loading{position:fixed;inset:0;z-index:99999;background:#fbf7f6;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;font-family:'Plus Jakarta Sans',system-ui,sans-serif;transition:opacity .45s ease}
       .dark #app-loading{background:#110a0f}
-      #app-loading .logo{width:60px;height:60px;border-radius:20px;background:linear-gradient(135deg,#ee8fae,#d9577f);display:flex;align-items:center;justify-content:center;font:italic 700 30px Fraunces,Georgia,serif;color:#fff;box-shadow:0 14px 34px rgba(217,87,127,.35);animation:pulse 1.6s ease-in-out infinite}
-      #app-loading p{font-size:.78rem;color:#9c8a93;font-weight:600;letter-spacing:.12em;text-transform:uppercase;margin:0}
+      #app-loading img{height:72px;width:auto;animation:pulse 1.6s ease-in-out infinite}
       @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
     </style>
   </head>
   <body>
-    <div id="app-loading"><div class="logo">M</div><p>Mimi Locks</p></div>
+    <div id="app-loading"><img src="/brand/sugerly-logo-sm.webp" alt="Sugerly" /></div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

@@ -35,7 +35,7 @@ export default function ProfileCard({ target, onClose, user, member, roles = [],
       {email && (
         <div>
           <div className="h-24 relative" style={{ background: u.banner_url ? undefined : `linear-gradient(135deg, ${top?.color || "rgb(var(--accent-2-rgb))"}, rgb(var(--accent-rgb)))` }}>
-            {u.banner_url && <img src={u.banner_url} alt="" className="w-full h-full object-cover" />}
+            {u.banner_url && <img loading="lazy" decoding="async" src={u.banner_url} alt="" className="w-full h-full object-cover" />}
           </div>
           <div className="px-5 pb-5 -mt-11">
             <div className="flex items-end justify-between">

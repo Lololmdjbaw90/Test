@@ -6,6 +6,7 @@ import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { toast } from "@/lib/toast";
 import { displayName, isOnline, profileLink, timeAgo } from "@/lib/format";
+import { isSiteOwner } from "@/lib/admin";
 import { Page, PageHeader, EmptyState, CenterSpinner } from "@/components/common/Page";
 import { SearchInput, Segmented, ChipRow } from "@/components/common/Controls";
 import { useConfirm } from "@/components/common/Modal";
@@ -102,8 +103,10 @@ export default function AdminPanel() {
       load();
     } catch (e) { toast.error(e?.message || "Could not delete."); }
   };
+  const canManageAdmins = isSiteOwner(me.email);
   const setRole = async (u, role) => {
     if (u.email === me.email) { toast.error("You can't change your own role"); return; }
+    if (!canManageAdmins) { toast.error("Only the site owner can add or remove admins."); return; }
     if (!(await confirm({ title: role === "admin" ? `Make ${displayName(u)} an admin?` : `Remove admin from ${displayName(u)}?`, message: role === "admin" ? "Admins can moderate all content and change site settings." : undefined, confirmLabel: "Confirm", danger: role !== "admin" }))) return;
     try {
       await base44.entities.User.update(u.id, { role });
@@ -114,7 +117,10 @@ export default function AdminPanel() {
   };
 
   const q = search.trim().toLowerCase();
-  const users = data.User.filter((u) => !q || [u.display_name, u.email].some((f) => String(f || "").toLowerCase().includes(q)));
+  // Owners first, then admins, then everyone else.
+  const rank = (u) => (isSiteOwner(u.email) ? 0 : u.role === "admin" ? 1 : 2);
+  const users = data.User.filter((u) => !q || [u.display_name, u.email].some((f) => String(f || "").toLowerCase().includes(q))).sort((a, b) => rank(a) - rank(b));
+  const adminCount = data.User.filter((u) => rank(u) < 2).length;
   const contentFiltered = content.filter((c) => (contentType === "all" || c.label === contentType) && (!q || [c.title, c.owner].some((f) => String(f || "").toLowerCase().includes(q))));
   const weekAgo = Date.now() - 7 * 86400000;
   const newThisWeek = (list) => list.filter((x) => new Date(x.created_date).getTime() > weekAgo).length;
@@ -151,17 +157,20 @@ export default function AdminPanel() {
 
       {tab === "users" && (
         <div className="space-y-4">
-          <SearchInput value={search} onChange={setSearch} placeholder="Search users…" className="max-w-sm" />
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <SearchInput value={search} onChange={setSearch} placeholder="Search users…" className="sm:max-w-sm flex-1" />
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>{adminCount} admin{adminCount === 1 ? "" : "s"} · {canManageAdmins ? "Use Make admin / Remove admin to change who can moderate." : "Only the site owner can add or remove admins."}</p>
+          </div>
           <div className="card overflow-hidden">
             {users.map((u, i) => (
-              <motion.div key={u.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: Math.min(i, 15) * 0.02 }} className="flex items-center gap-3 p-4 border-b last:border-0" style={{ borderColor: "var(--border-c)" }}>
+              <motion.div key={u.id} className="enter-fade flex items-center gap-3 p-4 border-b last:border-0" style={{ "--d": `${Math.round((Math.min(i, 15) * 0.02) * 1000)}ms`, borderColor: "var(--border-c)" }}>
                 <Link to={profileLink(u.email)}><Avatar src={u.profile_picture} name={displayName(u)} size={40} online={isOnline(u)} /></Link>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{displayName(u)}</p>
                   <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>{u.email} · joined {timeAgo(u.created_date)}</p>
                 </div>
-                <span className="badge-pink hidden sm:inline-flex" style={u.role === "admin" ? undefined : { color: "var(--text-muted)", background: "var(--surface-2)", borderColor: "var(--border-c)" }}>{u.role || "user"}</span>
-                {u.email !== me.email && (u.role === "admin"
+                <span className="badge-pink hidden sm:inline-flex" style={rank(u) < 2 ? undefined : { color: "var(--text-muted)", background: "var(--surface-2)", borderColor: "var(--border-c)" }}>{isSiteOwner(u.email) ? "owner" : u.role || "user"}</span>
+                {canManageAdmins && u.email !== me.email && !isSiteOwner(u.email) && (u.role === "admin"
                   ? <button onClick={() => setRole(u, "user")} className="btn-ghost text-xs" title="Remove admin"><ShieldOff className="w-4 h-4" /><span className="hidden md:inline">Remove admin</span></button>
                   : <button onClick={() => setRole(u, "admin")} className="btn-ghost text-xs" title="Make admin"><ShieldCheck className="w-4 h-4" /><span className="hidden md:inline">Make admin</span></button>)}
               </motion.div>
@@ -180,7 +189,7 @@ export default function AdminPanel() {
             <div className="card overflow-hidden">
               {contentFiltered.slice(0, 200).map((c) => (
                 <div key={c.collection + c.id} className="flex items-center gap-3 p-3.5 border-b last:border-0" style={{ borderColor: "var(--border-c)" }}>
-                  {c.image ? <img src={c.image} alt="" className="w-11 h-11 rounded-xl object-cover flex-shrink-0" /> : <span className="w-11 h-11 rounded-xl flex-shrink-0" style={{ background: "var(--surface-2)" }} />}
+                  {c.image ? <img loading="lazy" decoding="async" src={c.image} alt="" className="w-11 h-11 rounded-xl object-cover flex-shrink-0" /> : <span className="w-11 h-11 rounded-xl flex-shrink-0" style={{ background: "var(--surface-2)" }} />}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>{c.title || "Untitled"}</p>
                     <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>{c.label} · {c.owner} · {timeAgo(c.date)}</p>
@@ -199,7 +208,7 @@ export default function AdminPanel() {
           {data.Community.map((c) => (
             <div key={c.id} className="card p-4">
               <div className="flex items-center gap-3">
-                <span className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl overflow-hidden flex-shrink-0" style={{ background: "var(--pink-soft)" }}>{c.icon_url ? <img src={c.icon_url} alt="" className="w-full h-full object-cover" /> : c.icon_emoji || "💬"}</span>
+                <span className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl overflow-hidden flex-shrink-0" style={{ background: "var(--pink-soft)" }}>{c.icon_url ? <img loading="lazy" decoding="async" src={c.icon_url} alt="" className="w-full h-full object-cover" /> : c.icon_emoji || "💬"}</span>
                 <div className="flex-1 min-w-0">
                   <Link to={`/CommunityChat?id=${c.id}`} className="text-sm font-bold truncate block hover:underline" style={{ color: "var(--text-primary)" }}>{c.name}</Link>
                   <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>{c.member_emails?.length || 0} members · owner {c.owner_display_name || c.owner_email}</p>

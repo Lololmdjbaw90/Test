@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>Mimi Locks</string>
+	<string>Sugerly</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -52,13 +52,13 @@
 		<string>arm64</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>Mimi Locks uses the camera for video calls and for photos you choose to share.</string>
+	<string>Sugerly uses the camera for video calls and for photos you choose to share.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Mimi Locks uses the microphone for voice channels and calls.</string>
+	<string>Sugerly uses the microphone for voice channels and calls.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Choose photos and artwork to post, send or use as your profile picture.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Save images from Mimi Locks to your photo library.</string>
+	<string>Save images from Sugerly to your photo library.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

@@ -15,7 +15,7 @@ export default function DropZone({ accept = "image/*", preview, onFile, onClear,
   if (preview) {
     return (
       <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="relative rounded-2xl overflow-hidden" style={{ background: "var(--surface-2)", border: "1px solid var(--border-c)" }}>
-        <img src={preview} alt="" className="w-full object-cover" style={{ maxHeight: height * 1.6 }} />
+        <img loading="lazy" decoding="async" src={preview} alt="" className="w-full object-cover" style={{ maxHeight: height * 1.6 }} />
         {onClear && (
           <button type="button" onClick={onClear} className="icon-btn glass absolute top-3 right-3" style={{ border: "1px solid var(--border-c)" }} aria-label="Remove image"><X className="w-4 h-4" /></button>
         )}

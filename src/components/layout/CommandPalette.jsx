@@ -86,7 +86,7 @@ export default function CommandPalette({ open, onClose, isDark, onToggleTheme })
     <>
       {(
         <motion.div className="fixed inset-0 z-[150] flex items-start justify-center p-3 pt-[10vh]" initial={{ opacity: 0 }} animate={{ opacity: open ? 1 : 0 }} transition={{ duration: 0.15 }} style={{ pointerEvents: open ? "auto" : "none" }}>
-          <div className="absolute inset-0 backdrop-blur-sm" style={{ background: "rgb(20 8 14 / 0.4)" }} onClick={onClose} />
+          <div className="absolute inset-0 can-hover:backdrop-blur-sm" style={{ background: "rgb(20 8 14 / 0.4)" }} onClick={onClose} />
           <motion.div
             initial={{ opacity: 0, y: -16, scale: 0.97 }}
             animate={open ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: -10, scale: 0.98 }}
@@ -126,7 +126,7 @@ export default function CommandPalette({ open, onClose, isDark, onToggleTheme })
                       >
                         {active && <span className="absolute inset-0 rounded-2xl" style={{ background: "var(--pink-soft)" }} />}
                         <span className="relative w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: item.swatch || "var(--surface-2)", color: "var(--accent-rose)" }}>
-                          {item.avatar ? <Avatar src={item.avatar.profile_picture} name={displayName(item.avatar)} size={36} /> : item.image ? <img src={item.image} alt="" className="w-full h-full object-cover" /> : item.emoji ? <span className="text-lg">{item.emoji}</span> : !item.swatch && <Icon className="w-4 h-4" />}
+                          {item.avatar ? <Avatar src={item.avatar.profile_picture} name={displayName(item.avatar)} size={36} /> : item.image ? <img loading="lazy" decoding="async" src={item.image} alt="" className="w-full h-full object-cover" /> : item.emoji ? <span className="text-lg">{item.emoji}</span> : !item.swatch && <Icon className="w-4 h-4" />}
                         </span>
                         <span className="relative flex-1 min-w-0">
                           <span className="block text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>{item.label}</span>

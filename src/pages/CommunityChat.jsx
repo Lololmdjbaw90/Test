@@ -117,9 +117,9 @@ export default function CommunityChatPage() {
     return (
       <div className="h-full overflow-y-auto flex items-center justify-center p-6 app-shell">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="card !rounded-[2rem] overflow-hidden max-w-md w-full text-center">
-          <div className="h-32 relative" style={{ background: "var(--accent-grad)" }}>{community.banner_url && <img src={community.banner_url} alt="" className="w-full h-full object-cover" />}</div>
+          <div className="h-32 relative" style={{ background: "var(--accent-grad)" }}>{community.banner_url && <img loading="lazy" decoding="async" src={community.banner_url} alt="" className="w-full h-full object-cover" />}</div>
           <div className="px-6 pb-7 -mt-10">
-            <div className="w-20 h-20 rounded-3xl mx-auto flex items-center justify-center text-4xl overflow-hidden" style={{ background: "var(--surface)", boxShadow: "0 0 0 5px var(--surface), var(--shadow-md)" }}>{community.icon_url ? <img src={community.icon_url} alt="" className="w-full h-full object-cover" /> : community.icon_emoji || "💬"}</div>
+            <div className="w-20 h-20 rounded-3xl mx-auto flex items-center justify-center text-4xl overflow-hidden" style={{ background: "var(--surface)", boxShadow: "0 0 0 5px var(--surface), var(--shadow-md)" }}>{community.icon_url ? <img loading="lazy" decoding="async" src={community.icon_url} alt="" className="w-full h-full object-cover" /> : community.icon_emoji || "💬"}</div>
             <h1 className="font-display text-3xl font-semibold mt-4" style={{ color: "var(--text-primary)" }}>{community.name}</h1>
             <p className="text-sm mt-2" style={{ color: "var(--text-muted)" }}>{community.description || "A cozy place to hang out."}</p>
             <div className="flex justify-center -space-x-2 mt-5">{members.slice(0, 6).map((m) => <Avatar key={m.user_email} src={m.user_profile_picture} name={m.user_display_name} size={34} style={{ boxShadow: "0 0 0 3px var(--surface)", borderRadius: 9999 }} />)}</div>
@@ -146,7 +146,7 @@ export default function CommunityChatPage() {
       <AnimatePresence>
         {showSidebar && (
           <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="md:hidden fixed inset-0 z-[80] backdrop-blur-sm" style={{ background: "rgb(20 8 14 / 0.4)" }} onClick={() => setShowSidebar(false)} />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="md:hidden fixed inset-0 z-[80]" style={{ background: "rgb(20 8 14 / 0.4)" }} onClick={() => setShowSidebar(false)} />
             <motion.div initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }} transition={{ type: "spring", damping: 32, stiffness: 320 }} className="md:hidden fixed left-0 top-0 bottom-0 w-[82vw] max-w-xs z-[90] flex safe-top safe-bottom" style={{ background: "var(--surface)" }}>{sidebar}</motion.div>
           </>
         )}

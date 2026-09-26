@@ -1,4 +1,4 @@
-# Deploy Mimi Locks as a real website
+# Deploy Sugerly as a real website
 
 ## Fast Firebase Hosting deploy
 

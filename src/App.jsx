@@ -9,7 +9,9 @@ import { Toaster } from "@/lib/toast";
 import { ConfirmProvider } from "@/components/common/Modal";
 import { CenterSpinner } from "@/components/common/Page";
 import Layout from "./Layout.jsx";
+import ErrorBoundary from "@/components/common/ErrorBoundary";
 import Login from "./pages/Login";
+import { BrandLogo } from "@/components/common/Brand";
 
 // Pages are code-split so the first load stays small.
 const Home = lazy(() => import("./pages/Home"));
@@ -33,7 +35,7 @@ const PageNotFound = lazy(() => import("./lib/PageNotFound"));
 function Splash() {
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 app-shell">
-      <div className="w-14 h-14 rounded-[18px] flex items-center justify-center text-white font-display italic text-2xl font-bold animate-pulse" style={{ background: "var(--accent-grad)", boxShadow: "var(--shadow-accent)" }}>M</div>
+      <BrandLogo height={72} className="animate-pulse" />
     </div>
   );
 }
@@ -49,6 +51,7 @@ const AppRoutes = () => {
   const { authChecked, isAuthenticated } = useAuth();
   if (!authChecked) return <Splash />;
   return (
+    <ErrorBoundary>
     <Suspense fallback={<Splash />}>
       <Routes>
         <Route path="/Login" element={isAuthenticated ? <Navigate to="/" replace /> : <Login />} />
@@ -75,6 +78,7 @@ const AppRoutes = () => {
         </Route>
       </Routes>
     </Suspense>
+    </ErrorBoundary>
   );
 };
 

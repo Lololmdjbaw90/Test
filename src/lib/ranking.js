@@ -27,6 +27,9 @@ const HIDDEN_KEY = "mimilocks:__hidden_posts";
 const hoursSince = (date, now = Date.now()) => Math.max(0, (now - new Date(date || now).getTime()) / HOUR);
 const log1 = (n) => Math.log1p(Math.max(0, n || 0));
 const cap = (n, max) => Math.min(max, n);
+// Stored data isn't always the expected shape (older records, manual edits).
+const arr = (v) => (Array.isArray(v) ? v : []);
+const lower = (v) => String(v ?? "").toLowerCase();
 
 // ---------- text helpers ----------
 export function hashtags(text) {
@@ -72,17 +75,17 @@ export const playHistory = () => readMap(PLAYS_KEY);
 // Built from what you follow, like, comment on and listen to.
 export function buildTaste({ me, friends = [], posts = [], comments = [], tracks = [], artworks = [] }) {
   const email = me?.email;
-  const following = new Set(me?.following || []);
+  const following = new Set(arr(me?.following));
   const friendSet = new Set(friends);
   const affinity = new Map(); // author email -> weight
   const bump = (who, w) => { if (who && who !== email) affinity.set(who, (affinity.get(who) || 0) + w); };
   const interest = new Map(); // term / hashtag -> weight
   const addInterest = (t, w) => interest.set(t, (interest.get(t) || 0) + w);
-  (me?.interests || []).forEach((i) => terms(i).forEach((t) => addInterest(t, 2)));
+  arr(me?.interests).forEach((i) => terms(i).forEach((t) => addInterest(t, 2)));
 
   following.forEach((e) => bump(e, 3));
   friendSet.forEach((e) => bump(e, 2.5));
-  const liked = (list) => list.filter((x) => (x.likes || []).includes(email));
+  const liked = (list) => list.filter((x) => arr(x.likes).includes(email));
   liked(posts).forEach((p) => { bump(p.user_email, 0.6); hashtags(postText(p)).forEach((h) => addInterest(h, 1.2)); terms(postText(p)).forEach((t) => addInterest(t, 0.25)); });
   liked(artworks).forEach((a) => { bump(a.user_email || a.created_by, 0.5); if (a.medium) addInterest(String(a.medium).toLowerCase(), 0.6); });
   liked(tracks).forEach((t) => bump(t.user_email, 0.5));
@@ -97,7 +100,7 @@ export function buildTaste({ me, friends = [], posts = [], comments = [], tracks
   const addTaste = (map, k, w) => { if (k) map.set(k, (map.get(k) || 0) + w); };
   liked(tracks).forEach((t) => { addTaste(genres, t.genre, 2); addTaste(moods, t.mood, 1.5); });
   Object.values(playHistory()).forEach((p) => { addTaste(genres, p.genre, cap(p.n, 5) * 0.5); addTaste(moods, p.mood, cap(p.n, 5) * 0.3); bump(p.author, cap(p.n, 5) * 0.2); });
-  (me?.interests || []).forEach((i) => { addTaste(genres, i, 1); });
+  arr(me?.interests).forEach((i) => { addTaste(genres, i, 1); });
 
   return { email, following, friends: friendSet, affinity, interest, genres, moods };
 }
@@ -183,7 +186,7 @@ export function trendingTags(posts, { now = Date.now(), limit = 8, days = 14 } =
   posts.forEach((p) => {
     const age = hoursSince(p.created_date, now);
     if (age > days * 24) return;
-    const w = (1 + log1((p.likes || []).length)) / (1 + age / 36);
+    const w = (1 + log1(arr(p.likes).length)) / (1 + age / 36);
     new Set(hashtags(postText(p))).forEach((t) => {
       const cur = tags.get(t) || { tag: t, score: 0, posts: 0 };
       cur.score += w;
@@ -199,24 +202,27 @@ export function trendingTags(posts, { now = Date.now(), limit = 8, days = 14 } =
 // `exclude` defaults to people you already follow.
 export function suggestPeople(users, { me, taste, posts = [], limit = 6, now = Date.now(), exclude } = {}) {
   if (!me) return [];
-  const following = new Set(me.following || []);
+  const following = new Set(arr(me.following));
   const skip = exclude || following;
-  const myInterests = new Set((me.interests || []).map((i) => i.toLowerCase()));
+  const myInterests = new Set(arr(me.interests).map(lower));
   const likesReceived = new Map();
   const lastPost = new Map();
   posts.forEach((p) => {
-    likesReceived.set(p.user_email, (likesReceived.get(p.user_email) || 0) + (p.likes || []).length);
+    likesReceived.set(p.user_email, (likesReceived.get(p.user_email) || 0) + arr(p.likes).length);
     const t = new Date(p.created_date).getTime();
     if (t > (lastPost.get(p.user_email) || 0)) lastPost.set(p.user_email, t);
   });
-  const followedBy = (u) => users.filter((x) => following.has(x.email) && (x.following || []).includes(u.email));
+  // People I follow, grouped by who they follow (for "Followed by …").
+  const followers = new Map();
+  users.forEach((x) => { if (following.has(x.email)) arr(x.following).forEach((e) => followers.set(e, [...(followers.get(e) || []), x])); });
+  const followedBy = (u) => followers.get(u.email) || [];
 
   return users
     .filter((u) => u.email && u.email !== me.email && !skip.has(u.email))
     .map((u) => {
-      const followsMe = (u.following || []).includes(me.email);
+      const followsMe = arr(u.following).includes(me.email);
       const mutual = followedBy(u);
-      const shared = (u.interests || []).filter((i) => myInterests.has(i.toLowerCase()));
+      const shared = arr(u.interests).filter((i) => myInterests.has(lower(i)));
       const popularity = log1(likesReceived.get(u.email) || 0);
       const active = lastPost.has(u.email) && now - lastPost.get(u.email) < 7 * 24 * HOUR;
       const online = u.last_seen && now - new Date(u.last_seen).getTime() < 5 * 60000;
@@ -229,7 +235,7 @@ export function suggestPeople(users, { me, taste, posts = [], limit = 6, now = D
       else if (mutual.length) reason = `Followed by ${mutual[0].display_name || mutual[0].email.split("@")[0]}${mutual.length > 1 ? ` +${mutual.length - 1}` : ""}`;
       else if (shared.length) reason = `Also into ${shared.slice(0, 2).join(", ")}`;
       else if (popularity > 1.5) reason = "Popular creator";
-      else if (isNew) reason = "New to Mimi Locks";
+      else if (isNew) reason = "New to Sugerly";
       else reason = active ? "Recently active" : "Suggested for you";
       return { user: u, score, reason };
     })
@@ -242,7 +248,7 @@ export function suggestServers(communities, { me, taste, limit = 4, now = Date.n
   if (!me) return [];
   const circle = new Set([...(taste?.following || []), ...(taste?.friends || [])]);
   return communities
-    .filter((c) => includeJoined || !(c.member_emails || []).includes(me.email))
+    .filter((c) => includeJoined || !arr(c.member_emails).includes(me.email))
     .map((c) => {
       const members = c.member_emails || [];
       const friendsIn = members.filter((e) => circle.has(e));
@@ -295,7 +301,7 @@ export function rankTracks(tracks, { taste, users = {}, now = Date.now() } = {})
 export function trendingTracks(tracks, { now = Date.now() } = {}) {
   return tracks
     .filter((t) => t.music_url)
-    .map((t) => ({ track: t, score: (log1((t.likes || []).length * 2 + (t.plays || 0)) + 0.2) / (1 + hoursSince(t.created_date, now) / 72) }))
+    .map((t) => ({ track: t, score: (log1(arr(t.likes).length * 2 + (t.plays || 0)) + 0.2) / (1 + hoursSince(t.created_date, now) / 72) }))
     .sort((a, b) => b.score - a.score)
     .map((x) => x.track);
 }

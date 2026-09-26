@@ -49,7 +49,7 @@ export default function VoiceChannelView({ channel, me, access = { connect: true
         {inRoom.length > 0 && (
           <div className="flex flex-wrap justify-center gap-3 max-w-md">
             {inRoom.map((p, i) => (
-              <motion.div key={p.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }} className="flex flex-col items-center gap-1.5 w-20">
+              <motion.div key={p.id} className="enter flex flex-col items-center gap-1.5 w-20" style={{ "--d": `${Math.round((i * 0.04) * 1000)}ms`, "--enter-y": "10px" }}>
                 <span className="relative flex">
                   <Avatar src={p.user?.profile_picture} name={p.user?.display_name} size={56} />
                   {p.muted && <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "#140f17" }}><MicOff className="w-3.5 h-3.5 text-[#ff8b8b]" /></span>}

@@ -1,4 +1,4 @@
-# Mimi Locks
+# Sugerly
 
 A cozy home for artists: a curated gallery, a community feed, music sharing,
 Discord-style servers with text + voice channels, direct messages and group
@@ -21,6 +21,14 @@ npm run dev:demo     # offline demo with sample data, no Firebase needed
 
 Then open http://localhost:3000.
 Demo login (offline mode only): **admin@mimilocks.local / admin123**.
+
+## Admins
+
+**paologionfriddo90@gmail.com** is the site owner: always an admin, and the
+only account that can make or remove admins (Admin panel → Users → Make admin /
+Remove admin). Other admins can moderate but can't change anyone's role or edit
+the owner. To change the owner, edit `SITE_OWNERS` in `src/lib/admin.js` **and**
+`siteOwners()` in `firestore.rules`, then redeploy the rules.
 
 ## iPhone, iPad and installable app
 

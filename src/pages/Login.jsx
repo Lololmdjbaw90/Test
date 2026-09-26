@@ -6,6 +6,7 @@ import { base44, backendMode } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { Segmented } from "@/components/common/Controls";
 import { toast } from "@/lib/toast";
+import { BrandLogo } from "@/components/common/Brand";
 
 const TILES = [
   { x: "8%", y: "12%", r: -8, w: 150, h: 190, g: "linear-gradient(160deg,#ffd1dc,#ee8fae)", icon: Palette, d: 0 },
@@ -22,16 +23,11 @@ function ArtCollage() {
       <div className="orb orb-b w-[28rem] h-[28rem] bottom-0 right-0" />
       <div className="orb orb-c w-72 h-72 top-1/3 left-1/3" />
       {TILES.map((t, i) => (
-        <motion.div
-          key={i}
-          className="absolute rounded-[28px] flex items-end p-4 text-white"
-          style={{ left: t.x, top: t.y, width: t.w, height: t.h, background: t.g, boxShadow: "0 30px 60px rgb(42 22 32 / 0.18)" }}
-          initial={{ opacity: 0, y: 40, rotate: t.r - 6 }}
-          animate={{ opacity: 1, y: [0, -12, 0], rotate: t.r }}
-          transition={{ opacity: { delay: t.d * 0.25, duration: 0.6 }, rotate: { delay: t.d * 0.25, type: "spring", stiffness: 80 }, y: { delay: t.d, duration: 6 + i, repeat: Infinity, ease: "easeInOut" } }}
-        >
-          <t.icon className="w-6 h-6 opacity-90" />
-        </motion.div>
+        <div key={i} className="absolute enter-fade" style={{ left: t.x, top: t.y, width: t.w, height: t.h, rotate: `${t.r}deg`, "--d": `${t.d * 250}ms`, animationDuration: "600ms" }}>
+          <div className="anim-bob w-full h-full rounded-[28px] flex items-end p-4 text-white" style={{ background: t.g, boxShadow: "0 30px 60px rgb(42 22 32 / 0.18)", animationDuration: `${6 + i}s` }}>
+            <t.icon className="w-6 h-6 opacity-90" />
+          </div>
+        </div>
       ))}
       <div className="relative mt-auto p-12 max-w-lg">
         <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="eyebrow mb-3">A cozy corner of the internet</motion.p>
@@ -97,8 +93,7 @@ export default function LoginPage() {
         <div className="orb orb-a w-72 h-72 -top-10 -right-10 lg:hidden" />
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 200, damping: 24 }} className="relative w-full max-w-md">
           <div className="flex items-center gap-3 mb-8">
-            <motion.div initial={{ rotate: -20, scale: 0.6 }} animate={{ rotate: 0, scale: 1 }} transition={{ type: "spring", stiffness: 300, damping: 14 }} className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-display italic text-2xl font-bold" style={{ background: "var(--accent-grad)", boxShadow: "var(--shadow-accent)" }}>M</motion.div>
-            <span className="font-display text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>Mimi Locks</span>
+            <motion.div initial={{ rotate: -8, scale: 0.7, opacity: 0 }} animate={{ rotate: 0, scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 300, damping: 16 }}><BrandLogo height={64} /></motion.div>
           </div>
 
           <AnimatePresence mode="wait">

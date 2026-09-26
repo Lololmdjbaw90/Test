@@ -1,5 +1,24 @@
 # Changes
 
+## Sugerly logo, smoother app, admin owner (this update)
+
+### New
+- **Sugerly branding**: the new logo in the sidebar, top bar, login, onboarding and loading screens, plus new app icons, favicons and iOS splash screens. The app is now called Sugerly everywhere people see it (internal ids like the iOS bundle id are unchanged so existing installs and saved data keep working).
+- **Site owner**: paologionfriddo90@gmail.com is always an admin and is the only one who can add or remove admins (Admin panel → Users). Enforced in the Firestore rules too.
+- The profile **Saved** tab now shows saved Community posts as well as saved gallery pieces.
+
+### Faster
+- Firebase lists now use one live listener instead of a fetch plus a listener (half the reads, no re-sorting for every document), and writes no longer re-read your profile first.
+- Page, list and looping animations run in CSS on the GPU instead of JavaScript; the sidebar highlight no longer measures the page on every navigation.
+- No full-screen blur, blend modes or blurred floating shapes on phones and tablets; the music equalizer no longer re-lays out the page every frame; images load lazily and decode off the main thread.
+- In a benchmark with the CPU slowed 4× (like a tablet), pages do about half as much work while idle and 30–70% less while scrolling.
+
+### Fixed
+- **Friends** could sit on the loading skeleton forever: friends and requests now show without waiting for the whole member list, lists stop "loading" after 10 seconds at most, and the suggestions tolerate unusual profile data.
+- A crash inside one page now shows a "Try again / Reload" screen instead of a blank app.
+- Gallery cards show the like button and title on touch screens (they only appeared on mouse hover before).
+
+
 ## Server roles & permissions, smoother animations, .ipa builds (this update)
 
 ### New

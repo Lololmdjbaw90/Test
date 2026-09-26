@@ -35,7 +35,7 @@ function Overview({ community, onSaved }) {
   return (
     <div className="space-y-4">
       <label className="relative block h-28 rounded-3xl overflow-hidden cursor-pointer group" style={{ background: "var(--accent-grad)" }}>
-        {bannerPreview && <img src={bannerPreview} alt="" className="w-full h-full object-cover" />}
+        {bannerPreview && <img loading="lazy" decoding="async" src={bannerPreview} alt="" className="w-full h-full object-cover" />}
         <span className="absolute inset-0 flex items-center justify-center gap-2 text-white text-sm font-semibold opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: "rgb(20 8 14 / 0.4)" }}><ImagePlus className="w-4 h-4" /> Change banner</span>
         <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setBanner(f); setBannerPreview(URL.createObjectURL(f)); } e.target.value = ""; }} />
       </label>

@@ -22,8 +22,8 @@ export default function PostViewer({ post, onClose, liked, likeCount, onLike, on
         <div className={`flex flex-col ${post.image_url ? "lg:flex-row lg:h-[80vh]" : ""}`}>
           {post.image_url && (
             <div className="relative lg:flex-1 flex items-center justify-center overflow-hidden min-h-[40vh] lg:min-h-0" style={{ background: "#140a10" }}>
-              <img src={post.image_url} alt="" aria-hidden="true" className="absolute inset-0 w-full h-full object-cover opacity-30 blur-2xl scale-110" />
-              <img src={post.image_url} alt={post.title || ""} className="relative max-w-full max-h-[40vh] lg:max-h-[76vh] object-contain rounded-xl" />
+              <img loading="lazy" decoding="async" src={post.image_url} alt="" aria-hidden="true" className="absolute inset-0 w-full h-full object-cover opacity-30 blur-2xl scale-110" />
+              <img loading="lazy" decoding="async" src={post.image_url} alt={post.title || ""} className="relative max-w-full max-h-[40vh] lg:max-h-[76vh] object-contain rounded-xl" />
             </div>
           )}
           <div className={`${post.image_url ? "lg:w-[400px]" : ""} p-5 sm:p-6 space-y-4 overflow-y-auto scroll`}>

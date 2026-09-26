@@ -20,11 +20,9 @@ export default function ArtworkCard({ artwork, index = 0, onOpen, liked, likeCou
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 24, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ delay: Math.min(index, 12) * 0.035, type: "spring", stiffness: 260, damping: 26 }}
-      style={{ perspective: 900 }}
+      className="enter"
+      style={{ perspective: 900, "--d": `${Math.min(index, 12) * 35}ms` }}
     >
       <motion.div
         role="button"
@@ -39,7 +37,7 @@ export default function ArtworkCard({ artwork, index = 0, onOpen, liked, likeCou
       >
         <div className="relative overflow-hidden" style={{ background: "var(--surface-2)" }}>
           <img src={artwork.image_url} alt={artwork.title} loading="lazy" className="w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.06]" style={{ minHeight: 120 }} />
-          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" style={{ background: "linear-gradient(to top, rgb(20 8 14 / 0.7), transparent 50%)" }} />
+          <div className="absolute inset-0 can-hover:opacity-0 can-hover:group-hover:opacity-100 transition-opacity duration-300" style={{ background: "linear-gradient(to top, rgb(20 8 14 / 0.7), transparent 50%)" }} />
           <div className="absolute top-3 left-3 flex gap-1.5">
             {artwork.featured && <span className="badge-pink glass !text-[10px]"><Star className="w-3 h-3 fill-current" /> Featured</span>}
             {artwork.music_url && <span className="badge-pink glass !text-[10px]"><Music className="w-3 h-3" /></span>}
@@ -53,7 +51,7 @@ export default function ArtworkCard({ artwork, index = 0, onOpen, liked, likeCou
           >
             <Bookmark className={`w-4 h-4 ${saved ? "fill-current" : ""}`} />
           </button>
-          <div className="absolute bottom-0 inset-x-0 p-3 flex items-end gap-2 translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
+          <div className="absolute bottom-0 inset-x-0 p-3 flex items-end gap-2 transition-all duration-300 can-hover:translate-y-2 can-hover:opacity-0 can-hover:group-hover:translate-y-0 can-hover:group-hover:opacity-100">
             <div className="flex-1 min-w-0 text-white">
               <p className="font-display text-base font-semibold truncate">{artwork.title}</p>
               {artwork.user_display_name && <p className="text-[11px] opacity-80 truncate">by {artwork.user_display_name}</p>}

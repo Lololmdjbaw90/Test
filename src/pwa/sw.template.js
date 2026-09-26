@@ -1,4 +1,4 @@
-/* Mimi Locks service worker (generated at build time from src/pwa/sw.template.js).
+/* Sugerly service worker (generated at build time from src/pwa/sw.template.js).
  *  - The app shell and every built file are precached, so the installed app
  *    opens instantly and even offline.
  *  - Pages: network first, falling back to the cached shell when offline.

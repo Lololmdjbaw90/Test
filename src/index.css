@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* -----------------------------------------------------------------------------
-   Mimi Locks design tokens
+   Sugerly design tokens
    - Colors are CSS variables so every component (inline styles included)
      re-themes instantly for dark mode and for the user's accent choice.
    - Theme lives on <html>: class "dark" + data-accent="rose|lavender|mint|peach|sky".
@@ -131,8 +131,8 @@
 
   .glass {
     background: var(--surface-glass);
-    backdrop-filter: saturate(160%) blur(18px);
-    -webkit-backdrop-filter: saturate(160%) blur(18px);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
   }
 
   .card, .card-sm {
@@ -311,22 +311,28 @@
   }
 
   /* floating decorative blobs */
-  .orb { position: absolute; border-radius: 9999px; filter: blur(60px); opacity: 0.55; pointer-events: none; animation: float 16s ease-in-out infinite; }
-  .orb-a { background: rgb(var(--accent-2-rgb) / 0.55); }
-  .orb-b { background: rgb(var(--accent-rgb) / 0.35); animation-delay: -6s; animation-duration: 20s; }
-  .orb-c { background: rgb(167 139 250 / 0.35); animation-delay: -11s; animation-duration: 24s; }
+  /* A soft radial gradient looks the same as a blurred circle but costs
+     nothing to draw; the drift only runs where there's a mouse (desktop). */
+  .orb { position: absolute; border-radius: 9999px; opacity: 0.55; pointer-events: none; --orb: rgb(var(--accent-2-rgb) / 0.55); background: radial-gradient(closest-side, var(--orb), transparent); }
+  @media (hover: hover) and (pointer: fine) { .orb { animation: float 16s ease-in-out infinite; will-change: transform; } }
+  .orb-a { --orb: rgb(var(--accent-2-rgb) / 0.55); }
+  .orb-b { --orb: rgb(var(--accent-rgb) / 0.35); animation-delay: -6s; animation-duration: 20s; }
+  .orb-c { --orb: rgb(167 139 250 / 0.35); animation-delay: -11s; animation-duration: 24s; }
 
   .grain::before {
     content: "";
-    position: absolute; inset: 0; pointer-events: none; opacity: 0.35; mix-blend-mode: soft-light;
+    position: absolute; inset: 0; pointer-events: none; opacity: 0.35; mix-blend-mode: soft-light; display: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
   }
+  /* The soft-light blend re-mixes the whole block each frame something moves
+     inside it, so the grain texture is a desktop-only touch. */
+  @media (hover: hover) and (pointer: fine) { .grain::before { display: block; } }
 
   .equalizer { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; }
-  .equalizer span { width: 3px; border-radius: 2px; background: currentColor; animation: eq 900ms ease-in-out infinite; }
+  .equalizer span { width: 3px; height: 100%; border-radius: 2px; background: currentColor; transform-origin: bottom; animation: eq 900ms ease-in-out infinite; }
   .equalizer span:nth-child(2) { animation-delay: -300ms; }
   .equalizer span:nth-child(3) { animation-delay: -600ms; }
-  .equalizer.paused span { animation-play-state: paused; height: 30%; }
+  .equalizer.paused span { animation: none; transform: scaleY(0.3); }
 
   .mention { color: var(--accent-rose); font-weight: 700; background: var(--pink-soft); border-radius: 0.35rem; padding: 0 0.2rem; }
 
@@ -382,6 +388,20 @@
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .text-balance { text-wrap: balance; }
   .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+  /* Entrance and looping animations in CSS: the GPU runs them without the
+     main thread, so they stay smooth while a page is still being built.
+     Stagger with style={{ "--d": "80ms" }}. */
+  .enter { animation: enter-up 420ms cubic-bezier(.2,.8,.2,1) backwards; animation-delay: var(--d, 0ms); }
+  .enter-side { animation: enter-side 380ms cubic-bezier(.2,.8,.2,1) backwards; animation-delay: var(--d, 0ms); }
+  .enter-pop { animation: enter-pop 360ms cubic-bezier(.2,.8,.2,1) backwards; animation-delay: var(--d, 0ms); }
+  .enter-fade { animation: fade-in 220ms ease backwards; animation-delay: var(--d, 0ms); }
+  .page-enter { animation: enter-up 300ms cubic-bezier(.2,.8,.2,1) backwards; --enter-y: 10px; }
+  .anim-bob { animation: bob 3.2s ease-in-out infinite; }
+  .anim-wiggle { animation: wiggle 4s ease-in-out infinite; }
+  .anim-spin { animation: spin 8s linear infinite; }
+  .anim-spin[data-paused="true"] { animation-play-state: paused; }
+  .anim-sweep { animation: sweep 6.8s ease-in-out infinite; }
 }
 
 @keyframes shimmer { 0% { background-position: 120% 0; } 100% { background-position: -120% 0; } }
@@ -391,8 +411,15 @@
   66% { transform: translate3d(-25px, 20px, 0) scale(0.95); }
 }
 @keyframes ripple { 0% { transform: scale(1); opacity: 0.7; } 100% { transform: scale(1.9); opacity: 0; } }
-@keyframes eq { 0%, 100% { height: 25%; } 50% { height: 100%; } }
+@keyframes eq { 0%, 100% { transform: scaleY(0.25); } 50% { transform: scaleY(1); } }
 @keyframes spin { to { transform: rotate(360deg); } }
+@keyframes enter-up { from { opacity: 0; transform: translate3d(0, var(--enter-y, 14px), 0); } }
+@keyframes enter-side { from { opacity: 0; transform: translate3d(var(--enter-x, -12px), 0, 0); } }
+@keyframes enter-pop { from { opacity: 0; transform: scale(0.94); } }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes bob { 0%, 100% { transform: translate3d(0, 0, 0); } 50% { transform: translate3d(0, -6px, 0); } }
+@keyframes wiggle { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(8deg); } 75% { transform: rotate(-8deg); } }
+@keyframes sweep { 0% { transform: translate3d(-100%, 0, 0); } 45%, 100% { transform: translate3d(200%, 0, 0); } }
 @keyframes gradient-pan { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
 
 html, body, #root { height: 100%; }

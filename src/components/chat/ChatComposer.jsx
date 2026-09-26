@@ -99,7 +99,7 @@ export default function ChatComposer({ placeholder, onSend, editing, onCancelEdi
       <AnimatePresence>
         {preview && (
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="relative w-fit mb-2">
-            <img src={preview} alt="" className="h-24 rounded-2xl object-cover" style={{ border: "1px solid var(--border-c)" }} />
+            <img loading="lazy" decoding="async" src={preview} alt="" className="h-24 rounded-2xl object-cover" style={{ border: "1px solid var(--border-c)" }} />
             <button type="button" onClick={clearFile} className="absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center text-white" style={{ background: "var(--text-primary)" }} aria-label="Remove image"><X className="w-3.5 h-3.5" /></button>
           </motion.div>
         )}

@@ -1,6 +1,6 @@
-# Mimi Locks on iPhone and iPad
+# Sugerly on iPhone and iPad
 
-There are two ways to get Mimi Locks onto an iPhone or iPad. Both use the same
+There are two ways to get Sugerly onto an iPhone or iPad. Both use the same
 code as the website, so every feature (feed, music, servers, DMs, voice and
 video calls) works in all of them.
 
@@ -22,7 +22,7 @@ video calls) works in all of them.
 2. On the iPhone or iPad, open the site in **Safari**.
 3. Tap **Share** → **Add to Home Screen** → **Add**.
 
-Mimi Locks now opens from its own icon, full screen, without Safari's bars.
+Sugerly now opens from its own icon, full screen, without Safari's bars.
 The site also shows these steps as a small tip on phones and tablets, and
 under **Settings → Get the app**. On Android and in desktop Chrome / Edge
 there's a real **Install** button instead.
@@ -39,7 +39,7 @@ The `ios/` folder is a ready Xcode project (iPhone + iPad, iOS 15+) that wraps
 the built site with [Capacitor](https://capacitorjs.com). It's already set up
 with:
 
-- App name **Mimi Locks**, bundle id `com.mimilocks.app` (change it in
+- App name **Sugerly**, bundle id `com.mimilocks.app` (change it in
   `capacitor.config.json` **and** in Xcode → Signing & Capabilities before
   publishing — it must be unique to you).
 - App icon and light/dark launch screens.
@@ -91,8 +91,8 @@ app on one of GitHub's Macs and hands you an `.ipa` file:
    It runs automatically when the iOS project changes; you can also press
    **Run workflow** (that button appears once the workflow is on the default
    branch).
-2. Open the finished run and download **MimiLocks-ipa** from **Artifacts**
-   (unzip it to get `MimiLocks-unsigned.ipa`).
+2. Open the finished run and download **Sugerly-ipa** from **Artifacts**
+   (unzip it to get `Sugerly-unsigned.ipa`).
 3. iPhones and iPads only install apps signed for them, so sign-and-install it
    from your computer with **[Sideloadly](https://sideloadly.io)** (Windows or
    Mac) or **[AltStore](https://altstore.io)**:
@@ -119,7 +119,7 @@ Private repositories use GitHub Actions minutes for this (Mac minutes count
    through TestFlight first.
 
 Apple checks that social apps can handle bad behaviour, and that people
-can delete their account. Mimi Locks covers these — mention them in your
+can delete their account. Sugerly covers these — mention them in your
 review notes:
 
 - **Report** any post (⋯ menu) or person (⋯ on their profile). Reports go to

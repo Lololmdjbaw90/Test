@@ -13,7 +13,8 @@ function serviceWorker() {
     generateBundle(_, bundle) {
       const built = Object.keys(bundle).filter((f) => /\.(js|css|woff2?|png|svg)$/.test(f)).map((f) => `/${f}`);
       const icons = readdirSync(path.resolve(__dirname, "public/icons")).map((f) => `/icons/${f}`);
-      const precache = ["/", "/index.html", "/manifest.json", "/favicon.svg", ...icons, ...built];
+      const brand = readdirSync(path.resolve(__dirname, "public/brand")).map((f) => `/brand/${f}`);
+      const precache = ["/", "/index.html", "/manifest.json", ...icons, ...brand, ...built];
       const version = createHash("sha1").update(precache.join("|")).digest("hex").slice(0, 12);
       const source = readFileSync(path.resolve(__dirname, "src/pwa/sw.template.js"), "utf8")
         .replace("__VERSION__", version)

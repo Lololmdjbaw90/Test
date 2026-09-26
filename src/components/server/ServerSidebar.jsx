@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { ArrowLeft, ChevronDown, EyeOff, Hash, Link2, Lock, LogOut, MicOff, Plus, Settings, Users, Video, Volume2 } from "lucide-react";
 import { VOICE_STALE_MS } from "@/lib/voice";
 import { useVoice } from "@/components/voice/useVoice";
@@ -71,12 +71,12 @@ export default function ServerSidebar({ community, channels, activeChannel, perm
     <div className="flex flex-col h-full w-full glass" style={{ borderRight: "1px solid var(--border-c)" }}>
       <div className="relative flex-shrink-0">
         <div className="h-24 relative overflow-hidden" style={{ background: "var(--accent-grad)" }}>
-          {community.banner_url && <img src={community.banner_url} alt="" className="w-full h-full object-cover" />}
+          {community.banner_url && <img loading="lazy" decoding="async" src={community.banner_url} alt="" className="w-full h-full object-cover" />}
           <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgb(20 8 14 / 0.6), transparent)" }} />
           <Link to="/Communities" className="absolute top-2.5 left-2.5 icon-btn glass w-8 h-8" aria-label="Back to servers"><ArrowLeft className="w-4 h-4" /></Link>
         </div>
         <button ref={menuRef} onClick={() => setMenu((v) => !v)} className="absolute bottom-0 inset-x-0 flex items-center gap-2 px-3 py-2.5 text-white text-left" aria-expanded={menu}>
-          <span className="w-8 h-8 rounded-xl flex items-center justify-center text-lg overflow-hidden flex-shrink-0" style={{ background: "rgb(255 255 255 / 0.25)" }}>{community.icon_url ? <img src={community.icon_url} alt="" className="w-full h-full object-cover" /> : community.icon_emoji || "💬"}</span>
+          <span className="w-8 h-8 rounded-xl flex items-center justify-center text-lg overflow-hidden flex-shrink-0" style={{ background: "rgb(255 255 255 / 0.25)" }}>{community.icon_url ? <img loading="lazy" decoding="async" src={community.icon_url} alt="" className="w-full h-full object-cover" /> : community.icon_emoji || "💬"}</span>
           <span className="flex-1 min-w-0 font-display text-lg font-semibold truncate drop-shadow">{community.name}</span>
           <motion.span animate={{ rotate: menu ? 180 : 0 }}><ChevronDown className="w-4 h-4" /></motion.span>
         </button>

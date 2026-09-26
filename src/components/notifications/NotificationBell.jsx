@@ -22,7 +22,9 @@ export default function NotificationBell({ me }) {
     sort: "-created_date",
     limit: 50,
     enabled: !!me?.email,
-    onEvent: (ev) => { if (ev.type === "create" && ev.data?.message && !blocked.has(ev.data.from_email)) toast(ev.data.message, { icon: <Bell className="w-5 h-5" /> }); },
+    // Only brand-new ones: an older notification can also slide into the
+    // 50 shown here when a newer one is deleted.
+    onEvent: (ev) => { if (ev.type === "create" && ev.data?.message && !blocked.has(ev.data.from_email) && Date.now() - new Date(ev.data.created_date || 0).getTime() < 600000) toast(ev.data.message, { icon: <Bell className="w-5 h-5" /> }); },
   });
   const notifications = allNotifications.filter((n) => !blocked.has(n.from_email));
 

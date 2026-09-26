@@ -214,7 +214,7 @@ export default function DirectMessagesPage() {
           const title = c.type === "group" ? c.group.name : displayName(c.otherUser);
           const preview = c.last ? `${c.last.user_email === me.email ? "You: " : c.type === "group" ? `${c.last.user_display_name?.split(" ")[0]}: ` : ""}${messagePreview(c.last, me.email)}` : c.type === "group" ? `${c.group.member_emails.length} members` : "Say hi 👋";
           return (
-            <motion.button key={c.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(i, 10) * 0.03 }} onClick={() => open(c)} className="relative w-full flex items-center gap-3 p-2.5 rounded-2xl text-left transition-colors hover:bg-[var(--surface-2)]">
+            <motion.button key={c.id} onClick={() => open(c)} className="enter-side relative w-full flex items-center gap-3 p-2.5 rounded-2xl text-left transition-colors hover:bg-[var(--surface-2)]" style={{ "--d": `${Math.round((Math.min(i, 10) * 0.03) * 1000)}ms`, "--enter-x": "-10px" }}>
               {isActive && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 rounded-2xl" style={{ background: "var(--pink-soft)", boxShadow: "inset 0 0 0 1px rgb(var(--accent-rgb) / 0.2)" }} transition={{ type: "spring", stiffness: 420, damping: 34 }} />}
               <span className="relative">{c.type === "group" ? <GroupIcon group={c.group} /> : <Avatar src={c.otherUser.profile_picture} name={title} size={44} online={isOnline(c.otherUser)} />}</span>
               <span className="relative flex-1 min-w-0">
@@ -280,7 +280,7 @@ export default function DirectMessagesPage() {
     </div>
   ) : (
     <div className="h-full flex flex-col items-center justify-center text-center gap-4 p-8">
-      <motion.div animate={{ y: [0, -8, 0], rotate: [0, -4, 4, 0] }} transition={{ duration: 4, repeat: Infinity }} className="w-20 h-20 rounded-[1.75rem] flex items-center justify-center text-white" style={{ background: "var(--accent-grad)", boxShadow: "var(--shadow-accent)" }}><MessageSquare className="w-9 h-9" /></motion.div>
+      <div className="anim-bob w-20 h-20 rounded-[1.75rem] flex items-center justify-center text-white" style={{ animationDuration: "4s", background: "var(--accent-grad)", boxShadow: "var(--shadow-accent)" }}><MessageSquare className="w-9 h-9" /></div>
       <p className="font-display text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>Your messages</p>
       <p className="text-sm max-w-xs" style={{ color: "var(--text-muted)" }}>Pick a conversation, or start a group with a few friends.</p>
       <button onClick={() => setShowNewGroup(true)} className="btn"><Plus className="w-4 h-4" /> New group</button>

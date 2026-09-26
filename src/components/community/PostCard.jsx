@@ -17,12 +17,10 @@ export default function PostCard({ post, index = 0, onOpen, liked, likeCount, on
   const bg = TEXT_BACKGROUNDS[(post.id || "").charCodeAt(0) % TEXT_BACKGROUNDS.length || 0];
   return (
     <motion.article
-      initial={{ opacity: 0, y: 24 }}
-      animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96 }}
-      transition={{ delay: Math.min(index, 12) * 0.04, type: "spring", stiffness: 260, damping: 26 }}
       whileHover={{ y: -4 }}
-      className="card-sm !rounded-3xl overflow-hidden group cursor-pointer"
+      className="enter card-sm !rounded-3xl overflow-hidden group cursor-pointer"
+      style={{ "--d": `${Math.min(index, 12) * 40}ms` }}
       onClick={onOpen}
       role="button"
       tabIndex={0}

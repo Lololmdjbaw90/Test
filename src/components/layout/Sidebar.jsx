@@ -9,16 +9,17 @@ import { ADMIN_SECTION, NAV_SECTIONS, isActivePath } from "./nav";
 import { useAuth } from "@/lib/AuthContext";
 import { displayName, profileLink } from "@/lib/format";
 import { getLevelInfo } from "@/components/profile/LevelBadge";
+import { BrandLogo, BrandMark } from "@/components/common/Brand";
 
-export function Logo({ collapsed }) {
+export function Logo({ collapsed, bar }) {
   return (
-    <Link to="/" className="flex items-center gap-2.5 group" aria-label="Mimi Locks home">
-      <motion.span whileHover={{ rotate: -8, scale: 1.06 }} transition={{ type: "spring", stiffness: 400, damping: 12 }} className="w-10 h-10 rounded-[14px] flex items-center justify-center text-white flex-shrink-0 font-display italic text-xl font-bold" style={{ background: "var(--accent-grad)", boxShadow: "var(--shadow-accent)" }}>M</motion.span>
-      {!collapsed && (
-        <span className="leading-none">
-          <span className="block font-display text-lg font-semibold" style={{ color: "var(--text-primary)" }}>Mimi Locks</span>
-          <span className="block text-[10px] font-semibold tracking-[0.18em] uppercase mt-1" style={{ color: "var(--text-muted)" }}>art · music · friends</span>
-        </span>
+    <Link to="/" className="flex items-center group" aria-label="Sugerly home">
+      {bar ? (
+        <BrandLogo height={40} />
+      ) : collapsed ? (
+        <BrandMark size={44} className="transition-transform duration-300 can-hover:group-hover:-rotate-6" />
+      ) : (
+        <BrandLogo height={52} className="-ml-1.5 transition-transform duration-300 can-hover:group-hover:-rotate-2" />
       )}
     </Link>
   );
@@ -33,7 +34,7 @@ function NavItem({ item, active, collapsed, badge }) {
       className={`relative flex items-center gap-3 rounded-2xl text-sm font-semibold transition-colors ${collapsed ? "justify-center h-11 w-11 mx-auto" : "px-3 h-11"}`}
       style={{ color: active ? "var(--accent-rose)" : "var(--text-secondary)" }}
     >
-      {active && <motion.span layoutId="nav-active" className="absolute inset-0 rounded-2xl" style={{ background: "var(--pink-soft)", boxShadow: "inset 0 0 0 1px rgb(var(--accent-rgb) / 0.18)" }} transition={{ type: "spring", stiffness: 420, damping: 34 }} />}
+      {active && <span className="absolute inset-0 rounded-2xl enter-fade" style={{ background: "var(--pink-soft)", boxShadow: "inset 0 0 0 1px rgb(var(--accent-rgb) / 0.18)" }} />}
       {!active && <span className="absolute inset-0 rounded-2xl opacity-0 hover:opacity-100 transition-opacity" style={{ background: "var(--surface-2)" }} />}
       <Icon className="relative w-[18px] h-[18px] flex-shrink-0" />
       {!collapsed && <span className="relative flex-1 truncate">{item.label}</span>}
@@ -61,7 +62,7 @@ export default function Sidebar({ collapsed, onToggleCollapsed, badges = {}, onT
       className="hidden md:flex flex-col h-full flex-shrink-0 relative z-30 glass"
       style={{ borderRight: "1px solid var(--border-c)" }}
     >
-      <div className={`h-[72px] flex items-center flex-shrink-0 ${collapsed ? "justify-center" : "px-5"}`}>
+      <div className={`h-[84px] flex items-center flex-shrink-0 ${collapsed ? "justify-center" : "px-5"}`}>
         <Logo collapsed={collapsed} />
       </div>
 

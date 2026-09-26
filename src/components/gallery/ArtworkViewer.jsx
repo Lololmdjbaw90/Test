@@ -38,7 +38,7 @@ export default function ArtworkViewer({ artwork, onClose, onPrev, onNext, liked,
       {artwork && (
         <div className="flex flex-col lg:flex-row lg:h-[82vh]">
           <div className="relative lg:flex-1 flex items-center justify-center min-h-[42vh] lg:min-h-0 overflow-hidden" style={{ background: "#140a10" }}>
-            <img src={artwork.image_url} alt="" aria-hidden="true" className="absolute inset-0 w-full h-full object-cover opacity-30 blur-2xl scale-110" />
+            <img loading="lazy" decoding="async" src={artwork.image_url} alt="" aria-hidden="true" className="absolute inset-0 w-full h-full object-cover opacity-30 blur-2xl scale-110" />
             <AnimatePresence mode="wait">
               <motion.img
                 key={artwork.id}

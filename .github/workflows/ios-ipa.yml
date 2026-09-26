@@ -11,11 +11,19 @@ name: Build iOS app (.ipa)
 
 on:
   workflow_dispatch:
+  # Any change to the app itself produces a fresh .ipa.
   push:
     paths:
       - ".github/workflows/ios-ipa.yml"
       - "ios/**"
       - "capacitor.config.json"
+      - "src/**"
+      - "public/**"
+      - "index.html"
+      - "package.json"
+      - "package-lock.json"
+      - "vite.config.js"
+      - ".env"
 
 jobs:
   ipa:
@@ -54,11 +62,11 @@ jobs:
         run: |
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/App.app Payload/
-          zip -qry MimiLocks-unsigned.ipa Payload
-          ls -lh MimiLocks-unsigned.ipa
+          zip -qry Sugerly-unsigned.ipa Payload
+          ls -lh Sugerly-unsigned.ipa
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MimiLocks-ipa
-          path: MimiLocks-unsigned.ipa
+          name: Sugerly-ipa
+          path: Sugerly-unsigned.ipa
           retention-days: 30

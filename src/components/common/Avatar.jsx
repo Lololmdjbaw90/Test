@@ -21,6 +21,7 @@ export default function Avatar({ src, name, size = 36, online, nitro, className 
           src={src}
           alt=""
           loading="lazy"
+          decoding="async"
           onError={() => setErr(true)}
           className="relative w-full h-full object-cover"
           style={{ borderRadius: radius, background: "var(--pink-soft)", boxShadow: nitro ? "0 0 0 2px var(--surface)" : undefined }}

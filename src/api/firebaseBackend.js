@@ -1,4 +1,4 @@
-// Firebase backend for Mimi Locks.
+// Firebase backend for Sugerly.
 // -----------------------------------------------------------------------------
 // Same `base44` API shape as the local backend, backed by:
 // - Firebase Authentication for real email/password accounts
@@ -57,6 +57,7 @@ import { getStorage, ref, uploadBytes, getDownloadURL, connectStorageEmulator } 
 import { moderate } from "../utils/profanity.js";
 import { isOperator, sortAndLimit } from "./queryUtils.js";
 import { ENTITY_NAMES } from "./localBackend.js";
+import { isSiteOwner } from "../lib/admin.js";
 
 const normalizeEmail = (email) => String(email || "").trim().toLowerCase();
 const nowISO = () => new Date().toISOString();
@@ -103,7 +104,7 @@ function publicUserFromFirebaseUser(firebaseUser, profile = {}) {
     full_name: profile.full_name || name,
     display_name: name,
     profile_picture: profile.profile_picture || firebaseUser.photoURL || "",
-    role: "user",
+    role: isSiteOwner(email) ? "admin" : "user",
     bio: "",
     following: [],
     xp: 0,
@@ -157,12 +158,28 @@ export function createFirebaseClient() {
     return authSdk.currentUser || await waitForAuthReady();
   }
 
+  // Writes only need to know who is signed in; skipping the profile read
+  // saves a network round trip on every message, like and reaction.
+  async function requireFirebaseUser() {
+    const firebaseUser = await currentFirebaseUser();
+    if (!firebaseUser) throw new Error("auth_required");
+    return firebaseUser;
+  }
+
   async function currentUser() {
     const firebaseUser = await currentFirebaseUser();
     if (!firebaseUser) throw new Error("auth_required");
     const refDoc = doc(db, "User", firebaseUser.uid);
     const snap = await getDoc(refDoc);
-    if (snap.exists()) return serializeDoc(snap);
+    if (snap.exists()) {
+      const profile = serializeDoc(snap);
+      // Site owners are always admins (the rules treat them that way too).
+      if (isSiteOwner(profile.email) && profile.role !== "admin") {
+        profile.role = "admin";
+        await updateDoc(refDoc, { role: "admin", updated_date: nowISO() }).catch((e) => console.warn("[firebase] owner role not saved:", e?.message));
+      }
+      return profile;
+    }
     const profile = publicUserFromFirebaseUser(firebaseUser);
     await setDoc(refDoc, cleanObject(profile));
     return profile;
@@ -215,20 +232,20 @@ export function createFirebaseClient() {
         return serializeDoc(await getDoc(doc(db, name, id)));
       },
       async create(data) {
-        const me = await currentUser();
+        const me = await requireFirebaseUser();
         const payload = cleanObject({
           created_date: nowISO(),
           updated_date: nowISO(),
           created_at: serverTimestamp(),
           updated_at: serverTimestamp(),
-          created_by: me.email,
+          created_by: normalizeEmail(me.email),
           ...data,
         });
         const refDoc = await addDoc(collection(db, name), payload);
         return { id: refDoc.id, ...withoutSentinels(payload) };
       },
       async update(id, data) {
-        await currentUser();
+        await requireFirebaseUser();
         const refDoc = doc(db, name, id);
         const payload = cleanObject({ ...data, updated_date: nowISO(), updated_at: serverTimestamp() });
         await updateDoc(refDoc, payload);
@@ -236,7 +253,7 @@ export function createFirebaseClient() {
         return (snap && serializeDoc(snap)) || { id, ...withoutSentinels(payload) };
       },
       async delete(id) {
-        await currentUser();
+        await requireFirebaseUser();
         await deleteDoc(doc(db, name, id));
         return { id, success: true };
       },
@@ -244,6 +261,39 @@ export function createFirebaseClient() {
         const created = [];
         for (const item of items || []) created.push(await this.create(item));
         return created;
+      },
+      // Live list: onRows(rows, changes) gets the whole (sorted, limited) list
+      // on every snapshot plus the changes since the last one (none for the
+      // first). Unchanged rows keep their object identity between snapshots.
+      watch(queryObject, { sort = null, limit = null } = {}, onRows, onError) {
+        let unsub = () => {};
+        let cancelled = false;
+        const listen = (useSort) => {
+          const cache = new Map();
+          let first = true;
+          const q = useSort ? buildQuery(name, queryObject, sort, limit) : buildQuery(name, queryObject, null, null);
+          unsub = onSnapshot(q, (snap) => {
+            const changes = [];
+            snap.docChanges().forEach((change) => {
+              const id = change.doc.id;
+              if (change.type === "removed") { cache.delete(id); changes.push({ type: "delete", id, data: null }); return; }
+              const data = serializeDoc(change.doc);
+              cache.set(id, data);
+              changes.push({ type: change.type === "added" ? "create" : "update", id, data });
+            });
+            let rows = snap.docs.map((d) => cache.get(d.id)).filter(Boolean);
+            if (!useSort) rows = sortAndLimit(rows, sort, limit);
+            onRows(rows, first ? [] : changes);
+            first = false;
+          }, (e) => {
+            if (cancelled) return;
+            if (useSort && isIndexError(e)) { warnMissingIndex(name, e); listen(false); return; }
+            console.warn(`[firebase] ${name} listener error:`, e?.message || e);
+            onError?.(e);
+          });
+        };
+        listen(!!(sort || limit));
+        return () => { cancelled = true; unsub(); };
       },
       // callback({ type: "create" | "update" | "delete", id, data, initial })
       // Documents already present when the listener attaches arrive once as
@@ -332,7 +382,7 @@ export function createFirebaseClient() {
       async UploadFile(args) {
         const file = args?.file;
         if (!file) return { file_url: "" };
-        const me = await currentUser();
+        const me = await requireFirebaseUser();
         if (!storage) {
           // No bucket configured: keep the app usable with an inline data URL.
           return await new Promise((resolve, reject) => {
@@ -343,7 +393,7 @@ export function createFirebaseClient() {
           });
         }
         const safeName = String(file.name || "upload").replace(/[^a-zA-Z0-9._-]/g, "_");
-        const fileRef = ref(storage, `uploads/${me.id}/${Date.now()}-${safeName}`);
+        const fileRef = ref(storage, `uploads/${me.uid}/${Date.now()}-${safeName}`);
         await uploadBytes(fileRef, file, { contentType: file.type || "application/octet-stream" });
         return { file_url: await getDownloadURL(fileRef) };
       },

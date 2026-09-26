@@ -3,7 +3,11 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function userDoc() { return get(/databases/$(database)/documents/User/$(request.auth.uid)); }
-    function isAdmin() { return signedIn() && userDoc().data.role == 'admin'; }
+    // Site owners (keep in sync with src/lib/admin.js) are always admins and
+    // are the only ones who can make or remove admins.
+    function siteOwners() { return ['paologionfriddo90@gmail.com']; }
+    function isSiteOwner() { return signedIn() && request.auth.token.email in siteOwners(); }
+    function isAdmin() { return signedIn() && (isSiteOwner() || userDoc().data.role == 'admin'); }
     function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
     function ownEmail() { return request.auth.token.email; }
     function ownsResource() {
@@ -36,12 +40,17 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if isSelf(uid)
         && request.resource.data.email == ownEmail()
-        && request.resource.data.role == 'user';
-      allow update: if isAdmin() || (isSelf(uid)
-        && request.resource.data.email == resource.data.email
-        && request.resource.data.role == resource.data.role);
+        && (request.resource.data.role == 'user' || isSiteOwner());
+      // Owners can change anything, including who is an admin. Other admins
+      // can edit people but not roles, and can't touch an owner's profile.
+      allow update: if isSiteOwner()
+        || (isAdmin() && !(resource.data.email in siteOwners())
+            && request.resource.data.get('role', 'user') == resource.data.get('role', 'user'))
+        || (isSelf(uid)
+            && request.resource.data.email == resource.data.email
+            && request.resource.data.role == resource.data.role);
       // Admins, or the person themselves when they delete their account.
-      allow delete: if isAdmin() || isSelf(uid);
+      allow delete: if isSiteOwner() || isSelf(uid) || (isAdmin() && !(resource.data.email in siteOwners()));
     }
 
     match /SiteConfig/{id} {

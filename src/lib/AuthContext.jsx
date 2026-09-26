@@ -58,7 +58,7 @@ export const AuthProvider = ({ children }) => {
       user, setUser, isAuthenticated, isLoadingAuth, authError, authChecked,
       isAdmin: user?.role === "admin", logout, navigateToLogin, checkUserAuth, refreshUser: checkUserAuth, updateMe,
       // kept for compatibility with older components
-      isLoadingPublicSettings: false, appPublicSettings: { name: "Mimi Locks" },
+      isLoadingPublicSettings: false, appPublicSettings: { name: "Sugerly" },
     }}>
       {children}
     </AuthContext.Provider>

@@ -18,7 +18,7 @@ import { useBlocked } from "@/lib/safety";
 
 function PersonCard({ person, subtitle, children, index }) {
   return (
-    <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ delay: Math.min(index, 12) * 0.03 }} className="card-sm p-4 flex items-center gap-3">
+    <motion.div exit={{ opacity: 0, scale: 0.95 }} className="enter card-sm p-4 flex items-center gap-3" style={{ "--d": `${Math.round((Math.min(index, 12) * 0.03) * 1000)}ms`, "--enter-y": "16px" }}>
       <Link to={profileLink(person.email)}><Avatar src={person.profile_picture} name={displayName(person)} size={48} online={isOnline(person)} nitro={person.nitro_active} /></Link>
       <div className="flex-1 min-w-0">
         <Link to={profileLink(person.email)} className="block text-sm font-bold truncate hover:underline" style={{ color: "var(--text-primary)" }}>{displayName(person)}</Link>
@@ -36,10 +36,11 @@ export default function FriendsPage() {
   const [tab, setTab] = useState("friends");
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(null);
-  const { data: users, loading: usersLoading } = useLiveQuery("User", null, { sort: "-last_seen" });
+  // Most recently active people; enough for Discover and for fresh avatars.
+  const { data: users, loading: usersLoading } = useLiveQuery("User", null, { sort: "-last_seen", limit: 300 });
   const { friendships, loading } = useFriendships(me?.email);
   const blocked = useBlocked();
-  const { accepted, incoming: allIncoming, outgoing, other } = splitFriendships(friendships, me?.email);
+  const { accepted, incoming: allIncoming, outgoing, other, friendEmails } = useMemo(() => splitFriendships(friendships, me?.email), [friendships, me?.email]);
   const incoming = allIncoming.filter((f) => !blocked.has(f.requester_email));
   const byEmail = useMemo(() => Object.fromEntries(users.map((u) => [u.email, u])), [users]);
   const personFor = (f) => {
@@ -49,12 +50,12 @@ export default function FriendsPage() {
   };
   const q = search.trim().toLowerCase();
   const matches = (p) => !q || displayName(p).toLowerCase().includes(q) || String(p.email || "").includes(q);
-  const connected = new Set(friendships.map(other));
+  const connected = useMemo(() => new Set(friendships.map(other)), [friendships, other]);
   // Discover is ranked by the recommendation engine (mutual follows, shared
-  // interests, activity...) and shows why each person is suggested.
-  const { friendEmails } = splitFriendships(friendships, me?.email);
-  const taste = useMemo(() => buildTaste({ me, friends: friendEmails }), [me, friendEmails]);
-  const discover = useMemo(() => suggestPeople(users.filter((u) => matches(u) && !blocked.has(u.email)), { me, taste, limit: 60, exclude: connected }), [users, me, taste, connected.size, q]); // eslint-disable-line react-hooks/exhaustive-deps
+  // interests, activity...) and shows why each person is suggested. It's only
+  // worked out while the Discover tab is open.
+  const taste = useMemo(() => (tab === "discover" ? buildTaste({ me, friends: friendEmails }) : null), [tab, me?.email, me?.following, me?.interests, friendEmails]); // eslint-disable-line react-hooks/exhaustive-deps
+  const discover = useMemo(() => (taste ? suggestPeople(users.filter((u) => matches(u) && !blocked.has(u.email)), { me, taste, limit: 60, exclude: connected }) : []), [users, taste, connected, q, blocked]); // eslint-disable-line react-hooks/exhaustive-deps
   const friends = accepted.map((f) => ({ f, p: personFor(f) })).filter(({ p }) => matches(p)).sort((a, b) => Number(isOnline(b.p)) - Number(isOnline(a.p)));
 
   const run = async (key, fn) => { setBusy(key); try { await fn(); } catch (e) { toast.error(e?.message || "Something went wrong."); } setBusy(null); };
@@ -92,7 +93,7 @@ export default function FriendsPage() {
         </div>
       </PageHeader>
 
-      {loading || usersLoading ? (
+      {loading || (tab === "discover" && usersLoading) ? (
         <div className="grid sm:grid-cols-2 gap-3">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-20" />)}</div>
       ) : (
         <AnimatePresence mode="wait">
@@ -145,7 +146,7 @@ export default function FriendsPage() {
             ))}
 
             {tab === "discover" && (discover.length === 0 ? (
-              <EmptyState icon={UserPlus} title={q ? "No one found" : "You know everyone!"} text={q ? "Try a different name or email." : "Invite friends to join Mimi Locks."} />
+              <EmptyState icon={UserPlus} title={q ? "No one found" : "You know everyone!"} text={q ? "Try a different name or email." : "Invite friends to join Sugerly."} />
             ) : (
               <div className="grid sm:grid-cols-2 gap-3">
                 {discover.map(({ user: u, reason }, i) => (

@@ -18,10 +18,10 @@ import Avatar from "@/components/common/Avatar";
 import { useAuth } from "@/lib/AuthContext";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { applyTheme } from "@/lib/theme";
-import { pageTransition } from "@/lib/motion";
 import { toast } from "@/lib/toast";
 import { displayName, profileLink } from "@/lib/format";
 import { messagePreview } from "@/lib/calls";
+import ErrorBoundary from "@/components/common/ErrorBoundary";
 
 const FULL_HEIGHT = ["/communitychat", "/directmessages"];
 const EXTRA_TITLES = { "/profile": "Profile", "/settings": "Settings", "/communitychat": "Server", "/upload": "Upload art" };
@@ -29,7 +29,7 @@ function pageTitle(pathname) {
   const p = pathname.toLowerCase();
   const item = [...NAV_SECTIONS, ADMIN_SECTION].flatMap((s) => s.items).find((i) => i.path.toLowerCase() === p);
   const label = p === "/" ? "" : item?.label || EXTRA_TITLES[p] || "";
-  return label ? `${label} · Mimi Locks` : "Mimi Locks";
+  return label ? `${label} · Sugerly` : "Sugerly";
 }
 // True when there's an in-app page to go back to (React Router stores the index).
 const canGoBack = () => (window.history.state?.idx ?? 0) > 0;
@@ -61,7 +61,7 @@ function AnnouncementBar({ config }) {
   useEffect(() => { try { setDismissed(!!localStorage.getItem(key)); } catch { /* ignore */ } }, [key]);
   if (!text || dismissed) return null;
   return (
-    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} className="relative flex-shrink-0 overflow-hidden text-white" style={{ background: config.announcement_color ? `linear-gradient(90deg, ${config.announcement_color}, rgb(var(--accent-rgb)))` : "var(--accent-grad)", backgroundSize: "200% 100%", animation: "gradient-pan 8s ease infinite" }}>
+    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} className="relative flex-shrink-0 overflow-hidden text-white" style={{ background: config.announcement_color ? `linear-gradient(90deg, ${config.announcement_color}, rgb(var(--accent-rgb)))` : "var(--accent-grad)" }}>
       <div className="flex items-center gap-2.5 px-4 py-2 text-xs sm:text-sm font-semibold">
         <Megaphone className="w-4 h-4 flex-shrink-0" />
         <span className="flex-1 truncate">{text}</span>
@@ -82,11 +82,11 @@ function TopBar({ onSearch, user }) {
       <div className="md:hidden flex items-center gap-1">
         {showBack ? (
           <button onClick={() => navigate(-1)} className="icon-btn -ml-2" aria-label="Go back"><ArrowLeft className="w-5 h-5" /></button>
-        ) : <Logo collapsed />}
+        ) : <Logo bar />}
       </div>
       <button onClick={onSearch} className="flex-1 max-w-md hidden sm:flex items-center gap-3 h-10 px-4 rounded-full text-sm transition-colors hover:border-[rgb(var(--accent-rgb)/0.4)]" style={{ background: "var(--surface-2)", border: "1px solid var(--border-c)", color: "var(--text-muted)" }}>
         <Search className="w-4 h-4" />
-        <span className="flex-1 min-w-0 text-left truncate">Search Mimi Locks…</span>
+        <span className="flex-1 min-w-0 text-left truncate">Search Sugerly…</span>
         <span className="kbd">Ctrl</span><span className="kbd -ml-2">K</span>
       </button>
       <div className="flex-1" />
@@ -175,7 +175,7 @@ function MobileNav({ badges, isAdmin, isDark, onToggleTheme }) {
             const badge = isMore ? (badges.friends || 0) : item.badge ? badges[item.badge] : 0;
             const inner = (
               <>
-                {active && <motion.span layoutId="mobile-nav-active" className="absolute inset-1 rounded-2xl" style={{ background: "var(--pink-soft)" }} transition={{ type: "spring", stiffness: 420, damping: 34 }} />}
+                {active && <span className="absolute inset-1 rounded-2xl enter-fade" style={{ background: "var(--pink-soft)" }} />}
                 <span className="relative">
                   <Icon className="w-5 h-5" />
                   {badge > 0 && <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold text-white flex items-center justify-center" style={{ background: "var(--accent-rose)" }}>{badge > 9 ? "9+" : badge}</span>}
@@ -237,6 +237,7 @@ export default function Layout() {
     enabled: !!user,
     onEvent: (ev) => {
       if (ev.type !== "create" || ev.data?.user_email === user?.email || onDmsPageRef.current) return;
+      if (Date.now() - new Date(ev.data?.created_date || 0).getTime() > 600000) return; // an older message sliding into the list
       toast(`${ev.data.user_display_name || "Someone"}: ${messagePreview(ev.data, user?.email).slice(0, 80)}`, { icon: <MessageCircle className="w-5 h-5" />, description: ev.data.conversation_type === "group" ? ev.data.group_name : "Direct message" });
     },
   });
@@ -288,9 +289,9 @@ export default function Layout() {
         {!fullHeight && <TopBar onSearch={() => setPaletteOpen(true)} user={user} />}
         <main ref={mainRef} id="main" className={`flex-1 min-h-0 relative ${fullHeight ? `overflow-hidden ${hideMobileNav ? "" : "pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-0"}` : "overflow-y-auto overflow-x-hidden scroll"}`}>
           {/* Enter-only transition keyed by route; no exit phase that could stall navigation. */}
-          <motion.div key={location.pathname} initial={pageTransition.initial} animate={pageTransition.animate} className={fullHeight ? "h-full" : "min-h-full"}>
-            {outlet}
-          </motion.div>
+          <div key={location.pathname} className={`page-enter ${fullHeight ? "h-full" : "min-h-full"}`}>
+            <ErrorBoundary resetKey={location.pathname}>{outlet}</ErrorBoundary>
+          </div>
         </main>
       </div>
       {!hideMobileNav && <MobileNav badges={badges} isAdmin={isAdmin} isDark={isDark} onToggleTheme={toggleTheme} />}

@@ -22,7 +22,7 @@ const TEXT_BACKGROUNDS = [
 export async function sharePost(post) {
   const url = siteUrl(`/Community?post=${post.id}`);
   if (navigator.share && window.matchMedia("(pointer: coarse)").matches) {
-    try { await navigator.share({ title: post.title || "Mimi Locks post", url }); return; } catch { /* cancelled */ }
+    try { await navigator.share({ title: post.title || "Sugerly post", url }); return; } catch { /* cancelled */ }
   }
   try { await navigator.clipboard.writeText(url); toast.success("Link copied"); } catch { toast(url); }
 }
@@ -79,11 +79,9 @@ export default function FeedPost({ post, reason, me, author, comments = [], like
   const lastComments = comments.slice(-2);
 
   return (
-    <motion.article
-      initial={{ opacity: 0, y: 18 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: Math.min(index, 6) * 0.04, type: "spring", stiffness: 260, damping: 28 }}
-      className="card !rounded-[1.75rem] overflow-hidden"
+    <article
+      className="enter card !rounded-[1.75rem] overflow-hidden"
+      style={{ "--d": `${Math.min(index, 6) * 40}ms` }}
       data-post-id={post.id}
     >
       {reason && (
@@ -207,6 +205,6 @@ export default function FeedPost({ post, reason, me, author, comments = [], like
           </form>
         )}
       </div>
-    </motion.article>
+    </article>
   );
 }

@@ -9,6 +9,7 @@ import { toast } from "@/lib/toast";
 import Avatar from "@/components/common/Avatar";
 import ImageCropper from "@/components/common/ImageCropper";
 import Confetti from "@/components/common/Confetti";
+import { BrandLogo } from "@/components/common/Brand";
 
 const STEPS = ["You", "Photo", "Interests", "Style"];
 const INTERESTS = ["Painting", "Digital art", "Drawing", "Photography", "3D", "Pixel art", "Animation", "Music", "Lo-fi", "Writing", "Crafts", "Fashion"];
@@ -45,7 +46,7 @@ export default function OnboardingPage() {
       if (picFile) profile_picture = (await base44.integrations.Core.UploadFile({ file: picFile })).file_url;
       setDone(true);
       await updateMe({ ...form, display_name: form.display_name.trim(), profile_picture, onboarding_completed: true, coins: (user?.coins || 0) + 50 });
-      toast.success("Welcome to Mimi Locks!", { description: "You earned 50 coins for setting up your profile." });
+      toast.success("Welcome to Sugerly!", { description: "You earned 50 coins for setting up your profile." });
       setTimeout(() => navigate("/", { replace: true }), 1400);
     } catch (e) {
       setDone(false);
@@ -66,7 +67,7 @@ export default function OnboardingPage() {
       <div className="orb orb-b w-[30rem] h-[30rem] -bottom-32 -right-32" />
       <div className="relative w-full max-w-lg">
         <div className="text-center mb-8">
-          <motion.div initial={{ scale: 0.6, rotate: -20 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", stiffness: 260, damping: 14 }} className="w-14 h-14 rounded-[18px] mx-auto mb-4 flex items-center justify-center text-white font-display italic text-2xl font-bold" style={{ background: "var(--accent-grad)", boxShadow: "var(--shadow-accent)" }}>M</motion.div>
+          <motion.div initial={{ scale: 0.7, rotate: -8, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 260, damping: 16 }} className="flex justify-center mb-3"><BrandLogo height={64} /></motion.div>
           <h1 className="font-display text-3xl sm:text-4xl font-semibold" style={{ color: "var(--text-primary)" }}>Let's set up your space</h1>
           <p className="text-sm mt-2" style={{ color: "var(--text-muted)" }}>Four quick steps — you can change everything later.</p>
         </div>
@@ -123,7 +124,7 @@ export default function OnboardingPage() {
                   <p className="text-sm mb-4" style={{ color: "var(--text-secondary)" }}>What are you into? Pick as many as you like.</p>
                   <div className="flex flex-wrap gap-2">
                     {INTERESTS.map((i, idx) => (
-                      <motion.button key={i} initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: idx * 0.025 }} whileTap={{ scale: 0.92 }} className="chip" data-active={form.interests.includes(i)} onClick={() => toggleInterest(i)}>
+                      <motion.button key={i} whileTap={{ scale: 0.92 }} className="enter-pop chip" style={{ "--d": `${Math.round((idx * 0.025) * 1000)}ms` }} data-active={form.interests.includes(i)} onClick={() => toggleInterest(i)}>
                         {form.interests.includes(i) && <Check className="w-3.5 h-3.5" />}{i}
                       </motion.button>
                     ))}

@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { motion } from "framer-motion";
 import { Check, Coins, Crown, Gift, Loader2, Palette, Sparkles, Zap } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { toast } from "@/lib/toast";
@@ -42,9 +41,9 @@ export default function NitroShop() {
     <div className="space-y-5 relative">
       {burst && <Confetti />}
       <div className="rounded-3xl p-6 relative overflow-hidden text-white grain" style={{ background: "linear-gradient(135deg,#8b5cf6,#c084fc 45%,#ee8fae)", boxShadow: "0 20px 50px rgb(139 92 246 / 0.3)" }}>
-        <div className="orb w-64 h-64 -right-16 -top-16" style={{ background: "rgb(255 255 255 / 0.3)" }} />
+        <div className="orb w-64 h-64 -right-16 -top-16" style={{ "--orb": "rgb(255 255 255 / 0.3)" }} />
         <div className="relative flex flex-col sm:flex-row sm:items-center gap-5">
-          <motion.div animate={{ rotate: [0, 8, -8, 0] }} transition={{ duration: 4, repeat: Infinity }} className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "rgb(255 255 255 / 0.2)" }}><Sparkles className="w-8 h-8" /></motion.div>
+          <div className="anim-wiggle w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "rgb(255 255 255 / 0.2)" }}><Sparkles className="w-8 h-8" /></div>
           <div className="flex-1">
             <p className="font-display text-2xl font-semibold">{nitro ? "MimiNitro is active" : "MimiNitro"}</p>
             <p className="text-sm opacity-90">{nitro ? `Renews until ${new Date(user.nitro_until).toLocaleDateString()}` : "30 days of premium perks, paid with coins."}</p>

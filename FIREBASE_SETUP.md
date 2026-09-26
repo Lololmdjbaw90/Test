@@ -1,4 +1,4 @@
-# Mimi Locks Firebase setup
+# Sugerly Firebase setup
 
 This project is now wired to your Firebase project:
 

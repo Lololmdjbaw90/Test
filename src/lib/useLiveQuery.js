@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { applyEvent } from "@/api/queryUtils";
 
+// A list that never loads (dead connection, stalled request) shouldn't leave
+// a page on skeletons forever: after this long we show whatever we have.
+const LOADING_TIMEOUT = 10000;
+
 // Loads an entity list and keeps it in sync with realtime create/update/delete
 // events from either backend.
 //
@@ -33,13 +37,36 @@ export function useLiveQuery(entityName, query = null, { sort = null, limit = nu
 
   useEffect(() => {
     if (!enabled) { setData([]); setLoading(false); return undefined; }
-    load();
-    if (!live) return () => { version.current++; };
-    const unsub = base44.entities[entityName].subscribe((event) => {
+    const entity = base44.entities[entityName];
+    const watchdog = setTimeout(() => setLoading(false), LOADING_TIMEOUT);
+
+    // Firebase: one listener delivers the first page and every change after
+    // it, so each list is read once instead of twice.
+    if (live && entity.watch) {
+      let active = true;
+      setLoading(true);
+      const unsub = entity.watch(query, { sort, limit }, (rows, changes) => {
+        if (!active) return;
+        version.current++; // a snapshot is newer than any reload() in flight
+        setData(rows);
+        setError(null);
+        setLoading(false);
+        changes.forEach((ev) => onEventRef.current?.(ev));
+      }, (e) => {
+        if (!active) return;
+        setError(e);
+        setLoading(false);
+      });
+      return () => { active = false; clearTimeout(watchdog); unsub?.(); };
+    }
+
+    load().finally(() => clearTimeout(watchdog));
+    if (!live) return () => { clearTimeout(watchdog); version.current++; };
+    const unsub = entity.subscribe((event) => {
       setData((prev) => applyEvent(prev, event, { sort }));
       if (!event.initial) onEventRef.current?.(event);
     }, query, { sort, limit });
-    return () => { version.current++; unsub?.(); };
+    return () => { clearTimeout(watchdog); version.current++; unsub?.(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, enabled, live]);
 

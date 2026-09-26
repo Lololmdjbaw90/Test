@@ -111,7 +111,7 @@ export default function SettingsPage() {
 
   return (
     <Page width="max-w-5xl">
-      <PageHeader eyebrow="Your space" title="Settings" subtitle="Make Mimi Locks feel like yours." icon={SettingsIcon} actions={<Link to={profileLink(user.email)} className="btn-outline">View profile</Link>} />
+      <PageHeader eyebrow="Your space" title="Settings" subtitle="Make Sugerly feel like yours." icon={SettingsIcon} actions={<Link to={profileLink(user.email)} className="btn-outline">View profile</Link>} />
       <div className="grid lg:grid-cols-[200px_1fr] gap-6 items-start">
         <nav className="hidden lg:block sticky top-4 space-y-1">
           {[...SECTIONS, ...(isAdmin ? [{ id: "site", label: "Site settings", icon: Shield }] : [])].map((s) => (
@@ -123,7 +123,7 @@ export default function SettingsPage() {
           <Section id="profile" icon={User} title="Profile" subtitle="How others see you around the site.">
             <div className="relative h-36 mb-14">
               <div className="absolute inset-0 rounded-3xl overflow-hidden" style={{ background: bannerPreview ? undefined : `linear-gradient(120deg, ${form.banner_color || "rgb(var(--accent-2-rgb))"}, rgb(var(--accent-rgb)))` }}>
-                {bannerPreview && <img src={bannerPreview} alt="" className="absolute inset-0 w-full h-full object-cover" />}
+                {bannerPreview && <img loading="lazy" decoding="async" src={bannerPreview} alt="" className="absolute inset-0 w-full h-full object-cover" />}
               </div>
               <div className="absolute top-3 right-3 flex gap-2">
                 <button type="button" onClick={() => bannerRef.current?.click()} className="chip glass !py-1.5"><ImagePlus className="w-3.5 h-3.5" /> {bannerPreview ? "Change" : "Upload"} banner</button>
@@ -179,7 +179,7 @@ export default function SettingsPage() {
             </div>
           </Section>
 
-          <Section id="app" icon={Smartphone} title="Get the app" subtitle="Mimi Locks works like a native app on your phone, tablet or computer.">
+          <Section id="app" icon={Smartphone} title="Get the app" subtitle="Sugerly works like a native app on your phone, tablet or computer.">
             <InstallCard />
           </Section>
 

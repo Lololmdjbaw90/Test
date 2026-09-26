@@ -36,9 +36,9 @@ export function InstallBanner() {
       {show && (
         <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="flex-shrink-0 overflow-hidden">
           <div className="flex items-start gap-3 px-4 py-3" style={{ background: "var(--pink-soft)", borderBottom: "1px solid var(--border-c)" }}>
-            <img src="/icons/icon-192.png" alt="" className="w-10 h-10 rounded-xl flex-shrink-0" />
+            <img loading="lazy" decoding="async" src="/icons/icon-192.png" alt="" className="w-10 h-10 rounded-xl flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>Get the Mimi Locks app</p>
+              <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>Get the Sugerly app</p>
               {ios ? <div className="mt-1.5"><IOSSteps compact /></div> : <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>Full screen, faster, and on your home screen.</p>}
             </div>
             {canPrompt && <button onClick={async () => { if (await prompt()) dismiss(); }} className="btn !py-1.5 !px-3 text-xs flex-shrink-0"><Download className="w-3.5 h-3.5" /> Install</button>}
@@ -59,8 +59,8 @@ export function InstallCard() {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
-        <img src="/icons/icon-192.png" alt="" className="w-12 h-12 rounded-2xl" />
-        <p className="text-sm flex-1" style={{ color: "var(--text-secondary)" }}>Install Mimi Locks on your iPhone, iPad, Android phone or computer. It opens full screen, starts faster and works offline.</p>
+        <img loading="lazy" decoding="async" src="/icons/icon-192.png" alt="" className="w-12 h-12 rounded-2xl" />
+        <p className="text-sm flex-1" style={{ color: "var(--text-secondary)" }}>Install Sugerly on your iPhone, iPad, Android phone or computer. It opens full screen, starts faster and works offline.</p>
       </div>
       {canPrompt && <button onClick={prompt} className="btn"><Download className="w-4 h-4" /> Install app</button>}
       {ios && <IOSSteps />}

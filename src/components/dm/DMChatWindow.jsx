@@ -43,7 +43,7 @@ function Bubble({ msg, own, showAvatar, showName, isGroup, seen, onEdit, onDelet
         {showName && isGroup && !own && <span className="text-[11px] font-bold mb-1 ml-3" style={{ color: "var(--text-secondary)" }}>{msg.user_display_name}</span>}
         <div className={`relative flex items-center gap-1.5 ${own ? "flex-row-reverse" : ""}`}>
           <div className={`relative ${msg.image_url && !msg.content ? "" : "px-3.5 py-2"} text-sm leading-relaxed rounded-[1.25rem] ${own ? "rounded-br-md bubble-own" : "rounded-bl-md"}`} style={own ? { background: "var(--accent-grad)", color: "#fff", boxShadow: "var(--shadow-sm)" } : { background: "var(--surface)", color: "var(--text-primary)", border: "1px solid var(--border-c)" }}>
-            {msg.image_url && <a href={msg.image_url} target="_blank" rel="noopener noreferrer"><img src={msg.image_url} alt="" className={`max-w-[260px] max-h-72 object-cover rounded-2xl ${msg.content ? "mb-1.5 -mx-1.5 -mt-0.5" : ""}`} /></a>}
+            {msg.image_url && <a href={msg.image_url} target="_blank" rel="noopener noreferrer"><img loading="lazy" decoding="async" src={msg.image_url} alt="" className={`max-w-[260px] max-h-72 object-cover rounded-2xl ${msg.content ? "mb-1.5 -mx-1.5 -mt-0.5" : ""}`} /></a>}
             {msg.content && <RichText text={msg.content} />}
             {msg.is_edited && <span className="ml-1.5 text-[10px] opacity-70">(edited)</span>}
           </div>
@@ -160,7 +160,7 @@ export default function DMChatWindow({ conversation, me, onCall }) {
           <div className="space-y-4 py-6">{[40, 60, 35, 55].map((w, i) => <div key={i} className={`flex ${i % 2 ? "justify-end" : ""}`}><div className="skeleton h-10" style={{ width: `${w}%` }} /></div>)}</div>
         ) : messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center gap-3 px-8">
-            <motion.div animate={{ y: [0, -6, 0] }} transition={{ duration: 3, repeat: Infinity }} className="w-16 h-16 rounded-3xl flex items-center justify-center" style={{ background: "var(--pink-soft)", color: "var(--accent-rose)" }}><MessageSquare className="w-7 h-7" /></motion.div>
+            <div className="anim-bob w-16 h-16 rounded-3xl flex items-center justify-center" style={{ background: "var(--pink-soft)", color: "var(--accent-rose)" }}><MessageSquare className="w-7 h-7" /></div>
             <p className="font-display text-lg font-semibold" style={{ color: "var(--text-primary)" }}>Say hi 👋</p>
             <p className="text-sm" style={{ color: "var(--text-muted)" }}>This is the start of your conversation{isGroup ? ` in ${conversation.group.name}` : ` with ${displayName(conversation.otherUser)}`}.</p>
           </div>

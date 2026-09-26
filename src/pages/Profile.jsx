@@ -29,12 +29,12 @@ function Banner({ profile }) {
   return (
     <div className="relative h-44 sm:h-60 rounded-[2rem] overflow-hidden grain" style={{ boxShadow: "var(--shadow-md)" }}>
       {profile.banner_url ? (
-        <img src={profile.banner_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <img loading="lazy" decoding="async" src={profile.banner_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
       ) : (
-        <div className="absolute inset-0" style={{ background: nitro ? "linear-gradient(120deg,#8b5cf6,#c084fc,#ee8fae,#7cbeff)" : `linear-gradient(120deg, ${profile.banner_color || "rgb(var(--accent-2-rgb))"}, rgb(var(--accent-rgb)))`, backgroundSize: "300% 300%", animation: "gradient-pan 12s ease infinite" }} />
+        <div className="absolute inset-0" style={{ background: nitro ? "linear-gradient(120deg,#8b5cf6,#c084fc,#ee8fae,#7cbeff)" : `linear-gradient(120deg, ${profile.banner_color || "rgb(var(--accent-2-rgb))"}, rgb(var(--accent-rgb)))` }} />
       )}
-      <div className="orb w-72 h-72 -top-20 right-10" style={{ background: "rgb(255 255 255 / 0.25)" }} />
-      <motion.div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(105deg,transparent 35%,rgb(255 255 255 / 0.18) 50%,transparent 65%)" }} animate={{ x: ["-100%", "200%"] }} transition={{ duration: 2.8, repeat: Infinity, repeatDelay: 4, ease: "easeInOut" }} />
+      <div className="orb w-72 h-72 -top-20 right-10" style={{ "--orb": "rgb(255 255 255 / 0.25)" }} />
+      <div className="anim-sweep absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(105deg,transparent 35%,rgb(255 255 255 / 0.18) 50%,transparent 65%)" }} />
     </div>
   );
 }
@@ -67,12 +67,15 @@ export default function ProfilePage() {
   const { data: posts, setData: setPosts } = useLiveQuery("CommunityPost", { user_email: email }, { sort: "-created_date", enabled: !!email });
   const { data: followers } = useLiveQuery("User", { following: { $contains: email } }, { enabled: !!email });
   const { data: artworks } = useLiveQuery("Artwork", null, { sort: "-created_date", enabled: isOwn && tab === "saved", live: false });
+  const { data: recentPosts, setData: setRecentPosts } = useLiveQuery("CommunityPost", null, { sort: "-created_date", limit: 300, enabled: isOwn && tab === "saved", live: false });
   const { friendships } = useFriendships(me?.email);
   const friendship = friendships.find((f) => (f.requester_email === email && f.receiver_email === me?.email) || (f.receiver_email === email && f.requester_email === me?.email));
 
   const totalLikes = useMemo(() => posts.reduce((s, p) => s + (p.likes?.length || 0), 0), [posts]);
   const following = (me?.following || []).includes(email);
   const savedArt = artworks.filter((a) => (me?.saved_artworks || []).includes(a.id));
+  // Posts bookmarked in the Community feed live here too.
+  const savedPosts = recentPosts.filter((p) => (me?.saved_posts || []).includes(p.id));
   const openPostId = params.get("post");
   const openPost = posts.find((p) => p.id === openPostId) || null;
   const setOpenPost = (id) => setParams((p) => { const n = new URLSearchParams(p); if (id) n.set("post", id); else n.delete("post"); return n; });
@@ -221,18 +224,35 @@ export default function ProfilePage() {
               </div>
             ))}
             {tab === "guestbook" && <ProfileMessageBoard profileUser={profile} />}
-            {tab === "saved" && isOwn && (savedArt.length === 0 ? (
-              <EmptyState icon={Bookmark} title="Nothing saved yet" text="Tap the bookmark on gallery pieces to collect them here." action={<Link to="/Gallery" className="btn">Browse the gallery</Link>} />
+            {tab === "saved" && isOwn && (savedArt.length === 0 && savedPosts.length === 0 ? (
+              <EmptyState icon={Bookmark} title="Nothing saved yet" text="Tap the bookmark on posts and gallery pieces to collect them here." action={<Link to="/Community" className="btn">Browse the feed</Link>} />
             ) : (
+              <div className="space-y-8">
+              {savedPosts.length > 0 && (
+                <div>
+                  <p className="eyebrow mb-3">Posts · {savedPosts.length}</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    {savedPosts.map((p, i) => (
+                      <PostCard key={p.id} post={p} index={i} onOpen={() => navigate(`/Community?post=${p.id}`)} liked={!!me && (p.likes || []).includes(me.email)} likeCount={p.likes?.length || 0} onLike={() => toggleLike({ entity: "CommunityPost", record: p, user: me, setData: setRecentPosts, message: "liked your post", link: `/Community?post=${p.id}` })} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {savedArt.length > 0 && (
+              <div>
+              <p className="eyebrow mb-3">Artworks · {savedArt.length}</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 {savedArt.map((a, i) => (
-                  <motion.div key={a.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.04 }}>
+                  <motion.div className="enter-pop" style={{ "--d": `${Math.round((i * 0.04) * 1000)}ms` }} key={a.id}>
                     <Link to={`/Gallery?art=${a.id}`} className="group block rounded-3xl overflow-hidden aspect-square relative" style={{ boxShadow: "var(--shadow-sm)" }}>
-                      <img src={a.image_url} alt={a.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                      <img loading="lazy" decoding="async" src={a.image_url} alt={a.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                       <span className="absolute inset-x-0 bottom-0 p-3 text-white text-sm font-semibold truncate" style={{ background: "linear-gradient(to top, rgb(20 8 14 / 0.7), transparent)" }}>{a.title}</span>
                     </Link>
                   </motion.div>
                 ))}
+              </div>
+              </div>
+              )}
               </div>
             ))}
             {tab === "shop" && isOwn && <NitroShop />}

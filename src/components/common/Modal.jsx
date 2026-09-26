@@ -46,7 +46,8 @@ export default function Modal({ open, onClose, title, subtitle, children, footer
       transition={{ duration: 0.18 }}
       style={{ pointerEvents: open ? "auto" : "none" }}
     >
-      <div className="absolute inset-0 backdrop-blur-sm" style={{ background: "rgb(20 8 14 / 0.45)" }} onClick={onClose} />
+      {/* Blurring the whole screen is costly on phones and tablets: dim only there. */}
+      <div className="absolute inset-0 can-hover:backdrop-blur-sm" style={{ background: "rgb(20 8 14 / 0.45)" }} onClick={onClose} />
       <motion.div
         ref={panelRef}
         role="dialog"

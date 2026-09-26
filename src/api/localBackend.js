@@ -18,6 +18,7 @@
 // -----------------------------------------------------------------------------
 
 import { moderate } from "../utils/profanity.js";
+import { isSiteOwner } from "../lib/admin.js";
 import { matchesQuery, sortAndLimit } from "./queryUtils.js";
 
 const PREFIX = "mimilocks";
@@ -81,7 +82,8 @@ function requireAuthSync() {
 
 // ---------- permissions (mirror firestore.rules) ----------
 const same = (a, b) => normalizeEmail(a) === normalizeEmail(b) && !!normalizeEmail(a);
-const isAdminUser = (user) => user?.role === "admin";
+const isAdminUser = (user) => user?.role === "admin" || isSiteOwner(user?.email);
+const withOwnerRole = (user) => (user && isSiteOwner(user.email) ? { ...user, role: "admin" } : user);
 function isOwner(user, record) {
   if (!user || !record) return false;
   return [record.created_by, record.user_email, record.owner_email, record.artist_email, record.requester_email].some((v) => same(v, user.email));
@@ -142,6 +144,8 @@ function canCreate(user, name, data) {
 }
 function canUpdate(user, name, current, data = {}) {
   if (!user) return false;
+  // Only site owners change who is an admin, or edit an owner's profile.
+  if (name === "User" && !isSiteOwner(user.email) && (isSiteOwner(current?.email) || ("role" in data && (data.role || "user") !== (current?.role || "user")))) return false;
   if (isAdminUser(user)) return true;
   const email = user.email;
   switch (name) {
@@ -177,6 +181,7 @@ function canUpdate(user, name, current, data = {}) {
 }
 function canDelete(user, name, current) {
   if (!user) return false;
+  if (name === "User" && isSiteOwner(current?.email) && !same(current?.email, user.email)) return false;
   if (isAdminUser(user)) return true;
   const email = user.email;
   switch (name) {
@@ -333,10 +338,12 @@ function syncUserRecord(account) {
   const safe = publicUser(account);
   const users = loadCollection("User");
   const i = users.findIndex((x) => same(x.email, safe.email) || x.id === safe.id);
-  if (i === -1) users.push(safe); else users[i] = { ...users[i], ...safe };
+  // Keep the shared record's role: admins change it there (Admin panel).
+  if (i === -1) users.push(safe); else { const { role, ...rest } = safe; users[i] = { ...users[i], ...rest }; }
   saveCollection("User", users);
-  publish("User", { type: i === -1 ? "create" : "update", id: safe.id, data: safe });
-  return safe;
+  const record = i === -1 ? safe : users[i];
+  publish("User", { type: i === -1 ? "create" : "update", id: record.id, data: record });
+  return withOwnerRole(record);
 }
 const auth = {
   async me() {
@@ -345,7 +352,7 @@ const auth = {
     if (!u) throw new Error("auth_required");
     // Prefer the shared User record so admin edits (e.g. role changes) apply.
     const record = loadCollection("User").find((x) => x.id === u.id);
-    return publicUser({ ...u, ...(record || {}) });
+    return withOwnerRole(publicUser({ ...u, ...(record || {}) }));
   },
   async register({ email, password, display_name, full_name }) {
     await ensureDefaultAdminAccount();
@@ -356,12 +363,12 @@ const auth = {
     const name = (display_name || full_name || email.split("@")[0]).trim();
     const salt = uid();
     const account = newProfile({
-      id: uid(), email, full_name: name, display_name: name, role: "user",
+      id: uid(), email, full_name: name, display_name: name, role: isSiteOwner(email) ? "admin" : "user",
       password_salt: salt, password_hash: await hashPassword(password, salt), profile_picture: "",
     });
     accounts.push(account); saveAccounts(accounts); syncUserRecord(account);
     writeRaw(AUTH_KEY, JSON.stringify(publicUser(account)));
-    return publicUser(account);
+    return withOwnerRole(publicUser(account));
   },
   async login({ email, password } = {}) {
     await ensureDefaultAdminAccount();
@@ -374,7 +381,7 @@ const auth = {
     saveAccounts(loadAccounts().map((x) => same(x.email, email) ? next : x));
     syncUserRecord(next);
     writeRaw(AUTH_KEY, JSON.stringify(publicUser(next)));
-    return publicUser(next);
+    return withOwnerRole(publicUser(next));
   },
   async updateMe(data) {
     const current = requireAuthSync();
@@ -479,7 +486,7 @@ function seedIfEmpty() {
     // --- communities ---
     const c1 = uid(), c2 = uid();
     saveCollection("Community", [
-      { ...base(E.you, 60 * 24 * 10), id: c1, name: "Mimi Locks", description: "The main hangout — art, music & good vibes.", icon_emoji: "\u{1F338}", icon_url: "", banner_url: pic("mimibanner", 1200, 300), owner_email: E.you, owner_display_name: N[E.you], member_emails: [E.you, E.aria, E.kai, E.luna, E.max], welcome_message: "Welcome to Mimi Locks \u{1F338} introduce yourself in #general!" },
+      { ...base(E.you, 60 * 24 * 10), id: c1, name: "Sugerly", description: "The main hangout — art, music & good vibes.", icon_emoji: "\u{1F338}", icon_url: "", banner_url: pic("mimibanner", 1200, 300), owner_email: E.you, owner_display_name: N[E.you], member_emails: [E.you, E.aria, E.kai, E.luna, E.max], welcome_message: "Welcome to Sugerly \u{1F338} introduce yourself in #general!" },
       { ...base(E.aria, 60 * 24 * 6), id: c2, name: "Pixel Pals", description: "Pixel art & game-dev corner.", icon_emoji: "\u{1F3AE}", icon_url: "", banner_url: pic("pixelbanner", 1200, 300), owner_email: E.aria, owner_display_name: N[E.aria], member_emails: [E.aria, E.you, E.kai], welcome_message: "gm pixel pals \u{1F3AE}" },
     ]);
 
@@ -515,7 +522,7 @@ function seedIfEmpty() {
     // --- channel messages ---
     const msg = (cid, chid, email, content, mins, extra) => ({ ...base(email, mins), channel_id: chid, community_id: cid, content, image_url: "", ...author(email), reply_to_id: "", reply_to_preview: "", reactions: {}, is_pinned: false, is_edited: false, ...extra });
     saveCollection("ChannelMessage", [
-      msg(c1, gen, E.aria, "hey everyone! welcome to Mimi Locks \u{1F338}", 240, { is_pinned: true }),
+      msg(c1, gen, E.aria, "hey everyone! welcome to Sugerly \u{1F338}", 240, { is_pinned: true }),
       msg(c1, gen, E.kai, "this place looks so clean ✨", 180),
       msg(c1, gen, E.luna, "just posted a new piece in #showcase \u{1F440}", 90, { reactions: { "❤️": [E.aria, E.kai], "\u{1F525}": [E.max] } }),
       msg(c1, gen, E.max, "lofi set later in Music Lounge?", 35),
@@ -544,7 +551,7 @@ function seedIfEmpty() {
     const p2 = post(E.aria, "WIP koi studies", "Sketching some koi studies, thoughts? #wip #koi", "post-koi", [E.kai, E.luna, E.you], 300);
     const p3 = post(E.luna, "Finished!", "So happy with how Wildflower turned out \u{1F33C} #watercolor #finished", "post-flower", [E.you, E.aria, E.kai, E.max], 600);
     const p4 = post(E.kai, "Neon study #4", "Trying a new glow brush, feedback welcome. #digitalart #neon #wip", "post-neon", [E.aria], 900);
-    const p5 = post(E.you, "Hello Mimi Locks", "Excited to be here — let's make cool stuff ✨ #hello", "post-hello", [E.aria, E.luna], 30);
+    const p5 = post(E.you, "Hello Sugerly", "Excited to be here — let's make cool stuff ✨ #hello", "post-hello", [E.aria, E.luna], 30);
     const p6 = post(E.aria, "", "Art challenge this week: draw your favourite snack as a character \u{1F369} Tag it #snackchallenge!", null, [E.luna, E.kai, E.max], 180);
     const p7 = post(E.luna, "", "What's everyone listening to while drawing today? Paper Lanterns has been on repeat \u{1F3B6} #music", null, [E.aria], 1400);
     saveCollection("CommunityPost", [p1, p2, p3, p4, p5, p6, p7]);
@@ -596,12 +603,12 @@ function seedIfEmpty() {
     // --- notifications ---
     const notif = (from, type, message, read, mins, link = "") => ({ ...base(from, mins), to_email: E.you, from_email: from, from_display_name: N[from], from_profile_picture: P[from] || "", type, message, link, entity_id: "", is_read: !!read });
     saveCollection("Notification", [
-      notif(E.aria, "like", "Aria liked your post \"Hello Mimi Locks\"", false, 20, "/Community"),
+      notif(E.aria, "like", "Aria liked your post \"Hello Sugerly\"", false, 20, "/Community"),
       notif(E.kai, "friend_request", "Kai sent you a friend request", false, 40, "/Friends"),
       notif(E.luna, "comment", "Luna commented on your post", true, 200, "/Community"),
     ]);
 
-    saveCollection("SiteConfig", [{ ...base(E.you, 100), key: "global", announcement: "Welcome to the new Mimi Locks ✨ Press Ctrl+K to search anything.", announcement_active: true, announcement_color: "#d4708a", primary_color: "" }]);
+    saveCollection("SiteConfig", [{ ...base(E.you, 100), key: "global", announcement: "Welcome to the new Sugerly ✨ Press Ctrl+K to search anything.", announcement_active: true, announcement_color: "#d4708a", primary_color: "" }]);
 
     writeRaw(`${PREFIX}:__seeded`, "2");
   } catch (e) {

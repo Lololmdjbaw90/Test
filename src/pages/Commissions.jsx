@@ -64,7 +64,7 @@ function CreateModal({ open, onClose }) {
           <div className="flex gap-2 flex-wrap">
             {samples.map((s, i) => (
               <motion.div key={s.url} initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="relative w-20 h-20">
-                <img src={s.url} alt="" className="w-full h-full rounded-2xl object-cover" />
+                <img loading="lazy" decoding="async" src={s.url} alt="" className="w-full h-full rounded-2xl object-cover" />
                 <button onClick={() => setSamples((x) => x.filter((_, j) => j !== i))} className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full flex items-center justify-center text-white" style={{ background: "var(--text-primary)" }} aria-label="Remove sample"><X className="w-3 h-3" /></button>
               </motion.div>
             ))}
@@ -120,7 +120,7 @@ function DetailModal({ commission, onClose }) {
         <div className="relative h-64 sm:h-80 overflow-hidden" style={{ background: "var(--surface-2)" }}>
           <AnimatePresence mode="wait"><motion.img key={idx} src={commission.samples[idx]} alt="" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 w-full h-full object-cover" /></AnimatePresence>
           <div className="absolute top-4 left-4"><StatusPill open={open} /></div>
-          {commission.samples.length > 1 && <div className="absolute bottom-3 inset-x-0 flex justify-center gap-1.5">{commission.samples.map((s, i) => <button key={s} onClick={() => setIdx(i)} className="w-12 h-12 rounded-xl overflow-hidden transition-transform" style={{ boxShadow: i === idx ? "0 0 0 2px #fff" : "none", transform: i === idx ? "scale(1.08)" : "none" }}><img src={s} alt="" className="w-full h-full object-cover" /></button>)}</div>}
+          {commission.samples.length > 1 && <div className="absolute bottom-3 inset-x-0 flex justify-center gap-1.5">{commission.samples.map((s, i) => <button key={s} onClick={() => setIdx(i)} className="w-12 h-12 rounded-xl overflow-hidden transition-transform" style={{ boxShadow: i === idx ? "0 0 0 2px #fff" : "none", transform: i === idx ? "scale(1.08)" : "none" }}><img loading="lazy" decoding="async" src={s} alt="" className="w-full h-full object-cover" /></button>)}</div>}
         </div>
       )}
       <div className="p-5 sm:p-7 space-y-5">
@@ -136,7 +136,7 @@ function DetailModal({ commission, onClose }) {
         {commission.tiers?.length > 0 && (
           <div className="grid sm:grid-cols-2 gap-3">
             {commission.tiers.map((t, i) => (
-              <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }} className="card-sm p-4">
+              <motion.div key={i} className="enter card-sm p-4" style={{ "--d": `${Math.round((i * 0.06) * 1000)}ms`, "--enter-y": "10px" }}>
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-bold" style={{ color: "var(--text-primary)" }}>{t.name}</p>
                   <p className="font-display text-2xl font-semibold gradient-text">${t.price}</p>
@@ -187,7 +187,7 @@ export default function CommissionsPage() {
           {filtered.map((c, i) => {
             const price = minPrice(c);
             return (
-              <motion.button key={c.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 9) * 0.05 }} whileHover={{ y: -5 }} onClick={() => setParams({ c: c.id })} className="card !rounded-3xl overflow-hidden text-left group">
+              <motion.button key={c.id} whileHover={{ y: -5 }} onClick={() => setParams({ c: c.id })} className="enter card !rounded-3xl overflow-hidden text-left group" style={{ "--d": `${Math.round((Math.min(i, 9) * 0.05) * 1000)}ms`, "--enter-y": "20px" }}>
                 <div className="relative h-52 overflow-hidden" style={{ background: "var(--surface-2)" }}>
                   {c.samples?.[0] ? <img src={c.samples[0]} alt="" loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" /> : <div className="w-full h-full flex items-center justify-center"><Store className="w-8 h-8" style={{ color: "var(--text-muted)" }} /></div>}
                   <div className="absolute top-3 left-3"><StatusPill open={isOpen(c)} /></div>

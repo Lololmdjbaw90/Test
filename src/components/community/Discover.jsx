@@ -21,20 +21,18 @@ export function ActiveCreators({ me, creators, onOpen, onCompose }) {
         </button>
       )}
       {creators.map((c, i) => (
-        <motion.button
+        <button
           key={c.email}
-          initial={{ opacity: 0, scale: 0.85 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: Math.min(i, 8) * 0.035, type: "spring", stiffness: 380, damping: 26 }}
           onClick={() => onOpen(c)}
-          className="flex flex-col items-center gap-1.5 w-[68px] flex-shrink-0"
+          className="enter-pop flex flex-col items-center gap-1.5 w-[68px] flex-shrink-0"
+          style={{ "--d": `${Math.min(i, 8) * 35}ms` }}
           aria-label={`${c.name}'s latest post`}
         >
           <span className="flex p-[5px] rounded-full" style={{ background: c.unseen ? "conic-gradient(from 200deg, #f59e0b, rgb(var(--accent-rgb)), #a855f7, #f59e0b)" : "var(--border-strong)" }}>
             <Avatar src={c.user?.profile_picture || c.picture} name={c.name} size={58} ring={2} ringColor="var(--app-bg)" online={c.user ? (isOnline(c.user) || undefined) : undefined} />
           </span>
           <span className="text-[11px] font-semibold truncate w-full text-center" style={{ color: c.unseen ? "var(--text-primary)" : "var(--text-muted)" }}>{c.name.split(" ")[0]}</span>
-        </motion.button>
+        </button>
       ))}
     </div>
   );
@@ -81,7 +79,7 @@ export function SuggestedPeople({ items, followingSet, onFollow, variant = "list
       </div>
       <div className="space-y-1">
         {items.map(({ user, reason }, i) => (
-          <motion.div key={user.email} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }} className="flex items-center gap-3 py-1.5">
+          <div key={user.email} className="enter-side flex items-center gap-3 py-1.5" style={{ "--d": `${i * 40}ms`, "--enter-x": "10px" }}>
             <Link to={profileLink(user.email)}><Avatar src={user.profile_picture} name={displayName(user)} size={40} online={isOnline(user) || undefined} /></Link>
             <div className="flex-1 min-w-0">
               <Link to={profileLink(user.email)} className="block text-sm font-bold truncate hover:underline" style={{ color: "var(--text-primary)" }}>{displayName(user)}</Link>
@@ -90,7 +88,7 @@ export function SuggestedPeople({ items, followingSet, onFollow, variant = "list
             <button onClick={() => onFollow(user.email)} className="text-xs font-bold flex-shrink-0 px-2 py-1 rounded-lg transition-colors hover:bg-[var(--pink-soft)]" style={{ color: followingSet.has(user.email) ? "var(--text-muted)" : "var(--accent-rose)" }}>
               {followingSet.has(user.email) ? "Following" : "Follow"}
             </button>
-          </motion.div>
+          </div>
         ))}
       </div>
     </section>
@@ -133,7 +131,7 @@ export function ServerSuggestions({ items }) {
       <div className="space-y-1">
         {items.map(({ community: c, reason }) => (
           <Link key={c.id} to={`/CommunityChat?id=${c.id}`} className="flex items-center gap-3 px-2 py-2 rounded-xl transition-colors hover:bg-[var(--surface-2)]">
-            <span className="w-10 h-10 rounded-2xl overflow-hidden flex items-center justify-center text-xl flex-shrink-0" style={{ background: "var(--pink-soft)" }}>{c.icon_url ? <img src={c.icon_url} alt="" className="w-full h-full object-cover" /> : c.icon_emoji || "💬"}</span>
+            <span className="w-10 h-10 rounded-2xl overflow-hidden flex items-center justify-center text-xl flex-shrink-0" style={{ background: "var(--pink-soft)" }}>{c.icon_url ? <img loading="lazy" decoding="async" src={c.icon_url} alt="" className="w-full h-full object-cover" /> : c.icon_emoji || "💬"}</span>
             <span className="flex-1 min-w-0">
               <span className="block text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{c.name}</span>
               <span className="block text-[11px] truncate" style={{ color: "var(--text-muted)" }}>{reason}</span>
