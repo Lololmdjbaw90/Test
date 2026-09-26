@@ -143,10 +143,12 @@
   }
   .card { border-radius: 1.4rem; }
   .card-sm { border-radius: 1.1rem; }
-  .card-hover:hover, a.card:hover, a.card-sm:hover {
-    border-color: rgb(var(--accent-rgb) / 0.35);
-    box-shadow: var(--shadow-md);
-    translate: 0 -2px;
+  @media (hover: hover) {
+    .card-hover:hover, a.card:hover, a.card-sm:hover {
+      border-color: rgb(var(--accent-rgb) / 0.35);
+      box-shadow: var(--shadow-md);
+      translate: 0 -2px;
+    }
   }
 
   .badge-pink, .chip-sm {
@@ -182,6 +184,7 @@
     position: relative;
     overflow: hidden;
     background: var(--accent-grad);
+    background-origin: border-box; /* no light sliver where the gradient repeats under the border */
     color: #fff;
     border: 1px solid transparent;
     padding: 0.55rem 1.25rem;
@@ -195,24 +198,24 @@
     transform: translateX(-120%);
     transition: transform 600ms ease;
   }
-  .btn:hover { translate: 0 -1px; box-shadow: 0 14px 30px rgb(var(--accent-rgb) / 0.34); }
-  .btn:hover::after { transform: translateX(120%); }
+  @media (hover: hover) { .btn:hover { translate: 0 -1px; box-shadow: 0 14px 30px rgb(var(--accent-rgb) / 0.34); } }
+  @media (hover: hover) { .btn:hover::after { transform: translateX(120%); } }
   .btn-outline {
     background: var(--surface);
     color: var(--accent-rose);
     border: 1px solid rgb(var(--accent-rgb) / 0.35);
     padding: 0.5rem 1.1rem;
   }
-  .btn-outline:hover { background: var(--pink-soft); translate: 0 -1px; }
+  @media (hover: hover) { .btn-outline:hover { background: var(--pink-soft); translate: 0 -1px; } }
   .btn-ghost {
     background: transparent;
     color: var(--text-secondary);
     border: 1px solid transparent;
     padding: 0.5rem 1rem;
   }
-  .btn-ghost:hover { background: var(--pink-soft); color: var(--accent-rose); }
+  @media (hover: hover) { .btn-ghost:hover { background: var(--pink-soft); color: var(--accent-rose); } }
   .btn-danger { background: var(--danger); color: #fff; border: 1px solid transparent; padding: 0.55rem 1.2rem; }
-  .btn-danger:hover { filter: brightness(1.05); translate: 0 -1px; }
+  @media (hover: hover) { .btn-danger:hover { filter: brightness(1.05); translate: 0 -1px; } }
   .btn:active, .btn-outline:active, .btn-ghost:active, .btn-danger:active { translate: 0 0; scale: 0.97; }
   .btn:disabled, .btn-outline:disabled, .btn-ghost:disabled, .btn-danger:disabled {
     opacity: 0.5;
@@ -235,7 +238,7 @@
     border: 1px solid transparent;
     transition: background 160ms ease, color 160ms ease, scale 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
   }
-  .icon-btn:hover { background: var(--pink-soft); color: var(--accent-rose); }
+  @media (hover: hover) { .icon-btn:hover { background: var(--pink-soft); color: var(--accent-rose); } }
   .icon-btn:active { scale: 0.92; }
   .icon-btn[data-active="true"] { background: var(--accent-grad); color: #fff; box-shadow: var(--shadow-accent); }
   .icon-btn-bordered { border-color: var(--border-c); background: var(--surface); }
@@ -278,8 +281,9 @@
     transition: color 160ms ease, background 160ms ease, border-color 160ms ease, box-shadow 200ms ease, scale 160ms ease;
   }
   .chip:active { scale: 0.96; }
-  .chip:hover { color: var(--accent-rose); border-color: rgb(var(--accent-rgb) / 0.35); }
-  .chip[data-active="true"] { background: var(--accent-grad); color: #fff; border-color: transparent; box-shadow: var(--shadow-accent); }
+  @media (hover: hover) { .chip:hover { color: var(--accent-rose); border-color: rgb(var(--accent-rgb) / 0.35); } }
+  /* A tight glow that fits inside scrolling chip rows instead of being cut off. */
+  .chip[data-active="true"] { background: var(--accent-grad); background-origin: border-box; color: #fff; border-color: transparent; box-shadow: 0 6px 14px -6px rgb(var(--accent-rgb) / 0.6); }
 
   .divider { height: 1px; background: var(--border-c); }
 
@@ -352,15 +356,15 @@
     background: rgb(255 255 255 / 0.12); color: #fff;
     transition: background 160ms ease, color 160ms ease, scale 160ms cubic-bezier(.2,.8,.2,1);
   }
-  .call-btn:hover { background: rgb(255 255 255 / 0.2); }
+  @media (hover: hover) { .call-btn:hover { background: rgb(255 255 255 / 0.2); } }
   .call-btn:active { scale: 0.92; }
   .call-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .call-btn[data-on="true"] { background: #fff; color: #140f17; }
   .call-btn[data-warn="true"] { background: rgb(239 68 68 / 0.2); color: #ff8b8b; }
   .call-btn-danger { background: #ef4444; }
-  .call-btn-danger:hover { background: #dc2626; }
+  @media (hover: hover) { .call-btn-danger:hover { background: #dc2626; } }
   .call-btn-accept { background: #22c55e; }
-  .call-btn-accept:hover { background: #16a34a; }
+  @media (hover: hover) { .call-btn-accept:hover { background: #16a34a; } }
   .ripple { position: absolute; inset: 0; border-radius: 9999px; border: 2px solid rgb(var(--accent-rgb) / 0.6); animation: ripple 2.2s cubic-bezier(.2,.6,.3,1) infinite; pointer-events: none; }
   .ripple:nth-child(2) { animation-delay: -0.73s; }
   .ripple:nth-child(3) { animation-delay: -1.46s; }

@@ -73,7 +73,7 @@ export default function CommentSection({ entity = "Comment", field = "artwork_id
               const name = c.user_display_name || c.user_full_name || "Someone";
               const canDelete = user && (user.email === c.user_email || user.role === "admin" || user.email === ownerEmail);
               return (
-                <motion.div key={c.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -10 }} className="flex gap-2.5 group">
+                <motion.div key={c.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -10 }} className="flex gap-2.5 group">
                   <Link to={profileLink(c.user_email)}><Avatar src={c.user_profile_picture} name={name} size={30} /></Link>
                   <div className="flex-1 min-w-0 rounded-2xl rounded-tl-md px-3 py-2" style={{ background: "var(--surface-2)" }}>
                     <div className="flex items-baseline gap-2">

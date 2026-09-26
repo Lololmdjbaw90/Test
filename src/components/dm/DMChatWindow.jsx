@@ -37,7 +37,7 @@ function Bubble({ msg, own, showAvatar, showName, isGroup, seen, onEdit, onDelet
   const [react, setReact] = useState(false);
   const reactions = Object.entries(msg.reactions || {}).filter(([, users]) => users?.length);
   return (
-    <motion.div layout="position" initial={{ opacity: 0, y: 10, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: "spring", stiffness: 420, damping: 32 }} className={`group flex gap-2 ${own ? "flex-row-reverse" : ""} ${showAvatar ? "mt-3" : "mt-0.5"}`} onMouseLeave={() => setReact(false)} onClick={(e) => { if (window.matchMedia("(hover: none)").matches && !e.target.closest("button,a,input,textarea")) onTap?.(msg.id); }}>
+    <motion.div initial={{ opacity: 0, y: 10, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: "spring", stiffness: 420, damping: 32 }} className={`group flex gap-2 ${own ? "flex-row-reverse" : ""} ${showAvatar ? "mt-3" : "mt-0.5"}`} onMouseLeave={() => setReact(false)} onClick={(e) => { if (window.matchMedia("(hover: none)").matches && !e.target.closest("button,a,input,textarea")) onTap?.(msg.id); }}>
       <div className="w-8 flex-shrink-0">{!own && showAvatar && <Avatar src={msg.user_profile_picture} name={msg.user_display_name} size={32} />}</div>
       <div className={`max-w-[78%] sm:max-w-[65%] flex flex-col ${own ? "items-end" : "items-start"}`}>
         {showName && isGroup && !own && <span className="text-[11px] font-bold mb-1 ml-3" style={{ color: "var(--text-secondary)" }}>{msg.user_display_name}</span>}
@@ -186,7 +186,7 @@ export default function DMChatWindow({ conversation, me, onCall }) {
       </div>
       <AnimatePresence>
         {!atBottom && (
-          <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} onClick={jump} className="absolute bottom-24 left-1/2 -translate-x-1/2 chip glass" style={{ boxShadow: "var(--shadow-md)" }}>
+          <motion.button initial={{ opacity: 0, x: "-50%", y: 10 }} animate={{ opacity: 1, x: "-50%", y: 0 }} exit={{ opacity: 0, x: "-50%", y: 10 }} onClick={jump} className="absolute bottom-24 left-1/2 chip glass" style={{ boxShadow: "var(--shadow-md)" }}>
             <ArrowDown className="w-4 h-4" /> Latest
           </motion.button>
         )}

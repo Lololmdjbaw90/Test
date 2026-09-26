@@ -111,7 +111,20 @@ export default function CommunityPage() {
     if (mine.length) frozen.current.ids = [...mine.map((x) => x.post.id), ...frozen.current.ids];
     return { feed: frozen.current.ids.map((id) => byId.get(id)).filter(Boolean), freshCount: fresh.length - mine.length };
   }, [listNow, feedKey, ready, tab, me?.email]);
-  useSeenTracker(feed.length);
+  // Render the feed in pages of 10 so long feeds stay smooth; more load as you near the end.
+  const PAGE = 10;
+  const [visibleCount, setVisibleCount] = useState(PAGE);
+  useEffect(() => { setVisibleCount(PAGE); }, [feedKey]);
+  const shown = feed.slice(0, visibleCount);
+  const sentinelRef = useRef(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return undefined;
+    const io = new IntersectionObserver((entries) => { if (entries[0].isIntersecting) setVisibleCount((n) => n + PAGE); }, { rootMargin: "900px 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [shown.length, feed.length]);
+  useSeenTracker(shown.length);
 
   const people = useMemo(() => suggestPeople(users, { me, taste, posts, limit: 8 }).filter((x) => !dismissed.has(x.user.email) && !blocked.has(x.user.email)), [users, me, taste, posts, dismissed, blocked]);
   const servers = useMemo(() => suggestServers(communities, { me, taste, limit: 3 }), [communities, me, taste]);
@@ -223,7 +236,7 @@ export default function CommunityPage() {
             </>
           ) : (
             <div className="space-y-5">
-              {feed.map(({ post, reason }, i) => (
+              {shown.map(({ post, reason }, i) => (
                 <React.Fragment key={post.id}>
                   <FeedPost
                     post={post}
@@ -248,11 +261,17 @@ export default function CommunityPage() {
                   {i === 2 && people.length > 0 && <div className="lg:hidden"><SuggestedPeople items={people} followingSet={followingSet} onFollow={follow} variant="carousel" onDismiss={(e) => setDismissed((s) => new Set(s).add(e))} /></div>}
                 </React.Fragment>
               ))}
+              {shown.length < feed.length ? (
+                <div ref={sentinelRef} className="space-y-5" aria-hidden="true">
+                  <div className="card !rounded-[1.75rem] p-4 space-y-3"><div className="flex gap-3 items-center"><div className="skeleton w-10 h-10 !rounded-full" /><div className="skeleton h-4 w-32" /></div><div className="skeleton h-48" /></div>
+                </div>
+              ) : (
               <div className="text-center py-8">
                 <p className="text-2xl mb-1">✨</p>
                 <p className="font-display text-lg font-semibold" style={{ color: "var(--text-primary)" }}>You're all caught up</p>
                 <p className="text-sm" style={{ color: "var(--text-muted)" }}>{tab === "foryou" ? "Check out Latest or follow more artists for new things." : "That's everything for now."}</p>
               </div>
+              )}
             </div>
           )}
         </div>

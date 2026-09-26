@@ -43,7 +43,7 @@ export function Segmented({ options, value, onChange, size = "md", className = "
           initial={false}
           animate={{ x: pill.x, width: pill.width }}
           transition={{ type: "spring", stiffness: 420, damping: 34 }}
-          style={{ background: "var(--accent-grad)", boxShadow: "var(--shadow-accent)" }}
+          style={{ background: "var(--accent-grad)", boxShadow: "0 4px 10px -4px rgb(var(--accent-rgb) / 0.6)" }}
         />
       )}
       {options.map((o) => {
@@ -73,7 +73,7 @@ export function Segmented({ options, value, onChange, size = "md", className = "
 
 export function ChipRow({ options, value, onChange, className = "" }) {
   return (
-    <div className={`flex gap-2 overflow-x-auto no-scrollbar pb-1 ${className}`}>
+    <div className={`flex gap-2 overflow-x-auto no-scrollbar pt-1 pb-3 -mt-1 -mb-2 px-1 -mx-1 ${className}`}>
       {options.map((o) => {
         const id = typeof o === "string" ? o : o.id;
         const label = typeof o === "string" ? o : o.label;

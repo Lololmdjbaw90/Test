@@ -266,7 +266,7 @@ export default function ChatArea({ channel, community, me, roles, members, myRol
 
         <AnimatePresence>
           {!atBottom && (
-            <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} onClick={() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" })} className="absolute bottom-3 left-1/2 -translate-x-1/2 chip glass z-10" style={{ boxShadow: "var(--shadow-md)" }}><ArrowDown className="w-4 h-4" /> Jump to latest</motion.button>
+            <motion.button initial={{ opacity: 0, x: "-50%", y: 10 }} animate={{ opacity: 1, x: "-50%", y: 0 }} exit={{ opacity: 0, x: "-50%", y: 10 }} onClick={() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" })} className="absolute bottom-3 left-1/2 chip glass z-10" style={{ boxShadow: "var(--shadow-md)" }}><ArrowDown className="w-4 h-4" /> Jump to latest</motion.button>
           )}
         </AnimatePresence>
       </div>

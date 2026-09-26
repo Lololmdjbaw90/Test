@@ -82,7 +82,6 @@ export default function NotificationBell({ me }) {
                     return (
                       <motion.div
                         key={n.id}
-                        layout
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: 30, height: 0 }}

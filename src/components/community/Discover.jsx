@@ -101,7 +101,7 @@ export function TrendingTags({ tags, active, onTag, variant = "list" }) {
   if (!tags.length) return null;
   if (variant === "chips") {
     return (
-      <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 pb-1">
+      <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 sm:-mx-1 sm:px-1 pt-1 pb-3 -mt-1 -mb-2">
         <span className="chip !cursor-default flex-shrink-0" style={{ background: "transparent", borderColor: "transparent" }}><TrendingUp className="w-4 h-4" style={{ color: "var(--accent-rose)" }} /> Trending</span>
         {tags.map((t) => <button key={t.tag} className="chip flex-shrink-0" data-active={active === t.tag} onClick={() => onTag(active === t.tag ? null : t.tag)}>#{t.tag}</button>)}
       </div>
