@@ -10,7 +10,7 @@ import { toast } from "@/lib/toast";
 import { displayName, profileLink } from "@/lib/format";
 import { splitFriendships, toggleFollow, useFriendships } from "@/lib/social";
 import { setBlocked, useBlocked } from "@/lib/safety";
-import { buildTaste, hashtags, hidePost, markSeen, rankFeed, seenPosts, suggestPeople, suggestServers, trendingTags } from "@/lib/ranking";
+import { buildTaste, hashtags, hidePost, markSeen, rankFeed, relatedPosts, seenPosts, suggestPeople, suggestServers, trendingTags } from "@/lib/ranking";
 import { exportToCsv } from "@/utils/exportCsv";
 import { Page, EmptyState } from "@/components/common/Page";
 import { SearchInput, Segmented } from "@/components/common/Controls";
@@ -147,6 +147,11 @@ export default function CommunityPage() {
   const open = posts.find((p) => p.id === openId) || null;
   const update = (fn) => setParams((p) => { const n = new URLSearchParams(p); fn(n); return n; });
   const setOpen = (id) => { if (id) markSeen(id); update((n) => { if (id) n.set("post", id); else n.delete("post"); n.delete("compose"); }); };
+  // Where the open post sits in the feed you're looking at (for swiping), and
+  // what to suggest below it.
+  const openIndex = open ? feed.findIndex((x) => x.post.id === open.id) : -1;
+  const moreFromAuthor = useMemo(() => (open ? posts.filter((p) => p.user_email === open.user_email && p.id !== open.id).slice(0, 8) : []), [open, posts]);
+  const related = useMemo(() => relatedPosts(open, filtered, { limit: 6, exclude: blocked }).filter((p) => p.user_email !== open?.user_email || moreFromAuthor.length === 0), [open, filtered, blocked, moreFromAuthor.length]);
   const setTag = (t) => { update((n) => { if (t) n.set("tag", t); else n.delete("tag"); }); document.getElementById("main")?.scrollTo({ top: 0, behavior: "smooth" }); };
 
   const like = (post) => toggleLike({ entity: "CommunityPost", record: post, user: me, setData, message: `liked your post${post.title ? ` "${post.title}"` : ""}`, link: `/Community?post=${post.id}` });
@@ -295,7 +300,27 @@ export default function CommunityPage() {
         </aside>
       </div>
 
-      <PostViewer post={open} onClose={() => setOpen(null)} liked={!!open && !!me && (open.likes || []).includes(me.email)} likeCount={open?.likes?.length || 0} onLike={() => open && like(open)} onDelete={() => open && remove(open)} />
+      <PostViewer
+        post={open}
+        onClose={() => setOpen(null)}
+        liked={!!open && !!me && (open.likes || []).includes(me.email)}
+        likeCount={open?.likes?.length || 0}
+        onLike={() => open && like(open)}
+        onDelete={() => open && remove(open)}
+        position={openIndex >= 0 ? { index: openIndex + 1, total: feed.length } : null}
+        onPrev={openIndex > 0 ? () => setOpen(feed[openIndex - 1].post.id) : null}
+        onNext={openIndex >= 0 && openIndex < feed.length - 1 ? () => setOpen(feed[openIndex + 1].post.id) : null}
+        saved={!!open && saved.has(open.id)}
+        onSave={() => open && save(open)}
+        author={open ? usersByEmail[open.user_email] : null}
+        following={!!open && followingSet.has(open.user_email)}
+        onFollow={follow}
+        likers={open ? likersOf(open) : []}
+        moreFromAuthor={moreFromAuthor}
+        related={related}
+        onOpenPost={setOpen}
+        onTag={setTag}
+      />
     </Page>
   );
 }

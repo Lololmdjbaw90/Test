@@ -424,6 +424,14 @@
   .anim-spin { animation: spin 8s linear infinite; }
   .anim-spin[data-paused="true"] { animation-play-state: paused; }
   .anim-sweep { animation: sweep 6.8s ease-in-out infinite; }
+  .reel-kenburns { animation: kenburns 7s ease-out forwards; will-change: transform; }
+  .marquee { animation: marquee 7s linear infinite alternate; }
+  .marquee-mask { overflow: hidden; -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
+  /* The tab bar turns dark over Reels, like TikTok. */
+  .mobile-tabbar[data-dark="true"] { background: rgb(0 0 0 / 0.92) !important; border-color: rgb(255 255 255 / 0.08) !important; }
+  .mobile-tabbar[data-dark="true"] a, .mobile-tabbar[data-dark="true"] > div > button:not([aria-label="Create"]) { color: rgb(255 255 255 / 0.7) !important; }
+  .mobile-tabbar[data-dark="true"] [aria-current="page"] { color: #fff !important; }
+  .mobile-tabbar[data-dark="true"] [aria-current="page"] > span:first-child { background: rgb(255 255 255 / 0.12) !important; }
 }
 
 @keyframes shimmer { 0% { background-position: 120% 0; } 100% { background-position: -120% 0; } }
@@ -441,6 +449,8 @@
 @keyframes fade-in { from { opacity: 0; } }
 @keyframes bob { 0%, 100% { transform: translate3d(0, 0, 0); } 50% { transform: translate3d(0, -6px, 0); } }
 @keyframes wiggle { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(8deg); } 75% { transform: rotate(-8deg); } }
+@keyframes kenburns { from { transform: scale(1) translate3d(0, 0, 0); } to { transform: scale(1.14) translate3d(-2%, -2%, 0); } }
+@keyframes marquee { 0%, 12% { transform: translateX(0); } 88%, 100% { transform: translateX(min(0px, calc(-100% + 60vw))); } }
 @keyframes sweep { 0% { transform: translate3d(-100%, 0, 0); } 45%, 100% { transform: translate3d(200%, 0, 0); } }
 @keyframes gradient-pan { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
 

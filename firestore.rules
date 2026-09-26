@@ -85,6 +85,22 @@ service cloud.firestore {
       allow delete: if isAdmin() || ownsResource();
     }
 
+    // Reels: short videos / photos. Anyone signed in can like, and bump the
+    // view counter by exactly one; authors and admins edit or delete.
+    match /Reel/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.user_email == ownEmail();
+      allow update: if isAdmin() || ownsResource() || onlyChanged(['likes', 'updated_date', 'updated_at'])
+        || (signedIn() && onlyChanged(['views', 'updated_date', 'updated_at']) && request.resource.data.views == resource.data.get('views', 0) + 1);
+      allow delete: if isAdmin() || ownsResource();
+    }
+
+    // "What's new" notes written by admins, readable by everyone signed in.
+    match /AppUpdate/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
     match /Comment/{id} {
       allow read: if signedIn();
       allow create: if ownsIncomingData();

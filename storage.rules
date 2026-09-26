@@ -3,9 +3,10 @@ service firebase.storage {
   match /b/{bucket}/o {
     match /uploads/{userId}/{allPaths=**} {
       allow read: if request.auth != null;
+      // Pictures and audio up to 20 MB, reels videos up to 60 MB.
       allow write: if request.auth != null && request.auth.uid == userId
-        && request.resource.size < 20 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*|audio/.*|video/.*');
+        && request.resource.contentType.matches('image/.*|audio/.*|video/.*')
+        && request.resource.size < (request.resource.contentType.matches('video/.*') ? 60 : 20) * 1024 * 1024;
     }
   }
 }

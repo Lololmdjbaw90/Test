@@ -52,9 +52,9 @@
 		<string>arm64</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>Sugerly uses the camera for video calls and for photos you choose to share.</string>
+	<string>Sugerly uses the camera to film reels, take photos you choose to share, and for video calls.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Sugerly uses the microphone for voice channels and calls.</string>
+	<string>Sugerly uses the microphone for the sound in your reels, voice channels and calls.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Choose photos and artwork to post, send or use as your profile picture.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

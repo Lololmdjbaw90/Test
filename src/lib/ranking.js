@@ -305,3 +305,26 @@ export function trendingTracks(tracks, { now = Date.now() } = {}) {
     .sort((a, b) => b.score - a.score)
     .map((x) => x.track);
 }
+
+// "More like this" for an open post: shared hashtags count most, then the
+// same artist, people who liked both, similar words and freshness.
+export function relatedPosts(post, posts, { limit = 6, exclude = new Set() } = {}) {
+  if (!post) return [];
+  const myTags = new Set(hashtags(postText(post)));
+  const myTerms = new Set(terms(postText(post)));
+  const myLikers = new Set(arr(post.likes));
+  const hidden = hiddenPosts();
+  return posts
+    .filter((p) => p.id !== post.id && !exclude.has(p.user_email) && !hidden[p.id])
+    .map((p) => {
+      const tags = hashtags(postText(p));
+      const shared = tags.filter((t) => myTags.has(t)).length;
+      const words = terms(postText(p)).filter((t) => myTerms.has(t)).length;
+      const likers = arr(p.likes).filter((e) => myLikers.has(e)).length;
+      const score = shared * 3 + (p.user_email === post.user_email ? 1.5 : 0) + Math.min(3, likers) * 0.5 + Math.min(4, words) * 0.4 + (p.image_url ? 0.3 : 0) + 1 / (1 + hoursSince(p.created_date) / 72);
+      return { p, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((x) => x.p);
+}

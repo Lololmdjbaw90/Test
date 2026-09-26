@@ -1,5 +1,23 @@
 # Changes
 
+## Reels, the reel studio, a better post view and app updates (this update)
+
+### New
+- **Reels** (`/Reels`, in the tab bar): a full-screen, snap-scrolling feed of short videos and photos. Swipe up for the next one, tap for sound or to pause, double-tap to like, and use the side buttons to follow, comment, save, share or say "Not interested". Every reel says why it's in your feed.
+- **A smart For you algorithm** (`src/lib/reelRank.js`): learns from watch time, full watches and re-watches, quick swipes away, likes, saves, comments, shares and "Not interested". It builds a creator and hashtag taste from those signals, scores reels on taste, smoothed like rate, popularity and freshness, stops the same creator or hashtag from repeating back to back, and gives about 1 in 6 slots to creators you haven't met. It keeps learning while you scroll: the reels below the next one are re-ranked after every reel.
+- **Reel studio**: film in the app (front / back camera, flash — the real torch on the back camera and a bright screen flash for selfies — live filters, photo or video mode, 60 s max) or pick from your library, then edit: trim with a filmstrip, 12 filters, text you drag anywhere, speed (0.5x–2x), original sound on/off, music from Sugerly tracks and a cover frame. Video edits are saved with the reel and applied when it plays; photos have them drawn in.
+- **Photo filters** in the Community post composer (drawn into the picture before it's uploaded).
+- **Post view remade**: swipe (or ←/→) between posts in the feed you opened it from, double-tap to like, tap for full screen, follow the artist, Like / Comment / Share / Save tiles, tappable hashtags, "More from" the artist and "More like this".
+- **What's new**: release notes in the app (`/Updates`, also in the menu), a one-time popup after an update, an unread badge, and admins can post their own updates. The web app also shows "A new version is ready — Update" when one has downloaded.
+
+### Changed
+- Phones: the tab bar is now Home · Community · ＋ · Reels · Chat; everything else is in the menu behind your avatar (top right). The tab bar turns dark over Reels.
+- Videos up to 60 MB can be uploaded (pictures and audio stay at 20 MB).
+
+### For your Firebase project
+- Deploy the rules and indexes again: `npx firebase-tools deploy --only firestore:rules,firestore:indexes,storage` (new `Reel` and `AppUpdate` collections and the video size limit).
+
+
 ## Fonts, sounds & haptics, better artwork viewer (this update)
 
 ### New

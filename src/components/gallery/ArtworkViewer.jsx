@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bookmark, ChevronLeft, ChevronRight, Link2, Maximize2, Pause, Play, Star, Trash2, X } from "lucide-react";
+import { Bookmark, ChevronLeft, ChevronRight, Link2, Maximize2, Pause, Play, Star, Trash2 } from "lucide-react";
 import Modal from "@/components/common/Modal";
+import Lightbox from "@/components/common/Lightbox";
 import Avatar from "@/components/common/Avatar";
 import LikeButton from "@/components/common/LikeButton";
 import CommentSection from "./CommentSection";
@@ -12,28 +12,6 @@ import { usePlayer } from "@/lib/player";
 import { toast } from "@/lib/toast";
 import { profileLink, siteUrl, timeAgo } from "@/lib/format";
 import { feedback } from "@/lib/feedback";
-
-// Tap-to-open full-screen view of the image (pinch to zoom on phones).
-function Lightbox({ src, alt, onClose }) {
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") { e.stopImmediatePropagation(); onClose(); } };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [onClose]);
-  return createPortal(
-    <motion.div
-      className="fixed inset-0 z-[140] flex items-center justify-center safe-top safe-x"
-      style={{ background: "rgb(8 4 6 / 0.96)", touchAction: "pinch-zoom" }}
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}
-      onClick={onClose}
-      role="dialog" aria-modal="true" aria-label={alt}
-    >
-      <img src={src} alt={alt} className="max-w-full max-h-full object-contain select-none" draggable={false} />
-      <button onClick={onClose} className="absolute top-[calc(env(safe-area-inset-top)+0.75rem)] right-3 w-11 h-11 rounded-full flex items-center justify-center text-white" style={{ background: "rgb(255 255 255 / 0.14)" }} aria-label="Close full screen"><X className="w-5 h-5" /></button>
-    </motion.div>,
-    document.body,
-  );
-}
 
 // Artwork viewer. Phones and tablets: the image on top (swipe for the next
 // piece, tap for full screen), then title and artist, one row of actions,

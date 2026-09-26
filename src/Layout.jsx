@@ -23,8 +23,10 @@ import { displayName, profileLink } from "@/lib/format";
 import { messagePreview } from "@/lib/calls";
 import ErrorBoundary from "@/components/common/ErrorBoundary";
 import { feedback } from "@/lib/feedback";
+import { WhatsNewPopup, UpdateReadyBar } from "@/components/layout/WhatsNew";
+import { useUnseenUpdates } from "@/lib/updates";
 
-const FULL_HEIGHT = ["/communitychat", "/directmessages"];
+const FULL_HEIGHT = ["/communitychat", "/directmessages", "/reels"];
 const EXTRA_TITLES = { "/profile": "Profile", "/settings": "Settings", "/communitychat": "Server", "/upload": "Upload art" };
 function pageTitle(pathname) {
   const p = pathname.toLowerCase();
@@ -72,9 +74,13 @@ function AnnouncementBar({ config }) {
   );
 }
 
-function TopBar({ onSearch, user }) {
+function TopBar({ onSearch, user, badges, isDark, onToggleTheme }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const avatarRef = useRef(null);
+  useEffect(() => setMenuOpen(false), [location.pathname, location.search]);
+  const menuBadge = (badges?.friends || 0) + (badges?.updates || 0);
   // Phones (and the installed app, which has no browser back button) get a
   // back arrow once you've moved away from Home.
   const showBack = location.pathname !== "/" && canGoBack();
@@ -94,20 +100,25 @@ function TopBar({ onSearch, user }) {
       <button onClick={onSearch} className="icon-btn icon-btn-bordered sm:hidden" aria-label="Search"><Search className="w-[18px] h-[18px]" /></button>
       {user && <NotificationBell me={user} />}
       {user && (
-        <Link to={profileLink(user.email)} className="md:hidden" aria-label="Your profile">
-          <Avatar src={user.profile_picture} name={displayName(user)} size={36} nitro={user.nitro_active} />
-        </Link>
+        <>
+          {/* On phones your avatar opens the menu with your profile and every page. */}
+          <button ref={avatarRef} onClick={() => { feedback("tap"); setMenuOpen((v) => !v); }} className="md:hidden relative rounded-full" aria-label="Menu" aria-expanded={menuOpen}>
+            <Avatar src={user.profile_picture} name={displayName(user)} size={36} nitro={user.nitro_active} />
+            {menuBadge > 0 && <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold text-white flex items-center justify-center" style={{ background: "var(--accent-rose)", boxShadow: "0 0 0 2px var(--surface)" }}>{menuBadge > 9 ? "9+" : menuBadge}</span>}
+          </button>
+          <MoreSheet open={menuOpen} onClose={() => setMenuOpen(false)} anchorRef={avatarRef} placement="bottom-end" badges={badges || {}} isDark={isDark} onToggleTheme={onToggleTheme} />
+        </>
       )}
     </header>
   );
 }
 
-function MoreSheet({ open, onClose, anchorRef, badges, isDark, onToggleTheme }) {
+function MoreSheet({ open, onClose, anchorRef, badges, isDark, onToggleTheme, placement = "top-end" }) {
   const { user, isAdmin, logout } = useAuth();
   const location = useLocation();
   const sections = isAdmin ? [...NAV_SECTIONS, ADMIN_SECTION] : NAV_SECTIONS;
   return (
-    <Popover open={open} onClose={onClose} anchorRef={anchorRef} placement="top-end" width={340} label="More">
+    <Popover open={open} onClose={onClose} anchorRef={anchorRef} placement={placement} width={340} label="Menu">
       <div className="px-4 pb-4 pt-1 space-y-4">
         {user && (
           <Link to={profileLink(user.email)} onClick={onClose} className="card-sm p-3 flex items-center gap-3">
@@ -160,7 +171,7 @@ function MobileNav({ badges, isAdmin, isDark, onToggleTheme }) {
         <CreateMenu isAdmin={isAdmin} onDone={() => setSheet(null)} className="pb-4" />
       </Popover>
       <MoreSheet open={sheet === "more"} onClose={() => setSheet(null)} anchorRef={moreRef} badges={badges} isDark={isDark} onToggleTheme={onToggleTheme} />
-      <nav className="mobile-tabbar md:hidden fixed bottom-0 inset-x-0 z-[65] glass safe-bottom" style={{ borderTop: "1px solid var(--border-c)" }} aria-label="Main">
+      <nav className="mobile-tabbar md:hidden fixed bottom-0 inset-x-0 z-[65] glass safe-bottom" data-dark={location.pathname.toLowerCase() === "/reels"} style={{ borderTop: "1px solid var(--border-c)" }} aria-label="Main">
         <div className="flex items-center justify-around h-[68px] px-2">
           {MOBILE_NAV.map((item) => {
             if (item.label === "create") {
@@ -245,10 +256,12 @@ export default function Layout() {
     },
   });
   const { data: requests } = useLiveQuery("Friendship", user ? { receiver_email: user.email, status: "pending" } : null, { enabled: !!user });
+  const { unseen: unseenUpdates } = useUnseenUpdates(user);
   const badges = useMemo(() => ({
     dms: new Set(dms.filter((m) => m.user_email !== user?.email && !(m.read_by || []).includes(user?.email)).map((m) => m.conversation_id)).size,
     friends: requests.length,
-  }), [dms, requests, user?.email]);
+    updates: unseenUpdates.length,
+  }), [dms, requests, user?.email, unseenUpdates.length]);
 
   const toggleTheme = useCallback(() => {
     const next = document.documentElement.classList.contains("dark") ? "light" : "dark";
@@ -286,10 +299,11 @@ export default function Layout() {
       <Sidebar collapsed={collapsed} onToggleCollapsed={toggleCollapsed} badges={badges} onToggleTheme={toggleTheme} isDark={isDark} />
       <div className="flex-1 min-w-0 flex flex-col relative">
         <OfflineBar />
+        <UpdateReadyBar />
         <InstallBanner />
         <AnnouncementBar config={siteConfig} />
         <VoiceDock />
-        {!fullHeight && <TopBar onSearch={() => setPaletteOpen(true)} user={user} />}
+        {!fullHeight && <TopBar onSearch={() => setPaletteOpen(true)} user={user} badges={badges} isDark={isDark} onToggleTheme={toggleTheme} />}
         <main ref={mainRef} id="main" className={`flex-1 min-h-0 relative ${fullHeight ? `overflow-hidden ${hideMobileNav ? "" : "pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-0"}` : "overflow-y-auto overflow-x-hidden scroll"}`}>
           {/* Enter-only transition keyed by route; no exit phase that could stall navigation. */}
           <div key={location.pathname} className={`page-enter ${fullHeight ? "h-full" : "min-h-full"}`}>
@@ -301,6 +315,7 @@ export default function Layout() {
       <MiniPlayer raised={!hideMobileNav} />
       {user && <CallManager me={user} />}
       {user && <ReportHost />}
+      {user && <WhatsNewPopup unseen={unseenUpdates} />}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} isDark={isDark} onToggleTheme={toggleTheme} />
     </div>
   );

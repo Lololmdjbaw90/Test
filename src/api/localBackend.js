@@ -125,12 +125,13 @@ function communityUpdateAllowed(user, current, data) {
   if (fields(["perm_index", "everyone_permissions"]) && hasServerPerm(user, current.id, "manage_roles")) return true;
   return false;
 }
-const LIKEABLE = ["Artwork", "CommunityPost", "MusicReview"];
+const LIKEABLE = ["Artwork", "CommunityPost", "MusicReview", "Reel"];
 
 function canCreate(user, name, data) {
   if (!user) return false;
   if (isAdminUser(user)) return true;
-  if (name === "SiteConfig" || name === "Log" || name === "User") return false;
+  if (name === "SiteConfig" || name === "Log" || name === "User" || name === "AppUpdate") return false;
+  if (name === "Reel") return same(data?.user_email, user.email);
   if (name === "ServerChannel") return hasServerPerm(user, data?.community_id, "manage_channels");
   if (name === "ServerRole") return hasServerPerm(user, data?.community_id, "manage_roles");
   if (name === "ServerMember") return hasServerPerm(user, data?.community_id, "manage_roles") || (same(data?.user_email, user.email) && !(data?.roles || []).length);
@@ -149,7 +150,7 @@ function canUpdate(user, name, current, data = {}) {
   if (isAdminUser(user)) return true;
   const email = user.email;
   switch (name) {
-    case "SiteConfig": case "Log": case "User": return false;
+    case "SiteConfig": case "Log": case "User": case "AppUpdate": return false;
     case "ServerChannel": return hasServerPerm(user, current?.community_id, "manage_channels");
     case "ServerRole": return hasServerPerm(user, current?.community_id, "manage_roles");
     case "ServerMember":
@@ -176,6 +177,7 @@ function canUpdate(user, name, current, data = {}) {
     default:
       if (LIKEABLE.includes(name) && onlyChanged(data, ["likes"])) return true;
       if (name === "MusicReview" && onlyChanged(data, ["plays"]) && data.plays === (current?.plays || 0) + 1) return true;
+      if (name === "Reel" && onlyChanged(data, ["views"]) && data.views === (current?.views || 0) + 1) return true;
       return isOwner(user, current);
   }
 }
@@ -185,7 +187,7 @@ function canDelete(user, name, current) {
   if (isAdminUser(user)) return true;
   const email = user.email;
   switch (name) {
-    case "SiteConfig": case "Log": case "User": return false;
+    case "SiteConfig": case "Log": case "User": case "AppUpdate": return false;
     case "ServerChannel": return hasServerPerm(user, current?.community_id, "manage_channels");
     case "ServerRole": return hasServerPerm(user, current?.community_id, "manage_roles");
     case "ServerMember": return same(current?.user_email, email) || hasServerPerm(user, current?.community_id, "kick_members") || hasServerPerm(user, current?.community_id, "manage_roles");
@@ -288,7 +290,7 @@ export const ENTITY_NAMES = [
   "Artwork", "ArtworkPing", "ChannelMessage", "Comment", "Commission", "Community",
   "CommunityComment", "CommunityPost", "DirectMessage", "Friendship", "GroupChat", "Log", "MusicReview",
   "Notification", "ServerChannel", "ServerMember", "ServerRole", "SiteConfig", "User",
-  "VoicePresence", "VoiceSignal", "Call", "Report",
+  "VoicePresence", "VoiceSignal", "Call", "Report", "Reel", "AppUpdate",
 ];
 const entities = {};
 ENTITY_NAMES.forEach((n) => { entities[n] = makeEntity(n); });
@@ -444,6 +446,11 @@ const integrations = {
     async UploadFile(args) {
       const file = args && args.file;
       if (!file) return { file_url: "" };
+      // Videos and big files go to IndexedDB (localStorage only holds a few MB).
+      if (typeof indexedDB !== "undefined" && (String(file.type || "").startsWith("video/") || file.size > 1.5 * 1024 * 1024)) {
+        const { putLocalMedia } = await import("../lib/media.js");
+        return { file_url: await putLocalMedia(file) };
+      }
       return { file_url: await fileToDataUrl(file) };
     },
     async InvokeLLM(args) {
@@ -616,6 +623,51 @@ function seedIfEmpty() {
   }
 }
 
+// Reels arrived after the first demo seed, so they have their own one-time
+// seed that also runs for demo data created by older versions.
+const DEMO_VIDEO = "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
+function seedReelsIfMissing() {
+  if (!isBrowser || readRaw(`${PREFIX}:__seeded_reels`)) return;
+  try {
+    const users = loadCollection("User");
+    const find = (name) => users.find((u) => u.email === `${name}@mimilocks.local`);
+    const people = ["aria", "kai", "luna", "max"].map(find).filter(Boolean);
+    const admin = users.find((u) => u.role === "admin");
+    if (!people.length) { writeRaw(`${PREFIX}:__seeded_reels`, "1"); return; }
+    const tracks = loadCollection("MusicReview");
+    const ago = (m) => new Date(Date.now() - m * 60000).toISOString();
+    const pic = (seed) => `https://picsum.photos/seed/${seed}/720/1280`;
+    const emails = users.map((u) => u.email);
+    const pickLikes = (n, salt) => emails.filter((_, i) => (i * 7 + salt) % 5 < n);
+    const reel = (u, i, extra) => ({
+      id: uid(), created_date: ago(30 + i * 173), updated_date: ago(30 + i * 173), created_by: u.email,
+      user_email: u.email, user_display_name: u.display_name, user_profile_picture: u.profile_picture || "",
+      kind: "photo", media_url: "", cover_url: "", caption: "", tags: [], music_url: "", music_title: "", music_artist: "",
+      edits: { trim_start: 0, trim_end: 0, filter: "none", speed: 1, muted: false, text: [] },
+      likes: [], views: 0, duration: 7, ...extra,
+    });
+    const track = (i) => tracks[i % Math.max(1, tracks.length)] || null;
+    const music = (i) => { const t = track(i); return t ? { music_url: t.music_url, music_title: t.title, music_artist: t.user_display_name } : {}; };
+    const [aria, kai, luna, max] = [people[0], people[1] || people[0], people[2] || people[0], people[3] || people[0]];
+    const tagsOf = (text) => [...text.matchAll(/#([\p{L}\p{N}_]{2,30})/gu)].map((m) => m[1].toLowerCase());
+    const rows = [
+      reel(aria, 0, { media_url: pic("reel-koi"), cover_url: pic("reel-koi"), caption: "koi pond study, 3 layers of wash 🐟 #watercolor #koi", edits: { trim_start: 0, trim_end: 0, filter: "sugar", speed: 1, muted: false, text: [{ id: "t1", text: "day 12 of koi 🐟", x: 0.5, y: 0.18, color: "#ffffff", bg: "rgba(217,87,127,0.85)", size: 0.06 }] }, likes: pickLikes(3, 1), views: 142, ...music(3) }),
+      reel(kai, 1, { kind: "video", media_url: DEMO_VIDEO, cover_url: pic("reel-flower"), caption: "timelapse of tonight's neon study ✨ #digitalart #timelapse", edits: { trim_start: 0, trim_end: 0, filter: "vivid", speed: 1, muted: true, text: [{ id: "t1", text: "neon garden", x: 0.5, y: 0.82, color: "#ffffff", bg: "", size: 0.08 }] }, likes: pickLikes(4, 2), views: 388, duration: 5, ...music(1) }),
+      reel(luna, 2, { media_url: pic("reel-dream"), cover_url: pic("reel-dream"), caption: "soft light, softer brushes ☁️ #landscape #dreamy", edits: { trim_start: 0, trim_end: 0, filter: "dreamy", speed: 1, muted: false, text: [] }, likes: pickLikes(4, 3), views: 510, ...music(0) }),
+      reel(max, 3, { media_url: pic("reel-lofi"), cover_url: pic("reel-lofi"), caption: "drawing session soundtrack 🎧 #lofi #music", edits: { trim_start: 0, trim_end: 0, filter: "vintage", speed: 1, muted: false, text: [{ id: "t1", text: "press play & draw", x: 0.5, y: 0.5, color: "#ffe9f1", bg: "", size: 0.08 }] }, likes: pickLikes(2, 4), views: 97, ...music(0) }),
+      reel(aria, 4, { kind: "video", media_url: DEMO_VIDEO, cover_url: pic("reel-bloom"), caption: "slow bloom 🌸 reference for my next piece #reference #watercolor", edits: { trim_start: 1, trim_end: 4.5, filter: "peach", speed: 0.5, muted: true, text: [] }, likes: pickLikes(3, 5), views: 205, duration: 5, ...music(2) }),
+      reel(kai, 5, { media_url: pic("reel-city"), cover_url: pic("reel-city"), caption: "rainy city palette test 🌧️ #digitalart #colorstudy", edits: { trim_start: 0, trim_end: 0, filter: "cool", speed: 1, muted: false, text: [] }, likes: pickLikes(1, 6), views: 64, ...music(1) }),
+      reel(luna, 6, { media_url: pic("reel-sunset"), cover_url: pic("reel-sunset"), caption: "golden hour speedpaint 🌅 #landscape #speedpaint", edits: { trim_start: 0, trim_end: 0, filter: "golden", speed: 1, muted: false, text: [{ id: "t1", text: "20 min challenge", x: 0.5, y: 0.14, color: "#2a1620", bg: "rgba(255,255,255,0.9)", size: 0.055 }] }, likes: pickLikes(5, 7), views: 902, ...music(3) }),
+      reel(max, 7, { media_url: pic("reel-sketch"), cover_url: pic("reel-sketch"), caption: "sketchbook flip, be nice 🙈 #sketchbook #drawing", edits: { trim_start: 0, trim_end: 0, filter: "mono", speed: 1, muted: false, text: [] }, likes: pickLikes(2, 8), views: 51, ...music(0) }),
+      ...(admin ? [reel(admin, 8, { media_url: pic("reel-hello"), cover_url: pic("reel-hello"), caption: "welcome to Sugerly reels 🍬 #hello", edits: { trim_start: 0, trim_end: 0, filter: "pop", speed: 1, muted: false, text: [{ id: "t1", text: "hi from sugerly 🍬", x: 0.5, y: 0.5, color: "#ffffff", bg: "rgba(217,87,127,0.85)", size: 0.07 }] }, likes: pickLikes(2, 9), views: 33, ...music(2) })] : []),
+    ].map((r) => ({ ...r, tags: tagsOf(r.caption) }));
+    saveCollection("Reel", [...loadCollection("Reel"), ...rows]);
+    writeRaw(`${PREFIX}:__seeded_reels`, "1");
+  } catch (e) {
+    console.warn("[localBackend] reel seed skipped:", e);
+  }
+}
+
 // Wipes every local record (used by the "Reset demo data" button in Settings).
 export function resetLocalData() {
   if (!isBrowser) return;
@@ -623,7 +675,7 @@ export function resetLocalData() {
 }
 
 export function createLocalClient() {
-  const ready = isBrowser ? ensureDefaultAdminAccount().then(seedIfEmpty).catch((e) => console.warn("[localBackend] init skipped:", e)) : Promise.resolve();
+  const ready = isBrowser ? ensureDefaultAdminAccount().then(seedIfEmpty).then(seedReelsIfMissing).catch((e) => console.warn("[localBackend] init skipped:", e)) : Promise.resolve();
   const withReady = (fn) => async (...args) => { await ready; return fn(...args); };
   // Make sure the first query after page load sees the seeded demo data.
   Object.values(entities).forEach((entity) => {

@@ -15,7 +15,7 @@ import AdminSiteSettings from "@/components/admin/AdminSiteSettings";
 
 const COLLECTIONS = ["User", "Artwork", "CommunityPost", "Comment", "CommunityComment", "ChannelMessage", "Community", "ServerChannel", "MusicReview", "Commission", "Report"];
 // Where each kind of reported thing lives, so "Remove content" can delete it.
-const REPORT_TARGET = { post: "CommunityPost", comment: "CommunityComment", track: "MusicReview", message: "ChannelMessage" };
+const REPORT_TARGET = { post: "CommunityPost", comment: "CommunityComment", track: "MusicReview", message: "ChannelMessage", reel: "Reel" };
 
 function CountUp({ value }) {
   const [n, setN] = useState(0);

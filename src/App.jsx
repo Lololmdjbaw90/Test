@@ -26,6 +26,8 @@ const Onboarding = lazy(() => import("./pages/Onboarding"));
 const Communities = lazy(() => import("./pages/Communities"));
 const CommunityChat = lazy(() => import("./pages/CommunityChat"));
 const Friends = lazy(() => import("./pages/Friends"));
+const Reels = lazy(() => import("./pages/Reels"));
+const Updates = lazy(() => import("./pages/Updates"));
 const Commissions = lazy(() => import("./pages/Commissions"));
 const TopArtists = lazy(() => import("./pages/TopArtists"));
 const DirectMessages = lazy(() => import("./pages/DirectMessages"));
@@ -69,6 +71,8 @@ const AppRoutes = () => {
           <Route path="/Communities" element={<Suspense fallback={<CenterSpinner />}><Communities /></Suspense>} />
           <Route path="/CommunityChat" element={<Suspense fallback={<CenterSpinner />}><CommunityChat /></Suspense>} />
           <Route path="/Friends" element={<Suspense fallback={<CenterSpinner />}><Friends /></Suspense>} />
+          <Route path="/Reels" element={<Suspense fallback={<CenterSpinner />}><Reels /></Suspense>} />
+          <Route path="/Updates" element={<Suspense fallback={<CenterSpinner />}><Updates /></Suspense>} />
           <Route path="/Commissions" element={<Suspense fallback={<CenterSpinner />}><Commissions /></Suspense>} />
           <Route path="/TopArtists" element={<Suspense fallback={<CenterSpinner />}><TopArtists /></Suspense>} />
           <Route path="/DirectMessages" element={<Suspense fallback={<CenterSpinner />}><DirectMessages /></Suspense>} />
