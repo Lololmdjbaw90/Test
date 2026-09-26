@@ -6,6 +6,7 @@ import { feedback } from "@/lib/feedback";
 import { toast } from "@/lib/toast";
 import FilterLayers from "@/components/media/FilterLayers";
 import FilterStrip from "@/components/media/FilterStrip";
+import { nativeTorchAvailable, screenFlashBrightness, setNativeTorch } from "@/lib/flash";
 
 export const MAX_SECONDS = 60;
 const MAX_UPLOAD_MB = 60;
@@ -59,7 +60,7 @@ export default function ReelCamera({ onClose, onCaptured }) {
   const [facing, setFacing] = useState("user");
   const [mode, setMode] = useState("video");
   const [flash, setFlash] = useState(false);
-  const [torch, setTorch] = useState(false); // back camera has a real torch
+  const [torch, setTorch] = useState(false); // "web" | "native" | false — the back camera's real light
   const [filter, setFilter] = useState("none");
   const [showFilters, setShowFilters] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -95,13 +96,17 @@ export default function ReelCamera({ onClose, onCaptured }) {
         setStream(current);
         setError("");
         const track = current.getVideoTracks()[0];
-        setTorch(!!track?.getCapabilities?.()?.torch);
+        const webTorch = !!track?.getCapabilities?.()?.torch;
+        setTorch(webTorch ? "web" : facing === "environment" && await nativeTorchAvailable() ? "native" : false);
       } catch (e) {
         setError(e?.name === "NotAllowedError" ? "Camera access is off. Allow it in Settings, or pick a photo or video instead." : "No camera found — pick a photo or video instead.");
       }
     })();
-    return () => { cancelled = true; current?.getTracks().forEach((t) => t.stop()); };
+    return () => { cancelled = true; setNativeTorch(false); current?.getTracks().forEach((t) => t.stop()); };
   }, [facing]);
+
+  // Never leave the light on or the screen at full brightness.
+  useEffect(() => () => { setNativeTorch(false); screenFlashBrightness(false); }, []);
 
   // Show the camera once the preview element exists.
   useEffect(() => {
@@ -133,12 +138,29 @@ export default function ReelCamera({ onClose, onCaptured }) {
   }, [stream, thumb]);
 
   const setTorchOn = async (on) => {
+    if (torch === "native") return setNativeTorch(on);
     const track = stream?.getVideoTracks()[0];
-    if (!torch || !track) return false;
+    if (torch !== "web" || !track) return false;
     try { await track.applyConstraints({ advanced: [{ torch: on }] }); return true; } catch { return false; }
   };
-  const useScreenFlash = flash && !(torch && facing === "environment");
-  const lightsOff = () => { setScreenFlash(false); if (flash && !useScreenFlash) setTorchOn(false); };
+  // Front camera: the screen is the flash. Back camera: the real light.
+  const useScreenFlash = flash && facing === "user";
+  const screenOn = () => { setScreenFlash(true); screenFlashBrightness(true); };
+  const lightsOff = () => {
+    setScreenFlash(false);
+    screenFlashBrightness(false);
+    if (flash && !useScreenFlash && mode === "photo") setTorchOn(false);
+  };
+  // Video on the back camera: the light stays on while flash is on, like TikTok.
+  useEffect(() => {
+    if (!torch || facing !== "environment") return;
+    setTorchOn(flash && mode === "video");
+  }, [flash, mode, torch, facing]); // eslint-disable-line react-hooks/exhaustive-deps
+  const toggleFlash = () => {
+    feedback("toggle");
+    if (!flash && facing === "environment" && !torch) toast("This camera has no flash — flip to the front camera for a screen flash.");
+    setFlash((f) => !f);
+  };
 
   // ---------- photo ----------
   const takePhoto = async () => {
@@ -146,7 +168,8 @@ export default function ReelCamera({ onClose, onCaptured }) {
     if (!v?.videoWidth) return;
     feedback("tap");
     if (flash) {
-      if (useScreenFlash) { setScreenFlash(true); await new Promise((r) => setTimeout(r, 260)); } else { await setTorchOn(true); await new Promise((r) => setTimeout(r, 350)); }
+      // Give the camera time to adjust to the light before taking the picture.
+      if (useScreenFlash) { screenOn(); await new Promise((r) => setTimeout(r, 650)); } else if (await setTorchOn(true)) { await new Promise((r) => setTimeout(r, 600)); }
     }
     const c = document.createElement("canvas");
     c.width = v.videoWidth; c.height = v.videoHeight;
@@ -200,7 +223,7 @@ export default function ReelCamera({ onClose, onCaptured }) {
     } else if (rec.state === "paused") {
       rec.resume();
     }
-    if (flash) { if (useScreenFlash) setScreenFlash(true); else setTorchOn(true); }
+    if (flash) { if (useScreenFlash) screenOn(); else setTorchOn(true); }
     segStart.current = performance.now();
     recordingRef.current = true;
     setLive(0);
@@ -340,8 +363,8 @@ export default function ReelCamera({ onClose, onCaptured }) {
   const lit = screenFlash && recording;
 
   return (
-    <div className="absolute inset-0 flex flex-col text-white" style={{ background: lit ? "#fff" : "#000", transition: "background .2s" }}>
-      <div className="relative flex-1 min-h-0 overflow-hidden" style={{ margin: lit ? 18 : 0, borderRadius: lit ? 28 : 0, transition: "margin .2s, border-radius .2s" }}>
+    <div className="absolute inset-0 flex flex-col text-white" style={{ background: lit ? "#fff8f2" : "#000", transition: "background .2s" }}>
+      <div className="relative flex-1 min-h-0 overflow-hidden" style={{ margin: lit ? "44px 30px 16px" : 0, borderRadius: lit ? 30 : 0, transition: "margin .25s, border-radius .25s" }}>
         {stream ? (
           <video ref={videoRef} playsInline muted autoPlay className="absolute inset-0 w-full h-full object-cover" style={{ filter: filterCss(filter), transform: facing === "user" ? "scaleX(-1)" : undefined }} />
         ) : (
@@ -372,7 +395,7 @@ export default function ReelCamera({ onClose, onCaptured }) {
           )}
           <div className="flex flex-col gap-3 transition-opacity duration-200" style={{ opacity: recording ? 0 : 1, pointerEvents: recording ? "none" : undefined }}>
             <button onClick={() => { feedback("tap"); setFacing((f) => (f === "user" ? "environment" : "user")); setThumb(""); }} disabled={busy} className="w-11 h-11 rounded-full flex items-center justify-center disabled:opacity-40 active:scale-90 transition-transform" style={{ background: "rgb(0 0 0 / 0.35)" }} aria-label="Flip camera"><RefreshCcw className="w-5 h-5" /></button>
-            <button onClick={() => { feedback("toggle"); setFlash((f) => !f); }} className="w-11 h-11 rounded-full flex items-center justify-center active:scale-90 transition-transform" style={{ background: flash ? "#ffd35c" : "rgb(0 0 0 / 0.35)", color: flash ? "#2a1620" : "#fff" }} aria-label={flash ? "Flash on" : "Flash off"} aria-pressed={flash} title={torch && facing === "environment" ? "Flash" : "Screen flash"}>{flash ? <Zap className="w-5 h-5 fill-current" /> : <ZapOff className="w-5 h-5" />}</button>
+            <button onClick={toggleFlash} className="w-11 h-11 rounded-full flex items-center justify-center active:scale-90 transition-transform" style={{ background: flash ? "#ffd35c" : "rgb(0 0 0 / 0.35)", color: flash ? "#2a1620" : "#fff" }} aria-label={flash ? "Flash on" : "Flash off"} aria-pressed={flash} title={facing === "environment" ? (torch ? "Flash" : "No flash on this camera") : "Screen flash"}>{flash ? <Zap className="w-5 h-5 fill-current" /> : <ZapOff className="w-5 h-5" />}</button>
             <button onClick={() => { feedback("toggle"); setTimer((t) => TIMERS[(TIMERS.indexOf(t) + 1) % TIMERS.length]); }} className="relative w-11 h-11 rounded-full flex items-center justify-center active:scale-90 transition-transform" style={{ background: timer ? "#fff" : "rgb(0 0 0 / 0.35)", color: timer ? "#2a1620" : "#fff" }} aria-label={timer ? `Timer ${timer} seconds` : "Timer off"}>
               <Timer className="w-5 h-5" />
               {timer > 0 && <span className="absolute -right-1 -bottom-1 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center enter-pop" style={{ background: "#ff4d7d", color: "#fff" }}>{timer}</span>}
@@ -465,7 +488,7 @@ export default function ReelCamera({ onClose, onCaptured }) {
         )}
       </AnimatePresence>
 
-      {screenFlash && !recording && <div className="fixed inset-0 z-[5] bg-white pointer-events-none" />}
+      {screenFlash && !recording && <div className="fixed inset-0 z-[5] pointer-events-none enter-fade" style={{ background: "#fff8f2" }} />}
       <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden" onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ""; }} />
     </div>
   );
