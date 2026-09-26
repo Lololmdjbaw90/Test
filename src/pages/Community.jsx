@@ -20,6 +20,7 @@ import FeedPost from "@/components/community/FeedPost";
 import PostComposer from "@/components/community/PostComposer";
 import PostViewer from "@/components/community/PostViewer";
 import { ActiveCreators, ServerSuggestions, SuggestedPeople, TrendingTags } from "@/components/community/Discover";
+import { feedback } from "@/lib/feedback";
 
 const TABS = [
   { id: "foryou", label: "For you", icon: Sparkles },
@@ -156,6 +157,7 @@ export default function CommunityPage() {
     } catch (e) { toast.error(e?.message || "Could not update follow."); }
   };
   const save = async (post) => {
+    feedback("save");
     const next = saved.has(post.id) ? [...saved].filter((id) => id !== post.id) : [...saved, post.id];
     try { await updateMe({ saved_posts: next }); if (!saved.has(post.id)) toast.success("Saved", { description: "Find it in the Saved tab" }); } catch (e) { toast.error(e?.message || "Could not save."); }
   };

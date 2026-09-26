@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Camera, Check, Database, Download, Smartphone, ImagePlus, Loader2, LogOut, Monitor, Moon, Palette, RotateCcw, Save, Settings as SettingsIcon, Shield, Sun, Trash2, User } from "lucide-react";
+import { Camera, Check, Database, Download, Smartphone, ImagePlus, Loader2, LogOut, Monitor, Moon, Palette, RotateCcw, Save, Settings as SettingsIcon, Shield, Sun, Trash2, User, Volume2 } from "lucide-react";
 import { base44, backendMode } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { ACCENTS, applyTheme } from "@/lib/theme";
@@ -14,11 +14,14 @@ import ImageCropper from "@/components/common/ImageCropper";
 import AdminSiteSettings from "@/components/admin/AdminSiteSettings";
 import { InstallCard } from "@/components/layout/InstallApp";
 import { BlockedPeople, DeleteAccount } from "@/components/safety/AccountSafety";
+import { Toggle } from "@/components/common/Controls";
+import { haptic, playSound, useFeedbackPrefs } from "@/lib/feedback";
 
 const INTERESTS = ["Painting", "Digital art", "Drawing", "Photography", "3D", "Pixel art", "Animation", "Music", "Lo-fi", "Writing", "Crafts", "Fashion"];
 const SECTIONS = [
   { id: "profile", label: "Profile", icon: User },
   { id: "appearance", label: "Appearance", icon: Palette },
+  { id: "feedback", label: "Sounds & haptics", icon: Volume2 },
   { id: "app", label: "Get the app", icon: Smartphone },
   { id: "account", label: "Account & data", icon: Database },
 ];
@@ -40,6 +43,7 @@ function Section({ id, icon: Icon, title, subtitle, children }) {
 
 export default function SettingsPage() {
   const { user, isAdmin, updateMe, logout } = useAuth();
+  const [fb, setFb] = useFeedbackPrefs();
   const confirm = useConfirm();
   const bannerRef = useRef(null);
   const [form, setForm] = useState({ display_name: "", bio: "", interests: [], banner_color: "", theme: "light", accent: "rose" });
@@ -176,6 +180,13 @@ export default function SettingsPage() {
                   <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>{a.label}</span>
                 </motion.button>
               ))}
+            </div>
+          </Section>
+
+          <Section id="feedback" icon={Volume2} title="Sounds & haptics" subtitle="Little taps and sounds when you like, save, send and get notified. Saved on this device.">
+            <div className="space-y-3">
+              <div className="card-sm p-3.5"><Toggle checked={fb.sounds} onChange={(v) => { setFb({ sounds: v }); if (v) setTimeout(() => playSound("success"), 30); }} label="Sounds" description="Soft pops and chimes. On iPhone and iPad they stay quiet when the silent switch is on." /></div>
+              <div className="card-sm p-3.5"><Toggle checked={fb.haptics} onChange={(v) => { setFb({ haptics: v }); if (v) setTimeout(() => haptic("medium"), 30); }} label="Haptics" description="Gentle vibrations in the iPhone and iPad app." /></div>
             </div>
           </Section>
 

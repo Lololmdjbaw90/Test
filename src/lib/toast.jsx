@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, AlertCircle, Info, X } from "lucide-react";
 import { useMediaQuery } from "@/lib/useMediaQuery";
+import { feedback } from "@/lib/feedback";
 
 // Tiny global toast system: call toast("Saved"), toast.success(...), toast.error(...)
 // from anywhere; <Toaster /> (mounted once in App) renders them.
@@ -15,8 +16,8 @@ function push(message, { type = "info", description, duration = 3200, icon } = {
 }
 
 export const toast = Object.assign((message, opts) => push(message, opts), {
-  success: (message, opts) => push(message, { ...opts, type: "success" }),
-  error: (message, opts) => push(message, { ...opts, type: "error", duration: 4500 }),
+  success: (message, opts) => { feedback("success"); return push(message, { ...opts, type: "success" }); },
+  error: (message, opts) => { feedback("error"); return push(message, { ...opts, type: "error", duration: 4500 }); },
   info: (message, opts) => push(message, { ...opts, type: "info" }),
 });
 

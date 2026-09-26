@@ -11,6 +11,7 @@ import { displayName, profileLink, timeAgo } from "@/lib/format";
 import { notify } from "@/utils/notifications";
 import Avatar from "@/components/common/Avatar";
 import { useBlocked } from "@/lib/safety";
+import { feedback } from "@/lib/feedback";
 
 // Moderates and posts a comment, notifying the owner. Returns true on success.
 export async function sendComment({ entity = "Comment", field = "artwork_id", targetId, content, user, ownerEmail, link }) {
@@ -52,7 +53,7 @@ export default function CommentSection({ entity = "Comment", field = "artwork_id
     e?.preventDefault();
     if (!user || !text.trim() || sending) return;
     setSending(true);
-    if (await sendComment({ entity, field, targetId, content: text, user, ownerEmail, link })) setText("");
+    if (await sendComment({ entity, field, targetId, content: text, user, ownerEmail, link })) { feedback("send"); setText(""); }
     setSending(false);
   };
 

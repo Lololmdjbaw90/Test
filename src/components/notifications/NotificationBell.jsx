@@ -9,6 +9,7 @@ import { timeAgo } from "@/lib/format";
 import Avatar from "@/components/common/Avatar";
 import Popover from "@/components/common/Popover";
 import { useBlocked } from "@/lib/safety";
+import { feedback } from "@/lib/feedback";
 
 const TYPE_ICONS = { follow: UserPlus, like: Heart, comment: MessageCircle, friend_request: UserPlus, friend_accepted: UserCheck, mention: AtSign, dm: MessageCircle, ping: Bell };
 const TYPE_COLORS = { follow: "#7c5cf0", like: "#e0526b", comment: "#7c5cf0", friend_request: "#f0a020", friend_accepted: "#17a673", mention: "var(--accent-rose)", dm: "#2f80e0", ping: "var(--accent-rose)" };
@@ -24,7 +25,7 @@ export default function NotificationBell({ me }) {
     enabled: !!me?.email,
     // Only brand-new ones: an older notification can also slide into the
     // 50 shown here when a newer one is deleted.
-    onEvent: (ev) => { if (ev.type === "create" && ev.data?.message && !blocked.has(ev.data.from_email) && Date.now() - new Date(ev.data.created_date || 0).getTime() < 600000) toast(ev.data.message, { icon: <Bell className="w-5 h-5" /> }); },
+    onEvent: (ev) => { if (ev.type === "create" && ev.data?.message && !blocked.has(ev.data.from_email) && Date.now() - new Date(ev.data.created_date || 0).getTime() < 600000) { feedback("notify"); toast(ev.data.message, { icon: <Bell className="w-5 h-5" /> }); } },
   });
   const notifications = allNotifications.filter((n) => !blocked.has(n.from_email));
 

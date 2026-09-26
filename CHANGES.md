@@ -1,5 +1,17 @@
 # Changes
 
+## Fonts, sounds & haptics, better artwork viewer (this update)
+
+### New
+- **Brand fonts**: Bubbly for titles and headings (with Cute Here filling in digits and punctuation Bubbly doesn't have) and Cute Here for small labels. Plus Jakarta Sans is now bundled too, so no fonts load from Google: the app draws its first screen immediately and works offline.
+- **Sounds & haptics**: a matching tap on iPhone/iPad and a tiny sound for likes, saves, sending, success/error messages, new notifications and messages, tab switches and toggles. Sounds follow the iPhone's silent switch; both can be turned off in Settings → Sounds & haptics.
+- **Artwork viewer, reorganised for phones and tablets**: a big image you can swipe left/right between pieces and tap for full screen (with a "3 / 12" counter), then title, artist, one row of Like / Save / Share / Ping buttons, the description, and a small separate row for admin tools.
+
+### Fixed
+- Top Artists: the crown no longer sits on the #1 ring, and the gold/silver/bronze rings are real circles that stay round on every screen.
+- Viewers (artwork, post, commission, group info) no longer open scrolled down to the comment box or pop up the keyboard.
+
+
 ## Sugerly logo, smoother app, admin owner (this update)
 
 ### New

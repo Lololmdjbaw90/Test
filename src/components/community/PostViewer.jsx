@@ -17,7 +17,7 @@ export default function PostViewer({ post, onClose, liked, likeCount, onLike, on
     try { await navigator.clipboard.writeText(url); toast.success("Link copied"); } catch { toast(url); }
   };
   return (
-    <Modal open={!!post} onClose={onClose} size={post?.image_url ? "max-w-5xl" : "lg"} padded={false} hideHeader>
+    <Modal open={!!post} onClose={onClose} size={post?.image_url ? "max-w-5xl" : "lg"} padded={false} hideHeader autoFocus={false}>
       {post && (
         <div className={`flex flex-col ${post.image_url ? "lg:flex-row lg:h-[80vh]" : ""}`}>
           {post.image_url && (

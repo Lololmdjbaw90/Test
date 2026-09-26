@@ -11,17 +11,43 @@ import Avatar from "@/components/common/Avatar";
 import { getLevelInfo } from "@/components/profile/LevelBadge";
 
 const MEDALS = [
-  { color: "#f0a020", bg: "linear-gradient(180deg,#ffe29a,#f0a020)", height: 150 },
-  { color: "#94a3b8", bg: "linear-gradient(180deg,#e2e8f0,#94a3b8)", height: 110 },
-  { color: "#c2773a", bg: "linear-gradient(180deg,#f5c9a0,#c2773a)", height: 84 },
+  { color: "#f0a020", bg: "linear-gradient(180deg,#ffe29a,#f0a020)", ring: "conic-gradient(from 210deg,#ffe7a3,#f0a020,#ffd36b,#d98a0f,#ffe7a3)", height: 150 },
+  { color: "#94a3b8", bg: "linear-gradient(180deg,#e2e8f0,#94a3b8)", ring: "conic-gradient(from 210deg,#f1f5f9,#94a3b8,#e2e8f0,#7c8aa0,#f1f5f9)", height: 110 },
+  { color: "#c2773a", bg: "linear-gradient(180deg,#f5c9a0,#c2773a)", ring: "conic-gradient(from 210deg,#f8d3ae,#c2773a,#eab07c,#a8612b,#f8d3ae)", height: 84 },
 ];
+
+// A medal ring drawn as real, fixed-size circles (not a box-shadow), so it
+// stays perfectly round and centred on every screen; the crown gets its own
+// space above the ring instead of sitting on it.
+function MedalAvatar({ artist, medal, rank }) {
+  const size = rank === 1 ? 84 : 66;
+  const ringW = rank === 1 ? 4 : 3;
+  const gap = 3;
+  const outer = size + 2 * (ringW + gap);
+  return (
+    <div className="relative flex-shrink-0" style={{ width: outer, height: outer }}>
+      {rank === 1 && (
+        <span className="absolute left-1/2 bottom-full mb-1.5" style={{ translate: "-50% 0" }} aria-hidden="true">
+          <span className="block anim-bob" style={{ animationDuration: "2.8s" }}>
+            <Crown className="block w-9 h-9" style={{ color: medal.color, fill: medal.color, filter: "drop-shadow(0 3px 4px rgb(240 160 32 / 0.35))" }} />
+          </span>
+        </span>
+      )}
+      <Link to={profileLink(artist.email)} aria-label={displayName(artist)} className="absolute inset-0 rounded-full grid place-items-center" style={{ background: medal.ring, boxShadow: `0 10px 22px -10px ${medal.color}` }}>
+        <span className="rounded-full grid place-items-center" style={{ width: size + gap * 2, height: size + gap * 2, background: "var(--surface)" }}>
+          <Avatar src={artist.profile_picture} name={displayName(artist)} size={size} />
+        </span>
+      </Link>
+    </div>
+  );
+}
 const RANGES = [{ id: "all", label: "All time" }, { id: "month", label: "This month" }, { id: "week", label: "This week" }];
 
 function Podium({ artists }) {
   const order = [artists[1], artists[0], artists[2]];
   const medalIndex = [1, 0, 2];
   return (
-    <div className="flex items-end justify-center gap-3 sm:gap-6 mb-10 pt-6">
+    <div className="flex items-end justify-center gap-3 sm:gap-6 mb-10 pt-14">
       {order.map((a, i) => {
         if (!a) return <div key={i} className="w-24 sm:w-36" />;
         const m = MEDALS[medalIndex[i]];
@@ -29,10 +55,7 @@ function Podium({ artists }) {
         return (
           <div key={a.email} className="flex flex-col items-center w-24 sm:w-36">
             <motion.div initial={{ opacity: 0, y: 20, scale: 0.8 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ delay: 0.5 + i * 0.15, type: "spring", stiffness: 260, damping: 18 }} className="flex flex-col items-center mb-3">
-              {rank === 1 && <div className="anim-bob" style={{ animationDuration: "2.5s" }}><Crown className="w-7 h-7 mb-1" style={{ color: m.color, fill: m.color }} /></div>}
-              <Link to={profileLink(a.email)} className="flex rounded-full">
-                <Avatar src={a.profile_picture} name={displayName(a)} size={rank === 1 ? 84 : 66} style={{ boxShadow: `0 0 0 4px var(--surface), 0 0 0 7px ${m.color}` }} />
-              </Link>
+              <MedalAvatar artist={a} medal={m} rank={rank} />
               <p className="font-bold text-sm mt-3 truncate max-w-full" style={{ color: "var(--text-primary)" }}>{displayName(a)}</p>
               <p className="text-xs font-bold flex items-center gap-1" style={{ color: "var(--accent-rose)" }}><Heart className="w-3 h-3 fill-current" />{a.likes}</p>
             </motion.div>

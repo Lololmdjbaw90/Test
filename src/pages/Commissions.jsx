@@ -115,7 +115,7 @@ function DetailModal({ commission, onClose }) {
     try { await base44.entities.Commission.delete(commission.id); toast.success("Listing deleted"); onClose(); } catch (e) { toast.error(e?.message || "Could not delete."); }
   };
   return (
-    <Modal open onClose={onClose} size="xl" padded={false} hideHeader>
+    <Modal open onClose={onClose} size="xl" padded={false} hideHeader autoFocus={false}>
       {commission.samples?.length > 0 && (
         <div className="relative h-64 sm:h-80 overflow-hidden" style={{ background: "var(--surface-2)" }}>
           <AnimatePresence mode="wait"><motion.img key={idx} src={commission.samples[idx]} alt="" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 w-full h-full object-cover" /></AnimatePresence>

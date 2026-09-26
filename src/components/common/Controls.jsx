@@ -1,6 +1,7 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Search, X } from "lucide-react";
+import { feedback } from "@/lib/feedback";
 
 export function SearchInput({ value, onChange, placeholder = "Search…", className = "", autoFocus }) {
   return (
@@ -55,7 +56,7 @@ export function Segmented({ options, value, onChange, size = "md", className = "
             ref={(el) => { buttons.current[o.id] = el; }}
             role="tab"
             aria-selected={active}
-            onClick={() => onChange(o.id)}
+            onClick={() => { if (o.id !== value) feedback("toggle"); onChange(o.id); }}
             className={`relative flex items-center justify-center gap-1.5 rounded-full font-semibold whitespace-nowrap transition-colors duration-200 ${stretch ? "flex-1" : ""} ${pad}`}
             style={{ color: active ? "#fff" : "var(--text-secondary)" }}
           >
@@ -77,7 +78,7 @@ export function ChipRow({ options, value, onChange, className = "" }) {
       {options.map((o) => {
         const id = typeof o === "string" ? o : o.id;
         const label = typeof o === "string" ? o : o.label;
-        return <button key={id} className="chip" data-active={value === id} onClick={() => onChange(id)}>{label}</button>;
+        return <button key={id} className="chip" data-active={value === id} onClick={() => { if (id !== value) feedback("tap"); onChange(id); }}>{label}</button>;
       })}
     </div>
   );
@@ -94,7 +95,7 @@ export function Toggle({ checked, onChange, label, description }) {
         type="button"
         role="switch"
         aria-checked={checked}
-        onClick={() => onChange(!checked)}
+        onClick={() => { feedback("toggle"); onChange(!checked); }}
         className="relative w-11 h-6 rounded-full flex-shrink-0 transition-colors"
         style={{ background: checked ? "var(--accent-rose)" : "var(--border-strong)" }}
       >

@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Brand fonts, bundled with the app so they work offline and never delay the
+   first paint. Bubbly has no digits or most punctuation; Cute Here (same
+   rounded style) fills those in. Sources: /brand/*.otf */
+@font-face { font-family: "Bubbly"; src: url("./assets/fonts/Bubbly-Regular.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Cute Here"; src: url("./assets/fonts/CuteHere.woff2") format("woff2"); font-display: swap; }
+
 /* -----------------------------------------------------------------------------
    Sugerly design tokens
    - Colors are CSS variables so every component (inline styles included)
@@ -10,8 +16,9 @@
 ----------------------------------------------------------------------------- */
 @layer base {
   :root {
-    --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-    --font-display: "Fraunces", "Playfair Display", Georgia, serif;
+    --font-sans: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-display: "Bubbly", "Cute Here", ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+    --font-cute: "Cute Here", "Bubbly", ui-rounded, system-ui, sans-serif;
 
     /* accent (default: rose) */
     --accent-rgb: 217 87 127;
@@ -120,7 +127,10 @@
 }
 
 @layer components {
-  .font-display { font-family: var(--font-display); font-optical-sizing: auto; letter-spacing: -0.02em; }
+  /* The brand fonts have one weight: draw them as designed rather than with a
+     fake bold / slant from the browser. */
+  .font-display { font-family: var(--font-display); letter-spacing: 0.01em; font-synthesis: none; }
+  .font-cute { font-family: var(--font-cute); letter-spacing: 0.02em; font-synthesis: none; }
 
   .app-shell {
     background:
@@ -287,6 +297,18 @@
 
   .divider { height: 1px; background: var(--border-c); }
 
+  /* Equal-width action buttons (icon over label), e.g. under an artwork. */
+  .action-tile {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.3rem;
+    min-height: 3.6rem; padding: 0.55rem 0.25rem; border-radius: 1.1rem;
+    font-size: 0.72rem; font-weight: 700; line-height: 1;
+    background: var(--surface-2); color: var(--text-secondary); border: 1px solid var(--border-c);
+    transition: background 160ms ease, color 160ms ease, border-color 160ms ease, scale 160ms cubic-bezier(.2,.8,.2,1);
+  }
+  .action-tile:active { scale: 0.95; }
+  @media (hover: hover) { .action-tile:hover { color: var(--accent-rose); border-color: rgb(var(--accent-rgb) / 0.35); } }
+  .action-tile[data-active="true"] { background: var(--pink-soft); color: var(--accent-rose); border-color: rgb(var(--accent-rgb) / 0.3); }
+
   .skeleton {
     border-radius: 0.9rem;
     background: linear-gradient(90deg, var(--surface-2) 25%, var(--pink-soft) 45%, var(--surface-2) 65%);
@@ -301,7 +323,7 @@
     -webkit-text-fill-color: transparent;
   }
 
-  .eyebrow { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); }
+  .eyebrow { font-family: var(--font-cute); font-synthesis: none; font-size: 0.95rem; line-height: 1.2; font-weight: 400; letter-spacing: 0.04em; text-transform: none; color: var(--text-muted); }
 
   .kbd {
     display: inline-flex; align-items: center; justify-content: center;

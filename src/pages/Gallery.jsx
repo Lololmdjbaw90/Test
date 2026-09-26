@@ -15,6 +15,7 @@ import { useConfirm } from "@/components/common/Modal";
 import ArtworkCard from "@/components/gallery/ArtworkCard";
 import ArtworkViewer from "@/components/gallery/ArtworkViewer";
 import PingInbox from "@/components/gallery/PingInbox";
+import { feedback } from "@/lib/feedback";
 
 const MEDIA = [
   { id: "all", label: "All" },
@@ -74,6 +75,7 @@ export default function Gallery() {
   };
 
   const toggleSave = async (art) => {
+    feedback("save");
     const next = saved.includes(art.id) ? saved.filter((id) => id !== art.id) : [...saved, art.id];
     try {
       await updateMe({ saved_artworks: next });
@@ -147,6 +149,7 @@ export default function Gallery() {
       <ArtworkViewer
         artwork={open}
         onClose={() => setOpen(null)}
+        position={openIndex >= 0 ? { index: openIndex + 1, total: filtered.length } : null}
         onPrev={openIndex > 0 ? () => setOpen(filtered[openIndex - 1].id) : null}
         onNext={openIndex >= 0 && openIndex < filtered.length - 1 ? () => setOpen(filtered[openIndex + 1].id) : null}
         liked={!!open && !!user && (open.likes || []).includes(user.email)}

@@ -96,7 +96,7 @@ function GroupInfoModal({ open, onClose, group, me, friends, usersByEmail, onLef
     try { await base44.entities.GroupChat.delete(group.id); onLeft(); onClose(); } catch (e) { toast.error(e?.message || "Could not delete."); }
   };
   return (
-    <Modal open={open} onClose={onClose} title={group.name} subtitle={`${group.member_emails.length} members`}>
+    <Modal open={open} onClose={onClose} title={group.name} subtitle={`${group.member_emails.length} members`} autoFocus={false}>
       <div className="space-y-5">
         <div className="space-y-1">
           {group.member_emails.map((email) => {

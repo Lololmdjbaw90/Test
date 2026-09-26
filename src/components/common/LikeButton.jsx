@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Heart } from "lucide-react";
-import { haptic } from "@/lib/native";
+import { feedback } from "@/lib/feedback";
 
 const PARTICLES = Array.from({ length: 8 }, (_, i) => {
   const angle = (i / 8) * Math.PI * 2;
@@ -16,7 +16,7 @@ export default function LikeButton({ liked, count, onToggle, variant = "pill", d
     e.preventDefault();
     if (disabled) return;
     if (!liked) setBurst((b) => b + 1);
-    haptic(liked ? "light" : "medium");
+    feedback(liked ? "unlike" : "like");
     onToggle?.();
   };
   const styles = {
@@ -27,7 +27,9 @@ export default function LikeButton({ liked, count, onToggle, variant = "pill", d
       ? { background: "var(--accent-grad)", color: "#fff" }
       : { background: "rgb(255 255 255 / 0.92)", color: "#5b4450" },
     plain: { color: liked ? "var(--accent-rose)" : "var(--text-muted)" },
+    tile: {},
   };
+  const tile = variant === "tile";
   const pad = variant === "plain" ? "px-1 py-0.5" : "px-3 py-1.5";
   return (
     <button
@@ -36,12 +38,13 @@ export default function LikeButton({ liked, count, onToggle, variant = "pill", d
       disabled={disabled}
       aria-pressed={liked}
       aria-label={label || (liked ? "Unlike" : "Like")}
-      className={`relative inline-flex items-center gap-1.5 rounded-full text-xs font-bold transition-colors disabled:opacity-60 ${pad} ${className}`}
+      data-active={tile ? liked : undefined}
+      className={tile ? `action-tile relative ${className}` : `relative inline-flex items-center gap-1.5 rounded-full text-xs font-bold transition-colors disabled:opacity-60 ${pad} ${className}`}
       style={styles[variant]}
     >
       <span className="relative inline-flex">
         <motion.span key={liked ? "on" : "off"} initial={{ scale: liked ? 0.4 : 1 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 600, damping: 12 }} className="inline-flex">
-          <Heart className={`w-4 h-4 ${liked ? "fill-current" : ""}`} />
+          <Heart className={`${tile ? "w-5 h-5" : "w-4 h-4"} ${liked ? "fill-current" : ""}`} />
         </motion.span>
         <AnimatePresence>
           {burst > 0 && liked && (
@@ -62,7 +65,7 @@ export default function LikeButton({ liked, count, onToggle, variant = "pill", d
       {count !== undefined && (
         <span className="relative inline-flex overflow-hidden tabular-nums" style={{ minWidth: "1ch" }}>
           <motion.span key={count} initial={{ y: liked ? 10 : -10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 500, damping: 30 }}>
-            {count}
+            {tile && !count ? "Like" : count}
           </motion.span>
         </span>
       )}

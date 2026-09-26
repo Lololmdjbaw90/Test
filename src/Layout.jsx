@@ -22,6 +22,7 @@ import { toast } from "@/lib/toast";
 import { displayName, profileLink } from "@/lib/format";
 import { messagePreview } from "@/lib/calls";
 import ErrorBoundary from "@/components/common/ErrorBoundary";
+import { feedback } from "@/lib/feedback";
 
 const FULL_HEIGHT = ["/communitychat", "/directmessages"];
 const EXTRA_TITLES = { "/profile": "Profile", "/settings": "Settings", "/communitychat": "Server", "/upload": "Upload art" };
@@ -164,7 +165,7 @@ function MobileNav({ badges, isAdmin, isDark, onToggleTheme }) {
           {MOBILE_NAV.map((item) => {
             if (item.label === "create") {
               return (
-                <motion.button key="create" ref={createRef} whileTap={{ scale: 0.9 }} onClick={() => setSheet((v) => (v === "create" ? null : "create"))} className="w-14 h-14 -mt-6 rounded-2xl flex items-center justify-center text-white" style={{ background: "var(--accent-grad)", boxShadow: "var(--shadow-accent)" }} aria-label="Create" aria-expanded={sheet === "create"}>
+                <motion.button key="create" ref={createRef} whileTap={{ scale: 0.9 }} onClick={() => { feedback("tap"); setSheet((v) => (v === "create" ? null : "create")); }} className="w-14 h-14 -mt-6 rounded-2xl flex items-center justify-center text-white" style={{ background: "var(--accent-grad)", boxShadow: "var(--shadow-accent)" }} aria-label="Create" aria-expanded={sheet === "create"}>
                   <motion.span animate={{ rotate: sheet === "create" ? 45 : 0 }} className="inline-flex"><Plus className="w-6 h-6" /></motion.span>
                 </motion.button>
               );
@@ -187,12 +188,13 @@ function MobileNav({ badges, isAdmin, isDark, onToggleTheme }) {
             const style = { color: active ? "var(--accent-rose)" : "var(--text-muted)" };
             // Tapping the tab you're already on scrolls back to the top, like native apps.
             const onTabClick = (e) => {
+              feedback("tab");
               if (!active) return;
               e.preventDefault();
               document.getElementById("main")?.scrollTo({ top: 0, behavior: "smooth" });
             };
             return isMore ? (
-              <button key="more" ref={moreRef} onClick={() => setSheet((v) => (v === "more" ? null : "more"))} className={cls} style={style} aria-label="More pages" aria-expanded={sheet === "more"}>{inner}</button>
+              <button key="more" ref={moreRef} onClick={() => { feedback("tab"); setSheet((v) => (v === "more" ? null : "more")); }} className={cls} style={style} aria-label="More pages" aria-expanded={sheet === "more"}>{inner}</button>
             ) : (
               <Link key={item.path} to={item.path} onClick={onTabClick} className={cls} style={style} aria-current={active ? "page" : undefined}>{inner}</Link>
             );
@@ -238,6 +240,7 @@ export default function Layout() {
     onEvent: (ev) => {
       if (ev.type !== "create" || ev.data?.user_email === user?.email || onDmsPageRef.current) return;
       if (Date.now() - new Date(ev.data?.created_date || 0).getTime() > 600000) return; // an older message sliding into the list
+      feedback("notify");
       toast(`${ev.data.user_display_name || "Someone"}: ${messagePreview(ev.data, user?.email).slice(0, 80)}`, { icon: <MessageCircle className="w-5 h-5" />, description: ev.data.conversation_type === "group" ? ev.data.group_name : "Direct message" });
     },
   });

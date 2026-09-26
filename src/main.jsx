@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from '@/App.jsx'
+import '@fontsource-variable/plus-jakarta-sans'
 import '@/index.css'
 import { registerServiceWorker } from '@/lib/pwa'
 import { initNative } from '@/lib/native'

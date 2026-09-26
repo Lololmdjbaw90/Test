@@ -36,12 +36,12 @@ export default function PingButton({ artwork, variant = "pill" }) {
     <>
       <button
         onClick={(e) => { e.stopPropagation(); setOpen(true); }}
-        className={variant === "overlay" ? "w-8 h-8 rounded-full flex items-center justify-center" : "chip"}
+        className={variant === "overlay" ? "w-8 h-8 rounded-full flex items-center justify-center" : variant === "tile" ? "action-tile" : "chip"}
         style={variant === "overlay" ? { background: "rgb(255 255 255 / 0.92)", color: "#5b4450" } : undefined}
         title="Ping the artist"
         aria-label="Ping the artist"
       >
-        <Bell className="w-4 h-4" />{variant !== "overlay" && "Ping artist"}
+        <Bell className={variant === "tile" ? "w-5 h-5" : "w-4 h-4"} />{variant === "tile" ? <span>Ping</span> : variant !== "overlay" && "Ping artist"}
       </button>
       <Modal open={open} onClose={() => setOpen(false)} title="Ping the artist" subtitle={`About "${artwork.title}"`} size="sm">
         <AnimatePresence mode="wait">

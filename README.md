@@ -22,6 +22,16 @@ npm run dev:demo     # offline demo with sample data, no Firebase needed
 Then open http://localhost:3000.
 Demo login (offline mode only): **admin@mimilocks.local / admin123**.
 
+## Fonts, sounds & haptics
+
+- Fonts are bundled with the app: Bubbly (headings), Cute Here (labels and
+  Bubbly's missing digits) and Plus Jakarta Sans (body). Sources are in
+  `brand/`, the web versions in `src/assets/fonts/`.
+- `src/lib/feedback.js` plays haptics (native Taptic Engine in the iOS app)
+  and tiny synthesized sounds: `feedback("like" | "save" | "send" | "success" |
+  "error" | "notify" | "tab" | "toggle" | "tap" | "swipe")`. People can turn
+  either off in Settings → Sounds & haptics.
+
 ## Admins
 
 **paologionfriddo90@gmail.com** is the site owner: always an admin, and the

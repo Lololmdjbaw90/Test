@@ -18,7 +18,7 @@ export function useDelayedUnmount(open, ms = 220) {
 }
 
 // Accessible animated modal rendered in a portal. Closes on Escape / backdrop.
-export default function Modal({ open, onClose, title, subtitle, children, footer, size = "md", padded = true, hideHeader = false, className = "" }) {
+export default function Modal({ open, onClose, title, subtitle, children, footer, size = "md", padded = true, hideHeader = false, className = "", autoFocus = true }) {
   const panelRef = useRef(null);
   useEffect(() => {
     if (!open) return undefined;
@@ -26,9 +26,11 @@ export default function Modal({ open, onClose, title, subtitle, children, footer
     document.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const t = setTimeout(() => panelRef.current?.querySelector("input,textarea,select,[autofocus]")?.focus(), 60);
+    // Focus the first field for forms, without scrolling to it. Viewers pass
+    // autoFocus={false} so they open at the top (and no keyboard pops up).
+    const t = autoFocus ? setTimeout(() => panelRef.current?.querySelector("input,textarea,select,[autofocus]")?.focus({ preventScroll: true }), 60) : null;
     return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; clearTimeout(t); };
-  }, [open, onClose]);
+  }, [open, onClose, autoFocus]);
 
   // While closing, keep showing the last content so it animates out instead of
   // collapsing when the caller clears its data (e.g. selected item -> null).

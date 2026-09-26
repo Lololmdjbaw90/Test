@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, ImagePlus, Loader2, Lock, Pencil, Reply, Send, X } from "lucide-react";
 import EmojiPicker from "./EmojiPicker";
-import { haptic } from "@/lib/native";
+import { feedback } from "@/lib/feedback";
 
 // Shared message input: autosizing textarea, emoji picker, image attachment,
 // @mention suggestions, reply/edit banners. Enter sends, Shift+Enter = newline.
@@ -47,7 +47,7 @@ export default function ChatComposer({ placeholder, onSend, editing, onCancelEdi
     setSending(true);
     const ok = await onSend({ text: text.trim(), file });
     setSending(false);
-    if (ok !== false) { haptic(); setText(""); clearFile(); setMention(null); }
+    if (ok !== false) { feedback("send"); setText(""); clearFile(); setMention(null); }
     taRef.current?.focus();
   };
 

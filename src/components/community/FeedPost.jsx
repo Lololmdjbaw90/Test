@@ -9,7 +9,7 @@ import RichText from "@/components/chat/RichText";
 import { sendComment } from "@/components/gallery/CommentSection";
 import { toast } from "@/lib/toast";
 import { displayName, isOnline, profileLink, siteUrl, timeAgo } from "@/lib/format";
-import { haptic } from "@/lib/native";
+import { feedback } from "@/lib/feedback";
 
 const REASON_ICON = { heart: Heart, friend: Users, sparkles: Sparkles, flame: Flame, sprout: Sprout };
 const TEXT_BACKGROUNDS = [
@@ -61,7 +61,7 @@ export default function FeedPost({ post, reason, me, author, comments = [], like
       clearTimeout(tapTimer.current);
       tapTimer.current = null;
       setBurst((b) => b + 1);
-      haptic("medium");
+      feedback("like");
       if (!liked) onLike();
       return;
     }
@@ -161,7 +161,7 @@ export default function FeedPost({ post, reason, me, author, comments = [], like
       </div>
 
       <div className="px-2 pt-1.5 flex items-center">
-        <ActionButton onClick={() => { haptic(liked ? "light" : "medium"); onLike(); }} label={liked ? "Unlike" : "Like"} active={liked} activeColor="var(--accent-rose)" count={likeCount}>
+        <ActionButton onClick={() => { feedback(liked ? "unlike" : "like"); onLike(); }} label={liked ? "Unlike" : "Like"} active={liked} activeColor="var(--accent-rose)" count={likeCount}>
           <motion.span key={liked ? "on" : "off"} initial={{ scale: 0.6 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 500, damping: 15 }} className="inline-flex">
             <Heart className={`w-[22px] h-[22px] ${liked ? "fill-current" : ""}`} />
           </motion.span>
