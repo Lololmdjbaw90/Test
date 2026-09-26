@@ -22,6 +22,16 @@ npm run dev:demo     # offline demo with sample data, no Firebase needed
 Then open http://localhost:3000.
 Demo login (offline mode only): **admin@mimilocks.local / admin123**.
 
+## AI features
+
+- `src/lib/ai.js` talks to Gemini through Firebase AI Logic (`firebase/ai`), using the same Firebase project as the rest of the app. Turn it on once: Firebase console → AI Logic → Get started → Gemini Developer API. Admin → Site → AI features has a "Test AI" button.
+- Set `VITE_AI=off` to hide AI, or `VITE_AI_MODEL` to pick another Gemini model.
+
+## Publishing the Firebase rules
+
+- Automatic: add a GitHub repository secret `FIREBASE_SERVICE_ACCOUNT` with the JSON key from Firebase console → Project settings → Service accounts → Generate new private key. `.github/workflows/firebase-rules.yml` then publishes the rules and indexes on every change (and can be re-run from the Actions tab).
+- By hand: `npx firebase-tools deploy --only firestore:rules,firestore:indexes,storage`, or copy them from Admin → Site → Database security rules into the Firebase console.
+
 ## Reels
 
 - `src/pages/Reels.jsx` — the feed (For you / Following, `?r=<id>` opens a reel, `?tag=` filters, `?create=1` opens the studio).

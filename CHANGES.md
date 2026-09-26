@@ -1,6 +1,6 @@
 # Changes
 
-## Video cuts, text you can rotate and scale, smoother Reels (this update)
+## Video cuts, text you can rotate and scale, AI captions, smoother Reels (this update)
 
 ### New
 - **Film in clips** (`src/components/reels/ReelCamera.jsx`): tap the shutter to record and tap again to pause, or hold it and let go. A bar across the top and the ring around the shutter show each clip; delete the last clip, record more, then tap ✓. A 3 s / 10 s timer with a countdown. Closing with clips asks before discarding them.
@@ -8,6 +8,9 @@
 - **Text stickers** (`src/components/reels/Sticker.jsx`): drag to move (snaps to the centre), pinch to resize, twist to rotate (snaps to 0° / 90°), or use the corner handle with one finger; drag onto the bin to delete. Five fonts (Classic, Bubbly, Cute, Serif, Mono), five styles (Plain, Label, Outline, Neon, Shadow), eight animations (Pop, Fade, Rise, Type, Bounce, Wiggle, Pulse) and, on videos, when the text shows and hides. Text on photo reels now stays live (so it animates) instead of being drawn into the picture.
 - **Undo / redo** for every edit in the editor (a whole gesture is one step).
 - **Reels feed**: hold to play at 2x, drag the progress bar to skip, a spinner while a video buffers, animated like / save buttons and a spinning music disc.
+
+- **✨ Write with AI** (`src/lib/ai.js`, `src/components/ai/AICaptionHelper.jsx`): when you post a reel or in Community, AI looks at your picture (or the reel's cover frame) and anything you've typed and offers three captions with hashtags (and titles for posts). Powered by Gemini through Firebase AI Logic, so there's no server to run; the SDK only downloads the first time someone uses it. Admins switch it on once in the Firebase console and can test it in Admin → Site → AI features.
+- **Rules publish themselves**: `.github/workflows/firebase-rules.yml` publishes `firestore.rules`, `storage.rules` and the Firestore indexes to Firebase whenever they change, once the `FIREBASE_SERVICE_ACCOUNT` secret is added to the GitHub repo (see the top of that file).
 
 ### Faster
 - Reels only re-render when their own data changes, the feed re-ranks when the phone is idle instead of mid-swipe, and ranking stops early once the next reels are settled.

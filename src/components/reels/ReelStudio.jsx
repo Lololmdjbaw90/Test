@@ -10,6 +10,8 @@ import { toast } from "@/lib/toast";
 import { displayName } from "@/lib/format";
 import { capLength, clipsOf, locate, newClip, totalLength } from "@/lib/clips";
 import FilterLayers from "@/components/media/FilterLayers";
+import AICaptionHelper from "@/components/ai/AICaptionHelper";
+import { withHashtags } from "@/lib/ai";
 import ReelCamera, { MAX_SECONDS } from "./ReelCamera";
 import ReelEditor from "./ReelEditor";
 import { PHOTO_SECONDS, TextStickers } from "./ReelMedia";
@@ -106,6 +108,9 @@ function PostStep({ media, edits, music, coverTime, coverUrl, onBack, onPosted }
             onChange={(e) => setCaption(e.target.value)}
             aria-label="Caption"
           />
+        </div>
+        <div className="mt-3">
+          <AICaptionHelper kind="reel" dark getImage={() => (media.kind === "photo" ? media.file : coverUrl)} draft={caption} onPick={(o) => setCaption(withHashtags(o).slice(0, 300))} />
         </div>
         {tags.length > 0 && <div className="flex flex-wrap gap-1.5 mt-3">{tags.map((t) => <span key={t} className="px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1" style={{ background: "rgb(255 255 255 / 0.12)" }}><Hash className="w-3 h-3" />{t}</span>)}</div>}
         <ul className="mt-5 space-y-2 text-sm opacity-80">

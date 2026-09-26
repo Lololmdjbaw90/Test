@@ -13,6 +13,7 @@ export const RELEASES = [
       "Text you can pinch to resize and twist to rotate (or use the corner handle), with 5 fonts, 5 styles, 8 animations and a start / end time. Drag it to the bin to delete.",
       "Undo and redo for every edit, a 3s / 10s camera timer, and smoother, snappier Reels.",
       "In Reels: hold to watch at 2x, drag the progress bar to skip, and your new reel opens first after you post it.",
+      "✨ Write with AI: get three caption ideas with hashtags from your picture when you post a reel or in Community.",
     ],
   },
   {

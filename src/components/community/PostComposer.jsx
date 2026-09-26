@@ -11,6 +11,8 @@ import DropZone from "@/components/common/DropZone";
 import FilterStrip from "@/components/media/FilterStrip";
 import FilterLayers from "@/components/media/FilterLayers";
 import { bakePhoto, filterCss } from "@/lib/filters";
+import AICaptionHelper from "@/components/ai/AICaptionHelper";
+import { withHashtags } from "@/lib/ai";
 
 export default function PostComposer({ autoOpen = false }) {
   const { user, updateMe } = useAuth();
@@ -77,6 +79,9 @@ export default function PostComposer({ autoOpen = false }) {
               )}
               <input className="input" placeholder="Title (optional)" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} />
               <textarea className="input resize-none" rows={3} placeholder="What's on your mind?" value={desc} onChange={(e) => setDesc(e.target.value)} maxLength={1000} autoFocus />
+              {(img || desc.trim()) && (
+                <AICaptionHelper kind="post" getImage={() => img} draft={desc} title={title} onPick={(o) => { if (o.title && !title.trim()) setTitle(o.title); setDesc(withHashtags(o)); }} />
+              )}
               <div className="flex items-center gap-2">
                 <span className="text-[11px] flex items-center gap-1" style={{ color: "var(--text-muted)" }}><Shield className="w-3.5 h-3.5" /> Posts are auto-moderated</span>
                 <div className="flex-1" />

@@ -1,0 +1,62 @@
+# Publishes the database (Firestore) and file (Storage) security rules and the
+# Firestore indexes to the Firebase project whenever they change, so new
+# features like Reels never hit "Missing or insufficient permissions".
+#
+# One-time setup: add a repository secret named FIREBASE_SERVICE_ACCOUNT
+# (GitHub → Settings → Secrets and variables → Actions → New repository
+# secret) containing the whole JSON key from Firebase console → Project
+# settings → Service accounts → Generate new private key.
+# Then re-run this workflow (or push any change to the rules).
+name: Publish Firebase rules
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "firestore.rules"
+      - "storage.rules"
+      - "firestore.indexes.json"
+      - "scripts/deploy-rules.mjs"
+      - ".github/workflows/firebase-rules.yml"
+
+concurrency:
+  group: firebase-rules
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - name: Needs the FIREBASE_SERVICE_ACCOUNT secret
+        if: env.FIREBASE_SERVICE_ACCOUNT == ''
+        run: |
+          echo "::warning title=Rules not published::Add the FIREBASE_SERVICE_ACCOUNT secret (see the top of .github/workflows/firebase-rules.yml), then re-run this workflow."
+
+      - uses: actions/checkout@v4
+        if: env.FIREBASE_SERVICE_ACCOUNT != ''
+
+      - uses: actions/setup-node@v4
+        if: env.FIREBASE_SERVICE_ACCOUNT != ''
+        with:
+          node-version: 22
+
+      - name: Publish Firestore and Storage rules
+        if: env.FIREBASE_SERVICE_ACCOUNT != ''
+        run: |
+          npm install --no-save --no-package-lock firebase-admin@13
+          node scripts/deploy-rules.mjs
+
+      # Indexes make some lists (channels, messages, reels) load without errors.
+      # This needs more permissions than the rules, so it may be skipped.
+      - name: Publish Firestore indexes
+        if: env.FIREBASE_SERVICE_ACCOUNT != ''
+        continue-on-error: true
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/key.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/key.json"
+          PROJECT=$(node -p "JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT).project_id")
+          npx --yes firebase-tools@14 deploy --only firestore:indexes --project "$PROJECT" --non-interactive
+          rm -f "$RUNNER_TEMP/key.json"
