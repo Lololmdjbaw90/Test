@@ -9,6 +9,7 @@ import { toggleLike } from "@/lib/likes";
 import { toast } from "@/lib/toast";
 import { displayName, profileLink } from "@/lib/format";
 import { splitFriendships, toggleFollow, useFriendships } from "@/lib/social";
+import { setBlocked, useBlocked } from "@/lib/safety";
 import { buildTaste, hashtags, hidePost, markSeen, rankFeed, seenPosts, suggestPeople, suggestServers, trendingTags } from "@/lib/ranking";
 import { exportToCsv } from "@/utils/exportCsv";
 import { Page, EmptyState } from "@/components/common/Page";
@@ -66,7 +67,8 @@ export default function CommunityPage() {
   const { friendEmails } = splitFriendships(friendships, me?.email);
 
   const usersByEmail = useMemo(() => Object.fromEntries(users.map((u) => [u.email, u])), [users]);
-  const comments = useMemo(() => allComments.filter((c) => !String(c.post_id || "").startsWith("profile_")), [allComments]);
+  const blocked = useBlocked();
+  const comments = useMemo(() => allComments.filter((c) => !String(c.post_id || "").startsWith("profile_") && !blocked.has(c.user_email)), [allComments, blocked]);
   const commentsByPost = useMemo(() => {
     const m = {};
     [...comments].reverse().forEach((c) => { (m[c.post_id] = m[c.post_id] || []).push(c); });
@@ -79,8 +81,8 @@ export default function CommunityPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return posts.filter((p) => (!q || [p.title, p.description, p.user_display_name].some((f) => String(f || "").toLowerCase().includes(q))) && (!tag || hashtags(postText(p)).includes(tag)));
-  }, [posts, search, tag]);
+    return posts.filter((p) => !blocked.has(p.user_email) && (!q || [p.title, p.description, p.user_display_name].some((f) => String(f || "").toLowerCase().includes(q))) && (!tag || hashtags(postText(p)).includes(tag)));
+  }, [posts, search, tag, blocked]);
 
   const listNow = useMemo(() => {
     if (tab === "foryou") return rankFeed(filtered, { taste, comments, users: usersByEmail });
@@ -111,14 +113,14 @@ export default function CommunityPage() {
   }, [listNow, feedKey, ready, tab, me?.email]);
   useSeenTracker(feed.length);
 
-  const people = useMemo(() => suggestPeople(users, { me, taste, posts, limit: 8 }).filter((x) => !dismissed.has(x.user.email)), [users, me, taste, posts, dismissed]);
+  const people = useMemo(() => suggestPeople(users, { me, taste, posts, limit: 8 }).filter((x) => !dismissed.has(x.user.email) && !blocked.has(x.user.email)), [users, me, taste, posts, dismissed, blocked]);
   const servers = useMemo(() => suggestServers(communities, { me, taste, limit: 3 }), [communities, me, taste]);
   const tags = useMemo(() => trendingTags(posts, { limit: 6 }), [posts]);
   const creators = useMemo(() => {
     const seen = seenPosts();
     const byAuthor = new Map();
     posts.forEach((p) => {
-      if (p.user_email === me?.email || Date.now() - new Date(p.created_date).getTime() > 3 * 86400000) return;
+      if (p.user_email === me?.email || blocked.has(p.user_email) || Date.now() - new Date(p.created_date).getTime() > 3 * 86400000) return;
       const c = byAuthor.get(p.user_email) || { email: p.user_email, name: usersByEmail[p.user_email] ? displayName(usersByEmail[p.user_email]) : p.user_display_name, user: usersByEmail[p.user_email], picture: p.user_profile_picture, latest: p, unseen: false };
       if (!seen[p.id]) c.unseen = true;
       if (new Date(p.created_date) > new Date(c.latest.created_date)) c.latest = p;
@@ -148,6 +150,11 @@ export default function CommunityPage() {
     const ok = await confirm({ title: "Delete post?", message: "This can't be undone.", confirmLabel: "Delete", danger: true });
     if (!ok) return;
     try { await base44.entities.CommunityPost.delete(post.id); setOpen(null); toast.success("Post deleted"); } catch (e) { toast.error(e?.message || "Could not delete."); }
+  };
+  const block = async (email, name) => {
+    const ok = await confirm({ title: `Block ${name}?`, message: "You won't see their posts, comments or messages, and they can't call you. They won't be told.", confirmLabel: "Block", danger: true });
+    if (!ok) return;
+    try { await setBlocked({ me, email, updateMe, block: true }); toast.success(`${name} is blocked`, { description: "Unblock any time in Settings" }); } catch (e) { toast.error(e?.message || "Could not block."); }
   };
   const hide = (post) => {
     hidePost(post);
@@ -235,6 +242,7 @@ export default function CommunityPage() {
                     onOpen={() => setOpen(post.id)}
                     onTag={setTag}
                     onHide={hide}
+                    onBlock={block}
                     onDelete={me && (me.email === post.user_email || isAdmin) ? remove : null}
                   />
                   {i === 2 && people.length > 0 && <div className="lg:hidden"><SuggestedPeople items={people} followingSet={followingSet} onFollow={follow} variant="carousel" onDismiss={(e) => setDismissed((s) => new Set(s).add(e))} /></div>}

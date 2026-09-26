@@ -12,6 +12,7 @@ import { useDelayedUnmount } from "@/components/common/Modal";
 import Avatar from "@/components/common/Avatar";
 import CallStage from "@/components/voice/CallStage";
 import { useElapsed, useNow, useVoice } from "@/components/voice/useVoice";
+import { haptic } from "@/lib/native";
 
 const person = (call, email) => ({ email, name: call.member_names?.[email] || email.split("@")[0], picture: call.member_pictures?.[email] || "" });
 
@@ -126,7 +127,7 @@ export default function CallManager({ me }) {
   const incoming = useMemo(() => calls.find((c) =>
     c.caller_email !== me.email && c.status !== "ended" && now - (c.started_at || 0) < RING_MS &&
     !(c.declined_by || []).includes(me.email) && !(c.joined_emails || []).includes(me.email) &&
-    vs.room?.id !== c.id && !dismissed.has(c.id)), [calls, me.email, now, vs.room?.id, dismissed]);
+    vs.room?.id !== c.id && !dismissed.has(c.id) && !(me.blocked || []).includes(c.caller_email)), [calls, me.email, me.blocked, now, vs.room?.id, dismissed]);
 
   // The other side ended / declined the call.
   useEffect(() => {
@@ -157,11 +158,13 @@ export default function CallManager({ me }) {
   }, [current?.id, others]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const accept = async (call, video) => {
+    haptic("success");
     setDismissed((s) => new Set(s).add(call.id));
     const ok = await joinCall(call, me, { video });
     if (!ok) toast.error("Could not join the call.");
   };
   const decline = (call) => {
+    haptic("medium");
     setDismissed((s) => new Set(s).add(call.id));
     declineCall(call, me);
   };

@@ -8,6 +8,7 @@ import { toast } from "@/lib/toast";
 import { timeAgo } from "@/lib/format";
 import Avatar from "@/components/common/Avatar";
 import Popover from "@/components/common/Popover";
+import { useBlocked } from "@/lib/safety";
 
 const TYPE_ICONS = { follow: UserPlus, like: Heart, comment: MessageCircle, friend_request: UserPlus, friend_accepted: UserCheck, mention: AtSign, dm: MessageCircle, ping: Bell };
 const TYPE_COLORS = { follow: "#7c5cf0", like: "#e0526b", comment: "#7c5cf0", friend_request: "#f0a020", friend_accepted: "#17a673", mention: "var(--accent-rose)", dm: "#2f80e0", ping: "var(--accent-rose)" };
@@ -16,12 +17,14 @@ export default function NotificationBell({ me }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
-  const { data: notifications, setData } = useLiveQuery("Notification", me?.email ? { to_email: me.email } : null, {
+  const blocked = useBlocked();
+  const { data: allNotifications, setData } = useLiveQuery("Notification", me?.email ? { to_email: me.email } : null, {
     sort: "-created_date",
     limit: 50,
     enabled: !!me?.email,
-    onEvent: (ev) => { if (ev.type === "create" && ev.data?.message) toast(ev.data.message, { icon: <Bell className="w-5 h-5" /> }); },
+    onEvent: (ev) => { if (ev.type === "create" && ev.data?.message && !blocked.has(ev.data.from_email)) toast(ev.data.message, { icon: <Bell className="w-5 h-5" /> }); },
   });
+  const notifications = allNotifications.filter((n) => !blocked.has(n.from_email));
 
   const unread = notifications.filter((n) => !n.is_read).length;
   const markAllRead = async () => {
@@ -96,7 +99,7 @@ export default function NotificationBell({ me }) {
                           <span className="block text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>{timeAgo(n.created_date)}</span>
                         </span>
                         {!n.is_read && <span className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ background: "var(--accent-rose)" }} />}
-                        <button onClick={(e) => del(n.id, e)} className="icon-btn w-7 h-7 opacity-0 group-hover:opacity-100 focus:opacity-100" aria-label="Delete notification"><Trash2 className="w-3.5 h-3.5" style={{ color: "var(--danger)" }} /></button>
+                        <button onClick={(e) => del(n.id, e)} className="icon-btn w-7 h-7 can-hover:opacity-0 group-hover:opacity-100 focus:opacity-100" aria-label="Delete notification"><Trash2 className="w-3.5 h-3.5" style={{ color: "var(--danger)" }} /></button>
                       </motion.div>
                     );
                   })}

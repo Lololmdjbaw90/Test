@@ -15,6 +15,7 @@ import DMChatWindow from "@/components/dm/DMChatWindow";
 import voice, { VOICE_STALE_MS } from "@/lib/voice";
 import { isLiveCall, joinCall, messagePreview, startCall } from "@/lib/calls";
 import { useNow, useVoice } from "@/components/voice/useVoice";
+import { useBlocked } from "@/lib/safety";
 
 function GroupIcon({ group, size = 44 }) {
   const initials = (group?.name || "G").slice(0, 1).toUpperCase();
@@ -139,6 +140,7 @@ export default function DirectMessagesPage() {
   const usersByEmail = useMemo(() => Object.fromEntries(users.map((u) => [u.email, u])), [users]);
   const friends = useMemo(() => friendEmails.map((e) => usersByEmail[e]).filter(Boolean), [friendEmails, usersByEmail]);
 
+  const blocked = useBlocked();
   const conversations = useMemo(() => {
     const last = {};
     const unread = {};
@@ -148,6 +150,7 @@ export default function DirectMessagesPage() {
     });
     const dmEmails = new Set(friendEmails);
     recent.filter((m) => m.conversation_type !== "group").forEach((m) => (m.member_emails || []).forEach((e) => e !== me.email && dmEmails.add(e)));
+    blocked.forEach((e) => dmEmails.delete(e)); // hidden unless opened directly
     const withEmail = params.get("with");
     if (withEmail && withEmail !== me.email) dmEmails.add(withEmail);
     const list = [
@@ -158,7 +161,7 @@ export default function DirectMessagesPage() {
       ...groups.map((g) => ({ id: g.id, type: "group", group: g, last: last[g.id], unread: unread[g.id] || 0 })),
     ];
     return list.sort((a, b) => new Date(b.last?.created_date || b.group?.created_date || 0) - new Date(a.last?.created_date || a.group?.created_date || 0));
-  }, [recent, groups, friendEmails, usersByEmail, me.email, params]);
+  }, [recent, groups, friendEmails, usersByEmail, me.email, params, blocked]);
 
   const activeId = params.get("with") ? dmConversationId(me.email, params.get("with")) : params.get("c");
   const active = conversations.find((c) => c.id === activeId) || null;

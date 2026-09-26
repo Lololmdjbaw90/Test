@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Heart } from "lucide-react";
+import { haptic } from "@/lib/native";
 
 const PARTICLES = Array.from({ length: 8 }, (_, i) => {
   const angle = (i / 8) * Math.PI * 2;
@@ -15,6 +16,7 @@ export default function LikeButton({ liked, count, onToggle, variant = "pill", d
     e.preventDefault();
     if (disabled) return;
     if (!liked) setBurst((b) => b + 1);
+    haptic(liked ? "light" : "medium");
     onToggle?.();
   };
   const styles = {

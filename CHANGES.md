@@ -1,5 +1,22 @@
 # Changes
 
+## iPhone & iPad app, safety tools and polish (this update)
+
+### New
+- **Native iOS app** (Capacitor): Xcode project in `ios/` for iPhone and iPad with app icon, light/dark launch screens, camera/mic/photos permissions, background audio, haptics, status bar that follows the theme and the tab bar hiding while typing. `npm run ios` builds and opens it. See `IOS_APP.md`.
+- **Installable web app**: new icons, manifest, and a service worker that precaches the app so it starts instantly and offline (recent images are kept too). Install tip on phones/tablets and a "Get the app" section in Settings.
+- **Report** posts and people; admins review them in **Admin → Reports**.
+- **Block** people from a post or profile: hides their posts, comments, messages, notifications and calls. Manage in Settings.
+- **Delete account** in Settings (asks for your password, removes your content and sign-in).
+
+### Improved
+- Safe areas for the notch / Dynamic Island / home indicator; no zoom-in when tapping text fields on iPhone; no grey tap flash; no whole-app rubber-banding.
+- Buttons that only appeared on mouse hover are now always visible on touch screens; message actions appear when you tap a message.
+- Back button on phones, tap the current tab to scroll to top, page titles, offline notice, toasts that no longer cover the tab bar, mini player clear of the home indicator.
+- The tab bar steps aside inside a conversation; iPad portrait uses the compact sidebar.
+- Share/invite links use your public site address (also inside the app).
+- `/AdminPanel` now redirects to the admin page.
+
 ## Calls, social feed and recommendations (this update)
 
 ### New

@@ -1,13 +1,15 @@
 import React, { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bookmark, EyeOff, Flame, Heart, Link2, Loader2, MessageCircle, MoreHorizontal, Send, Share2, Sparkles, Sprout, Trash2, UserRound, Users } from "lucide-react";
+import { Ban, Bookmark, EyeOff, Flag, Flame, Heart, Link2, Loader2, MessageCircle, MoreHorizontal, Send, Share2, Sparkles, Sprout, Trash2, UserRound, Users } from "lucide-react";
+import { openReport } from "@/lib/safety";
 import Avatar from "@/components/common/Avatar";
 import Popover from "@/components/common/Popover";
 import RichText from "@/components/chat/RichText";
 import { sendComment } from "@/components/gallery/CommentSection";
 import { toast } from "@/lib/toast";
-import { displayName, isOnline, profileLink, timeAgo } from "@/lib/format";
+import { displayName, isOnline, profileLink, siteUrl, timeAgo } from "@/lib/format";
+import { haptic } from "@/lib/native";
 
 const REASON_ICON = { heart: Heart, friend: Users, sparkles: Sparkles, flame: Flame, sprout: Sprout };
 const TEXT_BACKGROUNDS = [
@@ -18,7 +20,7 @@ const TEXT_BACKGROUNDS = [
 ];
 
 export async function sharePost(post) {
-  const url = `${window.location.origin}/Community?post=${post.id}`;
+  const url = siteUrl(`/Community?post=${post.id}`);
   if (navigator.share && window.matchMedia("(pointer: coarse)").matches) {
     try { await navigator.share({ title: post.title || "Mimi Locks post", url }); return; } catch { /* cancelled */ }
   }
@@ -35,7 +37,7 @@ function ActionButton({ onClick, label, active, activeColor, children, count }) 
 }
 
 // One post in the social feed.
-export default function FeedPost({ post, reason, me, author, comments = [], likers = [], following, onFollow, liked, onLike, saved, onSave, onOpen, onTag, onDelete, onHide, index = 0 }) {
+export default function FeedPost({ post, reason, me, author, comments = [], likers = [], following, onFollow, liked, onLike, saved, onSave, onOpen, onTag, onDelete, onHide, onBlock, index = 0 }) {
   const [burst, setBurst] = useState(0);
   const [menu, setMenu] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -59,6 +61,7 @@ export default function FeedPost({ post, reason, me, author, comments = [], like
       clearTimeout(tapTimer.current);
       tapTimer.current = null;
       setBurst((b) => b + 1);
+      haptic("medium");
       if (!liked) onLike();
       return;
     }
@@ -111,6 +114,8 @@ export default function FeedPost({ post, reason, me, author, comments = [], like
               { icon: Link2, label: "Copy link", run: () => sharePost(post) },
               { icon: UserRound, label: `Go to ${name.split(" ")[0]}'s profile`, to: profileLink(post.user_email) },
               !isMine && onHide && { icon: EyeOff, label: "Not interested", run: () => onHide(post) },
+              !isMine && { icon: Flag, label: "Report post", run: () => openReport({ type: "post", id: post.id, owner: post.user_email, preview: post.description || post.title, link: `/Community?post=${post.id}` }), danger: true },
+              !isMine && onBlock && { icon: Ban, label: `Block ${name.split(" ")[0]}`, run: () => onBlock(post.user_email, name), danger: true },
               onDelete && { icon: Trash2, label: "Delete post", run: () => onDelete(post), danger: true },
             ].filter(Boolean).map((a) => {
               const cls = "flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold text-left transition-colors hover:bg-[var(--surface-2)]";
@@ -158,7 +163,7 @@ export default function FeedPost({ post, reason, me, author, comments = [], like
       </div>
 
       <div className="px-2 pt-1.5 flex items-center">
-        <ActionButton onClick={onLike} label={liked ? "Unlike" : "Like"} active={liked} activeColor="var(--accent-rose)" count={likeCount}>
+        <ActionButton onClick={() => { haptic(liked ? "light" : "medium"); onLike(); }} label={liked ? "Unlike" : "Like"} active={liked} activeColor="var(--accent-rose)" count={likeCount}>
           <motion.span key={liked ? "on" : "off"} initial={{ scale: 0.6 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 500, damping: 15 }} className="inline-flex">
             <Heart className={`w-[22px] h-[22px] ${liked ? "fill-current" : ""}`} />
           </motion.span>

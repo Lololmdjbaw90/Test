@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Camera, Check, Database, Download, ImagePlus, Loader2, LogOut, Monitor, Moon, Palette, RotateCcw, Save, Settings as SettingsIcon, Shield, Sun, Trash2, User } from "lucide-react";
+import { Camera, Check, Database, Download, Smartphone, ImagePlus, Loader2, LogOut, Monitor, Moon, Palette, RotateCcw, Save, Settings as SettingsIcon, Shield, Sun, Trash2, User } from "lucide-react";
 import { base44, backendMode } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { ACCENTS, applyTheme } from "@/lib/theme";
@@ -12,11 +12,14 @@ import Modal, { useConfirm } from "@/components/common/Modal";
 import Avatar from "@/components/common/Avatar";
 import ImageCropper from "@/components/common/ImageCropper";
 import AdminSiteSettings from "@/components/admin/AdminSiteSettings";
+import { InstallCard } from "@/components/layout/InstallApp";
+import { BlockedPeople, DeleteAccount } from "@/components/safety/AccountSafety";
 
 const INTERESTS = ["Painting", "Digital art", "Drawing", "Photography", "3D", "Pixel art", "Animation", "Music", "Lo-fi", "Writing", "Crafts", "Fashion"];
 const SECTIONS = [
   { id: "profile", label: "Profile", icon: User },
   { id: "appearance", label: "Appearance", icon: Palette },
+  { id: "app", label: "Get the app", icon: Smartphone },
   { id: "account", label: "Account & data", icon: Database },
 ];
 
@@ -176,6 +179,10 @@ export default function SettingsPage() {
             </div>
           </Section>
 
+          <Section id="app" icon={Smartphone} title="Get the app" subtitle="Mimi Locks works like a native app on your phone, tablet or computer.">
+            <InstallCard />
+          </Section>
+
           <Section id="account" icon={Database} title="Account & data" subtitle={backendMode === "firebase" ? "Your account is stored securely in Firebase." : "Demo mode: everything is saved in this browser only."}>
             <div className="space-y-3">
               <div className="card-sm p-4 flex items-center gap-3">
@@ -195,6 +202,8 @@ export default function SettingsPage() {
                 <div className="flex-1"><p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Log out</p><p className="text-xs" style={{ color: "var(--text-muted)" }}>Signed in as {displayName(user)} ({user.email})</p></div>
                 <button className="btn-outline text-xs" onClick={logout}>Log out</button>
               </div>
+              <BlockedPeople />
+              <DeleteAccount />
             </div>
           </Section>
 

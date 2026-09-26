@@ -29,7 +29,7 @@ export default function EmojiPicker({ onPick, align = "left", buttonClassName = 
         </div>
         <div className="grid grid-cols-8 gap-0.5 p-2 h-56 overflow-y-auto scroll">
           {current.emojis.map((e, i) => (
-            <button key={`${e}-${i}`} type="button" onClick={() => onPick(e)} className="h-9 rounded-lg text-xl flex items-center justify-center transition-[scale,background] hover:scale-125 hover:bg-[var(--surface-2)] active:scale-95">{e}</button>
+            <button key={`${e}-${i}`} type="button" onClick={() => onPick(e)} className="h-9 rounded-lg text-xl flex items-center justify-center transition-[transform,background-color] hover:scale-125 hover:bg-[var(--surface-2)] active:scale-95">{e}</button>
           ))}
         </div>
       </Popover>

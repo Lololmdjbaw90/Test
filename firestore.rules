@@ -40,7 +40,8 @@ service cloud.firestore {
       allow update: if isAdmin() || (isSelf(uid)
         && request.resource.data.email == resource.data.email
         && request.resource.data.role == resource.data.role);
-      allow delete: if isAdmin();
+      // Admins, or the person themselves when they delete their account.
+      allow delete: if isAdmin() || isSelf(uid);
     }
 
     match /SiteConfig/{id} {
@@ -202,6 +203,12 @@ service cloud.firestore {
         || (signedIn() && ownEmail() in resource.data.member_emails
             && onlyChanged(['status', 'declined_by', 'joined_emails', 'answered_at', 'ended_at', 'updated_date', 'updated_at']));
       allow delete: if isAdmin() || resource.data.caller_email == ownEmail();
+    }
+
+    // Reports of posts / people: anyone signed in can file one, only admins see them.
+    match /Report/{id} {
+      allow create: if signedIn() && request.resource.data.reporter_email == ownEmail();
+      allow read, update, delete: if isAdmin();
     }
 
     match /{document=**} {

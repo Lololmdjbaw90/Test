@@ -103,7 +103,7 @@ function Tile({ p, size = "md", onMenu, className = "", style }) {
       {onMenu && (
         <button
           onClick={(e) => { e.stopPropagation(); onMenu(p, e.currentTarget); }}
-          className="absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center text-white opacity-100 sm:opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+          className="absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center text-white can-hover:opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
           style={{ background: "rgb(0 0 0 / 0.45)" }}
           aria-label={`Options for ${nameOf(p)}`}
         >

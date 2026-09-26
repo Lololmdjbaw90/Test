@@ -10,6 +10,7 @@ import { toast } from "@/lib/toast";
 import { displayName, profileLink, timeAgo } from "@/lib/format";
 import { notify } from "@/utils/notifications";
 import Avatar from "@/components/common/Avatar";
+import { useBlocked } from "@/lib/safety";
 
 // Moderates and posts a comment, notifying the owner. Returns true on success.
 export async function sendComment({ entity = "Comment", field = "artwork_id", targetId, content, user, ownerEmail, link }) {
@@ -43,7 +44,9 @@ export default function CommentSection({ entity = "Comment", field = "artwork_id
   const { user } = useAuth();
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
-  const { data: comments, loading } = useLiveQuery(entity, { [field]: targetId }, { sort: "created_date", limit: 200, enabled: !!targetId });
+  const blocked = useBlocked();
+  const { data: allComments, loading } = useLiveQuery(entity, { [field]: targetId }, { sort: "created_date", limit: 200, enabled: !!targetId });
+  const comments = allComments.filter((c) => !blocked.has(c.user_email));
 
   const send = async (e) => {
     e?.preventDefault();
@@ -80,7 +83,7 @@ export default function CommentSection({ entity = "Comment", field = "artwork_id
                     <p className="text-sm break-words whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>{c.content}</p>
                   </div>
                   {canDelete && (
-                    <button onClick={() => remove(c.id)} className="icon-btn w-7 h-7 opacity-0 group-hover:opacity-100 focus:opacity-100 self-center" aria-label="Delete comment"><Trash2 className="w-3.5 h-3.5" style={{ color: "var(--danger)" }} /></button>
+                    <button onClick={() => remove(c.id)} className="icon-btn w-7 h-7 can-hover:opacity-0 group-hover:opacity-100 focus:opacity-100 self-center" aria-label="Delete comment"><Trash2 className="w-3.5 h-3.5" style={{ color: "var(--danger)" }} /></button>
                   )}
                 </motion.div>
               );

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, ImagePlus, Loader2, Lock, Pencil, Reply, Send, X } from "lucide-react";
 import EmojiPicker from "./EmojiPicker";
+import { haptic } from "@/lib/native";
 
 // Shared message input: autosizing textarea, emoji picker, image attachment,
 // @mention suggestions, reply/edit banners. Enter sends, Shift+Enter = newline.
@@ -46,7 +47,7 @@ export default function ChatComposer({ placeholder, onSend, editing, onCancelEdi
     setSending(true);
     const ok = await onSend({ text: text.trim(), file });
     setSending(false);
-    if (ok !== false) { setText(""); clearFile(); setMention(null); }
+    if (ok !== false) { haptic(); setText(""); clearFile(); setMention(null); }
     taRef.current?.focus();
   };
 
@@ -69,7 +70,7 @@ export default function ChatComposer({ placeholder, onSend, editing, onCancelEdi
   }
 
   return (
-    <form onSubmit={submit} className="px-3 sm:px-4 pb-3 sm:pb-4 pt-2 relative">
+    <form onSubmit={submit} className="px-3 sm:px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-4 pt-2 relative">
       <AnimatePresence>
         {suggestions.length > 0 && (
           <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }} className="absolute bottom-full left-4 right-4 mb-1 rounded-2xl overflow-hidden z-20" style={{ background: "var(--surface)", border: "1px solid var(--border-c)", boxShadow: "var(--shadow-lg)" }}>

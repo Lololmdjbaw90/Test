@@ -14,6 +14,7 @@ import { useConfirm } from "@/components/common/Modal";
 import ChatComposer from "@/components/chat/ChatComposer";
 import RichText, { mentionedNames } from "@/components/chat/RichText";
 import { QUICK_REACTIONS } from "@/components/chat/EmojiPicker";
+import { useBlocked } from "@/lib/safety";
 
 const compact = (s) => String(s || "").replace(/\s+/g, "").toLowerCase();
 
@@ -41,7 +42,7 @@ function MessageItem({ msg, grouped, me, roleColor, mentionsMe, canPin, canDelet
     >
       <div className="w-10 flex-shrink-0">
         {!grouped ? (
-          <button onClick={(e) => onOpenProfile?.(msg.user_email, e.currentTarget)} className="rounded-full transition-[scale] hover:scale-105" aria-label={`View ${msg.user_display_name}'s profile`}><Avatar src={msg.user_profile_picture} name={msg.user_display_name} size={40} /></button>
+          <button onClick={(e) => onOpenProfile?.(msg.user_email, e.currentTarget)} className="rounded-full transition-transform hover:scale-105" aria-label={`View ${msg.user_display_name}'s profile`}><Avatar src={msg.user_profile_picture} name={msg.user_display_name} size={40} /></button>
         ) : (
           <span className="text-[10px] opacity-0 group-hover:opacity-100 block text-right pt-1" style={{ color: "var(--text-muted)" }}>{clockTime(msg.created_date)}</span>
         )}
@@ -69,7 +70,7 @@ function MessageItem({ msg, grouped, me, roleColor, mentionsMe, canPin, canDelet
           </div>
         )}
       </div>
-      <div className={`absolute -top-3 right-4 sm:right-6 flex items-center gap-0.5 p-0.5 rounded-xl transition-opacity z-10 ${tapped ? "opacity-100" : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto"}`} style={{ background: "var(--surface)", border: "1px solid var(--border-c)", boxShadow: "var(--shadow-sm)" }}>
+      <div className={`absolute -top-3 right-4 sm:right-6 flex items-center gap-0.5 p-0.5 rounded-xl transition-opacity z-10 ${tapped ? "opacity-100" : "opacity-0 pointer-events-none can-hover:group-hover:opacity-100 can-hover:group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto"}`} style={{ background: "var(--surface)", border: "1px solid var(--border-c)", boxShadow: "var(--shadow-sm)" }}>
         <button onClick={() => setPicker((v) => !v)} className="icon-btn w-8 h-8" aria-label="Add reaction"><SmilePlus className="w-4 h-4" /></button>
         <button onClick={() => onReply(msg)} className="icon-btn w-8 h-8" aria-label="Reply"><Reply className="w-4 h-4" /></button>
         {own && msg.content && <button onClick={() => onEdit(msg)} className="icon-btn w-8 h-8" aria-label="Edit"><Pencil className="w-4 h-4" /></button>}
@@ -98,7 +99,8 @@ export default function ChatArea({ channel, community, me, roles, members, myRol
   const [showPinned, setShowPinned] = useState(false);
   const [query, setQuery] = useState("");
   const { data: raw, loading } = useLiveQuery("ChannelMessage", { channel_id: channel.id }, { sort: "-created_date", limit: 150 });
-  const messages = useMemo(() => [...raw].reverse(), [raw]);
+  const blocked = useBlocked();
+  const messages = useMemo(() => [...raw].reverse().filter((m) => !blocked.has(m.user_email)), [raw, blocked]);
 
   const myRoles = roles.filter((r) => myRoleIds.includes(r.id));
   const canPost = canManage || !channel.allowed_roles?.length || myRoles.some((r) => channel.allowed_roles.includes(r.name));

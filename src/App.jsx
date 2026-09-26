@@ -70,6 +70,7 @@ const AppRoutes = () => {
           <Route path="/TopArtists" element={<Suspense fallback={<CenterSpinner />}><TopArtists /></Suspense>} />
           <Route path="/DirectMessages" element={<Suspense fallback={<CenterSpinner />}><DirectMessages /></Suspense>} />
           <Route path="/Admin" element={<Suspense fallback={<CenterSpinner />}><AdminPanel /></Suspense>} />
+          <Route path="/AdminPanel" element={<Navigate to="/Admin" replace />} />
           <Route path="*" element={<Suspense fallback={<CenterSpinner />}><PageNotFound /></Suspense>} />
         </Route>
       </Routes>

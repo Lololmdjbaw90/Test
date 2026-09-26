@@ -8,6 +8,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { toast } from "@/lib/toast";
 import Avatar from "@/components/common/Avatar";
 import Popover from "@/components/common/Popover";
+import { siteUrl } from "@/lib/format";
 
 function ChannelRow({ ch, active, canManage, onSelect, onSettings, voicePeers, live }) {
   const Icon = ch.type === "voice" ? Volume2 : Hash;
@@ -23,7 +24,7 @@ function ChannelRow({ ch, active, canManage, onSelect, onSettings, voicePeers, l
           {locked && <Lock className="w-3 h-3 flex-shrink-0 opacity-60" />}
         </button>
         {canManage && (
-          <button onClick={() => onSettings(ch)} className="relative icon-btn w-7 h-7 opacity-0 group-hover:opacity-100 focus:opacity-100 mr-1" aria-label={`Settings for ${ch.name}`}><Settings className="w-3.5 h-3.5" /></button>
+          <button onClick={() => onSettings(ch)} className="relative icon-btn w-7 h-7 can-hover:opacity-0 group-hover:opacity-100 focus:opacity-100 mr-1" aria-label={`Settings for ${ch.name}`}><Settings className="w-3.5 h-3.5" /></button>
         )}
       </div>
       {inVoice.length > 0 && (
@@ -58,7 +59,7 @@ export default function ServerSidebar({ community, channels, activeChannel, canM
   const text = channels.filter((c) => c.type !== "voice");
   const voiceChannels = channels.filter((c) => c.type === "voice");
   const invite = async () => {
-    const url = `${window.location.origin}/CommunityChat?id=${community.id}`;
+    const url = siteUrl(`/CommunityChat?id=${community.id}`);
     try { await navigator.clipboard.writeText(url); toast.success("Invite link copied"); } catch { toast(url); }
     setMenu(false);
   };

@@ -46,7 +46,7 @@ export default function ArtworkCard({ artwork, index = 0, onOpen, liked, likeCou
           </div>
           <button
             onClick={(e) => { e.stopPropagation(); onSave?.(); }}
-            className="absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+            className="absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center transition-all can-hover:opacity-0 group-hover:opacity-100 focus:opacity-100"
             style={saved ? { background: "var(--accent-grad)", color: "#fff", opacity: 1 } : { background: "rgb(255 255 255 / 0.92)", color: "#5b4450" }}
             aria-label={saved ? "Remove from saved" : "Save"}
             aria-pressed={saved}

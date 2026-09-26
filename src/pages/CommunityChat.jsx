@@ -130,7 +130,7 @@ export default function CommunityChatPage() {
         {showSidebar && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="md:hidden fixed inset-0 z-[80] backdrop-blur-sm" style={{ background: "rgb(20 8 14 / 0.4)" }} onClick={() => setShowSidebar(false)} />
-            <motion.div initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }} transition={{ type: "spring", damping: 32, stiffness: 320 }} className="md:hidden fixed left-0 top-0 bottom-0 w-[82vw] max-w-xs z-[90] flex" style={{ background: "var(--surface)" }}>{sidebar}</motion.div>
+            <motion.div initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }} transition={{ type: "spring", damping: 32, stiffness: 320 }} className="md:hidden fixed left-0 top-0 bottom-0 w-[82vw] max-w-xs z-[90] flex safe-top safe-bottom" style={{ background: "var(--surface)" }}>{sidebar}</motion.div>
           </>
         )}
       </AnimatePresence>
@@ -164,7 +164,7 @@ export default function CommunityChatPage() {
       </AnimatePresence>
       <AnimatePresence>
         {showMembers && (
-          <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", damping: 32, stiffness: 320 }} className="lg:hidden fixed right-0 top-0 bottom-0 w-[82vw] max-w-xs z-[90] flex" style={{ background: "var(--surface)", boxShadow: "var(--shadow-lg)" }}>
+          <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", damping: 32, stiffness: 320 }} className="lg:hidden fixed right-0 top-0 bottom-0 w-[82vw] max-w-xs z-[90] flex safe-top safe-bottom" style={{ background: "var(--surface)", boxShadow: "var(--shadow-lg)" }}>
             <MemberList members={members} roles={roles} usersByEmail={usersByEmail} community={community} onOpenProfile={openProfile("left-start")} onClose={() => setShowMembers(false)} />
           </motion.div>
         )}

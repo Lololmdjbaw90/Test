@@ -38,5 +38,11 @@ export function applyTheme({ theme, accent } = {}) {
     if (mediaListener) media.addEventListener?.("change", mediaListener);
   }
   try { localStorage.setItem(KEY, JSON.stringify(next)); } catch { /* ignore */ }
+  // Match the browser / iOS status bar to the app background.
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
+    m.setAttribute("content", isDark ? "#110a0f" : "#fbf7f6");
+    m.removeAttribute("media");
+  });
+  window.dispatchEvent(new CustomEvent("mimilocks:theme", { detail: { dark: !!isDark } }));
   return next;
 }

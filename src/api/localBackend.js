@@ -107,6 +107,7 @@ function canCreate(user, name, data) {
   if (name === "GroupChat") return (data?.member_emails || []).includes(user.email);
   if (name === "VoicePresence" || name === "VoiceSignal") return same(data?.user_email, user.email);
   if (name === "Call") return same(data?.caller_email, user.email) && (data?.member_emails || []).includes(user.email);
+  if (name === "Report") return same(data?.reporter_email, user.email);
   return true;
 }
 function canUpdate(user, name, current, data = {}) {
@@ -245,7 +246,7 @@ export const ENTITY_NAMES = [
   "Artwork", "ArtworkPing", "ChannelMessage", "Comment", "Commission", "Community",
   "CommunityComment", "CommunityPost", "DirectMessage", "Friendship", "GroupChat", "Log", "MusicReview",
   "Notification", "ServerChannel", "ServerMember", "ServerRole", "SiteConfig", "User",
-  "VoicePresence", "VoiceSignal", "Call",
+  "VoicePresence", "VoiceSignal", "Call", "Report",
 ];
 const entities = {};
 ENTITY_NAMES.forEach((n) => { entities[n] = makeEntity(n); });
@@ -349,6 +350,19 @@ const auth = {
   },
   async resetPassword() {
     throw new Error("Password reset emails need Firebase. In local demo mode, create a new account instead.");
+  },
+  async verifyPassword(password) {
+    const current = requireAuthSync();
+    const account = loadAccounts().find((x) => same(x.email, current.email));
+    if (!account) throw new Error("Account not found.");
+    const expected = await hashPassword(password || "", account.password_salt);
+    if (expected !== account.password_hash) throw new Error("Wrong password.");
+  },
+  async deleteAccount() {
+    const current = requireAuthSync();
+    saveAccounts(loadAccounts().filter((x) => !same(x.email, current.email)));
+    saveCollection("User", loadCollection("User").filter((u) => !same(u.email, current.email)));
+    if (isBrowser) { window.localStorage.removeItem(AUTH_KEY); window.location.href = "/Login"; }
   },
   logout() {
     if (isBrowser) { window.localStorage.removeItem(AUTH_KEY); window.location.href = "/Login"; }

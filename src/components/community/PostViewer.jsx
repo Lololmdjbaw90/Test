@@ -7,13 +7,13 @@ import LikeButton from "@/components/common/LikeButton";
 import CommentSection from "@/components/gallery/CommentSection";
 import { useAuth } from "@/lib/AuthContext";
 import { toast } from "@/lib/toast";
-import { profileLink, timeAgo } from "@/lib/format";
+import { profileLink, siteUrl, timeAgo } from "@/lib/format";
 
 export default function PostViewer({ post, onClose, liked, likeCount, onLike, onDelete }) {
   const { user } = useAuth();
   const canDelete = post && user && (user.email === post.user_email || user.role === "admin");
   const share = async () => {
-    const url = `${window.location.origin}/Community?post=${post.id}`;
+    const url = siteUrl(`/Community?post=${post.id}`);
     try { await navigator.clipboard.writeText(url); toast.success("Link copied"); } catch { toast(url); }
   };
   return (

@@ -14,6 +14,7 @@ import { Page, PageHeader, EmptyState } from "@/components/common/Page";
 import { SearchInput, Segmented } from "@/components/common/Controls";
 import { useConfirm } from "@/components/common/Modal";
 import Avatar from "@/components/common/Avatar";
+import { useBlocked } from "@/lib/safety";
 
 function PersonCard({ person, subtitle, children, index }) {
   return (
@@ -37,7 +38,9 @@ export default function FriendsPage() {
   const [busy, setBusy] = useState(null);
   const { data: users, loading: usersLoading } = useLiveQuery("User", null, { sort: "-last_seen" });
   const { friendships, loading } = useFriendships(me?.email);
-  const { accepted, incoming, outgoing, other } = splitFriendships(friendships, me?.email);
+  const blocked = useBlocked();
+  const { accepted, incoming: allIncoming, outgoing, other } = splitFriendships(friendships, me?.email);
+  const incoming = allIncoming.filter((f) => !blocked.has(f.requester_email));
   const byEmail = useMemo(() => Object.fromEntries(users.map((u) => [u.email, u])), [users]);
   const personFor = (f) => {
     const email = other(f);
@@ -51,7 +54,7 @@ export default function FriendsPage() {
   // interests, activity...) and shows why each person is suggested.
   const { friendEmails } = splitFriendships(friendships, me?.email);
   const taste = useMemo(() => buildTaste({ me, friends: friendEmails }), [me, friendEmails]);
-  const discover = useMemo(() => suggestPeople(users.filter(matches), { me, taste, limit: 60, exclude: connected }), [users, me, taste, connected.size, q]); // eslint-disable-line react-hooks/exhaustive-deps
+  const discover = useMemo(() => suggestPeople(users.filter((u) => matches(u) && !blocked.has(u.email)), { me, taste, limit: 60, exclude: connected }), [users, me, taste, connected.size, q]); // eslint-disable-line react-hooks/exhaustive-deps
   const friends = accepted.map((f) => ({ f, p: personFor(f) })).filter(({ p }) => matches(p)).sort((a, b) => Number(isOnline(b.p)) - Number(isOnline(a.p)));
 
   const run = async (key, fn) => { setBusy(key); try { await fn(); } catch (e) { toast.error(e?.message || "Something went wrong."); } setBusy(null); };

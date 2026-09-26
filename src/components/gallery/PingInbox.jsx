@@ -41,7 +41,7 @@ export default function PingInbox() {
                       {ping.message && <p className="text-xs mt-1 italic" style={{ color: "var(--text-secondary)" }}>“{ping.message}”</p>}
                       <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>{timeAgo(ping.created_date)}</p>
                     </div>
-                    <button onClick={() => del(ping.id)} className="icon-btn w-7 h-7 opacity-0 group-hover:opacity-100 focus:opacity-100" aria-label="Delete ping"><Trash2 className="w-3.5 h-3.5" style={{ color: "var(--danger)" }} /></button>
+                    <button onClick={() => del(ping.id)} className="icon-btn w-7 h-7 can-hover:opacity-0 group-hover:opacity-100 focus:opacity-100" aria-label="Delete ping"><Trash2 className="w-3.5 h-3.5" style={{ color: "var(--danger)" }} /></button>
                   </div>
                 ))}
               </div>

@@ -18,6 +18,7 @@ import { ChipRow, SearchInput } from "@/components/common/Controls";
 import Modal, { useConfirm } from "@/components/common/Modal";
 import DropZone from "@/components/common/DropZone";
 import LikeButton from "@/components/common/LikeButton";
+import { useBlocked } from "@/lib/safety";
 
 const GENRES = ["Lo-fi", "Ambient", "Synthwave", "Dream pop", "Hip-hop", "Electronic", "Acoustic", "Classical", "Rock", "Other"];
 const MOODS = ["Chill", "Calm", "Dreamy", "Energetic", "Happy", "Melancholy", "Focus"];
@@ -141,7 +142,7 @@ function Cover({ track, className = "", rounded = "rounded-2xl" }) {
 
 function PlayFab({ playing, onClick, label, className = "" }) {
   return (
-    <button onClick={(e) => { e.stopPropagation(); onClick(); }} className={`w-11 h-11 rounded-full flex items-center justify-center text-white transition-[opacity,translate,scale] duration-200 active:scale-90 ${className}`} style={{ background: "var(--accent-grad)", boxShadow: "0 10px 24px rgb(0 0 0 / 0.3)" }} aria-label={label}>
+    <button onClick={(e) => { e.stopPropagation(); onClick(); }} className={`w-11 h-11 rounded-full flex items-center justify-center text-white transition-[opacity,transform] duration-200 active:scale-90 ${className}`} style={{ background: "var(--accent-grad)", boxShadow: "0 10px 24px rgb(0 0 0 / 0.3)" }} aria-label={label}>
       {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
     </button>
   );
@@ -171,7 +172,7 @@ function TrackCard({ track, reason, player, queue, index }) {
       <div className="relative cursor-pointer" onClick={() => player.toggle(asQueueItem(track), queue)}>
         <Cover track={track} className="aspect-square w-full card-hover" rounded="rounded-[1.4rem]" />
         {playing && <span className="absolute top-2.5 left-2.5 px-2 py-1 rounded-full text-white" style={{ background: "rgb(0 0 0 / 0.5)" }}><span className="equalizer"><span /><span /><span /></span></span>}
-        <PlayFab playing={playing} onClick={() => player.toggle(asQueueItem(track), queue)} label={playing ? `Pause ${track.title}` : `Play ${track.title}`} className={`absolute right-2.5 bottom-2.5 ${current ? "" : "sm:opacity-0 sm:translate-y-2 group-hover:opacity-100 group-hover:translate-y-0"}`} />
+        <PlayFab playing={playing} onClick={() => player.toggle(asQueueItem(track), queue)} label={playing ? `Pause ${track.title}` : `Play ${track.title}`} className={`absolute right-2.5 bottom-2.5 ${current ? "" : "can-hover:opacity-0 can-hover:translate-y-2 group-hover:opacity-100 group-hover:translate-y-0"}`} />
       </div>
       <p className="mt-2.5 text-sm font-bold truncate" style={{ color: current ? "var(--accent-rose)" : "var(--text-primary)" }}>{track.title || "Untitled"}</p>
       <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>{reason || track.user_display_name}</p>
@@ -250,7 +251,9 @@ export default function MusicPage() {
   const [search, setSearch] = useState("");
   const [genre, setGenre] = useState("All");
   const [mood, setMood] = useState(null);
-  const { data: tracks, setData, loading } = useLiveQuery("MusicReview", null, { sort: "-created_date", limit: 300 });
+  const blocked = useBlocked();
+  const { data: allTracks, setData, loading } = useLiveQuery("MusicReview", null, { sort: "-created_date", limit: 300 });
+  const tracks = useMemo(() => allTracks.filter((t) => !blocked.has(t.user_email)), [allTracks, blocked]);
   const { data: users } = useLiveQuery("User", null, { live: false });
   const { friendships } = useFriendships(user?.email);
   const { friendEmails } = splitFriendships(friendships, user?.email);
@@ -394,7 +397,7 @@ export default function MusicPage() {
                           const u = usersByEmail[a.email];
                           return (
                             <Link key={a.email} to={profileLink(a.email)} className="flex flex-col items-center gap-2 w-24 flex-shrink-0 group">
-                              <span className="flex rounded-full p-[5px] transition-[scale] duration-200 group-hover:scale-105" style={{ background: "var(--accent-grad)" }}><Avatar src={u?.profile_picture || a.picture} name={u ? displayName(u) : a.name} size={80} ring={2} ringColor="var(--app-bg)" /></span>
+                              <span className="flex rounded-full p-[5px] transition-transform duration-200 group-hover:scale-105" style={{ background: "var(--accent-grad)" }}><Avatar src={u?.profile_picture || a.picture} name={u ? displayName(u) : a.name} size={80} ring={2} ringColor="var(--app-bg)" /></span>
                               <span className="text-xs font-bold truncate w-full text-center" style={{ color: "var(--text-primary)" }}>{u ? displayName(u) : a.name}</span>
                               <span className="text-[10px] -mt-1.5" style={{ color: "var(--text-muted)" }}>{a.tracks} track{a.tracks === 1 ? "" : "s"}</span>
                             </Link>
@@ -452,7 +455,7 @@ export default function MusicPage() {
                             {t.mood && <button onClick={() => setMood(t.mood)} className="badge-pink" style={{ color: "var(--text-secondary)", background: "var(--surface-2)", borderColor: "var(--border-c)" }}>{t.mood}</button>}
                           </div>
                           <LikeButton variant="plain" liked={!!user && (t.likes || []).includes(user.email)} count={t.likes?.length || 0} onToggle={() => like(t)} />
-                          {canDelete && <button onClick={() => remove(t)} className="icon-btn w-8 h-8 sm:opacity-0 group-hover:opacity-100 focus:opacity-100" aria-label="Delete track"><Trash2 className="w-4 h-4" style={{ color: "var(--danger)" }} /></button>}
+                          {canDelete && <button onClick={() => remove(t)} className="icon-btn w-8 h-8 can-hover:opacity-0 group-hover:opacity-100 focus:opacity-100" aria-label="Delete track"><Trash2 className="w-4 h-4" style={{ color: "var(--danger)" }} /></button>}
                         </motion.div>
                       );
                     })}

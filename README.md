@@ -2,7 +2,8 @@
 
 A cozy home for artists: a curated gallery, a community feed, music sharing,
 Discord-style servers with text + voice channels, direct messages and group
-chats, commissions, profiles with levels and a coin shop.
+chats, voice/video calls, commissions, profiles with levels and a coin shop.
+Runs as a website, an installable app, and a native **iPhone / iPad app**.
 
 ## Stack
 
@@ -18,7 +19,18 @@ npm run dev          # uses Firebase if .env has a config (it does in this repo)
 npm run dev:demo     # offline demo with sample data, no Firebase needed
 ```
 
+Then open http://localhost:3000.
 Demo login (offline mode only): **admin@mimilocks.local / admin123**.
+
+## iPhone, iPad and installable app
+
+- **Installable web app** — open the site in Safari → Share → Add to Home
+  Screen (Chrome / Edge / Android get an Install button). Full screen, works
+  offline, app icon, splash.
+- **Native iOS app** — `npm run ios` builds the site and opens the Xcode
+  project in `ios/` (iPhone + iPad) on a Mac.
+
+Step-by-step instructions, including TestFlight / App Store: **[IOS_APP.md](IOS_APP.md)**.
 
 ## Features
 
@@ -57,10 +69,15 @@ Demo login (offline mode only): **admin@mimilocks.local / admin123**.
 - **Commissions** — tiers with prices and delivery times, sample galleries,
   open/closed status, message the artist.
 - **Admin** — stats, 14-day activity chart, user roles, content moderation,
-  server management, site announcement banner, default accent, activity logs.
+  a Reports queue, server management, site announcement banner, default
+  accent, activity logs.
+- **Safety** — report posts and people, block users (hides their posts,
+  comments, messages, notifications and calls), automatic text moderation,
+  and full account deletion in Settings.
 - **Everywhere** — Ctrl/⌘ K command palette, light/dark/system themes, five
-  accent colors, notifications, toasts, responsive mobile layout with a
-  bottom nav, reduced-motion support.
+  accent colors, notifications, toasts, reduced-motion support. Phone layout
+  with a bottom tab bar, back button and safe areas for the notch and home
+  indicator; compact sidebar on iPad; offline notice.
 
 ## Environment
 
@@ -96,9 +113,12 @@ The emulators enforce the real `firestore.rules` / `storage.rules` and use a
 ```
 src/
   api/          base44Client (backend switch), firebaseBackend, localBackend, queryUtils
-  lib/          auth context, theme, player, voice, live queries, toasts, helpers
+  lib/          auth context, theme, player, voice, calls, ranking, safety,
+                pwa (install + service worker), native (iOS app), helpers
+  pwa/          service worker template (built to /sw.js)
   components/   layout (sidebar, palette, mini player), common UI, feature components
   pages/        one file per route
+ios/            native iPhone/iPad app (Capacitor + Xcode), see IOS_APP.md
 ```
 
 All data access goes through `base44.entities.<Name>` (`list`, `filter`, `get`,

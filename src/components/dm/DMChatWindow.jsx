@@ -12,6 +12,7 @@ import ChatComposer from "@/components/chat/ChatComposer";
 import RichText from "@/components/chat/RichText";
 import { QUICK_REACTIONS } from "@/components/chat/EmojiPicker";
 import { callSummary } from "@/lib/calls";
+import { useBlocked } from "@/lib/safety";
 
 // Centered "Missed call / Call · 4:12" notice with a call-back button.
 function CallNotice({ msg, me, onCall }) {
@@ -32,11 +33,11 @@ function CallNotice({ msg, me, onCall }) {
   );
 }
 
-function Bubble({ msg, own, showAvatar, showName, isGroup, seen, onEdit, onDelete, onReact, me }) {
+function Bubble({ msg, own, showAvatar, showName, isGroup, seen, onEdit, onDelete, onReact, me, tapped, onTap }) {
   const [react, setReact] = useState(false);
   const reactions = Object.entries(msg.reactions || {}).filter(([, users]) => users?.length);
   return (
-    <motion.div layout="position" initial={{ opacity: 0, y: 10, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: "spring", stiffness: 420, damping: 32 }} className={`group flex gap-2 ${own ? "flex-row-reverse" : ""} ${showAvatar ? "mt-3" : "mt-0.5"}`} onMouseLeave={() => setReact(false)}>
+    <motion.div layout="position" initial={{ opacity: 0, y: 10, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: "spring", stiffness: 420, damping: 32 }} className={`group flex gap-2 ${own ? "flex-row-reverse" : ""} ${showAvatar ? "mt-3" : "mt-0.5"}`} onMouseLeave={() => setReact(false)} onClick={(e) => { if (window.matchMedia("(hover: none)").matches && !e.target.closest("button,a,input,textarea")) onTap?.(msg.id); }}>
       <div className="w-8 flex-shrink-0">{!own && showAvatar && <Avatar src={msg.user_profile_picture} name={msg.user_display_name} size={32} />}</div>
       <div className={`max-w-[78%] sm:max-w-[65%] flex flex-col ${own ? "items-end" : "items-start"}`}>
         {showName && isGroup && !own && <span className="text-[11px] font-bold mb-1 ml-3" style={{ color: "var(--text-secondary)" }}>{msg.user_display_name}</span>}
@@ -46,7 +47,7 @@ function Bubble({ msg, own, showAvatar, showName, isGroup, seen, onEdit, onDelet
             {msg.content && <RichText text={msg.content} />}
             {msg.is_edited && <span className="ml-1.5 text-[10px] opacity-70">(edited)</span>}
           </div>
-          <div className={`flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity ${own ? "flex-row-reverse" : ""}`}>
+          <div className={`flex items-center gap-0.5 transition-opacity ${own ? "flex-row-reverse" : ""} ${tapped ? "opacity-100" : "opacity-0 pointer-events-none can-hover:group-hover:opacity-100 can-hover:group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto"}`}>
             <button onClick={() => setReact((v) => !v)} className="icon-btn w-7 h-7" aria-label="React"><SmilePlus className="w-3.5 h-3.5" /></button>
             {own && msg.content && <button onClick={() => onEdit(msg)} className="icon-btn w-7 h-7" aria-label="Edit message"><Pencil className="w-3.5 h-3.5" /></button>}
             {(own || me?.role === "admin") && <button onClick={() => onDelete(msg)} className="icon-btn w-7 h-7" aria-label="Delete message"><Trash2 className="w-3.5 h-3.5" style={{ color: "var(--danger)" }} /></button>}
@@ -80,8 +81,11 @@ export default function DMChatWindow({ conversation, me, onCall }) {
   const scrollRef = useRef(null);
   const [atBottom, setAtBottom] = useState(true);
   const [editing, setEditing] = useState(null);
+  const [tapped, setTapped] = useState(null); // bubble showing its actions on touch screens
   const { data: raw, loading } = useLiveQuery("DirectMessage", { conversation_id: conversation.id, member_emails: { $contains: me.email } }, { sort: "-created_date", limit: 200 });
-  const messages = useMemo(() => [...raw].reverse(), [raw]);
+  const blocked = useBlocked();
+  const messages = useMemo(() => [...raw].reverse().filter((m) => !blocked.has(m.user_email)), [raw, blocked]);
+  const blockedOther = !isGroup && blocked.has(conversation.otherUser?.email);
 
   // Mark incoming messages as read.
   useEffect(() => {
@@ -174,7 +178,7 @@ export default function DMChatWindow({ conversation, me, onCall }) {
                     <div className="divider flex-1" />
                   </div>
                 )}
-                {m.type === "call" ? <CallNotice msg={m} me={me} onCall={onCall} /> : <Bubble msg={m} me={me} own={m.user_email === me.email} showAvatar={!grouped} showName={!grouped} isGroup={isGroup} seen={m.id === seenId} onEdit={setEditing} onDelete={remove} onReact={react} />}
+                {m.type === "call" ? <CallNotice msg={m} me={me} onCall={onCall} /> : <Bubble msg={m} me={me} own={m.user_email === me.email} showAvatar={!grouped} showName={!grouped} isGroup={isGroup} seen={m.id === seenId} onEdit={setEditing} onDelete={remove} onReact={react} tapped={tapped === m.id} onTap={(id) => setTapped((t) => (t === id ? null : id))} />}
               </React.Fragment>
             );
           })
@@ -190,6 +194,7 @@ export default function DMChatWindow({ conversation, me, onCall }) {
       <ChatComposer
         placeholder={isGroup ? `Message ${conversation.group.name}` : `Message ${displayName(conversation.otherUser)}`}
         onSend={send}
+        disabledReason={blockedOther ? `You blocked ${displayName(conversation.otherUser)}. Unblock them in Settings to send messages.` : undefined}
         editing={editing}
         onCancelEdit={() => setEditing(null)}
         mentionCandidates={mentionCandidates}

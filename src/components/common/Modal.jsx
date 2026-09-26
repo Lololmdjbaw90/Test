@@ -55,7 +55,7 @@ export default function Modal({ open, onClose, title, subtitle, children, footer
         initial={{ opacity: 0, y: 40, scale: 0.97 }}
         animate={open ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 30, scale: 0.97, transition: { duration: 0.15 } }}
         transition={{ type: "spring", stiffness: 380, damping: 32 }}
-        className={`relative w-full ${SIZES[size] || size} max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-t-[1.75rem] sm:rounded-[1.75rem] ${className}`}
+        className={`relative w-full ${SIZES[size] || size} max-h-[calc(92dvh-env(safe-area-inset-top))] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-t-[1.75rem] sm:rounded-[1.75rem] pb-[env(safe-area-inset-bottom)] sm:pb-0 ${className}`}
         style={{ background: "var(--surface)", border: "1px solid var(--border-c)", boxShadow: "var(--shadow-lg)" }}
       >
         {!hideHeader && (title || subtitle) && (

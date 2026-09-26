@@ -57,3 +57,14 @@ export function isNitro(user) {
   if (!user?.nitro_active) return false;
   return !user.nitro_until || new Date(user.nitro_until).getTime() > Date.now();
 }
+
+// Public address for share / invite links. Inside the iOS app the page origin
+// is capacitor://localhost, which nobody else can open, so use VITE_PUBLIC_URL
+// (or the Firebase Hosting domain) there.
+export function siteUrl(path = "") {
+  const env = import.meta.env.VITE_PUBLIC_URL;
+  const project = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+  const web = /^https?:$/.test(window.location.protocol);
+  const base = env || (web ? window.location.origin : project ? `https://${project}.web.app` : window.location.origin);
+  return `${base.replace(/\/$/, "")}${path}`;
+}

@@ -9,7 +9,7 @@ import CommentSection from "./CommentSection";
 import PingButton from "./PingButton";
 import { usePlayer } from "@/lib/player";
 import { toast } from "@/lib/toast";
-import { profileLink, timeAgo } from "@/lib/format";
+import { profileLink, siteUrl, timeAgo } from "@/lib/format";
 
 // Full-screen artwork viewer with ←/→ navigation.
 export default function ArtworkViewer({ artwork, onClose, onPrev, onNext, liked, likeCount, onLike, saved, onSave, isAdmin, onToggleFeatured, onDelete }) {
@@ -27,7 +27,7 @@ export default function ArtworkViewer({ artwork, onClose, onPrev, onNext, liked,
   }, [artwork, onPrev, onNext]);
 
   const share = async () => {
-    const url = `${window.location.origin}/Gallery?art=${artwork.id}`;
+    const url = siteUrl(`/Gallery?art=${artwork.id}`);
     try { await navigator.clipboard.writeText(url); toast.success("Link copied"); } catch { toast(url); }
   };
   const track = artwork?.music_url ? { id: `art-${artwork.id}`, title: artwork.title, artist: artwork.user_display_name || "Gallery", src: artwork.music_url, cover: artwork.image_url } : null;

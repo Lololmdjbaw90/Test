@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { animate, motion } from "framer-motion";
-import { Activity, BarChart3, Image as ImageIcon, MessageSquare, Music, Server, Settings as SettingsIcon, Shield, ShieldCheck, ShieldOff, Trash2, Users } from "lucide-react";
+import { Activity, BarChart3, Check, ExternalLink, Flag, Image as ImageIcon, MessageSquare, Music, Server, Settings as SettingsIcon, Shield, ShieldCheck, ShieldOff, Trash2, Users } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { toast } from "@/lib/toast";
@@ -12,7 +12,9 @@ import { useConfirm } from "@/components/common/Modal";
 import Avatar from "@/components/common/Avatar";
 import AdminSiteSettings from "@/components/admin/AdminSiteSettings";
 
-const COLLECTIONS = ["User", "Artwork", "CommunityPost", "Comment", "CommunityComment", "ChannelMessage", "Community", "ServerChannel", "MusicReview", "Commission"];
+const COLLECTIONS = ["User", "Artwork", "CommunityPost", "Comment", "CommunityComment", "ChannelMessage", "Community", "ServerChannel", "MusicReview", "Commission", "Report"];
+// Where each kind of reported thing lives, so "Remove content" can delete it.
+const REPORT_TARGET = { post: "CommunityPost", comment: "CommunityComment", track: "MusicReview", message: "ChannelMessage" };
 
 function CountUp({ value }) {
   const [n, setN] = useState(0);
@@ -120,7 +122,7 @@ export default function AdminPanel() {
   return (
     <Page width="max-w-6xl">
       <PageHeader eyebrow="Mission control" title="Admin panel" subtitle="Moderate content, manage people and tune the site." icon={Shield} actions={<Link to="/Logs" className="btn-outline">Activity logs</Link>}>
-        <Segmented options={[{ id: "overview", label: "Overview", icon: BarChart3 }, { id: "users", label: "Users", icon: Users, count: data.User.length }, { id: "content", label: "Content", icon: ImageIcon }, { id: "servers", label: "Servers", icon: Server }, { id: "settings", label: "Site", icon: SettingsIcon }]} value={tab} onChange={(t) => { setTab(t); setSearch(""); }} size="sm" />
+        <Segmented options={[{ id: "overview", label: "Overview", icon: BarChart3 }, { id: "users", label: "Users", icon: Users, count: data.User.length }, { id: "content", label: "Content", icon: ImageIcon }, { id: "servers", label: "Servers", icon: Server }, { id: "reports", label: "Reports", icon: Flag, count: data.Report.filter((r) => r.status !== "resolved").length }, { id: "settings", label: "Site", icon: SettingsIcon }]} value={tab} onChange={(t) => { setTab(t); setSearch(""); }} size="sm" />
       </PageHeader>
 
       {tab === "overview" && (
@@ -207,6 +209,43 @@ export default function AdminPanel() {
               <div className="mt-3 flex flex-wrap gap-1.5">{data.ServerChannel.filter((ch) => ch.community_id === c.id).map((ch) => <span key={ch.id} className="text-[11px] px-2 py-1 rounded-full" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>{ch.type === "voice" ? "🔊" : "#"} {ch.name}</span>)}</div>
             </div>
           ))}
+        </div>
+      )}
+
+      {tab === "reports" && (
+        <div className="space-y-3">
+          {data.Report.length === 0 && <EmptyState icon={Flag} title="No reports" text="When people report posts or accounts, they show up here." />}
+          {[...data.Report].sort((a, b) => Number(a.status === "resolved") - Number(b.status === "resolved") || new Date(b.created_date) - new Date(a.created_date)).map((r) => {
+            const collection = REPORT_TARGET[r.target_type];
+            const resolved = r.status === "resolved";
+            return (
+              <div key={r.id} className="card-sm p-4 flex flex-col sm:flex-row sm:items-center gap-3" style={{ opacity: resolved ? 0.55 : 1 }}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <span className="badge-pink" style={{ color: "var(--danger)" }}><Flag className="w-3 h-3" /> {r.reason}</span>
+                    <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>{r.target_type}</span>
+                    {resolved && <span className="text-[11px] font-bold" style={{ color: "var(--success)" }}>✓ {r.resolution || "Resolved"}</span>}
+                  </div>
+                  {r.target_preview && <p className="text-sm line-clamp-2" style={{ color: "var(--text-primary)" }}>“{r.target_preview}”</p>}
+                  {r.details && <p className="text-xs mt-1 italic" style={{ color: "var(--text-secondary)" }}>{r.details}</p>}
+                  <p className="text-[11px] mt-1" style={{ color: "var(--text-muted)" }}>Reported by {r.reporter_name || r.reporter_email} · {new Date(r.created_date).toLocaleString()}{r.target_owner_email ? ` · owner ${r.target_owner_email}` : ""}</p>
+                </div>
+                <div className="flex gap-1.5 flex-shrink-0">
+                  {r.link && <Link to={r.link} className="btn-outline text-xs !py-1.5"><ExternalLink className="w-3.5 h-3.5" /> Open</Link>}
+                  {!resolved && collection && (
+                    <button className="btn-outline text-xs !py-1.5" style={{ color: "var(--danger)" }} onClick={async () => {
+                      if (!(await confirm({ title: `Remove this ${r.target_type}?`, confirmLabel: "Remove", danger: true }))) return;
+                      await base44.entities[collection].delete(r.target_id).catch(() => {});
+                      await base44.entities.Report.update(r.id, { status: "resolved", resolution: "Content removed", resolved_by: me.email });
+                      base44.entities.Log.create({ action: "moderation_delete", details: `Removed reported ${r.target_type} ${r.target_id}`, user_email: me.email }).catch(() => {});
+                      toast.success("Content removed"); load();
+                    }}><Trash2 className="w-3.5 h-3.5" /> Remove</button>
+                  )}
+                  {!resolved && <button className="btn-outline text-xs !py-1.5" onClick={async () => { await base44.entities.Report.update(r.id, { status: "resolved", resolution: "Dismissed", resolved_by: me.email }).catch((e) => toast.error(e?.message)); load(); }}><Check className="w-3.5 h-3.5" /> Dismiss</button>}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

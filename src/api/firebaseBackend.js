@@ -18,8 +18,14 @@
 // -----------------------------------------------------------------------------
 
 import { initializeApp } from "firebase/app";
+import { Capacitor } from "@capacitor/core";
 import {
   getAuth,
+  initializeAuth,
+  indexedDBLocalPersistence,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  deleteUser,
   onAuthStateChanged,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -125,7 +131,9 @@ function warnMissingIndex(name, e) {
 
 export function createFirebaseClient() {
   const app = initializeApp(firebaseConfigFromEnv());
-  const authSdk = getAuth(app);
+  // Inside the iOS app, getAuth() can stall waiting for a browser popup helper
+  // that WKWebView doesn't have; email/password sign-in only needs storage.
+  const authSdk = Capacitor.isNativePlatform() ? initializeAuth(app, { persistence: indexedDBLocalPersistence }) : getAuth(app);
   const db = getFirestore(app);
   const storage = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ? getStorage(app) : null;
 
@@ -297,6 +305,20 @@ export function createFirebaseClient() {
     async resetPassword(email) {
       await sendPasswordResetEmail(authSdk, normalizeEmail(email)).catch((e) => { throw friendlyAuthError(e); });
     },
+    // Confirms the password (Firebase needs a fresh sign-in before deleting).
+    async verifyPassword(password) {
+      const user = authSdk.currentUser;
+      if (!user) throw new Error("You're not signed in.");
+      await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password || "")).catch((e) => { throw friendlyAuthError(e); });
+    },
+    // Removes the profile and the sign-in account. Call verifyPassword first.
+    async deleteAccount() {
+      const user = authSdk.currentUser;
+      if (!user) throw new Error("You're not signed in.");
+      await deleteDoc(doc(db, "User", user.uid)).catch(() => {});
+      await deleteUser(user).catch((e) => { throw friendlyAuthError(e); });
+      window.location.href = "/Login";
+    },
     async logout() {
       await signOut(authSdk);
       window.location.href = "/Login";
@@ -356,6 +378,8 @@ function friendlyAuthError(e) {
     "auth/too-many-requests": "Too many attempts. Please wait a minute and try again.",
     "auth/network-request-failed": "Network error. Check your connection and try again.",
     "auth/operation-not-allowed": "Email/password sign-in is not enabled in the Firebase console.",
+    "auth/requires-recent-login": "Please enter your password again to continue.",
+    "auth/missing-password": "Please enter your password.",
   };
   return new Error(map[e?.code] || e?.message || "Something went wrong.");
 }

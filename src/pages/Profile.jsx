@@ -1,14 +1,14 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bookmark, Calendar, Check, Clock, Grid3X3, Heart, Loader2, MessageCircle, MessageSquare, Pencil, Shield, Sparkles, UserCheck, UserPlus, Users } from "lucide-react";
+import { Ban, Bookmark, Calendar, Check, Clock, Flag, Grid3X3, Heart, Loader2, MessageCircle, MessageSquare, MoreHorizontal, Pencil, Shield, Sparkles, UserCheck, UserPlus, Users } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { useFriendships } from "@/lib/social";
 import { toggleLike } from "@/lib/likes";
 import { toast } from "@/lib/toast";
-import { compactNumber, displayName, isNitro, isOnline, timeAgo } from "@/lib/format";
+import { compactNumber, displayName, isNitro, isOnline, profileLink, timeAgo } from "@/lib/format";
 import { Page, EmptyState, CenterSpinner } from "@/components/common/Page";
 import { Segmented } from "@/components/common/Controls";
 import Avatar from "@/components/common/Avatar";
@@ -20,6 +20,9 @@ import LevelBadge, { getLevelInfo } from "@/components/profile/LevelBadge";
 import NitroBadge from "@/components/profile/NitroBadge";
 import NitroShop from "@/components/profile/NitroShop";
 import { notify } from "@/utils/notifications";
+import Popover from "@/components/common/Popover";
+import { useConfirm } from "@/components/common/Modal";
+import { openReport, setBlocked, useBlocked } from "@/lib/safety";
 
 function Banner({ profile }) {
   const nitro = isNitro(profile);
@@ -53,6 +56,11 @@ export default function ProfilePage() {
   const isOwn = me?.email === email;
   const [tab, setTab] = useState("posts");
   const [busy, setBusy] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const menuRef = useRef(null);
+  const confirm = useConfirm();
+  const blockedSet = useBlocked();
+  const isBlocked = !isOwn && blockedSet.has(email);
 
   const { data: userRows, loading } = useLiveQuery("User", { email }, { enabled: !!email });
   const profile = isOwn ? { ...(userRows[0] || {}), ...me } : userRows[0];
@@ -77,6 +85,14 @@ export default function ProfilePage() {
   const nitro = isNitro(profile);
   const level = getLevelInfo(profile.xp || 0);
 
+  const toggleBlock = async () => {
+    setMenu(false);
+    if (!isBlocked && !(await confirm({ title: `Block ${name}?`, message: "You won't see their posts, comments or messages, and they can't call you. They won't be told.", confirmLabel: "Block", danger: true }))) return;
+    try {
+      await setBlocked({ me, email, updateMe, block: !isBlocked });
+      toast.success(isBlocked ? `${name} is unblocked` : `${name} is blocked`);
+    } catch (e) { toast.error(e?.message || "Could not update."); }
+  };
   const toggleFollow = async () => {
     setBusy(true);
     const next = following ? (me.following || []).filter((e) => e !== email) : [...(me.following || []), email];
@@ -147,6 +163,17 @@ export default function ProfilePage() {
                 {friendship?.status === "accepted" && <button onClick={() => navigate(`/DirectMessages?with=${encodeURIComponent(email)}`)} className="btn-outline"><MessageSquare className="w-4 h-4" /> Message</button>}
               </>
             )}
+            {!isOwn && me && (
+              <>
+                <button ref={menuRef} onClick={() => setMenu((v) => !v)} className="icon-btn icon-btn-bordered" aria-label="More options" aria-expanded={menu}><MoreHorizontal className="w-5 h-5" /></button>
+                <Popover open={menu} onClose={() => setMenu(false)} anchorRef={menuRef} placement="bottom-end" width={230} label="Profile options">
+                  <div className="p-2 grid gap-0.5">
+                    <button onClick={() => { setMenu(false); openReport({ type: "user", id: profile.id || email, owner: email, preview: `${name}${profile.bio ? ` — ${profile.bio}` : ""}`, link: profileLink(email) }); }} className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold text-left transition-colors hover:bg-[var(--surface-2)]" style={{ color: "var(--danger)" }}><Flag className="w-4 h-4" /> Report {name.split(" ")[0]}</button>
+                    <button onClick={toggleBlock} className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold text-left transition-colors hover:bg-[var(--surface-2)]" style={{ color: isBlocked ? "var(--text-primary)" : "var(--danger)" }}><Ban className="w-4 h-4" /> {isBlocked ? "Unblock" : "Block"} {name.split(" ")[0]}</button>
+                  </div>
+                </Popover>
+              </>
+            )}
           </div>
         </div>
 
@@ -170,6 +197,14 @@ export default function ProfilePage() {
           </div>
         )}
 
+        {isBlocked ? (
+          <div className="mt-8 card !rounded-3xl p-8 text-center">
+            <Ban className="w-8 h-8 mx-auto mb-3" style={{ color: "var(--text-muted)" }} />
+            <p className="font-display text-xl font-semibold" style={{ color: "var(--text-primary)" }}>You blocked {name}</p>
+            <p className="text-sm mt-1 mb-4" style={{ color: "var(--text-muted)" }}>You won't see their posts, comments or messages, and they can't call you.</p>
+            <button onClick={toggleBlock} className="btn-outline">Unblock</button>
+          </div>
+        ) : <>
         <div className="mt-8 mb-6"><Segmented options={tabs} value={tab} onChange={setTab} /></div>
 
         <AnimatePresence mode="wait">
@@ -203,6 +238,7 @@ export default function ProfilePage() {
             {tab === "shop" && isOwn && <NitroShop />}
           </motion.div>
         </AnimatePresence>
+        </>}
       </div>
 
       <PostViewer post={openPost} onClose={() => setOpenPost(null)} liked={!!openPost && !!me && (openPost.likes || []).includes(me.email)} likeCount={openPost?.likes?.length || 0} onLike={() => openPost && toggleLike({ entity: "CommunityPost", record: openPost, user: me, setData: setPosts, message: "liked your post", link: `/Community?post=${openPost.id}` })} onDelete={() => openPost && removePost(openPost)} />

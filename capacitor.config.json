@@ -1,0 +1,28 @@
+{
+  "appId": "com.mimilocks.app",
+  "appName": "Mimi Locks",
+  "webDir": "dist",
+  "backgroundColor": "#fbf7f6",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#fbf7f6",
+    "allowsLinkPreview": false,
+    "preferredContentMode": "mobile"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 800,
+      "launchAutoHide": true,
+      "launchFadeOutDuration": 250,
+      "backgroundColor": "#fbf7f6",
+      "showSpinner": false
+    },
+    "Keyboard": {
+      "resize": "native",
+      "resizeOnFullScreen": true
+    },
+    "StatusBar": {
+      "overlaysWebView": true
+    }
+  }
+}

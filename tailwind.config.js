@@ -1,4 +1,9 @@
 import tailwindcssAnimate from "tailwindcss-animate";
+import plugin from "tailwindcss/plugin";
+
+// `can-hover:` applies only on devices with a real mouse, so things that are
+// revealed on hover stay visible (and tappable) on phones and tablets.
+const canHover = plugin(({ addVariant }) => addVariant("can-hover", "@media (hover: hover) and (pointer: fine)"));
 
 /** @type {import('tailwindcss').Config} */
 export default {
@@ -51,5 +56,5 @@ export default {
       },
     },
   },
-  plugins: [tailwindcssAnimate],
+  plugins: [tailwindcssAnimate, canHover],
 };

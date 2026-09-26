@@ -1,15 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, Navigate, useLocation, useOutlet } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate, useOutlet } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { LogOut, MessageCircle, Megaphone, Moon, Plus, Search, Settings, Sun, X } from "lucide-react";
+import { ArrowLeft, LogOut, MessageCircle, Megaphone, Moon, Plus, Search, Settings, Sun, X } from "lucide-react";
 import Sidebar, { Logo } from "@/components/layout/Sidebar";
 import CommandPalette from "@/components/layout/CommandPalette";
 import CreateMenu from "@/components/layout/CreateMenu";
 import MiniPlayer from "@/components/layout/MiniPlayer";
 import VoiceDock from "@/components/voice/VoiceDock";
+import { InstallBanner } from "@/components/layout/InstallApp";
+import ReportHost from "@/components/safety/ReportDialog";
 import CallManager from "@/components/voice/CallManager";
 import { ADMIN_SECTION, MOBILE_NAV, NAV_SECTIONS, isActivePath } from "@/components/layout/nav";
 import Popover from "@/components/common/Popover";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 import NotificationBell from "@/components/notifications/NotificationBell";
 import Avatar from "@/components/common/Avatar";
 import { useAuth } from "@/lib/AuthContext";
@@ -21,6 +24,35 @@ import { displayName, profileLink } from "@/lib/format";
 import { messagePreview } from "@/lib/calls";
 
 const FULL_HEIGHT = ["/communitychat", "/directmessages"];
+const EXTRA_TITLES = { "/profile": "Profile", "/settings": "Settings", "/communitychat": "Server", "/upload": "Upload art" };
+function pageTitle(pathname) {
+  const p = pathname.toLowerCase();
+  const item = [...NAV_SECTIONS, ADMIN_SECTION].flatMap((s) => s.items).find((i) => i.path.toLowerCase() === p);
+  const label = p === "/" ? "" : item?.label || EXTRA_TITLES[p] || "";
+  return label ? `${label} · Mimi Locks` : "Mimi Locks";
+}
+// True when there's an in-app page to go back to (React Router stores the index).
+const canGoBack = () => (window.history.state?.idx ?? 0) > 0;
+
+function OfflineBar() {
+  const [online, setOnline] = useState(() => navigator.onLine !== false);
+  useEffect(() => {
+    const up = () => setOnline(true);
+    const down = () => setOnline(false);
+    window.addEventListener("online", up);
+    window.addEventListener("offline", down);
+    return () => { window.removeEventListener("online", up); window.removeEventListener("offline", down); };
+  }, []);
+  return (
+    <AnimatePresence initial={false}>
+      {!online && (
+        <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} className="flex-shrink-0 overflow-hidden">
+          <p className="text-center text-xs font-bold py-1.5 text-white" style={{ background: "#6b5b64" }}>You're offline — changes will sync when you reconnect</p>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
 
 function AnnouncementBar({ config }) {
   const text = config?.announcement_active ? String(config.announcement || "").trim() : "";
@@ -40,12 +72,21 @@ function AnnouncementBar({ config }) {
 }
 
 function TopBar({ onSearch, user }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  // Phones (and the installed app, which has no browser back button) get a
+  // back arrow once you've moved away from Home.
+  const showBack = location.pathname !== "/" && canGoBack();
   return (
     <header className="flex-shrink-0 h-16 flex items-center gap-3 px-4 sm:px-6 relative z-20 glass" style={{ borderBottom: "1px solid var(--border-c)" }}>
-      <div className="md:hidden"><Logo collapsed /></div>
+      <div className="md:hidden flex items-center gap-1">
+        {showBack ? (
+          <button onClick={() => navigate(-1)} className="icon-btn -ml-2" aria-label="Go back"><ArrowLeft className="w-5 h-5" /></button>
+        ) : <Logo collapsed />}
+      </div>
       <button onClick={onSearch} className="flex-1 max-w-md hidden sm:flex items-center gap-3 h-10 px-4 rounded-full text-sm transition-colors hover:border-[rgb(var(--accent-rgb)/0.4)]" style={{ background: "var(--surface-2)", border: "1px solid var(--border-c)", color: "var(--text-muted)" }}>
         <Search className="w-4 h-4" />
-        <span className="flex-1 text-left">Search Mimi Locks…</span>
+        <span className="flex-1 min-w-0 text-left truncate">Search Mimi Locks…</span>
         <span className="kbd">Ctrl</span><span className="kbd -ml-2">K</span>
       </button>
       <div className="flex-1" />
@@ -118,7 +159,7 @@ function MobileNav({ badges, isAdmin, isDark, onToggleTheme }) {
         <CreateMenu isAdmin={isAdmin} onDone={() => setSheet(null)} className="pb-4" />
       </Popover>
       <MoreSheet open={sheet === "more"} onClose={() => setSheet(null)} anchorRef={moreRef} badges={badges} isDark={isDark} onToggleTheme={onToggleTheme} />
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-[65] glass safe-bottom" style={{ borderTop: "1px solid var(--border-c)" }} aria-label="Main">
+      <nav className="mobile-tabbar md:hidden fixed bottom-0 inset-x-0 z-[65] glass safe-bottom" style={{ borderTop: "1px solid var(--border-c)" }} aria-label="Main">
         <div className="flex items-center justify-around h-[68px] px-2">
           {MOBILE_NAV.map((item) => {
             if (item.label === "create") {
@@ -144,10 +185,16 @@ function MobileNav({ badges, isAdmin, isDark, onToggleTheme }) {
             );
             const cls = "relative flex flex-col items-center justify-center gap-1 w-16 h-14 rounded-2xl";
             const style = { color: active ? "var(--accent-rose)" : "var(--text-muted)" };
+            // Tapping the tab you're already on scrolls back to the top, like native apps.
+            const onTabClick = (e) => {
+              if (!active) return;
+              e.preventDefault();
+              document.getElementById("main")?.scrollTo({ top: 0, behavior: "smooth" });
+            };
             return isMore ? (
               <button key="more" ref={moreRef} onClick={() => setSheet((v) => (v === "more" ? null : "more"))} className={cls} style={style} aria-label="More pages" aria-expanded={sheet === "more"}>{inner}</button>
             ) : (
-              <Link key={item.path} to={item.path} className={cls} style={style}>{inner}</Link>
+              <Link key={item.path} to={item.path} onClick={onTabClick} className={cls} style={style} aria-current={active ? "page" : undefined}>{inner}</Link>
             );
           })}
         </div>
@@ -162,7 +209,11 @@ export default function Layout() {
   const outlet = useOutlet();
   const { user, isAdmin, updateMe } = useAuth();
   const mainRef = useRef(null);
-  const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem("mimilocks:__sidebar") === "collapsed"; } catch { return false; } });
+  const [collapsedPref, setCollapsed] = useState(() => { try { return localStorage.getItem("mimilocks:__sidebar") === "collapsed"; } catch { return false; } });
+  // Tablets in portrait (iPad) get the compact icon sidebar so content has room.
+  const tablet = useMediaQuery("(min-width: 768px) and (max-width: 1023px)");
+  const [tabletOpen, setTabletOpen] = useState(false);
+  const collapsed = tablet ? !tabletOpen : collapsedPref;
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
 
@@ -211,25 +262,31 @@ export default function Layout() {
   }, []);
 
   useEffect(() => { mainRef.current?.scrollTo({ top: 0 }); }, [location.pathname]);
+  useEffect(() => { document.title = pageTitle(location.pathname); }, [location.pathname]);
 
-  const toggleCollapsed = () => setCollapsed((c) => {
+  const toggleCollapsed = () => (tablet ? setTabletOpen((v) => !v) : setCollapsed((c) => {
     try { localStorage.setItem("mimilocks:__sidebar", c ? "expanded" : "collapsed"); } catch { /* ignore */ }
     return !c;
-  });
+  }));
 
   if (user && !user.onboarding_completed) return <Navigate to="/Onboarding" replace />;
 
   const fullHeight = FULL_HEIGHT.includes(location.pathname.toLowerCase());
-  const hideMobileNav = location.pathname.toLowerCase() === "/communitychat";
+  const path = location.pathname.toLowerCase();
+  // Inside a server or an open conversation the tab bar steps aside (like iMessage).
+  const inConversation = path === "/directmessages" && /[?&](with|c)=/.test(location.search);
+  const hideMobileNav = path === "/communitychat" || inConversation;
 
   return (
-    <div className="app-shell flex h-[100dvh] overflow-hidden">
+    <div className="app-shell flex h-[100dvh] overflow-hidden safe-top safe-x">
       <Sidebar collapsed={collapsed} onToggleCollapsed={toggleCollapsed} badges={badges} onToggleTheme={toggleTheme} isDark={isDark} />
       <div className="flex-1 min-w-0 flex flex-col relative">
+        <OfflineBar />
+        <InstallBanner />
         <AnnouncementBar config={siteConfig} />
         <VoiceDock />
         {!fullHeight && <TopBar onSearch={() => setPaletteOpen(true)} user={user} />}
-        <main ref={mainRef} id="main" className={`flex-1 min-h-0 relative ${fullHeight ? `overflow-hidden ${hideMobileNav ? "" : "pb-[72px] md:pb-0"}` : "overflow-y-auto overflow-x-hidden scroll"}`}>
+        <main ref={mainRef} id="main" className={`flex-1 min-h-0 relative ${fullHeight ? `overflow-hidden ${hideMobileNav ? "" : "pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-0"}` : "overflow-y-auto overflow-x-hidden scroll"}`}>
           {/* Enter-only transition keyed by route; no exit phase that could stall navigation. */}
           <motion.div key={location.pathname} initial={pageTransition.initial} animate={pageTransition.animate} className={fullHeight ? "h-full" : "min-h-full"}>
             {outlet}
@@ -239,6 +296,7 @@ export default function Layout() {
       {!hideMobileNav && <MobileNav badges={badges} isAdmin={isAdmin} isDark={isDark} onToggleTheme={toggleTheme} />}
       <MiniPlayer raised={!hideMobileNav} />
       {user && <CallManager me={user} />}
+      {user && <ReportHost />}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} isDark={isDark} onToggleTheme={toggleTheme} />
     </div>
   );

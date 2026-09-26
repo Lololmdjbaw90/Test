@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, AlertCircle, Info, X } from "lucide-react";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 
 // Tiny global toast system: call toast("Saved"), toast.success(...), toast.error(...)
 // from anywhere; <Toaster /> (mounted once in App) renders them.
@@ -23,6 +24,7 @@ const ICONS = { success: CheckCircle2, error: AlertCircle, info: Info };
 const COLORS = { success: "var(--success)", error: "var(--danger)", info: "var(--accent-rose)" };
 
 export function Toaster() {
+  const top = useMediaQuery("(max-width: 767px)"); // phones: toasts drop in from the top
   const [items, setItems] = useState([]);
   useEffect(() => {
     const onToast = (t) => {
@@ -34,7 +36,7 @@ export function Toaster() {
   }, []);
 
   return (
-    <div className="fixed z-[200] bottom-4 left-1/2 -translate-x-1/2 md:left-auto md:right-5 md:translate-x-0 flex flex-col gap-2 w-[min(92vw,380px)] pointer-events-none" aria-live="polite">
+    <div className="fixed z-[200] top-[calc(env(safe-area-inset-top)+0.75rem)] md:top-auto md:bottom-5 left-1/2 -translate-x-1/2 md:left-auto md:right-5 md:translate-x-0 flex flex-col gap-2 w-[min(92vw,380px)] pointer-events-none" aria-live="polite">
       <AnimatePresence initial={false}>
         {items.map((t) => {
           const Icon = ICONS[t.type] || Info;
@@ -42,9 +44,9 @@ export function Toaster() {
             <motion.div
               key={t.id}
               layout
-              initial={{ opacity: 0, y: 24, scale: 0.94 }}
+              initial={{ opacity: 0, y: top ? -24 : 24, scale: 0.94 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 40, scale: 0.96, transition: { duration: 0.18 } }}
+              exit={top ? { opacity: 0, y: -16, scale: 0.96, transition: { duration: 0.18 } } : { opacity: 0, x: 40, scale: 0.96, transition: { duration: 0.18 } }}
               transition={{ type: "spring", stiffness: 420, damping: 30 }}
               className="pointer-events-auto glass flex items-start gap-3 rounded-2xl px-4 py-3"
               style={{ border: "1px solid var(--border-c)", boxShadow: "var(--shadow-lg)" }}
