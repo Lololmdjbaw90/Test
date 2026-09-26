@@ -137,22 +137,30 @@ export function rankReels(reels, { me, friends = [], blocked = new Set(), commen
   const random = rng(seed);
   const unknown = pool.filter((x) => !taste.creators.has(x.reel.user_email) && !x.seen);
 
+  // Greedy pick with a diversity penalty for the next 60 slots (what anyone
+  // realistically scrolls to before the queue is re-ranked again); the rest
+  // simply follow by score.
+  const GREEDY = 60;
+  pool.sort((a, b) => b.score - a.score);
   const out = [];
   const recent = [];
-  while (pool.length) {
+  while (pool.length && out.length < GREEDY) {
     const explore = unknown.length && out.length % 6 === 4 && random() < 0.85;
+    const last = recent[recent.length - 1]?.user_email;
+    const lastAuthors = new Set(recent.slice(-3).map((r) => r.user_email));
+    const lastTags = new Set(recent.slice(-2).flatMap((r) => r.tags || []));
     let bestI = -1, best = -Infinity;
-    pool.forEach((x, i) => {
-      if (explore && !unknown.includes(x)) return;
+    for (let i = 0; i < pool.length; i++) {
+      const x = pool[i];
+      if (explore && !unknown.includes(x)) continue;
+      if (!explore && x.score < best) break; // sorted, and penalties only lower a score
       let v = x.score;
-      const lastAuthors = recent.slice(-3).map((r) => r.user_email);
-      if (lastAuthors[lastAuthors.length - 1] === x.reel.user_email) v -= 2.2;       // never back to back
-      else if (lastAuthors.includes(x.reel.user_email)) v -= 0.9;
-      const lastTags = new Set(recent.slice(-2).flatMap((r) => r.tags || []));
+      if (x.reel.user_email === last) v -= 2.2;                  // never back to back
+      else if (lastAuthors.has(x.reel.user_email)) v -= 0.9;
       if ((x.reel.tags || []).some((g) => lastTags.has(g))) v -= 0.35;
       if (explore) v += random() * 0.5;
       if (v > best) { best = v; bestI = i; }
-    });
+    }
     if (bestI < 0) bestI = 0;
     const [pick] = pool.splice(bestI, 1);
     const u = unknown.indexOf(pick);
@@ -160,5 +168,6 @@ export function rankReels(reels, { me, friends = [], blocked = new Set(), commen
     out.push({ reel: pick.reel, reason: explore && u >= 0 ? "New creator for you" : pick.reason });
     recent.push(pick.reel);
   }
+  pool.forEach((x) => out.push({ reel: x.reel, reason: x.reason }));
   return out;
 }

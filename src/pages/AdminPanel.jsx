@@ -12,6 +12,7 @@ import { SearchInput, Segmented, ChipRow } from "@/components/common/Controls";
 import { useConfirm } from "@/components/common/Modal";
 import Avatar from "@/components/common/Avatar";
 import AdminSiteSettings from "@/components/admin/AdminSiteSettings";
+import { RulesSetupCard } from "@/components/admin/RulesSetup";
 
 const COLLECTIONS = ["User", "Artwork", "CommunityPost", "Comment", "CommunityComment", "ChannelMessage", "Community", "ServerChannel", "MusicReview", "Commission", "Report"];
 // Where each kind of reported thing lives, so "Remove content" can delete it.
@@ -258,7 +259,7 @@ export default function AdminPanel() {
         </div>
       )}
 
-      {tab === "settings" && <div className="max-w-2xl"><AdminSiteSettings /></div>}
+      {tab === "settings" && <div className="max-w-2xl space-y-6"><RulesSetupCard /><AdminSiteSettings /></div>}
     </Page>
   );
 }

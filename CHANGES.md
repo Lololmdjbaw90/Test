@@ -1,6 +1,23 @@
 # Changes
 
-## Reels, the reel studio, a better post view and app updates (this update)
+## Video cuts, text you can rotate and scale, smoother Reels (this update)
+
+### New
+- **Film in clips** (`src/components/reels/ReelCamera.jsx`): tap the shutter to record and tap again to pause, or hold it and let go. A bar across the top and the ring around the shutter show each clip; delete the last clip, record more, then tap ✓. A 3 s / 10 s timer with a countdown. Closing with clips asks before discarding them.
+- **Cuts** (`src/lib/clips.js`, `src/components/reels/ClipTimeline.jsx`): a filmstrip of clips in the editor. Split at the playhead, delete, duplicate, move earlier / later, and drag a clip's edges to trim it. Nothing is re-encoded: the reel stores `edits.clips` (`[{ id, start, end }]` in seconds of the original file) and the player jumps from clip to clip. Older reels with only `trim_start` / `trim_end` still play, and new reels keep those fields too.
+- **Text stickers** (`src/components/reels/Sticker.jsx`): drag to move (snaps to the centre), pinch to resize, twist to rotate (snaps to 0° / 90°), or use the corner handle with one finger; drag onto the bin to delete. Five fonts (Classic, Bubbly, Cute, Serif, Mono), five styles (Plain, Label, Outline, Neon, Shadow), eight animations (Pop, Fade, Rise, Type, Bounce, Wiggle, Pulse) and, on videos, when the text shows and hides. Text on photo reels now stays live (so it animates) instead of being drawn into the picture.
+- **Undo / redo** for every edit in the editor (a whole gesture is one step).
+- **Reels feed**: hold to play at 2x, drag the progress bar to skip, a spinner while a video buffers, animated like / save buttons and a spinning music disc.
+
+### Faster
+- Reels only re-render when their own data changes, the feed re-ranks when the phone is idle instead of mid-swipe, and ranking stops early once the next reels are settled.
+
+### Fixed
+- The reel you just posted now always opens first (it could land second if it arrived after the feed was ranked).
+- "Missing or insufficient permissions" when posting a reel or an update: it happens when the Firebase project still has older security rules. Admins now see a red banner ("Fix it") and a card in Admin → Site with the rules to copy, links to the Firebase console and a "Check again" button. Permission errors everywhere now say what to do instead of the raw Firebase message.
+
+
+## Reels, the reel studio, a better post view and app updates
 
 ### New
 - **Reels** (`/Reels`, in the tab bar): a full-screen, snap-scrolling feed of short videos and photos. Swipe up for the next one, tap for sound or to pause, double-tap to like, and use the side buttons to follow, comment, save, share or say "Not interested". Every reel says why it's in your feed.
@@ -18,7 +35,7 @@
 - Deploy the rules and indexes again: `npx firebase-tools deploy --only firestore:rules,firestore:indexes,storage` (new `Reel` and `AppUpdate` collections and the video size limit).
 
 
-## Fonts, sounds & haptics, better artwork viewer (this update)
+## Fonts, sounds & haptics, better artwork viewer
 
 ### New
 - **Brand fonts**: Bubbly for titles and headings (with Cute Here filling in digits and punctuation Bubbly doesn't have) and Cute Here for small labels. Plus Jakarta Sans is now bundled too, so no fonts load from Google: the app draws its first screen immediately and works offline.
@@ -30,7 +47,7 @@
 - Viewers (artwork, post, commission, group info) no longer open scrolled down to the comment box or pop up the keyboard.
 
 
-## Sugerly logo, smoother app, admin owner (this update)
+## Sugerly logo, smoother app, admin owner
 
 ### New
 - **Sugerly branding**: the new logo in the sidebar, top bar, login, onboarding and loading screens, plus new app icons, favicons and iOS splash screens. The app is now called Sugerly everywhere people see it (internal ids like the iOS bundle id are unchanged so existing installs and saved data keep working).
@@ -49,7 +66,7 @@
 - Gallery cards show the like button and title on touch screens (they only appeared on mouse hover before).
 
 
-## Server roles & permissions, smoother animations, .ipa builds (this update)
+## Server roles & permissions, smoother animations, .ipa builds
 
 ### New
 - **Role permissions** for servers: administrator, manage server / channels / roles, kick members, create invites, send messages, attach images, add reactions, mention roles & @everyone, pin messages, manage messages, and voice connect / speak / video.
@@ -67,7 +84,7 @@
 ### Firebase
 - Server rules changed and Community docs gain `perm_index` / `everyone_permissions`. Redeploy: `firebase deploy --only firestore:rules`. The permission index fills in automatically the first time an owner or role manager opens each server.
 
-## iPhone & iPad app, safety tools and polish (this update)
+## iPhone & iPad app, safety tools and polish
 
 ### New
 - **Native iOS app** (Capacitor): Xcode project in `ios/` for iPhone and iPad with app icon, light/dark launch screens, camera/mic/photos permissions, background audio, haptics, status bar that follows the theme and the tab bar hiding while typing. `npm run ios` builds and opens it. See `IOS_APP.md`.
@@ -84,7 +101,7 @@
 - Share/invite links use your public site address (also inside the app).
 - `/AdminPanel` now redirects to the admin page.
 
-## Calls, social feed and recommendations (this update)
+## Calls, social feed and recommendations
 
 ### New
 - **Voice & video calls** in DMs and group chats: ringing card with accept / accept with video / decline, 45s ring timeout, "call in progress" banner to join, and call summaries in the chat (missed, declined, duration).
@@ -102,7 +119,7 @@
 ### Firebase
 - New `Call` collection with rules and an index, and a rule letting anyone bump a track's play count by exactly one. Redeploy: `firebase deploy --only firestore:rules,firestore:indexes`.
 
-## Redesign + everything working (this update)
+## Redesign + everything working
 
 ### Fixed
 - **Realtime was broken in Firebase mode**: chat, DMs and notifications expected create/update/delete events but Firebase sent whole snapshots. Both backends now emit the same events.

@@ -25,6 +25,7 @@ import ErrorBoundary from "@/components/common/ErrorBoundary";
 import { feedback } from "@/lib/feedback";
 import { WhatsNewPopup, UpdateReadyBar } from "@/components/layout/WhatsNew";
 import { useUnseenUpdates } from "@/lib/updates";
+import { RulesBanner } from "@/components/admin/RulesSetup";
 
 const FULL_HEIGHT = ["/communitychat", "/directmessages", "/reels"];
 const EXTRA_TITLES = { "/profile": "Profile", "/settings": "Settings", "/communitychat": "Server", "/upload": "Upload art" };
@@ -300,6 +301,7 @@ export default function Layout() {
       <div className="flex-1 min-w-0 flex flex-col relative">
         <OfflineBar />
         <UpdateReadyBar />
+        {isAdmin && <RulesBanner />}
         <InstallBanner />
         <AnnouncementBar config={siteConfig} />
         <VoiceDock />

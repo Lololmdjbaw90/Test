@@ -6,6 +6,16 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 
 export const RELEASES = [
   {
+    id: "v2.1", version: "2.1", date: "2026-09-26T13:00:00Z", emoji: "✂️", title: "Video cuts & fancy text",
+    items: [
+      "Film in several clips: tap (or hold) to record, tap again to pause, delete the last clip, then tap ✓.",
+      "Cuts in the editor: split at the playhead, delete, duplicate, reorder and trim every clip.",
+      "Text you can pinch to resize and twist to rotate (or use the corner handle), with 5 fonts, 5 styles, 8 animations and a start / end time. Drag it to the bin to delete.",
+      "Undo and redo for every edit, a 3s / 10s camera timer, and smoother, snappier Reels.",
+      "In Reels: hold to watch at 2x, drag the progress bar to skip, and your new reel opens first after you post it.",
+    ],
+  },
+  {
     id: "v2.0", version: "2.0", date: "2026-09-26T12:00:00Z", emoji: "🎬", title: "Reels are here",
     items: [
       "Reels: a full-screen feed of short videos and photos — swipe up for the next one, double-tap to like.",

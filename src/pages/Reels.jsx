@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Camera, ChevronDown, ChevronUp, Clapperboard, Loader2, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
@@ -62,6 +62,7 @@ export default function ReelsPage() {
   const [nonce, setNonce] = useState(0);
   const orderKey = `${tab}|${tag}|${loading}|${nonce}`;
   const lastKey = useRef("");
+  const scrollTarget = useRef(null);
   const candidates = useCallback(() => reels.filter((r) => !blocked.has(r.user_email) && (!tag || (r.tags || []).includes(tag)) && (tab === "foryou" || following.has(r.user_email) || friendEmails.includes(r.user_email))), [reels, blocked, tag, tab, following, friendEmails]);
   const rank = useCallback((list, fixed = []) => {
     if (tab === "following") return list.filter((r) => !fixed.includes(r.id)).map((r) => ({ reel: r, reason: null }));
@@ -75,21 +76,34 @@ export default function ReelsPage() {
     if (startId && byId.has(startId)) list = [{ id: startId, reason: null }, ...list.filter((x) => x.id !== startId)];
     setOrder(list);
     setActive(0);
-    scroller.current?.scrollTo({ top: 0 });
+    scrollTarget.current = 0;
   }, [orderKey, loading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Scroll once the new order is on screen (scroll snapping would otherwise
+  // stay on the reel that was there before).
+  useLayoutEffect(() => {
+    const i = scrollTarget.current;
+    const root = scroller.current;
+    if (i == null || !root) return;
+    scrollTarget.current = null;
+    root.scrollTo({ top: i * root.clientHeight });
+  }, [order]);
 
   // New reels arriving while you watch: yours go right after the current one,
   // others join the end of the queue.
   useEffect(() => {
     if (!order.length) return;
     const list = candidates();
+    if (startId && !order.some((x) => x.id === startId) && list.some((r) => r.id === startId)) scrollTarget.current = active;
     setOrder((o) => {
       const known = new Set(o.map((x) => x.id));
       const fresh = list.filter((r) => !known.has(r.id));
       if (!fresh.length) return o;
-      const mine = fresh.filter((r) => r.user_email === me?.email).map((r) => ({ id: r.id, reason: null }));
-      const others = fresh.filter((r) => r.user_email !== me?.email).map((r) => ({ id: r.id, reason: "New" }));
-      return [...o.slice(0, active + 1), ...mine, ...o.slice(active + 1), ...others];
+      const mine = fresh.filter((r) => r.user_email === me?.email && r.id !== startId).map((r) => ({ id: r.id, reason: null }));
+      const others = fresh.filter((r) => r.user_email !== me?.email && r.id !== startId).map((r) => ({ id: r.id, reason: "New" }));
+      // The reel you just posted arrived after the feed was ranked: show it now.
+      const opened = fresh.some((r) => r.id === startId) ? [{ id: startId, reason: null }] : [];
+      return [...o.slice(0, active), ...opened, ...o.slice(active, active + 1), ...mine, ...o.slice(active + 1), ...others];
     });
   }, [reels]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -117,8 +131,15 @@ export default function ReelsPage() {
   }, [order.length]);
   const prevActive = useRef(0);
   useEffect(() => {
-    if (prevActive.current !== active) { feedback("swipe"); reRank(active); }
+    if (prevActive.current === active) return undefined;
     prevActive.current = active;
+    feedback("swipe");
+    // Re-rank once the swipe has settled, so it never competes with the scroll.
+    const t = setTimeout(() => {
+      const run = () => reRank(active);
+      if (window.requestIdleCallback) window.requestIdleCallback(run, { timeout: 800 }); else run();
+    }, 450);
+    return () => clearTimeout(t);
   }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reels have their own sound: pause the music player while you watch.
@@ -187,6 +208,16 @@ export default function ReelsPage() {
     if (newId) { setTab("foryou"); setNonce((n) => n + 1); }
   };
 
+  // One stable object for every reel, so reels only re-render when their own
+  // data changes (the functions inside always see the latest state).
+  const latest = useRef({});
+  latest.current = {
+    like, save, share, follow, hide, remove, viewed, tag: setTag, setSound,
+    comments: setCommentsFor,
+    report: (r) => openReport({ type: "reel", id: r.id, owner: r.user_email, preview: r.caption, link: `/Reels?r=${r.id}` }),
+  };
+  const actions = useMemo(() => new Proxy({}, { get: (_, key) => (...args) => latest.current[key]?.(...args) }), []);
+
   const items = order.map((x) => ({ ...x, reel: byId.get(x.id) })).filter((x) => x.reel);
 
   return (
@@ -199,7 +230,7 @@ export default function ReelsPage() {
             {TABS.map((t) => (
               <button key={t.id} onClick={() => { if (t.id !== tab) { feedback("tab"); setTab(t.id); } }} className="relative py-1 text-[15px] font-bold transition-opacity" style={{ opacity: tab === t.id ? 1 : 0.6, textShadow: "0 1px 4px rgb(0 0 0 / 0.5)" }} aria-pressed={tab === t.id}>
                 {t.label}
-                {tab === t.id && <span className="absolute left-1/2 -bottom-0.5 w-6 h-[3px] -ml-3 rounded-full bg-white" />}
+                <span className="absolute left-1/2 -bottom-0.5 w-6 h-[3px] -ml-3 rounded-full bg-white transition-all duration-300" style={{ opacity: tab === t.id ? 1 : 0, transform: `scaleX(${tab === t.id ? 1 : 0.2})` }} />
               </button>
             ))}
           </div>
@@ -214,7 +245,7 @@ export default function ReelsPage() {
 
       {/* the feed */}
       <div className="md:flex md:justify-center h-full">
-        <div ref={scroller} className="relative h-full w-full md:max-w-[min(480px,calc((100dvh-2rem)*9/16))] md:rounded-3xl md:my-0 overflow-y-scroll no-scrollbar snap-y snap-mandatory overscroll-contain" style={{ scrollbarWidth: "none" }}>
+        <div ref={scroller} className="relative h-full w-full md:max-w-[min(480px,calc((100dvh-2rem)*9/16))] md:rounded-3xl md:my-0 overflow-y-scroll no-scrollbar snap-y snap-mandatory overscroll-contain" style={{ scrollbarWidth: "none", overflowAnchor: "none" }}>
           {loading && !items.length ? (
             <div className="h-full flex items-center justify-center"><Loader2 className="w-7 h-7 animate-spin opacity-70" /></div>
           ) : !items.length ? (
@@ -241,18 +272,7 @@ export default function ReelsPage() {
                       saved={savedSet.has(reel.id)}
                       commentCount={commentCounts[reel.id] || 0}
                       soundOn={soundOn}
-                      onSoundOn={setSound}
-                      onBlocked={() => setSound(false)}
-                      onLike={like}
-                      onSave={save}
-                      onFollow={follow}
-                      onComments={setCommentsFor}
-                      onShare={share}
-                      onHide={hide}
-                      onReport={(r) => openReport({ type: "reel", id: r.id, owner: r.user_email, preview: r.caption, link: `/Reels?r=${r.id}` })}
-                      onDelete={me && (me.email === reel.user_email || me.role === "admin") ? remove : null}
-                      onTag={setTag}
-                      onViewed={viewed}
+                      actions={actions}
                     />
                   )}
                 </section>

@@ -26,7 +26,8 @@ Demo login (offline mode only): **admin@mimilocks.local / admin123**.
 
 - `src/pages/Reels.jsx` — the feed (For you / Following, `?r=<id>` opens a reel, `?tag=` filters, `?create=1` opens the studio).
 - `src/lib/reelRank.js` — the recommendation algorithm (explained at the top of the file). Watch signals stay on the device.
-- `src/components/reels/` — the player (`ReelMedia`), one reel with its buttons (`ReelItem`), the camera (`ReelCamera`), the editor (`ReelEditor`, `TrimBar`) and the studio flow (`ReelStudio`).
+- `src/components/reels/` — the player (`ReelMedia`), one reel with its buttons (`ReelItem`), the camera with multi-clip recording (`ReelCamera`), the editor with undo / redo (`ReelEditor`), the cuts filmstrip (`ClipTimeline`), text stickers (`Sticker`) and the studio flow (`ReelStudio`).
+- `src/lib/clips.js` — video cuts. Reels are never re-encoded: `edits.clips` lists the parts of the original video to play, in order, and the player jumps between them.
 - `src/lib/filters.js` — the filter presets: CSS for previews and videos, the same maths as a colour matrix for photos.
 - Reel data lives in the `Reel` collection; comments use `CommunityComment` with `post_id = "reel_<id>"`.
 - In the offline demo, videos are kept in IndexedDB (`src/lib/media.js`).

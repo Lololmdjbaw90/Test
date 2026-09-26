@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, Hash, Loader2, Send } from "lucide-react";
 import { base44 } from "@/api/base44Client";
@@ -8,10 +8,11 @@ import { hashtags } from "@/lib/ranking";
 import { feedback } from "@/lib/feedback";
 import { toast } from "@/lib/toast";
 import { displayName } from "@/lib/format";
+import { capLength, clipsOf, locate, newClip, totalLength } from "@/lib/clips";
 import FilterLayers from "@/components/media/FilterLayers";
 import ReelCamera, { MAX_SECONDS } from "./ReelCamera";
 import ReelEditor from "./ReelEditor";
-import { TextStickers } from "./ReelMedia";
+import { PHOTO_SECONDS, TextStickers } from "./ReelMedia";
 
 // A frame of the video as a JPEG (for the cover and the filter thumbnails).
 function grabFrame(url, time, { filter = "none", mirror = false, width = 720 } = {}) {
@@ -33,11 +34,15 @@ function grabFrame(url, time, { filter = "none", mirror = false, width = 720 } =
   });
 }
 
-function PostStep({ media, edits, music, coverUrl, onBack, onPosted }) {
+// Seconds of finished reel (after cuts and speed).
+const reelLength = (media, edits) => (media.kind === "video" ? totalLength(clipsOf(edits, media.duration)) / (edits.speed || 1) : PHOTO_SECONDS);
+
+function PostStep({ media, edits, music, coverTime, coverUrl, onBack, onPosted }) {
   const { user } = useAuth();
   const [caption, setCaption] = useState("");
   const [busy, setBusy] = useState("");
   const tags = hashtags(caption);
+  const clips = media.kind === "video" ? clipsOf(edits, media.duration) : [];
 
   const post = async () => {
     if (busy) return;
@@ -45,22 +50,25 @@ function PostStep({ media, edits, music, coverUrl, onBack, onPosted }) {
       const upload = async (file) => (await base44.integrations.Core.UploadFile({ file })).file_url;
       let mediaUrl, cover, finalEdits = { trim_start: 0, trim_end: 0, filter: "none", speed: 1, muted: false, text: [], mirror: false, ...edits };
       if (media.kind === "photo") {
-        setBusy("Applying your edits…");
-        // Filters and text are drawn into the photo, so it looks the same everywhere.
-        const baked = await bakePhoto(media.file, { filter: edits.filter, stickers: edits.text || [], max: 1440 });
+        setBusy("Applying your filter…");
+        // The filter is drawn into the photo; text stays live so it can animate.
+        const baked = await bakePhoto(media.file, { filter: edits.filter, max: 1440 });
         setBusy("Uploading…");
         mediaUrl = await upload(baked);
         cover = mediaUrl;
-        finalEdits = { ...finalEdits, filter: "none", text: [] };
+        finalEdits = { ...finalEdits, filter: "none" };
+        delete finalEdits.clips;
       } else {
         setBusy("Uploading video…");
         mediaUrl = await upload(media.file);
         setBusy("Making the cover…");
-        const blob = await grabFrame(media.url, media.coverTime ?? edits.trim_start ?? 0, { filter: edits.filter, mirror: edits.mirror });
+        const blob = await grabFrame(media.url, locate(clips, coverTime || 0).source || 0.05, { filter: edits.filter, mirror: edits.mirror });
         cover = blob ? await upload(new File([blob], "cover.jpg", { type: "image/jpeg" })) : "";
+        // Older versions of the app only know trim_start / trim_end.
+        finalEdits = { ...finalEdits, clips: clips.map(({ id, start, end }) => ({ id, start: Math.round(start * 1000) / 1000, end: Math.round(end * 1000) / 1000 })), trim_start: clips[0].start, trim_end: clips[clips.length - 1].end };
       }
       setBusy("Posting…");
-      const span = media.kind === "video" ? Math.min(MAX_SECONDS, (edits.trim_end || media.duration) - (edits.trim_start || 0)) / (edits.speed || 1) : 7;
+      const span = reelLength(media, edits);
       const created = await base44.entities.Reel.create({
         user_email: user.email, user_display_name: displayName(user), user_profile_picture: user.profile_picture || "",
         kind: media.kind, media_url: mediaUrl, cover_url: cover, caption: caption.trim(), tags,
@@ -102,7 +110,8 @@ function PostStep({ media, edits, music, coverUrl, onBack, onPosted }) {
         {tags.length > 0 && <div className="flex flex-wrap gap-1.5 mt-3">{tags.map((t) => <span key={t} className="px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1" style={{ background: "rgb(255 255 255 / 0.12)" }}><Hash className="w-3 h-3" />{t}</span>)}</div>}
         <ul className="mt-5 space-y-2 text-sm opacity-80">
           {music && <li>♪ {music.title} · {music.artist}</li>}
-          {media.kind === "video" && <li>✂️ {((edits.trim_end || media.duration) - (edits.trim_start || 0)).toFixed(1)}s{edits.speed && edits.speed !== 1 ? ` at ${edits.speed}x` : ""}{edits.muted ? " · original sound off" : ""}</li>}
+          {media.kind === "video" && <li>✂️ {clips.length > 1 ? `${clips.length} clips · ` : ""}{reelLength(media, edits).toFixed(1)}s{edits.speed && edits.speed !== 1 ? ` at ${edits.speed}x` : ""}{edits.muted ? " · original sound off" : ""}</li>}
+          {(edits.text || []).length > 0 && <li>🔤 {edits.text.length} text{edits.text.length === 1 ? "" : "s"}</li>}
           <li>👀 Everyone on Sugerly can watch it in Reels</li>
         </ul>
       </div>
@@ -117,9 +126,9 @@ function PostStep({ media, edits, music, coverUrl, onBack, onPosted }) {
 export default function ReelStudio({ onClose }) {
   const [step, setStep] = useState("camera");
   const [media, setMedia] = useState(null);
-  const [edits, setEdits] = useState({ filter: "none", speed: 1, muted: false, text: [], trim_start: 0, trim_end: 0 });
-  const [music, setMusic] = useState(null);
-  const [coverTime, setCoverTime] = useState(0);
+  const [draft, setDraft] = useState(null); // { edits, music, coverTime }
+  const latest = useRef(null); // the editor's latest state (a ref, so gestures don't re-render the studio)
+  const [editorKey, setEditorKey] = useState(0);
   const [coverUrl, setCoverUrl] = useState("");
 
   useEffect(() => {
@@ -131,20 +140,29 @@ export default function ReelStudio({ onClose }) {
 
   const captured = async (m) => {
     feedback("success");
-    const trimEnd = m.kind === "video" ? Math.min(m.duration || MAX_SECONDS, MAX_SECONDS) : 0;
-    setEdits({ filter: "none", speed: 1, muted: false, text: [], trim_start: 0, trim_end: trimEnd, mirror: false, ...m.edits });
-    setCoverTime(0);
+    const edits = { filter: "none", speed: 1, muted: false, text: [], mirror: false, ...m.edits };
+    if (m.kind === "video") {
+      // Library videos start as one clip, cut down to the length limit.
+      const clips = capLength(m.edits?.clips?.length ? m.edits.clips : [newClip(0, m.duration || MAX_SECONDS)], MAX_SECONDS);
+      Object.assign(edits, { clips, trim_start: clips[0].start, trim_end: clips[clips.length - 1].end });
+    }
     let thumb = "";
     if (m.kind === "video") {
-      const b = await grabFrame(m.url, 0.1, { width: 160, mirror: m.edits?.mirror });
+      const b = await grabFrame(m.url, (edits.clips?.[0]?.start || 0) + 0.1, { width: 160, mirror: m.edits?.mirror });
       if (b) thumb = URL.createObjectURL(b);
     }
+    latest.current = { edits, music: null, coverTime: 0 };
+    setDraft(latest.current);
+    setEditorKey((k) => k + 1);
     setMedia({ ...m, thumb });
     setStep("edit");
   };
   const toPost = async () => {
+    const d = latest.current;
+    setDraft(d);
     if (media.kind === "video") {
-      const b = await grabFrame(media.url, coverTime || edits.trim_start || 0.1, { filter: edits.filter, mirror: edits.mirror, width: 360 });
+      const clips = clipsOf(d.edits, media.duration);
+      const b = await grabFrame(media.url, locate(clips, d.coverTime || 0).source || 0.1, { filter: d.edits.filter, mirror: d.edits.mirror, width: 360 });
       setCoverUrl(b ? URL.createObjectURL(b) : "");
     } else setCoverUrl(media.url);
     setStep("post");
@@ -153,11 +171,11 @@ export default function ReelStudio({ onClose }) {
   return createPortal(
     <div className="fixed inset-0 z-[125] bg-black safe-x" role="dialog" aria-modal="true" aria-label="Create a reel">
       {step === "camera" && <ReelCamera onClose={() => onClose(null)} onCaptured={captured} />}
-      {step === "edit" && media && (
-        <ReelEditor media={media} edits={edits} setEdits={setEdits} music={music} setMusic={setMusic} coverTime={coverTime} setCoverTime={setCoverTime} onBack={() => { setMedia(null); setStep("camera"); }} onNext={toPost} />
+      {step === "edit" && media && draft && (
+        <ReelEditor key={editorKey} media={media} initial={draft} onChange={(d) => { latest.current = d; }} onBack={() => { setMedia(null); setDraft(null); setStep("camera"); }} onNext={toPost} />
       )}
-      {step === "post" && media && (
-        <PostStep media={{ ...media, coverTime }} edits={edits} music={music} coverUrl={coverUrl} onBack={() => setStep("edit")} onPosted={(id) => onClose(id)} />
+      {step === "post" && media && draft && (
+        <PostStep media={media} edits={draft.edits} music={draft.music} coverTime={draft.coverTime} coverUrl={coverUrl} onBack={() => { setEditorKey((k) => k + 1); setStep("edit"); }} onPosted={(id) => onClose(id)} />
       )}
     </div>,
     document.body,

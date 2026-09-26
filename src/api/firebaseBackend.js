@@ -121,6 +121,18 @@ function publicUserFromFirebaseUser(firebaseUser, profile = {}) {
   };
 }
 
+// "Missing or insufficient permissions" usually means the project's security
+// rules are older than this version of the app (admins see a banner with the fix).
+const PERMISSION_HELP = "The server didn't allow this. If it keeps happening, an admin needs to publish the latest database rules (Admin panel → Site).";
+function friendlyWriteError(e) {
+  if (e?.code === "permission-denied" || e?.code === "storage/unauthorized") {
+    const err = new Error(PERMISSION_HELP);
+    err.code = e.code;
+    return err;
+  }
+  return e;
+}
+
 const isIndexError = (e) => e?.code === "failed-precondition" || /requires an index/i.test(e?.message || "");
 const warnedIndexes = new Set();
 function warnMissingIndex(name, e) {
@@ -241,20 +253,20 @@ export function createFirebaseClient() {
           created_by: normalizeEmail(me.email),
           ...data,
         });
-        const refDoc = await addDoc(collection(db, name), payload);
+        const refDoc = await addDoc(collection(db, name), payload).catch((e) => { throw friendlyWriteError(e); });
         return { id: refDoc.id, ...withoutSentinels(payload) };
       },
       async update(id, data) {
         await requireFirebaseUser();
         const refDoc = doc(db, name, id);
         const payload = cleanObject({ ...data, updated_date: nowISO(), updated_at: serverTimestamp() });
-        await updateDoc(refDoc, payload);
+        await updateDoc(refDoc, payload).catch((e) => { throw friendlyWriteError(e); });
         const snap = await getDoc(refDoc).catch(() => null);
         return (snap && serializeDoc(snap)) || { id, ...withoutSentinels(payload) };
       },
       async delete(id) {
         await requireFirebaseUser();
-        await deleteDoc(doc(db, name, id));
+        await deleteDoc(doc(db, name, id)).catch((e) => { throw friendlyWriteError(e); });
         return { id, success: true };
       },
       async bulkCreate(items) {
@@ -394,7 +406,7 @@ export function createFirebaseClient() {
         }
         const safeName = String(file.name || "upload").replace(/[^a-zA-Z0-9._-]/g, "_");
         const fileRef = ref(storage, `uploads/${me.uid}/${Date.now()}-${safeName}`);
-        await uploadBytes(fileRef, file, { contentType: file.type || "application/octet-stream" });
+        await uploadBytes(fileRef, file, { contentType: file.type || "application/octet-stream" }).catch((e) => { throw friendlyWriteError(e); });
         return { file_url: await getDownloadURL(fileRef) };
       },
       async InvokeLLM(args) {
