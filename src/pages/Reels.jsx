@@ -10,9 +10,11 @@ import { toggleLike } from "@/lib/likes";
 import { useBlocked, openReport } from "@/lib/safety";
 import { toast } from "@/lib/toast";
 import { feedback } from "@/lib/feedback";
-import { displayName, siteUrl } from "@/lib/format";
+import { displayName } from "@/lib/format";
 import { usePlayer } from "@/lib/player";
-import Modal, { useConfirm } from "@/components/common/Modal";
+import { useConfirm } from "@/components/common/Modal";
+import BottomSheet from "@/components/common/BottomSheet";
+import ShareSheet from "@/components/reels/ShareSheet";
 import CommentSection from "@/components/gallery/CommentSection";
 import ReelItem from "@/components/reels/ReelItem";
 import ReelStudio from "@/components/reels/ReelStudio";
@@ -31,6 +33,7 @@ export default function ReelsPage() {
   const [active, setActive] = useState(0);
   const [soundOn, setSoundOn] = useState(() => { try { return sessionStorage.getItem("sugerly:reel-sound") === "1"; } catch { return false; } });
   const [commentsFor, setCommentsFor] = useState(null);
+  const [shareFor, setShareFor] = useState(null);
   const scroller = useRef(null);
   const tag = params.get("tag");
   const startId = params.get("r");
@@ -152,7 +155,7 @@ export default function ReelsPage() {
   };
   useEffect(() => {
     const onKey = (e) => {
-      if (["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName) || commentsFor || creating) return;
+      if (["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName) || commentsFor || shareFor || creating) return;
       if (e.key === "ArrowDown" || e.key === "j") { e.preventDefault(); go(1); }
       if (e.key === "ArrowUp" || e.key === "k") { e.preventDefault(); go(-1); }
     };
@@ -177,14 +180,7 @@ export default function ReelsPage() {
     const next = was ? [...savedSet].filter((id) => id !== reel.id) : [...savedSet, reel.id];
     try { await updateMe({ saved_reels: next }); if (!was) toast.success("Saved to your reels"); } catch (e) { toast.error(e?.message || "Could not save."); }
   };
-  const share = async (reel) => {
-    recordReelSignal(reel, { shared: true });
-    const url = siteUrl(`/Reels?r=${reel.id}`);
-    try {
-      if (navigator.share) { await navigator.share({ title: `${reel.user_display_name} on Sugerly`, text: reel.caption || "", url }); return; }
-    } catch { return; }
-    try { await navigator.clipboard.writeText(url); toast.success("Link copied"); } catch { toast(url); }
-  };
+  const share = (reel) => setShareFor(reel);
   const follow = async (email) => {
     try { const now = await toggleFollow({ me, email, updateMe }); if (now) toast.success(`Following ${usersByEmail[email] ? displayName(usersByEmail[email]) : email.split("@")[0]}`); } catch (e) { toast.error(e?.message || "Could not follow."); }
   };
@@ -263,7 +259,7 @@ export default function ReelsPage() {
                     <ReelItem
                       reel={reel}
                       reason={tab === "foryou" ? reason : null}
-                      active={i === active && !commentsFor && !creating}
+                      active={i === active && !commentsFor && !shareFor && !creating}
                       near={Math.abs(i - active) <= 1}
                       me={me}
                       author={usersByEmail[reel.user_email]}
@@ -298,13 +294,14 @@ export default function ReelsPage() {
         )}
       </div>
 
-      <Modal open={!!commentsFor} onClose={() => setCommentsFor(null)} title="Comments" subtitle={commentsFor ? `on @${commentsFor.user_display_name}'s reel` : ""} size="md" autoFocus={false}>
+      <BottomSheet open={!!commentsFor} onClose={() => setCommentsFor(null)} title={commentsFor ? `${commentCounts[commentsFor.id] || 0} comment${commentCounts[commentsFor.id] === 1 ? "" : "s"}` : ""} label="Comments">
         {commentsFor && (
           <div onSubmitCapture={() => recordReelSignal(commentsFor, { commented: true })}>
             <CommentSection entity="CommunityComment" field="post_id" targetId={`reel_${commentsFor.id}`} ownerEmail={commentsFor.user_email} link={`/Reels?r=${commentsFor.id}`} />
           </div>
         )}
-      </Modal>
+      </BottomSheet>
+      <ShareSheet reel={shareFor} me={me} friendEmails={friendEmails} usersByEmail={usersByEmail} onClose={() => setShareFor(null)} onShared={() => shareFor && recordReelSignal(shareFor, { shared: true })} />
 
       {creating && <ReelStudio onClose={closeStudio} />}
     </div>

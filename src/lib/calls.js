@@ -140,5 +140,6 @@ export function callSummary(msg, meEmail) {
 
 export function messagePreview(msg, meEmail) {
   if (msg.type === "call") return `📞 ${callSummary(msg, meEmail)}`;
+  if (msg.shared_reel) return `🎬 ${msg.content?.split("\n")[0]?.startsWith("🎬") ? "Sent a reel" : msg.content.split("\n")[0]}`;
   return msg.content || "📷 Image";
 }

@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowDown, CheckCheck, MessageSquare, Pencil, Phone, PhoneMissed, SmilePlus, Trash2, Video } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ArrowDown, CheckCheck, MessageSquare, Pencil, Phone, PhoneMissed, Play, SmilePlus, Trash2, Video } from "lucide-react";
+import { useMediaSrc } from "@/lib/media";
 import { base44 } from "@/api/base44Client";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { checkText } from "@/lib/moderation";
@@ -33,6 +35,20 @@ function CallNotice({ msg, me, onCall }) {
   );
 }
 
+// A reel someone sent from the Reels share sheet.
+function SharedReel({ reel, own }) {
+  const cover = useMediaSrc(reel.cover_url || "");
+  return (
+    <Link to={`/Reels?r=${reel.id}`} className="block w-40 -mx-1 mb-1 rounded-2xl overflow-hidden active:scale-[0.98] transition-transform" style={{ background: own ? "rgb(255 255 255 / 0.15)" : "var(--surface-2)" }} aria-label={`Watch ${reel.by}'s reel`}>
+      <span className="relative block aspect-[9/14] bg-neutral-800">
+        {cover && <img src={cover} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />}
+        <span className="absolute inset-0 flex items-center justify-center"><span className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgb(0 0 0 / 0.4)" }}><Play className="w-5 h-5 text-white fill-white ml-0.5" /></span></span>
+        <span className="absolute left-0 right-0 bottom-0 p-2 text-[11px] font-semibold text-white leading-tight" style={{ background: "linear-gradient(transparent, rgb(0 0 0 / 0.7))" }}>@{reel.by}{reel.caption ? <span className="block font-normal opacity-90 line-clamp-2">{reel.caption}</span> : null}</span>
+      </span>
+    </Link>
+  );
+}
+
 function Bubble({ msg, own, showAvatar, showName, isGroup, seen, onEdit, onDelete, onReact, me, tapped, onTap }) {
   const [react, setReact] = useState(false);
   const reactions = Object.entries(msg.reactions || {}).filter(([, users]) => users?.length);
@@ -44,7 +60,8 @@ function Bubble({ msg, own, showAvatar, showName, isGroup, seen, onEdit, onDelet
         <div className={`relative flex items-center gap-1.5 ${own ? "flex-row-reverse" : ""}`}>
           <div className={`relative ${msg.image_url && !msg.content ? "" : "px-3.5 py-2"} text-sm leading-relaxed rounded-[1.25rem] ${own ? "rounded-br-md bubble-own" : "rounded-bl-md"}`} style={own ? { background: "var(--accent-grad)", color: "#fff", boxShadow: "var(--shadow-sm)" } : { background: "var(--surface)", color: "var(--text-primary)", border: "1px solid var(--border-c)" }}>
             {msg.image_url && <a href={msg.image_url} target="_blank" rel="noopener noreferrer"><img loading="lazy" decoding="async" src={msg.image_url} alt="" className={`max-w-[260px] max-h-72 object-cover rounded-2xl ${msg.content ? "mb-1.5 -mx-1.5 -mt-0.5" : ""}`} /></a>}
-            {msg.content && <RichText text={msg.content} />}
+            {msg.shared_reel && <SharedReel reel={msg.shared_reel} own={own} />}
+            {msg.content && (msg.shared_reel ? msg.content.split("\n").filter((l) => !l.startsWith("🎬")).join("\n") : msg.content) && <RichText text={msg.shared_reel ? msg.content.split("\n").filter((l) => !l.startsWith("🎬")).join("\n") : msg.content} />}
             {msg.is_edited && <span className="ml-1.5 text-[10px] opacity-70">(edited)</span>}
           </div>
           <div className={`flex items-center gap-0.5 transition-opacity ${own ? "flex-row-reverse" : ""} ${tapped ? "opacity-100" : "opacity-0 pointer-events-none can-hover:group-hover:opacity-100 can-hover:group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto"}`}>
