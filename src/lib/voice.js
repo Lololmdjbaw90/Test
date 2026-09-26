@@ -68,6 +68,7 @@ export function playTone(kind) {
 const state = {
   room: null, connecting: false, connected: false, joinedAt: null,
   muted: false, deafened: false, micError: false, video: null, videoError: "", expanded: true,
+  canSpeak: true, canVideo: true, // server roles can take these away in a voice channel
 };
 const listeners = new Set();
 let selfId = null;
@@ -318,9 +319,9 @@ function startHeartbeat() {
 function stopHeartbeat() { if (heartbeat) { clearInterval(heartbeat); heartbeat = null; } }
 
 // ---------- public API ----------
-async function join(room, user, { video = false } = {}) {
+async function join(room, user, { video = false, canSpeak = true, canVideo = true } = {}) {
   if (state.connected || state.connecting) await leave({ silent: true });
-  Object.assign(state, { room, connecting: true, muted: false, deafened: false, video: null, videoError: "", expanded: true });
+  Object.assign(state, { room, connecting: true, muted: !canSpeak, deafened: false, video: null, videoError: "", expanded: true, canSpeak, canVideo });
   selfId = rid();
   selfEmail = user?.email || "";
   selfUser = { display_name: user?.display_name || user?.full_name || "You", profile_picture: user?.profile_picture || "", email: selfEmail };
@@ -328,7 +329,8 @@ async function join(room, user, { video = false } = {}) {
   notify();
 
   await startMic();
-  if (video) await startVideo("camera");
+  if (!canSpeak) micStream?.getAudioTracks().forEach((t) => { t.enabled = false; });
+  if (video && canVideo) await startVideo("camera");
   try {
     unsubSignals = Signal().subscribe(handleSignal, { channel_id: room.id, to_peer: selfId, to_email: selfEmail });
     const doc = await Presence().create({
@@ -368,7 +370,7 @@ async function leave({ silent = false } = {}) {
   micStream = null;
   videoStream = null;
   if (audioCtx) { try { await audioCtx.close(); } catch { /* ignore */ } audioCtx = null; }
-  Object.assign(state, { room: null, connected: false, connecting: false, joinedAt: null, muted: false, deafened: false, micError: false, video: null, videoError: "", expanded: true });
+  Object.assign(state, { room: null, connected: false, connecting: false, joinedAt: null, muted: false, deafened: false, micError: false, video: null, videoError: "", expanded: true, canSpeak: true, canVideo: true });
   selfId = null;
   selfUser = null;
   selfSpeaking = false;
@@ -379,6 +381,7 @@ async function leave({ silent = false } = {}) {
 }
 
 async function startVideo(kind) {
+  if (!state.canVideo) return;
   try {
     const stream = kind === "screen"
       ? await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 15 }, audio: false })
@@ -409,7 +412,7 @@ const toggleCamera = () => (state.video === "camera" ? stopVideo() : startVideo(
 const toggleScreen = () => (state.video === "screen" ? stopVideo() : startVideo("screen"));
 
 function toggleMute() {
-  if (state.micError) return;
+  if (state.micError || (!state.canSpeak && state.muted)) return;
   state.muted = !state.muted;
   micStream?.getAudioTracks().forEach((t) => { t.enabled = !state.muted; });
   if (state.muted) selfSpeaking = false;

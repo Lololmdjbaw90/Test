@@ -6,7 +6,7 @@ import { haptic } from "@/lib/native";
 
 // Shared message input: autosizing textarea, emoji picker, image attachment,
 // @mention suggestions, reply/edit banners. Enter sends, Shift+Enter = newline.
-export default function ChatComposer({ placeholder, onSend, editing, onCancelEdit, replyTo, onCancelReply, disabledReason, mentionCandidates = [] }) {
+export default function ChatComposer({ placeholder, onSend, editing, onCancelEdit, replyTo, onCancelReply, disabledReason, mentionCandidates = [], allowAttachments = true }) {
   const [text, setText] = useState("");
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -107,7 +107,7 @@ export default function ChatComposer({ placeholder, onSend, editing, onCancelEdi
       <div className="flex items-end gap-1.5 rounded-[1.4rem] p-1.5 transition-shadow focus-within:shadow-[0_0_0_4px_rgb(var(--accent-rgb)/0.12)]" style={{ background: "var(--surface-2)", border: "1px solid var(--border-c)" }}>
         {!editing && (
           <>
-            <button type="button" onClick={() => fileRef.current?.click()} className="icon-btn" aria-label="Attach image"><ImagePlus className="w-[18px] h-[18px]" /></button>
+            {allowAttachments && <button type="button" onClick={() => fileRef.current?.click()} className="icon-btn" aria-label="Attach image"><ImagePlus className="w-[18px] h-[18px]" /></button>}
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setFile(f); setPreview(URL.createObjectURL(f)); } e.target.value = ""; }} />
           </>
         )}

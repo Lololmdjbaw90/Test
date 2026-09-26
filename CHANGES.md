@@ -1,5 +1,23 @@
 # Changes
 
+## Server roles & permissions, smoother animations, .ipa builds (this update)
+
+### New
+- **Role permissions** for servers: administrator, manage server / channels / roles, kick members, create invites, send messages, attach images, add reactions, mention roles & @everyone, pin messages, manage messages, and voice connect / speak / video.
+- **@everyone defaults**, a **role hierarchy** with reordering (you can only manage roles and people below your highest role, and can't hand out permissions you don't have), and **private channels**.
+- `@Role` and `@everyone` mentions now notify people (with the Mention permission).
+- **.ipa builds without a Mac**: a GitHub Actions workflow builds the iOS app and uploads an `.ipa` to install with Sideloadly / AltStore. See `IOS_APP.md`.
+
+### Fixed
+- Security: members could give themselves roles and remove other people from a server by writing to the database directly; creating channels/roles and posting now also check server membership and permissions in the Firestore rules.
+- "Jump to latest" buttons slid in off-centre; DM bubbles, comments and notifications could slide from stale positions after scrolling.
+- The Community feed renders 10 posts at a time and loads more as you scroll.
+- Active chips / tab pills: the glow was cut off in a hard rectangle and gradients left a light sliver at the edges.
+- Hover lifts and shine effects no longer stick after tapping on iPhone / iPad.
+
+### Firebase
+- Server rules changed and Community docs gain `perm_index` / `everyone_permissions`. Redeploy: `firebase deploy --only firestore:rules`. The permission index fills in automatically the first time an owner or role manager opens each server.
+
 ## iPhone & iPad app, safety tools and polish (this update)
 
 ### New

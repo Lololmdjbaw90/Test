@@ -28,7 +28,8 @@ Demo login (offline mode only): **admin@mimilocks.local / admin123**.
   Screen (Chrome / Edge / Android get an Install button). Full screen, works
   offline, app icon, splash.
 - **Native iOS app** — `npm run ios` builds the site and opens the Xcode
-  project in `ios/` (iPhone + iPad) on a Mac.
+  project in `ios/` (iPhone + iPad) on a Mac. No Mac? GitHub Actions builds an
+  `.ipa` for you (install it with Sideloadly / AltStore).
 
 Step-by-step instructions, including TestFlight / App Store: **[IOS_APP.md](IOS_APP.md)**.
 
@@ -56,6 +57,13 @@ Step-by-step instructions, including TestFlight / App Store: **[IOS_APP.md](IOS_
   role-restricted channels, pins, replies, reactions, @mentions (with
   notifications), search, member list with profile cards (roles, bio, join
   dates, quick message), invites, kick, server settings.
+- **Roles & permissions** — Discord-style: administrator, manage server /
+  channels / roles, kick, invites, send, attach, react, mention roles, pin,
+  manage messages, and voice connect / speak / video. An @everyone set of
+  defaults, a role hierarchy (you can only manage people and roles below
+  you), private channels and posting limits per role. Management actions
+  (channels, roles, kicking, deleting/pinning others' messages, server
+  settings) and server membership are also enforced by the Firestore rules.
 - **Voice channels & calls** — WebRTC voice/video with camera, screen
   sharing, speaking indicators, mute/deafen, per-person volume and device
   picker. Voice channels show who's inside before you join; DMs and group
@@ -113,7 +121,7 @@ The emulators enforce the real `firestore.rules` / `storage.rules` and use a
 ```
 src/
   api/          base44Client (backend switch), firebaseBackend, localBackend, queryUtils
-  lib/          auth context, theme, player, voice, calls, ranking, safety,
+  lib/          auth context, theme, player, voice, calls, ranking, safety, permissions,
                 pwa (install + service worker), native (iOS app), helpers
   pwa/          service worker template (built to /sw.js)
   components/   layout (sidebar, palette, mini player), common UI, feature components

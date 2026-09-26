@@ -1,0 +1,64 @@
+# Builds the iPhone / iPad app on a GitHub Mac and uploads an .ipa you can
+# download from the run's "Artifacts" section.
+#
+# The .ipa is unsigned: install it on your own device with Sideloadly or
+# AltStore (they sign it with your Apple ID), or sign it yourself. For
+# TestFlight / the App Store, archive from Xcode instead — see IOS_APP.md.
+#
+# Run it any time from the Actions tab → "Build iOS app (.ipa)" → Run workflow
+# (the manual button appears once this file is on the default branch).
+name: Build iOS app (.ipa)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/ios-ipa.yml"
+      - "ios/**"
+      - "capacitor.config.json"
+
+jobs:
+  ipa:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build the website
+        run: npm run build
+
+      - name: Copy it into the iOS project
+        run: npx cap sync ios
+
+      - name: Build the app (unsigned)
+        run: |
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package the .ipa
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/App.app Payload/
+          zip -qry MimiLocks-unsigned.ipa Payload
+          ls -lh MimiLocks-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MimiLocks-ipa
+          path: MimiLocks-unsigned.ipa
+          retention-days: 30

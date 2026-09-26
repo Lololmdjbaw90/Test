@@ -102,41 +102,73 @@ service cloud.firestore {
       allow update, delete: if isAdmin() || ownsResource();
     }
 
+    // ---- Servers -------------------------------------------------------
+    // Moderation permissions come from roles; the app mirrors them into
+    // Community.perm_index = { permission: [emails] } so rules can check them.
+    function serverData(cid) { return get(/databases/$(database)/documents/Community/$(cid)).data; }
+    function serverPermIn(c, perm) {
+      return signedIn() && (isAdmin() || c.owner_email == ownEmail()
+        || (ownEmail() in c.get('member_emails', []) && ownEmail() in c.get('perm_index', {}).get(perm, [])));
+    }
+    function hasServerPerm(cid, perm) { return serverPermIn(serverData(cid), perm); }
+    function isServerMember(cid) { return signedIn() && (isAdmin() || ownEmail() in serverData(cid).get('member_emails', [])); }
+    // Emails added to / removed from a server's member list by this write.
+    function membersAdded() { return request.resource.data.member_emails.toSet().difference(resource.data.member_emails.toSet()); }
+    function membersRemoved() { return resource.data.member_emails.toSet().difference(request.resource.data.member_emails.toSet()); }
+
     match /Community/{id} {
       allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.owner_email == ownEmail();
       allow update: if isAdmin()
         || resource.data.owner_email == ownEmail()
-        || onlyChanged(['member_emails', 'updated_date', 'updated_at']);
+        // Joining or leaving yourself.
+        || (signedIn() && onlyChanged(['member_emails', 'updated_date', 'updated_at'])
+            && membersAdded().union(membersRemoved()).hasOnly([ownEmail()]))
+        // Kicking: remove others only.
+        || (serverPermIn(resource.data, 'kick_members') && onlyChanged(['member_emails', 'updated_date', 'updated_at'])
+            && membersAdded().size() == 0 && !(resource.data.owner_email in membersRemoved()))
+        || (serverPermIn(resource.data, 'manage_server')
+            && onlyChanged(['name', 'description', 'icon_emoji', 'icon_url', 'banner_url', 'welcome_message', 'updated_date', 'updated_at']))
+        || (serverPermIn(resource.data, 'manage_roles')
+            && onlyChanged(['perm_index', 'everyone_permissions', 'updated_date', 'updated_at']));
       allow delete: if isAdmin() || resource.data.owner_email == ownEmail();
     }
 
     match /ServerChannel/{id} {
       allow read: if signedIn();
-      allow create: if managesCommunity(request.resource.data.community_id);
-      allow update, delete: if managesCommunity(resource.data.community_id);
+      allow create: if hasServerPerm(request.resource.data.community_id, 'manage_channels');
+      allow update, delete: if hasServerPerm(resource.data.community_id, 'manage_channels');
     }
 
     match /ServerRole/{id} {
       allow read: if signedIn();
-      allow create: if managesCommunity(request.resource.data.community_id);
-      allow update, delete: if managesCommunity(resource.data.community_id);
+      allow create: if hasServerPerm(request.resource.data.community_id, 'manage_roles');
+      allow update, delete: if hasServerPerm(resource.data.community_id, 'manage_roles');
     }
 
     match /ServerMember/{id} {
       allow read: if signedIn();
-      allow create: if managesCommunity(request.resource.data.community_id) || request.resource.data.user_email == ownEmail();
-      allow update, delete: if managesCommunity(resource.data.community_id) || resource.data.user_email == ownEmail();
+      // You can create your own row (with no roles); role changes need Manage roles.
+      allow create: if hasServerPerm(request.resource.data.community_id, 'manage_roles')
+        || (signedIn() && request.resource.data.user_email == ownEmail() && request.resource.data.roles.size() == 0);
+      allow update: if hasServerPerm(resource.data.community_id, 'manage_roles')
+        || (signedIn() && resource.data.user_email == ownEmail()
+            && onlyChanged(['nickname', 'user_display_name', 'user_profile_picture', 'updated_date', 'updated_at']));
+      allow delete: if resource.data.user_email == ownEmail()
+        || hasServerPerm(resource.data.community_id, 'kick_members')
+        || hasServerPerm(resource.data.community_id, 'manage_roles');
     }
 
     match /ChannelMessage/{id} {
       allow read: if signedIn();
-      allow create: if signedIn() && request.resource.data.user_email == ownEmail();
+      allow create: if signedIn() && request.resource.data.user_email == ownEmail() && isServerMember(request.resource.data.community_id);
       allow update: if isAdmin()
-        || resource.data.user_email == ownEmail()
-        || managesCommunity(resource.data.community_id)
+        // Authors edit their own text (pinning needs permission).
+        || (resource.data.user_email == ownEmail() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['is_pinned', 'user_email']))
+        || hasServerPerm(resource.data.community_id, 'manage_messages')
+        || (onlyChanged(['is_pinned', 'updated_date', 'updated_at']) && hasServerPerm(resource.data.community_id, 'pin_messages'))
         || onlyChanged(['reactions', 'thread_count', 'updated_date', 'updated_at']);
-      allow delete: if isAdmin() || resource.data.user_email == ownEmail() || managesCommunity(resource.data.community_id);
+      allow delete: if isAdmin() || resource.data.user_email == ownEmail() || hasServerPerm(resource.data.community_id, 'manage_messages');
     }
 
     match /Friendship/{id} {

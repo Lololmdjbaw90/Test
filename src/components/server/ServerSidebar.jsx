@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ChevronDown, Hash, Link2, Lock, LogOut, MicOff, Plus, Settings, Users, Video, Volume2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, EyeOff, Hash, Link2, Lock, LogOut, MicOff, Plus, Settings, Users, Video, Volume2 } from "lucide-react";
 import { VOICE_STALE_MS } from "@/lib/voice";
 import { useVoice } from "@/components/voice/useVoice";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -13,6 +13,7 @@ import { siteUrl } from "@/lib/format";
 function ChannelRow({ ch, active, canManage, onSelect, onSettings, voicePeers, live }) {
   const Icon = ch.type === "voice" ? Volume2 : Hash;
   const locked = ch.allowed_roles?.length > 0;
+  const hidden = locked && ch.private;
   const inVoice = ch.type === "voice" ? voicePeers.filter((p) => p.channel_id === ch.id) : [];
   return (
     <div>
@@ -21,7 +22,7 @@ function ChannelRow({ ch, active, canManage, onSelect, onSettings, voicePeers, l
         <button onClick={() => onSelect(ch)} className="relative flex items-center gap-2 flex-1 min-w-0 h-9 px-2.5 text-left rounded-xl hover:bg-[var(--surface-2)] transition-colors" style={{ color: active ? "var(--accent-rose)" : "var(--text-secondary)" }}>
           <Icon className="w-4 h-4 flex-shrink-0 opacity-80" />
           <span className="truncate text-sm" style={{ fontWeight: active ? 700 : 500 }}>{ch.name}</span>
-          {locked && <Lock className="w-3 h-3 flex-shrink-0 opacity-60" />}
+          {hidden ? <EyeOff className="w-3 h-3 flex-shrink-0 opacity-60" aria-label="Private channel" /> : locked && <Lock className="w-3 h-3 flex-shrink-0 opacity-60" aria-label="Limited channel" />}
         </button>
         {canManage && (
           <button onClick={() => onSettings(ch)} className="relative icon-btn w-7 h-7 can-hover:opacity-0 group-hover:opacity-100 focus:opacity-100 mr-1" aria-label={`Settings for ${ch.name}`}><Settings className="w-3.5 h-3.5" /></button>
@@ -48,8 +49,10 @@ function ChannelRow({ ch, active, canManage, onSelect, onSettings, voicePeers, l
   );
 }
 
-export default function ServerSidebar({ community, channels, activeChannel, canManage, isOwner, memberCount, onSelectChannel, onAddChannel, onChannelSettings, onServerSettings, onMembers, onLeave }) {
+export default function ServerSidebar({ community, channels, activeChannel, perms = {}, isOwner, memberCount, onSelectChannel, onAddChannel, onChannelSettings, onServerSettings, onMembers, onLeave }) {
   const [menu, setMenu] = useState(false);
+  const canManage = !!perms.manage_channels;
+  const canOpenSettings = !!(perms.manage_server || perms.manage_roles || perms.kick_members);
   const menuRef = useRef(null);
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 15000); return () => clearInterval(t); }, []);
@@ -79,8 +82,8 @@ export default function ServerSidebar({ community, channels, activeChannel, canM
         </button>
         <Popover open={menu} onClose={() => setMenu(false)} anchorRef={menuRef} placement="bottom-start" width={240} label="Server menu">
           <div className="p-1.5">
-            <button onClick={invite} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[var(--pink-soft)]" style={{ color: "var(--accent-rose)" }}><Link2 className="w-4 h-4" /> Copy invite link</button>
-            {canManage && <button onClick={() => { setMenu(false); onServerSettings(); }} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[var(--surface-2)]" style={{ color: "var(--text-secondary)" }}><Settings className="w-4 h-4" /> Server settings</button>}
+            {perms.create_invite && <button onClick={invite} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[var(--pink-soft)]" style={{ color: "var(--accent-rose)" }}><Link2 className="w-4 h-4" /> Copy invite link</button>}
+            {canOpenSettings && <button onClick={() => { setMenu(false); onServerSettings(); }} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[var(--surface-2)]" style={{ color: "var(--text-secondary)" }}><Settings className="w-4 h-4" /> Server settings</button>}
             {canManage && <button onClick={() => { setMenu(false); onAddChannel("text"); }} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[var(--surface-2)]" style={{ color: "var(--text-secondary)" }}><Plus className="w-4 h-4" /> Create channel</button>}
             {!isOwner && <button onClick={() => { setMenu(false); onLeave(); }} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-[var(--surface-2)]" style={{ color: "var(--danger)" }}><LogOut className="w-4 h-4" /> Leave server</button>}
           </div>

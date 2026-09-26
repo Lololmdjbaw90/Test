@@ -166,17 +166,17 @@ export function CallControls({ vs, onLeave, className = "", style }) {
   const tip = (on, off, active) => (active ? on : off);
   return (
     <div className={`flex items-center justify-center gap-2 sm:gap-3 ${className}`} style={style}>
-      <button className="call-btn" data-warn={vs.muted} disabled={vs.micError} onClick={voice.toggleMute} title={vs.micError ? "No microphone" : tip("Unmute", "Mute", vs.muted)} aria-label={tip("Unmute", "Mute", vs.muted)} aria-pressed={vs.muted}>
+      <button className="call-btn" data-warn={vs.muted} disabled={vs.micError || !vs.canSpeak} onClick={voice.toggleMute} title={vs.micError ? "No microphone" : !vs.canSpeak ? "You don't have permission to speak here" : tip("Unmute", "Mute", vs.muted)} aria-label={tip("Unmute", "Mute", vs.muted)} aria-pressed={vs.muted}>
         {vs.muted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
       </button>
       <button className="call-btn" data-warn={vs.deafened} onClick={voice.toggleDeafen} title={tip("Undeafen", "Deafen", vs.deafened)} aria-label={tip("Undeafen", "Deafen", vs.deafened)} aria-pressed={vs.deafened}>
         {vs.deafened ? <HeadphoneOff className="w-5 h-5" /> : <Headphones className="w-5 h-5" />}
       </button>
-      <button className="call-btn" data-on={vs.video === "camera"} onClick={voice.toggleCamera} title={tip("Turn camera off", "Turn camera on", vs.video === "camera")} aria-label="Camera" aria-pressed={vs.video === "camera"}>
+      <button className="call-btn" data-on={vs.video === "camera"} disabled={!vs.canVideo} onClick={voice.toggleCamera} title={tip("Turn camera off", "Turn camera on", vs.video === "camera")} aria-label="Camera" aria-pressed={vs.video === "camera"}>
         {vs.video === "camera" ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
       </button>
       {voice.canShareScreen && (
-        <button className="call-btn" data-on={vs.video === "screen"} onClick={voice.toggleScreen} title={tip("Stop sharing", "Share your screen", vs.video === "screen")} aria-label="Share screen" aria-pressed={vs.video === "screen"}>
+        <button className="call-btn" data-on={vs.video === "screen"} disabled={!vs.canVideo} onClick={voice.toggleScreen} title={tip("Stop sharing", "Share your screen", vs.video === "screen")} aria-label="Share screen" aria-pressed={vs.video === "screen"}>
           {vs.video === "screen" ? <ScreenShareOff className="w-5 h-5" /> : <ScreenShare className="w-5 h-5" />}
         </button>
       )}

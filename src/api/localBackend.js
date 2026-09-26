@@ -89,11 +89,39 @@ function isOwner(user, record) {
 function onlyChanged(data, allowed) {
   return Object.keys(data || {}).every((k) => allowed.includes(k) || k === "updated_date");
 }
-function managesCommunity(user, communityId) {
+// Server role permissions, computed straight from the roles (see src/lib/permissions.js).
+const LEGACY_PERMS = { can_pin_messages: "pin_messages", can_manage_messages: "manage_messages" };
+function hasServerPerm(user, communityId, perm) {
   if (!user || !communityId) return false;
   if (isAdminUser(user)) return true;
   const comm = loadCollection("Community").find((c) => c.id === communityId);
-  return same(comm?.owner_email, user.email);
+  if (!comm) return false;
+  if (same(comm.owner_email, user.email)) return true;
+  if (!(comm.member_emails || []).some((e) => same(e, user.email))) return false;
+  const member = loadCollection("ServerMember").find((m) => m.community_id === communityId && same(m.user_email, user.email));
+  const roles = loadCollection("ServerRole").filter((r) => r.community_id === communityId && (member?.roles || []).includes(r.id));
+  return roles.some((r) => Object.entries(r.permissions || {}).some(([k, v]) => v && [perm, "administrator"].includes(LEGACY_PERMS[k] || k)));
+}
+function isServerMember(user, communityId) {
+  if (isAdminUser(user)) return true;
+  const comm = loadCollection("Community").find((c) => c.id === communityId);
+  return !!comm && (comm.member_emails || []).some((e) => same(e, user.email));
+}
+function communityUpdateAllowed(user, current, data) {
+  const email = user.email;
+  if (same(current?.owner_email, email)) return true;
+  const fields = (list) => onlyChanged(data, list);
+  if (fields(["member_emails"]) && Array.isArray(data.member_emails)) {
+    const before = new Set(current.member_emails || []);
+    const after = new Set(data.member_emails);
+    const added = [...after].filter((e) => !before.has(e));
+    const removed = [...before].filter((e) => !after.has(e));
+    if ([...added, ...removed].every((e) => same(e, email))) return true; // join / leave yourself
+    if (added.length === 0 && !removed.some((e) => same(e, current.owner_email)) && hasServerPerm(user, current.id, "kick_members")) return true;
+  }
+  if (fields(["name", "description", "icon_emoji", "icon_url", "banner_url", "welcome_message"]) && hasServerPerm(user, current.id, "manage_server")) return true;
+  if (fields(["perm_index", "everyone_permissions"]) && hasServerPerm(user, current.id, "manage_roles")) return true;
+  return false;
 }
 const LIKEABLE = ["Artwork", "CommunityPost", "MusicReview"];
 
@@ -101,8 +129,10 @@ function canCreate(user, name, data) {
   if (!user) return false;
   if (isAdminUser(user)) return true;
   if (name === "SiteConfig" || name === "Log" || name === "User") return false;
-  if (name === "ServerChannel" || name === "ServerRole") return managesCommunity(user, data?.community_id);
-  if (name === "ServerMember") return managesCommunity(user, data?.community_id) || same(data?.user_email, user.email);
+  if (name === "ServerChannel") return hasServerPerm(user, data?.community_id, "manage_channels");
+  if (name === "ServerRole") return hasServerPerm(user, data?.community_id, "manage_roles");
+  if (name === "ServerMember") return hasServerPerm(user, data?.community_id, "manage_roles") || (same(data?.user_email, user.email) && !(data?.roles || []).length);
+  if (name === "ChannelMessage") return same(data?.user_email, user.email) && isServerMember(user, data?.community_id);
   if (name === "DirectMessage") return (data?.member_emails || []).includes(user.email) && same(data?.user_email, user.email);
   if (name === "GroupChat") return (data?.member_emails || []).includes(user.email);
   if (name === "VoicePresence" || name === "VoiceSignal") return same(data?.user_email, user.email);
@@ -116,11 +146,17 @@ function canUpdate(user, name, current, data = {}) {
   const email = user.email;
   switch (name) {
     case "SiteConfig": case "Log": case "User": return false;
-    case "ServerChannel": case "ServerRole": return managesCommunity(user, current?.community_id);
-    case "ServerMember": return managesCommunity(user, current?.community_id) || same(current?.user_email, email);
-    case "Community": return same(current?.owner_email, email) || onlyChanged(data, ["member_emails"]);
+    case "ServerChannel": return hasServerPerm(user, current?.community_id, "manage_channels");
+    case "ServerRole": return hasServerPerm(user, current?.community_id, "manage_roles");
+    case "ServerMember":
+      return hasServerPerm(user, current?.community_id, "manage_roles") ||
+        (same(current?.user_email, email) && onlyChanged(data, ["nickname", "user_display_name", "user_profile_picture"]));
+    case "Community": return communityUpdateAllowed(user, current, data);
     case "ChannelMessage":
-      return same(current?.user_email, email) || managesCommunity(user, current?.community_id) || onlyChanged(data, ["reactions", "thread_count"]);
+      return (same(current?.user_email, email) && !("is_pinned" in (data || {})))
+        || hasServerPerm(user, current?.community_id, "manage_messages")
+        || (onlyChanged(data, ["is_pinned"]) && hasServerPerm(user, current?.community_id, "pin_messages"))
+        || onlyChanged(data, ["reactions", "thread_count"]);
     case "DirectMessage":
       return (same(current?.user_email, email) && onlyChanged(data, ["content", "is_edited", "read_by", "reactions"])) ||
         ((current?.member_emails || []).includes(email) && onlyChanged(data, ["read_by", "reactions"]));
@@ -145,10 +181,11 @@ function canDelete(user, name, current) {
   const email = user.email;
   switch (name) {
     case "SiteConfig": case "Log": case "User": return false;
-    case "ServerChannel": case "ServerRole": return managesCommunity(user, current?.community_id);
-    case "ServerMember": return managesCommunity(user, current?.community_id) || same(current?.user_email, email);
+    case "ServerChannel": return hasServerPerm(user, current?.community_id, "manage_channels");
+    case "ServerRole": return hasServerPerm(user, current?.community_id, "manage_roles");
+    case "ServerMember": return same(current?.user_email, email) || hasServerPerm(user, current?.community_id, "kick_members") || hasServerPerm(user, current?.community_id, "manage_roles");
     case "Community": return same(current?.owner_email, email);
-    case "ChannelMessage": return same(current?.user_email, email) || managesCommunity(user, current?.community_id);
+    case "ChannelMessage": return same(current?.user_email, email) || hasServerPerm(user, current?.community_id, "manage_messages");
     case "DirectMessage": return same(current?.user_email, email);
     case "Friendship": return same(current?.requester_email, email) || same(current?.receiver_email, email);
     case "GroupChat": return same(current?.owner_email, email);
@@ -449,7 +486,7 @@ function seedIfEmpty() {
     // --- roles ---
     const rMod = uid(), rArtist = uid(), rMember = uid(), r2Member = uid();
     saveCollection("ServerRole", [
-      { ...base(E.you, 1000), id: rMod, community_id: c1, name: "Moderator", color: "#d4708a", permissions: { can_pin_messages: true, can_manage_messages: true }, position: 0 },
+      { ...base(E.you, 1000), id: rMod, community_id: c1, name: "Moderator", color: "#d4708a", permissions: { pin_messages: true, manage_messages: true, kick_members: true, mention_roles: true }, position: 0 },
       { ...base(E.you, 1000), id: rArtist, community_id: c1, name: "Artist", color: "#a78bfa", permissions: {}, position: 1 },
       { ...base(E.you, 1000), id: rMember, community_id: c1, name: "Member", color: "#64748b", permissions: {}, position: 2 },
       { ...base(E.aria, 1000), id: r2Member, community_id: c2, name: "Member", color: "#38bdf8", permissions: {}, position: 0 },

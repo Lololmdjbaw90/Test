@@ -8,10 +8,11 @@ import LevelBadge from "@/components/profile/LevelBadge";
 import NitroBadge from "@/components/profile/NitroBadge";
 import { getNameStyle } from "@/components/profile/NameStylePicker";
 import { displayName, isNitro, isOnline, profileLink, timeAgo } from "@/lib/format";
+import { canActOn, canEditRole, computePermissions } from "@/lib/permissions";
 
 // Discord-style member card: opens next to the clicked avatar/name on desktop
 // and as a bottom sheet on phones.
-export default function ProfileCard({ target, onClose, user, member, roles = [], community, me, canManage, onRoleChange, onKick }) {
+export default function ProfileCard({ target, onClose, user, member, roles = [], community, me, actor, onRoleChange, onKick }) {
   const open = !!target;
   const email = target?.email;
   const u = user || (member ? { email: member.user_email, display_name: member.user_display_name, profile_picture: member.user_profile_picture } : { email });
@@ -20,6 +21,11 @@ export default function ProfileCard({ target, onClose, user, member, roles = [],
   const top = memberRoles[0];
   const isOwner = community?.owner_email === email;
   const nitro = isNitro(u);
+  // You can change roles / kick only people ranked below you, and only hand out roles below your own.
+  const targetInfo = member && email ? { email, ...computePermissions({ community, member, roles, email }) } : null;
+  const outranks = !!actor && !!targetInfo && email !== me?.email && canActOn(actor, targetInfo, community);
+  const assignable = outranks ? roles.filter((r) => canEditRole(actor, r)) : [];
+  const shownRoles = roles.filter((r) => memberRoles.includes(r) || assignable.includes(r));
   const online = isOnline(u);
   // Stable ref object per opened target (Popover re-measures when it changes).
   const anchorRef = useMemo(() => ({ current: target?.anchor || null }), [target]);
@@ -65,14 +71,14 @@ export default function ProfileCard({ target, onClose, user, member, roles = [],
                 {member?.created_date && <span className="flex items-center gap-1"><span className="text-sm leading-none">{community?.icon_emoji || "💬"}</span> {new Date(member.created_date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>}
               </p>
 
-              {(memberRoles.length > 0 || (canManage && !isOwner && roles.length > 0)) && (
+              {shownRoles.length > 0 && (
                 <>
                   <div className="divider my-3" />
                   <p className="eyebrow mb-1.5">Roles</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {(canManage && !isOwner ? roles : memberRoles).map((r) => {
+                    {shownRoles.map((r) => {
                       const has = (member?.roles || []).includes(r.id);
-                      const editable = canManage && !isOwner;
+                      const editable = assignable.includes(r);
                       return (
                         <motion.button
                           key={r.id}
@@ -97,7 +103,7 @@ export default function ProfileCard({ target, onClose, user, member, roles = [],
             <div className="flex gap-2 mt-3">
               <Link to={profileLink(email)} onClick={onClose} className="btn-outline flex-1 !px-3"><UserRound className="w-4 h-4" /> Profile</Link>
               {email !== me?.email && <Link to={`/DirectMessages?with=${encodeURIComponent(email)}`} onClick={onClose} className="btn flex-1 !px-3"><MessageSquare className="w-4 h-4" /> Message</Link>}
-              {canManage && !isOwner && member && email !== me?.email && (
+              {outranks && actor.perms.kick_members && (
                 <button onClick={() => { onClose(); onKick?.(member); }} className="icon-btn icon-btn-bordered !w-10 !h-10" style={{ color: "var(--danger)" }} title="Kick from server" aria-label="Kick from server"><UserMinus className="w-4 h-4" /></button>
               )}
             </div>

@@ -18,7 +18,7 @@ import { useBlocked } from "@/lib/safety";
 
 const compact = (s) => String(s || "").replace(/\s+/g, "").toLowerCase();
 
-function MessageItem({ msg, grouped, me, roleColor, mentionsMe, canPin, canDelete, onReply, onEdit, onDelete, onPin, onReact, onJumpTo, onOpenProfile, tapped, onTap }) {
+function MessageItem({ msg, grouped, me, roleColor, mentionsMe, canPin, canDelete, canReact = true, onReply, onEdit, onDelete, onPin, onReact, onJumpTo, onOpenProfile, tapped, onTap }) {
   const [picker, setPicker] = useState(false);
   const own = msg.user_email === me.email;
   if (msg.type === "join" || msg.user_email === "__system__") {
@@ -65,13 +65,13 @@ function MessageItem({ msg, grouped, me, roleColor, mentionsMe, canPin, canDelet
         {reactions.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1.5">
             {reactions.map(([emoji, users]) => (
-              <motion.button key={emoji} initial={{ scale: 0 }} animate={{ scale: 1 }} onClick={() => onReact(msg, emoji)} className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1 font-semibold transition-colors" style={users.includes(me.email) ? { background: "var(--pink-soft)", border: "1px solid rgb(var(--accent-rgb) / 0.45)", color: "var(--accent-rose)" } : { background: "var(--surface)", border: "1px solid var(--border-c)", color: "var(--text-secondary)" }} title={`${users.length} reaction${users.length > 1 ? "s" : ""}`}>{emoji}<span>{users.length}</span></motion.button>
+              <motion.button key={emoji} initial={{ scale: 0 }} animate={{ scale: 1 }} disabled={!canReact} onClick={() => onReact(msg, emoji)} className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1 font-semibold transition-colors disabled:cursor-default" style={users.includes(me.email) ? { background: "var(--pink-soft)", border: "1px solid rgb(var(--accent-rgb) / 0.45)", color: "var(--accent-rose)" } : { background: "var(--surface)", border: "1px solid var(--border-c)", color: "var(--text-secondary)" }} title={`${users.length} reaction${users.length > 1 ? "s" : ""}`}>{emoji}<span>{users.length}</span></motion.button>
             ))}
           </div>
         )}
       </div>
       <div className={`absolute -top-3 right-4 sm:right-6 flex items-center gap-0.5 p-0.5 rounded-xl transition-opacity z-10 ${tapped ? "opacity-100" : "opacity-0 pointer-events-none can-hover:group-hover:opacity-100 can-hover:group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto"}`} style={{ background: "var(--surface)", border: "1px solid var(--border-c)", boxShadow: "var(--shadow-sm)" }}>
-        <button onClick={() => setPicker((v) => !v)} className="icon-btn w-8 h-8" aria-label="Add reaction"><SmilePlus className="w-4 h-4" /></button>
+        {canReact && <button onClick={() => setPicker((v) => !v)} className="icon-btn w-8 h-8" aria-label="Add reaction"><SmilePlus className="w-4 h-4" /></button>}
         <button onClick={() => onReply(msg)} className="icon-btn w-8 h-8" aria-label="Reply"><Reply className="w-4 h-4" /></button>
         {own && msg.content && <button onClick={() => onEdit(msg)} className="icon-btn w-8 h-8" aria-label="Edit"><Pencil className="w-4 h-4" /></button>}
         {canPin && <button onClick={() => onPin(msg)} className="icon-btn w-8 h-8" aria-label={msg.is_pinned ? "Unpin" : "Pin"}>{msg.is_pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}</button>}
@@ -88,7 +88,9 @@ function MessageItem({ msg, grouped, me, roleColor, mentionsMe, canPin, canDelet
   );
 }
 
-export default function ChatArea({ channel, community, me, roles, members, myRoleIds, canManage, onOpenSidebar, onToggleMembers, showMembers, onOpenProfile }) {
+export default function ChatArea({ channel, community, me, roles, members, actor, access, onOpenSidebar, onToggleMembers, showMembers, onOpenProfile }) {
+  const perms = actor.perms;
+  const myRoleIds = actor.roleIds;
   const confirm = useConfirm();
   const [tapped, setTapped] = useState(null); // message showing its action bar on touch screens
   const scrollRef = useRef(null);
@@ -103,7 +105,8 @@ export default function ChatArea({ channel, community, me, roles, members, myRol
   const messages = useMemo(() => [...raw].reverse().filter((m) => !blocked.has(m.user_email)), [raw, blocked]);
 
   const myRoles = roles.filter((r) => myRoleIds.includes(r.id));
-  const canPost = canManage || !channel.allowed_roles?.length || myRoles.some((r) => channel.allowed_roles.includes(r.name));
+  const canPost = !!access?.post;
+  const postRoles = (channel.allowed_roles || []).map((a) => roles.find((r) => r.id === a || r.name === a)?.name).filter(Boolean);
   const roleColorFor = useMemo(() => {
     const map = {};
     members.forEach((m) => { const top = roles.find((r) => (m.roles || []).includes(r.id)); if (top) map[m.user_email] = top.color; });
@@ -160,6 +163,12 @@ export default function ChatArea({ channel, community, me, roles, members, myRol
       const names = mentionedNames(text);
       const targets = new Set();
       members.forEach((m) => { if (names.includes(compact(m.user_display_name))) targets.add(m.user_email); });
+      // @Role and @everyone only notify when you're allowed to mention them.
+      if (perms.mention_roles) {
+        const everyone = names.includes("everyone") || names.includes("here");
+        const roleIds = roles.filter((r) => names.includes(compact(r.name))).map((r) => r.id);
+        members.forEach((m) => { if (everyone || (m.roles || []).some((id) => roleIds.includes(id))) targets.add(m.user_email); });
+      }
       if (replyTo && replyTo.user_email !== me.email) targets.add(replyTo.user_email);
       targets.delete(me.email);
       await Promise.all([...targets].map((to) => notify({ to_email: to, from_email: me.email, from_display_name: displayName(me), from_profile_picture: me.profile_picture, type: "mention", message: `${displayName(me)} mentioned you in #${channel.name}: "${text.slice(0, 60)}"`, link: `/CommunityChat?id=${community.id}&channel=${channel.id}`, entity_id: channel.id })));
@@ -186,9 +195,8 @@ export default function ChatArea({ channel, community, me, roles, members, myRol
 
   const mentionCandidates = useMemo(() => [
     ...members.filter((m) => m.user_email !== me.email).map((m) => ({ name: m.user_display_name || m.user_email.split("@")[0], color: roleColorFor[m.user_email], hint: "member" })),
-    ...roles.map((r) => ({ name: r.name, color: r.color, hint: "role" })),
-    { name: "everyone", hint: "notify channel" },
-  ], [members, roles, roleColorFor, me.email]);
+    ...(perms.mention_roles ? [...roles.map((r) => ({ name: r.name, color: r.color, hint: "role" })), { name: "everyone", hint: "notify everyone" }] : []),
+  ], [members, roles, roleColorFor, me.email, perms.mention_roles]);
 
   return (
     <div className="flex flex-col h-full min-h-0 min-w-0">
@@ -237,7 +245,7 @@ export default function ChatArea({ channel, community, me, roles, members, myRol
                 return (
                   <React.Fragment key={m.id}>
                     {newDay && <div className="flex items-center gap-3 px-6 my-4"><div className="divider flex-1" /><span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>{dayLabel(m.created_date)}</span><div className="divider flex-1" /></div>}
-                    <MessageItem msg={m} grouped={grouped} me={me} roleColor={roleColorFor[m.user_email]} mentionsMe={mentionsMe} canPin={canManage} canDelete={m.user_email === me.email || canManage} onReply={setReplyTo} onEdit={setEditing} onDelete={remove} onPin={pin} onReact={react} onJumpTo={jumpTo} onOpenProfile={onOpenProfile} tapped={tapped === m.id} onTap={(id) => setTapped((t) => (t === id ? null : id))} />
+                    <MessageItem msg={m} grouped={grouped} me={me} roleColor={roleColorFor[m.user_email]} mentionsMe={mentionsMe} canPin={!!(perms.pin_messages || perms.manage_messages)} canDelete={m.user_email === me.email || !!perms.manage_messages} canReact={!!perms.add_reactions} onReply={setReplyTo} onEdit={setEditing} onDelete={remove} onPin={pin} onReact={react} onJumpTo={jumpTo} onOpenProfile={onOpenProfile} tapped={tapped === m.id} onTap={(id) => setTapped((t) => (t === id ? null : id))} />
                   </React.Fragment>
                 );
               })}
@@ -278,7 +286,8 @@ export default function ChatArea({ channel, community, me, roles, members, myRol
         onCancelEdit={() => setEditing(null)}
         replyTo={replyTo}
         onCancelReply={() => setReplyTo(null)}
-        disabledReason={canPost ? null : `Only ${channel.allowed_roles.join(" or ")} can post here`}
+        disabledReason={canPost ? null : !perms.send_messages ? "You don't have permission to send messages in this server" : `Only ${postRoles.join(" or ") || "certain roles"} can post here`}
+        allowAttachments={!!perms.attach_files}
         mentionCandidates={mentionCandidates}
       />
     </div>

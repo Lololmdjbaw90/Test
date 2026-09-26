@@ -10,7 +10,7 @@ import { useNow, useVoice } from "@/components/voice/useVoice";
 // A server voice channel: a lobby showing who's hanging out, then the call
 // stage once you join. The connection keeps running when you switch channels
 // or pages (the dock at the top of the app brings you back).
-export default function VoiceChannelView({ channel, me }) {
+export default function VoiceChannelView({ channel, me, access = { connect: true, speak: true, video: true } }) {
   const vs = useVoice();
   const now = useNow(10000);
   const [busy, setBusy] = useState(false);
@@ -27,7 +27,7 @@ export default function VoiceChannelView({ channel, me }) {
 
   const join = async (video) => {
     setBusy(true);
-    await voice.join({ id: channel.id, name: channel.name, type: "channel", communityId: channel.community_id, link: `/CommunityChat?id=${channel.community_id}&channel=${channel.id}` }, me, { video });
+    await voice.join({ id: channel.id, name: channel.name, type: "channel", communityId: channel.community_id, link: `/CommunityChat?id=${channel.community_id}&channel=${channel.id}` }, me, { video: video && access.video, canSpeak: access.speak, canVideo: access.video });
     setBusy(false);
   };
 
@@ -62,14 +62,18 @@ export default function VoiceChannelView({ channel, me }) {
         )}
 
         <div className="flex flex-wrap justify-center gap-3">
-          <button onClick={() => join(false)} disabled={busy || vs.connecting} className="call-btn call-btn-accept !w-auto !h-12 px-6 gap-2 font-bold">
+          <button onClick={() => join(false)} disabled={busy || vs.connecting || !access.connect} className="call-btn call-btn-accept !w-auto !h-12 px-6 gap-2 font-bold">
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <PhoneCall className="w-4 h-4" />} {elsewhere ? "Switch here" : "Join voice"}
           </button>
-          <button onClick={() => join(true)} disabled={busy || vs.connecting} className="call-btn !w-auto !h-12 px-6 gap-2 font-bold">
-            <Video className="w-4 h-4" /> Join with video
-          </button>
+          {access.video && (
+            <button onClick={() => join(true)} disabled={busy || vs.connecting || !access.connect} className="call-btn !w-auto !h-12 px-6 gap-2 font-bold">
+              <Video className="w-4 h-4" /> Join with video
+            </button>
+          )}
         </div>
         {elsewhere && <p className="text-xs opacity-60">You're currently in <strong>{vs.room.name}</strong>.</p>}
+        {!access.connect && <p className="text-xs font-semibold opacity-80">You don't have permission to join this channel.</p>}
+        {access.connect && !access.speak && <p className="text-xs opacity-70">You'll join muted — your roles don't allow speaking here.</p>}
       </div>
     </div>
   );

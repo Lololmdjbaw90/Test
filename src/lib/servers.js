@@ -35,7 +35,7 @@ export async function createServer({ me, name, description, icon_emoji, icon_url
   for (const [position, ch] of tpl.channels.entries()) {
     await base44.entities.ServerChannel.create({ community_id: community.id, ...ch, position, allowed_roles: [] });
   }
-  await base44.entities.ServerRole.create({ community_id: community.id, name: "Moderator", color: "#d9577f", permissions: { can_pin_messages: true, can_manage_messages: true }, position: 0 });
+  await base44.entities.ServerRole.create({ community_id: community.id, name: "Moderator", color: "#d9577f", permissions: { pin_messages: true, manage_messages: true, kick_members: true, mention_roles: true }, position: 0 });
   await base44.entities.ServerRole.create({ community_id: community.id, name: "Member", color: "#64748b", permissions: {}, position: 1 });
   await ensureMembership(community, me);
   return community;

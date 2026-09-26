@@ -19,6 +19,7 @@ import ChannelSettingsModal from "@/components/server/ChannelSettingsModal";
 import AddChannelModal from "@/components/server/AddChannelModal";
 import VoiceChannelView from "@/components/server/VoiceChannelView";
 import ProfileCard from "@/components/server/ProfileCard";
+import { canActOn, canEditRole, channelAccess, computePermissions, syncPermIndex } from "@/lib/permissions";
 
 export default function CommunityChatPage() {
   const navigate = useNavigate();
@@ -39,10 +40,9 @@ export default function CommunityChatPage() {
   const community = communities[0] || null;
   const isMember = !!community?.member_emails?.includes(me.email);
   const isOwner = community?.owner_email === me.email;
-  const canManage = isOwner || me.role === "admin";
   const enabled = !!community;
   const { data: channels } = useLiveQuery("ServerChannel", { community_id: communityId }, { sort: "position", enabled });
-  const { data: roles } = useLiveQuery("ServerRole", { community_id: communityId }, { sort: "position", enabled });
+  const { data: roles, loading: rolesLoading } = useLiveQuery("ServerRole", { community_id: communityId }, { sort: "position", enabled });
   const { data: memberRows, loading: membersLoading } = useLiveQuery("ServerMember", { community_id: communityId }, { enabled });
   const { data: users } = useLiveQuery("User", null, { live: false, enabled });
   const usersByEmail = useMemo(() => Object.fromEntries(users.map((u) => [u.email, u])), [users]);
@@ -63,8 +63,22 @@ export default function CommunityChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [community?.id, isMember, membersLoading]);
 
+  // What you're allowed to do here (roles + @everyone), and which channels you can see.
+  const actor = useMemo(() => computePermissions({ community, me, member: myMember, roles }), [community, me, myMember, roles]);
+  const perms = actor.perms;
+  const canManage = actor.top === -Infinity; // owner / site admin
+  const infoFor = (member) => ({ email: member?.user_email, ...computePermissions({ community, member, roles, email: member?.user_email }) });
+  const visibleChannels = useMemo(() => channels.filter((c) => channelAccess(c, actor, roles).view), [channels, actor, roles]);
+
+  // Keep the permission index the security rules read in step with the roles.
+  useEffect(() => {
+    if (!community || membersLoading || rolesLoading || !perms.manage_roles) return;
+    syncPermIndex(community, roles, memberRows);
+  }, [community, roles, memberRows, membersLoading, rolesLoading, perms.manage_roles]);
+
   const channelId = params.get("channel");
-  const activeChannel = channels.find((c) => c.id === channelId) || channels.find((c) => c.type !== "voice") || channels[0] || null;
+  const activeChannel = visibleChannels.find((c) => c.id === channelId) || visibleChannels.find((c) => c.type !== "voice") || visibleChannels[0] || null;
+  const access = activeChannel ? channelAccess(activeChannel, actor, roles) : null;
   const selectChannel = (ch) => { setParams({ id: communityId, channel: ch.id }, { replace: true }); setShowSidebar(false); };
 
   const join = async () => {
@@ -77,6 +91,7 @@ export default function CommunityChatPage() {
     try { await leaveServer(community, me); toast("You left the server"); navigate("/Communities"); } catch (e) { toast.error(e?.message || "Could not leave."); }
   };
   const kick = async (member) => {
+    if (!perms.kick_members || !canActOn(actor, infoFor(member), community)) { toast.error("You can't kick this member."); return; }
     if (!(await confirm({ title: `Kick ${member.user_display_name}?`, message: "They can rejoin unless you make the server private later.", confirmLabel: "Kick", danger: true }))) return;
     try {
       await base44.entities.Community.update(community.id, { member_emails: community.member_emails.filter((e) => e !== member.user_email) });
@@ -85,6 +100,8 @@ export default function CommunityChatPage() {
     } catch (e) { toast.error(e?.message || "Could not kick member."); }
   };
   const changeRole = async (member, roleId, add) => {
+    const role = roles.find((r) => r.id === roleId);
+    if (!role || !canEditRole(actor, role) || !canActOn(actor, infoFor(member), community)) { toast.error("You can't change this role."); return; }
     const next = add ? [...new Set([...(member.roles || []), roleId])] : (member.roles || []).filter((r) => r !== roleId);
     try {
       if (member.id) await base44.entities.ServerMember.update(member.id, { roles: next });
@@ -118,7 +135,7 @@ export default function CommunityChatPage() {
   }
 
   const sidebar = (
-    <ServerSidebar community={community} channels={channels} activeChannel={activeChannel} canManage={canManage} isOwner={isOwner} memberCount={members.length}
+    <ServerSidebar community={community} channels={visibleChannels} activeChannel={activeChannel} perms={perms} isOwner={isOwner} memberCount={members.length}
       onSelectChannel={selectChannel} onAddChannel={(type) => { setAddChannel(type); setShowSidebar(false); }} onChannelSettings={(ch) => { setChannelSettings(ch); setShowSidebar(false); }}
       onServerSettings={() => { setShowSettings(true); setShowSidebar(false); }} onMembers={() => { setShowMembers((v) => !v); setShowSidebar(false); }} onLeave={leave} />
   );
@@ -139,7 +156,7 @@ export default function CommunityChatPage() {
         {!activeChannel ? (
           <div className="h-full flex flex-col">
             <div className="h-14 flex items-center px-3 md:hidden"><button onClick={() => setShowSidebar(true)} className="icon-btn" aria-label="Channels"><Menu className="w-5 h-5" /></button></div>
-            <EmptyState icon={Hash} title="No channels yet" text={canManage ? "Create the first channel to get chatting." : "The owner hasn't created any channels yet."} action={canManage && <button className="btn" onClick={() => setAddChannel("text")}>Create channel</button>} />
+            <EmptyState icon={Hash} title="No channels yet" text={perms.manage_channels ? "Create the first channel to get chatting." : "The owner hasn't created any channels yet."} action={perms.manage_channels && <button className="btn" onClick={() => setAddChannel("text")}>Create channel</button>} />
           </div>
         ) : activeChannel.type === "voice" ? (
           <div className="h-full flex flex-col min-h-0">
@@ -148,10 +165,10 @@ export default function CommunityChatPage() {
               <span className="font-bold flex-1 truncate" style={{ color: "var(--text-primary)" }}>🔊 {activeChannel.name}</span>
               <button onClick={() => setShowMembers((v) => !v)} className="icon-btn" data-active={showMembers} aria-label="Members"><Users className="w-4 h-4" /></button>
             </div>
-            <div className="flex-1 min-h-0 flex flex-col"><VoiceChannelView key={activeChannel.id} channel={activeChannel} me={me} /></div>
+            <div className="flex-1 min-h-0 flex flex-col"><VoiceChannelView key={activeChannel.id} channel={activeChannel} me={me} access={access} /></div>
           </div>
         ) : (
-          <ChatArea channel={activeChannel} community={community} me={me} roles={roles} members={members} myRoleIds={myMember?.roles || []} canManage={canManage} onOpenSidebar={() => setShowSidebar(true)} onToggleMembers={() => setShowMembers((v) => !v)} showMembers={showMembers} onOpenProfile={openProfile("right-start")} />
+          <ChatArea channel={activeChannel} community={community} me={me} roles={roles} members={members} actor={actor} access={access} onOpenSidebar={() => setShowSidebar(true)} onToggleMembers={() => setShowMembers((v) => !v)} showMembers={showMembers} onOpenProfile={openProfile("right-start")} />
         )}
       </main>
 
@@ -178,11 +195,11 @@ export default function CommunityChatPage() {
         roles={roles}
         community={community}
         me={me}
-        canManage={canManage}
+        actor={actor}
         onRoleChange={changeRole}
         onKick={kick}
       />
-      <ServerSettingsModal open={showSettings} community={community} members={members} roles={roles} usersByEmail={usersByEmail} me={me} onClose={() => setShowSettings(false)} onKick={kick} onRoleChange={changeRole} />
+      <ServerSettingsModal open={showSettings} community={community} members={members} roles={roles} usersByEmail={usersByEmail} me={me} actor={actor} onClose={() => setShowSettings(false)} onKick={kick} onRoleChange={changeRole} />
       <ChannelSettingsModal channel={channelSettings} roles={roles} onClose={() => setChannelSettings(null)} onDeleted={(ch) => { if (ch.id === activeChannel?.id) setParams({ id: communityId }, { replace: true }); }} />
       <AddChannelModal open={!!addChannel} defaultType={addChannel || "text"} communityId={communityId} channelCount={channels.length} onClose={() => setAddChannel(null)} onCreated={(ch) => selectChannel(ch)} />
     </div>

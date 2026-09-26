@@ -82,6 +82,32 @@ npm run ios:sync     # rebuild the site and copy it into the iOS project
 
 Then press Run in Xcode again.
 
+### No Mac? Get an .ipa from GitHub
+
+The repo includes a workflow (`.github/workflows/ios-ipa.yml`) that builds the
+app on one of GitHub's Macs and hands you an `.ipa` file:
+
+1. On GitHub, open the repository → **Actions** → **Build iOS app (.ipa)**.
+   It runs automatically when the iOS project changes; you can also press
+   **Run workflow** (that button appears once the workflow is on the default
+   branch).
+2. Open the finished run and download **MimiLocks-ipa** from **Artifacts**
+   (unzip it to get `MimiLocks-unsigned.ipa`).
+3. iPhones and iPads only install apps signed for them, so sign-and-install it
+   from your computer with **[Sideloadly](https://sideloadly.io)** (Windows or
+   Mac) or **[AltStore](https://altstore.io)**:
+   - Connect the iPad with a cable, open Sideloadly, drop in the `.ipa`, enter
+     your Apple ID and press **Start**.
+   - On the iPad: **Settings → General → VPN & Device Management** → trust
+     your Apple ID. On iPadOS 16+ also turn on **Settings → Privacy &
+     Security → Developer Mode** (the iPad restarts).
+   - With a free Apple ID the app works for **7 days**, then re-install it with
+     Sideloadly (AltStore can refresh it automatically). A paid Apple
+     Developer account makes it last a year — or use TestFlight below.
+
+Private repositories use GitHub Actions minutes for this (Mac minutes count
+10×); public repositories build for free.
+
 ### Publishing to TestFlight / the App Store
 
 1. Join the Apple Developer Program and create the app in
