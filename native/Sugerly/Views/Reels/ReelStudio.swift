@@ -72,36 +72,126 @@ enum ReelFilter: String, CaseIterable, Identifiable {
     }
 }
 
-// Text on the video: where it sits (0…1 of the frame), size, colour, font.
+// Colour tweaks on top of the filter (0 = unchanged).
+struct ReelAdjust: Equatable {
+    var brightness: Double = 0   // -1…1
+    var contrast: Double = 0     // -1…1
+    var saturation: Double = 0   // -1…1
+    var warmth: Double = 0       // -1…1
+    var vignette: Double = 0     // 0…1
+
+    var isNeutral: Bool { self == ReelAdjust() }
+
+    func apply(_ input: CIImage) -> CIImage {
+        guard !isNeutral else { return input }
+        var img = input
+        if brightness != 0 || contrast != 0 || saturation != 0 {
+            let f = CIFilter.colorControls()
+            f.inputImage = img
+            f.brightness = Float(brightness * 0.25)
+            f.contrast = Float(1 + contrast * 0.35)
+            f.saturation = Float(1 + saturation)
+            img = f.outputImage ?? img
+        }
+        if warmth != 0 {
+            let f = CIFilter.temperatureAndTint()
+            f.inputImage = img
+            f.neutral = CIVector(x: 6500, y: 0)
+            f.targetNeutral = CIVector(x: CGFloat(6500 - warmth * 2200), y: 0)
+            img = f.outputImage ?? img
+        }
+        if vignette > 0 {
+            let f = CIFilter.vignette()
+            f.inputImage = img
+            f.intensity = Float(vignette * 1.6)
+            f.radius = 1.6
+            img = f.outputImage ?? img
+        }
+        return img
+    }
+}
+
+// The whole look: filter then adjustments.
+struct ReelLook: Equatable {
+    var filter: ReelFilter = .none
+    var adjust = ReelAdjust()
+    var isNeutral: Bool { filter == .none && adjust.isNeutral }
+    func apply(_ input: CIImage) -> CIImage {
+        let extent = input.extent
+        return adjust.apply(filter.apply(input.clampedToExtent())).cropped(to: extent)
+    }
+}
+
+enum StickerFont: String, CaseIterable {
+    case bubbly = "Bubbly", cute = "Cute", bold = "Bold", classic = "Classic"
+    var uiName: String {
+        switch self {
+        case .bubbly: return "Bubbly-Regular"
+        case .cute: return "CuteHereRegular"
+        case .bold: return "PlusJakartaSans-ExtraBold"
+        case .classic: return "PlusJakartaSans-SemiBold"
+        }
+    }
+}
+
+enum StickerStyle: String, CaseIterable {
+    case plain = "Plain", label = "Label", outline = "Outline", glow = "Glow"
+}
+
+// Text (or an emoji) on the video: where it sits (0…1 of the frame), size,
+// turn, colour, font and style.
 struct TextSticker: Identifiable, Equatable {
     var id = UUID()
     var text: String
     var color: UInt32 = 0xFFFFFF
-    var bubbly = true
-    var background = true
+    var font: StickerFont = .bubbly
+    var style: StickerStyle = .label
+    var align: NSTextAlignment = .center
     var x: CGFloat = 0.5
     var y: CGFloat = 0.4
     var scale: CGFloat = 1
+    var rotation: Double = 0 // radians
+    var isEmoji = false
 
     func uiFont(size: CGFloat) -> UIFont {
-        UIFont(name: bubbly ? "Bubbly-Regular" : "PlusJakartaSans-ExtraBold", size: size) ?? .boldSystemFont(ofSize: size)
+        if isEmoji { return .systemFont(ofSize: size) }
+        return UIFont(name: font.uiName, size: size) ?? .boldSystemFont(ofSize: size)
+    }
+
+    var baseSize: CGFloat { isEmoji ? 0.16 : 0.075 }
+
+    // Text colour and label colour for the chosen style.
+    var inkColor: UInt32 {
+        if style == .label { return color == 0xFFFFFF || color == 0xFFD166 || color == 0xFFB3D1 ? 0x2A1620 : 0xFFFFFF }
+        return color
     }
 
     // The sticker drawn as a picture (for baking into the video).
     func render(width: CGFloat) -> UIImage {
-        let size = width * 0.075 * scale
+        let size = width * baseSize * scale
         let font = uiFont(size: size)
-        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: background ? UIColor(hex: 0x2A1620) : UIColor(hex: color)]
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = align
+        var attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor(hex: isEmoji ? 0xFFFFFF : inkColor), .paragraphStyle: paragraph]
+        if style == .outline && !isEmoji {
+            attrs[.strokeColor] = UIColor(hex: color == 0x2A1620 ? 0xFFFFFF : 0x2A1620)
+            attrs[.strokeWidth] = -6.0
+        }
         let text = NSAttributedString(string: self.text, attributes: attrs)
         let textSize = text.boundingRect(with: CGSize(width: width * 0.9, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin], context: nil).size
-        let pad = size * 0.45
+        let pad = isEmoji ? size * 0.1 : size * 0.45
         let box = CGSize(width: ceil(textSize.width + pad * 2), height: ceil(textSize.height + pad * 1.2))
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
-        return UIGraphicsImageRenderer(size: box, format: format).image { _ in
-            if background {
+        return UIGraphicsImageRenderer(size: box, format: format).image { ctx in
+            if style == .label && !isEmoji {
                 UIColor(hex: color).setFill()
                 UIBezierPath(roundedRect: CGRect(origin: .zero, size: box), cornerRadius: size * 0.5).fill()
+            }
+            if style == .glow && !isEmoji {
+                ctx.cgContext.setShadow(offset: .zero, blur: size * 0.5, color: UIColor(hex: color).cgColor)
+            } else if style == .plain && !isEmoji {
+                ctx.cgContext.setShadow(offset: CGSize(width: 0, height: size * 0.04), blur: size * 0.18, color: UIColor.black.withAlphaComponent(0.45).cgColor)
             }
             text.draw(with: CGRect(x: pad, y: pad * 0.6, width: textSize.width + 1, height: textSize.height + 1), options: [.usesLineFragmentOrigin], context: nil)
         }
@@ -158,7 +248,7 @@ struct PickedMovie: Transferable {
 
 // Holds what the export needs while the video is rendered frame by frame.
 final class RenderBox: @unchecked Sendable {
-    var filter: ReelFilter = .none
+    var look = ReelLook()
     var scale: CGFloat = 1
     var overlays: [CIImage] = []
 }
@@ -184,8 +274,31 @@ struct ReelStudioView: View {
     @State private var trimStart: Double = 0
     @State private var trimEnd: Double = 0
     @State private var thumbs: [UIImage] = []
-    @State private var filter: ReelFilter = .none
+    @State private var look = ReelLook()
     @State private var stickers: [TextSticker] = []
+    @State private var tool: EditTool = .filters
+    @State private var history: [Snapshot] = []
+    @State private var draggingSticker = false
+    @State private var overTrash = false
+    @State private var previewPhotos: [UIImage] = []
+    @State private var soundVolume: Double = 1
+    @State private var originalVolume: Double = 1
+
+    enum EditTool: String, CaseIterable {
+        case trim = "Trim", filters = "Filters", adjust = "Adjust", text = "Text", stickers = "Stickers", sound = "Sound"
+        var icon: String {
+            switch self {
+            case .trim: return "scissors"
+            case .filters: return "camera.filters"
+            case .adjust: return "slider.horizontal.3"
+            case .text: return "textformat"
+            case .stickers: return "face.smiling"
+            case .sound: return "music.note"
+            }
+        }
+    }
+
+    struct Snapshot { var look: ReelLook; var stickers: [TextSticker] }
     @State private var editingText: TextSticker?
     @State private var sound: Track?
     @State private var soundPlayer: AVPlayer?
@@ -220,7 +333,7 @@ struct ReelStudioView: View {
             TextStickerEditor(sticker: sticker) { updated in
                 if let i = stickers.firstIndex(where: { $0.id == updated.id }) { stickers[i] = updated } else { stickers.append(updated) }
             } onDelete: { id in stickers.removeAll { $0.id == id } }
-            .presentationDetents([.height(360)])
+            .presentationDetents([.height(470), .large])
             .presentationCornerRadius(30)
         }
         .sheet(isPresented: $choosingSound) {
@@ -232,7 +345,7 @@ struct ReelStudioView: View {
             .presentationCornerRadius(30)
         }
         .onChange(of: items) { _, list in Task { await loadPicked(list) } }
-        .onChange(of: filter) { _, _ in applyPreviewFilter() }
+        .onChange(of: look) { _, _ in applyPreviewFilter() }
         .onDisappear { teardown() }
     }
 
@@ -277,84 +390,247 @@ struct ReelStudioView: View {
     // MARK: step 2 — edit
 
     private var editScreen: some View {
-        VStack(spacing: 12) {
-            topBar(title: "Edit", back: { resetToPick() }, next: { goToPost() })
+        VStack(spacing: 10) {
+            editTopBar
             GeometryReader { geo in
                 ZStack {
                     if asset != nil {
                         VideoPlayerLayer(player: player).clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                     } else if !photos.isEmpty {
+                        let shown = previewPhotos.count == photos.count ? previewPhotos : photos
                         TabView(selection: $slide) {
-                            ForEach(photos.indices, id: \.self) { i in
-                                Image(uiImage: photos[i]).resizable().scaledToFill().frame(width: geo.size.width, height: geo.size.height).clipped().tag(i)
+                            ForEach(shown.indices, id: \.self) { i in
+                                Image(uiImage: shown[i]).resizable().scaledToFill().frame(width: geo.size.width, height: geo.size.height).clipped().tag(i)
                             }
                         }
                         .tabViewStyle(.page(indexDisplayMode: .always))
                         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                     }
                     ForEach($stickers) { $sticker in
-                        StickerView(sticker: $sticker, frame: geo.size) { editingText = sticker }
+                        StickerView(sticker: $sticker, frame: geo.size, onEdit: { checkpoint(); editingText = sticker }, onDragging: { active, trash in
+                            draggingSticker = active
+                            overTrash = trash
+                        }, onDrop: { trash in
+                            checkpoint()
+                            if trash { withAnimation(.snappy) { stickers.removeAll { $0.id == sticker.id } } }
+                        })
+                    }
+                    if draggingSticker {
+                        VStack {
+                            Spacer()
+                            Image(systemName: "trash.fill")
+                                .font(.system(size: overTrash ? 24 : 18, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(width: overTrash ? 64 : 50, height: overTrash ? 64 : 50)
+                                .background(overTrash ? Palette.danger : Color.black.opacity(0.5), in: Circle())
+                                .overlay(Circle().strokeBorder(.white.opacity(0.7), lineWidth: 2))
+                                .animation(.spring(response: 0.25, dampingFraction: 0.6), value: overTrash)
+                                .padding(.bottom, 16)
+                        }
+                        .allowsHitTesting(false)
+                        .transition(.scale.combined(with: .opacity))
                     }
                 }
+                .sensoryFeedback(.impact(weight: .medium), trigger: overTrash)
             }
             .aspectRatio(9 / 16, contentMode: .fit)
             .frame(maxHeight: .infinity)
             .padding(.horizontal, 16)
 
+            toolPanel
+                .frame(height: 118)
+                .animation(.snappy, value: tool)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(EditTool.allCases.filter { $0 != .trim || asset != nil }, id: \.self) { t in
+                        Button {
+                            withAnimation(.snappy) { tool = t }
+                            if t == .text { checkpoint(); editingText = TextSticker(text: "") }
+                            if t == .sound && sound == nil { choosingSound = true }
+                        } label: {
+                            VStack(spacing: 4) {
+                                Image(systemName: t.icon).font(.system(size: 18, weight: .bold))
+                                Text(t.rawValue).font(.jakarta(11, .bold))
+                            }
+                            .foregroundStyle(tool == t ? .white : .white.opacity(0.65))
+                            .frame(width: 66, height: 56)
+                            .background {
+                                if tool == t {
+                                    RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.gradient)
+                                        .shadow(color: Theme.pink.opacity(0.45), radius: 8, y: 3)
+                                } else {
+                                    RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.white.opacity(0.1))
+                                }
+                            }
+                        }
+                        .buttonStyle(BouncyStyle(scale: 0.9))
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+            .sensoryFeedback(.selection, trigger: tool)
+        }
+        .padding(.bottom, 10)
+        .onAppear { if asset == nil && tool == .trim { tool = .filters } }
+    }
+
+    private var editTopBar: some View {
+        HStack(spacing: 10) {
+            Button { resetToPick() } label: {
+                Image(systemName: "chevron.left").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                    .frame(width: 42, height: 42).background(.white.opacity(0.14), in: Circle())
+            }
+            .buttonStyle(BouncyStyle())
+            Button { undo() } label: {
+                Image(systemName: "arrow.uturn.backward").font(.system(size: 15, weight: .bold)).foregroundStyle(.white.opacity(history.isEmpty ? 0.35 : 1))
+                    .frame(width: 42, height: 42).background(.white.opacity(0.14), in: Circle())
+            }
+            .buttonStyle(BouncyStyle())
+            .disabled(history.isEmpty)
+            Spacer()
+            Text("Edit").font(.display(24)).foregroundStyle(.white)
+            Spacer()
+            Color.clear.frame(width: 42, height: 42)
+            Button("Next") { goToPost() }.buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+    }
+
+    @ViewBuilder
+    private var toolPanel: some View {
+        switch tool {
+        case .trim:
             if asset != nil {
                 TrimBar(thumbs: thumbs, duration: duration, start: $trimStart, end: $trimEnd) { player.seek(to: CMTime(seconds: trimStart, preferredTimescale: 600)) }
                     .padding(.horizontal, 16)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(ReelFilter.allCases) { f in
-                            Button { filter = f } label: {
-                                VStack(spacing: 5) {
-                                    Circle().fill(LinearGradient(colors: f.swatch, startPoint: .topLeading, endPoint: .bottomTrailing))
-                                        .frame(width: 48, height: 48)
-                                        .overlay(Circle().strokeBorder(.white, lineWidth: filter == f ? 3 : 0))
-                                        .shadow(color: filter == f ? Theme.pink.opacity(0.7) : .clear, radius: 8)
-                                    Text(f.rawValue).font(.jakarta(11, .bold)).foregroundStyle(.white.opacity(filter == f ? 1 : 0.7))
-                                }
-                            }
-                            .buttonStyle(BouncyStyle(scale: 0.88))
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                }
-                .sensoryFeedback(.selection, trigger: filter)
             }
-
-            HStack(spacing: 10) {
-                tool("textformat", "Text") { editingText = TextSticker(text: "") }
-                tool("music.note", sound == nil ? "Sound" : "Change") { choosingSound = true }
-                if asset != nil {
-                    tool(muteOriginal ? "speaker.slash.fill" : "speaker.wave.2.fill", muteOriginal ? "Muted" : "Audio") {
-                        muteOriginal.toggle()
-                        player.isMuted = muteOriginal
+        case .filters:
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(ReelFilter.allCases) { f in
+                        Button { checkpoint(); look.filter = f } label: {
+                            VStack(spacing: 6) {
+                                filterThumb(f)
+                                    .frame(width: 58, height: 76)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.white, lineWidth: look.filter == f ? 3 : 0))
+                                    .shadow(color: look.filter == f ? Theme.pink.opacity(0.7) : .clear, radius: 8)
+                                Text(f.rawValue).font(.jakarta(11, .bold)).foregroundStyle(.white.opacity(look.filter == f ? 1 : 0.7))
+                            }
+                        }
+                        .buttonStyle(BouncyStyle(scale: 0.88))
                     }
+                }
+                .padding(.horizontal, 16)
+            }
+            .sensoryFeedback(.selection, trigger: look.filter)
+        case .adjust:
+            ScrollView {
+                VStack(spacing: 6) {
+                    adjustRow("Brightness", "sun.max.fill", $look.adjust.brightness, -1...1)
+                    adjustRow("Contrast", "circle.lefthalf.filled", $look.adjust.contrast, -1...1)
+                    adjustRow("Saturation", "drop.fill", $look.adjust.saturation, -1...1)
+                    adjustRow("Warmth", "thermometer.sun.fill", $look.adjust.warmth, -1...1)
+                    adjustRow("Vignette", "camera.aperture", $look.adjust.vignette, 0...1)
+                    Button("Reset adjustments") { checkpoint(); look.adjust = ReelAdjust() }
+                        .font(.jakarta(12, .bold)).foregroundStyle(Theme.pink)
+                }
+                .padding(.horizontal, 16)
+            }
+        case .text:
+            VStack(spacing: 10) {
+                Text(stickers.contains { !$0.isEmoji } ? "Drag to move · pinch to resize · twist to turn · tap to edit · drop on the bin to delete" : "Add some words to your reel")
+                    .font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.7)).multilineTextAlignment(.center)
+                Button { checkpoint(); editingText = TextSticker(text: "") } label: { Label("Add text", systemImage: "plus") }
+                    .buttonStyle(GradientButtonStyle(height: 44, fullWidth: false))
+            }
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity)
+        case .stickers:
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHGrid(rows: [GridItem(.fixed(50)), GridItem(.fixed(50))], spacing: 8) {
+                    ForEach(Self.emojis, id: \.self) { e in
+                        Button {
+                            checkpoint()
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                stickers.append(TextSticker(text: e, x: CGFloat.random(in: 0.3...0.7), y: CGFloat.random(in: 0.3...0.6), isEmoji: true))
+                            }
+                        } label: {
+                            Text(e).font(.system(size: 30)).frame(width: 50, height: 50)
+                                .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        }
+                        .buttonStyle(BouncyStyle(scale: 0.8))
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        case .sound:
+            VStack(spacing: 8) {
+                HStack {
+                    if let sound {
+                        Label("\(sound.title) · \(sound.artist)", systemImage: "music.note")
+                            .font(.jakarta(12, .semibold)).foregroundStyle(.white).lineLimit(1)
+                    } else {
+                        Text("No sound yet").font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.6))
+                    }
+                    Spacer()
+                    Button(sound == nil ? "Add sound" : "Change") { choosingSound = true }
+                        .font(.jakarta(12, .heavy)).foregroundStyle(Theme.pink)
+                    if sound != nil {
+                        Button { sound = nil; soundPlayer?.pause(); soundPlayer = nil } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.white.opacity(0.6)) }
+                    }
+                }
+                if sound != nil {
+                    adjustRow("Song", "music.note", $soundVolume, 0...1)
+                }
+                if asset != nil {
+                    adjustRow("Original", "waveform", $originalVolume, 0...1)
                 }
             }
             .padding(.horizontal, 16)
-            if let sound {
-                Label("\(sound.title) · \(sound.artist)", systemImage: "music.note")
-                    .font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.85)).lineLimit(1)
-                    .padding(.horizontal, 14).padding(.vertical, 6).background(.white.opacity(0.12), in: Capsule())
+            .onChange(of: soundVolume) { _, v in soundPlayer?.volume = Float(v) }
+            .onChange(of: originalVolume) { _, v in
+                player.volume = Float(v)
+                muteOriginal = v < 0.02
             }
         }
-        .padding(.bottom, 12)
     }
 
-    private func tool(_ icon: String, _ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: icon).font(.system(size: 18, weight: .bold))
-                Text(title).font(.jakarta(11, .bold))
+    static let emojis = ["💖", "✨", "🌸", "🎀", "🍓", "🦋", "🌈", "⭐️", "🔥", "😍", "🥹", "😂", "🫶", "👑", "🎨", "🎧", "🌙", "☁️", "🍰", "🐱", "🐰", "💫", "🌷", "💅"]
+
+    private func filterThumb(_ f: ReelFilter) -> some View {
+        Group {
+            if let base = thumbs.first ?? photos.first {
+                Image(uiImage: FilterThumbs.make(base, f)).resizable().scaledToFill()
+            } else {
+                LinearGradient(colors: f.swatch, startPoint: .topLeading, endPoint: .bottomTrailing)
             }
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity).frame(height: 58)
-            .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
-        .buttonStyle(BouncyStyle())
+    }
+
+    private func adjustRow(_ title: String, _ icon: String, _ value: Binding<Double>, _ range: ClosedRange<Double>) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon).font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.pink).frame(width: 20)
+            Text(title).font(.jakarta(12, .bold)).foregroundStyle(.white).frame(width: 78, alignment: .leading)
+            Slider(value: value, in: range, onEditingChanged: { editing in if editing { checkpoint() } })
+                .tint(Theme.pink)
+            Text("\(Int((value.wrappedValue * 100).rounded()))").font(.jakarta(11, .bold)).foregroundStyle(.white.opacity(0.7)).frame(width: 34, alignment: .trailing)
+        }
+    }
+
+    private func checkpoint() {
+        history.append(Snapshot(look: look, stickers: stickers))
+        if history.count > 40 { history.removeFirst() }
+    }
+
+    private func undo() {
+        guard let last = history.popLast() else { return }
+        withAnimation(.snappy) {
+            look = last.look
+            stickers = last.stickers
+        }
     }
 
     // MARK: step 3 — post
@@ -457,7 +733,9 @@ struct ReelStudioView: View {
         }
         guard !images.isEmpty else { return }
         photos = images
+        previewPhotos = []
         asset = nil
+        tool = .filters
         withAnimation { step = .edit }
     }
 
@@ -471,6 +749,7 @@ struct ReelStudioView: View {
         trimStart = 0
         trimEnd = min(seconds, 60)
         photos = []
+        tool = .trim
         let item = AVPlayerItem(asset: a)
         player.replaceCurrentItem(with: item)
         applyPreviewFilter()
@@ -493,11 +772,19 @@ struct ReelStudioView: View {
     }
 
     private func applyPreviewFilter() {
+        let chosen = look
+        if asset == nil {
+            // Slideshow: redraw the pictures with the look.
+            let originals = photos
+            Task {
+                let out = await FilterThumbs.applyAll(chosen, to: originals)
+                if chosen == look { previewPhotos = out }
+            }
+            return
+        }
         guard let asset, let item = player.currentItem else { return }
-        let chosen = filter
-        item.videoComposition = chosen == .none ? nil : AVMutableVideoComposition(asset: asset) { request in
-            let output = chosen.apply(request.sourceImage.clampedToExtent()).cropped(to: request.sourceImage.extent)
-            request.finish(with: output, context: nil)
+        item.videoComposition = chosen.isNeutral ? nil : AVMutableVideoComposition(asset: asset) { request in
+            request.finish(with: chosen.apply(request.sourceImage), context: nil)
         }
     }
 
@@ -517,6 +804,7 @@ struct ReelStudioView: View {
         soundPlayer?.pause()
         guard let sound, let url = URL(string: sound.audioURL) else { return }
         let p = AVPlayer(url: url)
+        p.volume = Float(soundVolume)
         p.play()
         soundPlayer = p
         player.seek(to: CMTime(seconds: trimStart, preferredTimescale: 600))
@@ -613,9 +901,9 @@ struct ReelStudioView: View {
 
     // Filter + text stickers drawn onto a picture.
     private func bake(_ image: UIImage) -> UIImage {
-        guard filter != .none || !stickers.isEmpty, let cg = image.cgImage else { return image }
+        guard !look.isNeutral || !stickers.isEmpty, let cg = image.cgImage else { return image }
         var ci = CIImage(cgImage: cg)
-        ci = filter.apply(ci.clampedToExtent()).cropped(to: ci.extent)
+        ci = look.apply(ci)
         for overlay in overlayImages(width: ci.extent.width, height: ci.extent.height) { ci = overlay.composited(over: ci) }
         let context = CIContext()
         guard let out = context.createCGImage(ci, from: ci.extent) else { return image }
@@ -626,20 +914,23 @@ struct ReelStudioView: View {
         stickers.filter { !$0.text.isEmpty }.compactMap { sticker in
             guard let cg = sticker.render(width: width).cgImage else { return nil }
             let img = CIImage(cgImage: cg)
-            let x = sticker.x * width - img.extent.width / 2
-            let y = (1 - sticker.y) * height - img.extent.height / 2
-            return img.transformed(by: CGAffineTransform(translationX: x, y: y))
+            let w = img.extent.width, h = img.extent.height
+            // Centre on the origin, turn (Core Image's y axis points up, so
+            // the angle flips), then move into place.
+            let centred = CGAffineTransform(translationX: -w / 2, y: -h / 2)
+            let turned = centred.concatenating(CGAffineTransform(rotationAngle: -CGFloat(sticker.rotation)))
+            let placed = turned.concatenating(CGAffineTransform(translationX: sticker.x * width, y: (1 - sticker.y) * height))
+            return img.transformed(by: placed)
         }
     }
 
     private func exportVideo(_ asset: AVURLAsset) async throws -> URL {
         let box = RenderBox()
-        box.filter = filter
+        box.look = look
         let composition = AVMutableVideoComposition(asset: asset) { request in
             var img = request.sourceImage
             if box.scale < 1 { img = img.transformed(by: CGAffineTransform(scaleX: box.scale, y: box.scale)) }
-            let extent = img.extent
-            img = box.filter.apply(img.clampedToExtent()).cropped(to: extent)
+            img = box.look.apply(img)
             for overlay in box.overlays { img = overlay.composited(over: img) }
             request.finish(with: img, context: nil)
         }
@@ -659,12 +950,13 @@ struct ReelStudioView: View {
         session.outputFileType = .mp4
         session.shouldOptimizeForNetworkUse = true
         session.timeRange = CMTimeRange(start: CMTime(seconds: trimStart, preferredTimescale: 600), end: CMTime(seconds: trimEnd, preferredTimescale: 600))
-        if muteOriginal {
+        if muteOriginal || originalVolume < 0.99 {
             let mix = AVMutableAudioMix()
             let tracks = (try? await asset.loadTracks(withMediaType: .audio)) ?? []
+            let volume = Float(muteOriginal ? 0 : originalVolume)
             mix.inputParameters = tracks.map { track in
                 let p = AVMutableAudioMixInputParameters(track: track)
-                p.setVolume(0, at: .zero)
+                p.setVolume(volume, at: .zero)
                 return p
             }
             session.audioMix = mix
@@ -690,89 +982,6 @@ struct VideoPlayerLayer: UIViewRepresentable {
         return view
     }
     func updateUIView(_ view: PlayerUIView, context: Context) { view.playerLayer.player = player }
-}
-
-// A draggable, pinchable text sticker on the preview.
-struct StickerView: View {
-    @Binding var sticker: TextSticker
-    let frame: CGSize
-    var onEdit: () -> Void
-    @State private var drag: CGSize = .zero
-    @State private var pinch: CGFloat = 1
-
-    var body: some View {
-        if !sticker.text.isEmpty {
-            Text(sticker.text)
-                .font(sticker.bubbly ? .display(frame.width * 0.075 * sticker.scale * pinch) : .jakarta(frame.width * 0.07 * sticker.scale * pinch, .heavy))
-                .foregroundStyle(sticker.background ? Color(hex: 0x2A1620) : Color(hex: sticker.color))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, frame.width * 0.03)
-                .padding(.vertical, frame.width * 0.015)
-                .background {
-                    if sticker.background {
-                        RoundedRectangle(cornerRadius: frame.width * 0.035, style: .continuous).fill(Color(hex: sticker.color))
-                    }
-                }
-                .shadow(color: .black.opacity(sticker.background ? 0.15 : 0.5), radius: 4)
-                .position(x: sticker.x * frame.width + drag.width, y: sticker.y * frame.height + drag.height)
-                .gesture(
-                    DragGesture()
-                        .onChanged { drag = $0.translation }
-                        .onEnded { v in
-                            sticker.x = min(0.95, max(0.05, sticker.x + v.translation.width / frame.width))
-                            sticker.y = min(0.95, max(0.05, sticker.y + v.translation.height / frame.height))
-                            drag = .zero
-                        }
-                        .simultaneously(with: MagnifyGesture()
-                            .onChanged { pinch = $0.magnification }
-                            .onEnded { v in sticker.scale = min(3, max(0.5, sticker.scale * v.magnification)); pinch = 1 })
-                )
-                .onTapGesture(perform: onEdit)
-        }
-    }
-}
-
-struct TextStickerEditor: View {
-    @State var sticker: TextSticker
-    var onSave: (TextSticker) -> Void
-    var onDelete: (UUID) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @FocusState private var focused: Bool
-    private let colors: [UInt32] = [0xFFFFFF, 0xFFB3D1, 0xD9577F, 0xB19CFF, 0x7CBEFF, 0x5FD3B0, 0xFFD166, 0x2A1620]
-
-    var body: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Button("Delete") { onDelete(sticker.id); dismiss() }.foregroundStyle(Palette.danger).font(.jakarta(15, .bold))
-                Spacer()
-                Button("Done") { onSave(sticker); dismiss() }.buttonStyle(GradientButtonStyle(height: 38, fullWidth: false))
-            }
-            TextField("Type something cute…", text: $sticker.text, axis: .vertical)
-                .font(sticker.bubbly ? .display(28) : .jakarta(24, .heavy))
-                .multilineTextAlignment(.center)
-                .focused($focused)
-                .padding(14)
-                .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            HStack(spacing: 10) {
-                Chip(title: "Bubbly", active: sticker.bubbly) { sticker.bubbly = true }
-                Chip(title: "Bold", active: !sticker.bubbly) { sticker.bubbly = false }
-                Chip(title: "Label", icon: "rectangle.fill", active: sticker.background) { sticker.background.toggle() }
-            }
-            HStack(spacing: 10) {
-                ForEach(colors, id: \.self) { c in
-                    Button { sticker.color = c } label: {
-                        Circle().fill(Color(hex: c)).frame(width: 32, height: 32)
-                            .overlay(Circle().strokeBorder(sticker.color == c ? Theme.pink : Palette.border, lineWidth: sticker.color == c ? 3 : 1))
-                    }
-                    .buttonStyle(BouncyStyle())
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(20)
-        .sugarBackground()
-        .onAppear { focused = true }
-    }
 }
 
 // Trim: drag the two handles over the film strip.
