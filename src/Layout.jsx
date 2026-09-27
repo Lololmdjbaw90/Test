@@ -10,7 +10,10 @@ import VoiceDock from "@/components/voice/VoiceDock";
 import { InstallBanner } from "@/components/layout/InstallApp";
 import ReportHost from "@/components/safety/ReportDialog";
 import CallManager from "@/components/voice/CallManager";
-import { ADMIN_SECTION, MOBILE_NAV, NAV_SECTIONS, isActivePath } from "@/components/layout/nav";
+import { ADMIN_SECTION, EXPLORE_NAV, MOBILE_NAV, MORE_NAV, NAV_SECTIONS, isActivePath } from "@/components/layout/nav";
+import AppIcon from "@/components/layout/AppIcon";
+import { getLevelInfo } from "@/components/profile/LevelBadge";
+import { useNativeTabBar } from "@/lib/nativeTabBar";
 import Popover from "@/components/common/Popover";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import NotificationBell from "@/components/notifications/NotificationBell";
@@ -88,7 +91,7 @@ function TopBar({ onSearch, user, badges, isDark, onToggleTheme }) {
   // back arrow once you've moved away from Home.
   const showBack = location.pathname !== "/" && canGoBack();
   return (
-    <header className="flex-shrink-0 h-16 flex items-center gap-3 px-4 sm:px-6 relative z-20 glass" style={{ borderBottom: "1px solid var(--border-c)" }}>
+    <header className="flex-shrink-0 h-16 flex items-center gap-3 px-4 sm:px-6 relative z-20 glass-bar" style={{ borderBottom: "1px solid var(--border-c)" }}>
       <div className="desk:hidden flex items-center gap-1">
         {showBack ? (
           <button onClick={() => navigate(-1)} className="icon-btn -ml-2" aria-label="Go back"><ArrowLeft className="w-5 h-5" /></button>
@@ -116,57 +119,92 @@ function TopBar({ onSearch, user, badges, isDark, onToggleTheme }) {
   );
 }
 
+// The menu behind your avatar on phones and tablets. The main places are in
+// the tab bar, so this leads with big tiles for exploring, then a short list.
 function MoreSheet({ open, onClose, anchorRef, badges, isDark, onToggleTheme, placement = "top-end" }) {
   const { user, isAdmin, logout } = useAuth();
   const location = useLocation();
-  const sections = isAdmin ? [...NAV_SECTIONS, ADMIN_SECTION] : NAV_SECTIONS;
+  const level = getLevelInfo(user?.xp || 0);
+  const rows = [...MORE_NAV, { label: "Settings", path: "/Settings", icon: Settings }, ...(isAdmin ? ADMIN_SECTION.items : [])];
   return (
-    <Popover open={open} onClose={onClose} anchorRef={anchorRef} placement={placement} width={340} label="Menu">
+    <Popover open={open} onClose={onClose} anchorRef={anchorRef} placement={placement} width={352} label="Menu">
       <div className="px-4 pb-4 pt-1 space-y-4">
         {user && (
-          <Link to={profileLink(user.email)} onClick={onClose} className="card-sm p-3 flex items-center gap-3">
-            <Avatar src={user.profile_picture} name={displayName(user)} size={44} nitro={user.nitro_active} online />
+          <Link to={profileLink(user.email)} onClick={onClose} className="rounded-3xl p-3 flex items-center gap-3 active:scale-[0.98] transition-transform" style={{ background: "var(--pink-soft)" }}>
+            <Avatar src={user.profile_picture} name={displayName(user)} size={48} nitro={user.nitro_active} online />
             <span className="flex-1 min-w-0">
-              <span className="block font-bold truncate" style={{ color: "var(--text-primary)" }}>{displayName(user)}</span>
-              <span className="block text-xs" style={{ color: "var(--text-muted)" }}>View your profile</span>
+              <span className="block font-bold text-[15px] truncate" style={{ color: "var(--text-primary)" }}>{displayName(user)}</span>
+              <span className="block text-xs font-semibold" style={{ color: level.current.color }}>Lv.{level.current.level} · {level.current.title}</span>
             </span>
+            <span className="text-xs font-bold" style={{ color: "rgb(var(--accent-rgb))" }}>Profile</span>
           </Link>
         )}
-        {sections.map((section) => (
-          <div key={section.label}>
-            <p className="eyebrow mb-2 px-1">{section.label}</p>
-            <div className="grid grid-cols-4 gap-2">
-              {section.items.map((item) => {
-                const active = isActivePath(location.pathname, item.path);
-                const badge = item.badge ? badges[item.badge] : 0;
-                return (
-                  <Link key={item.path} to={item.path} onClick={onClose} className="relative flex flex-col items-center gap-1.5 py-2.5 rounded-2xl transition-colors" style={{ background: active ? "var(--pink-soft)" : "var(--surface-2)", color: active ? "var(--accent-rose)" : "var(--text-secondary)" }}>
-                    <item.icon className="w-5 h-5" />
-                    <span className="text-[10px] font-bold text-center leading-tight px-1">{item.label}</span>
-                    {badge > 0 && <span className="absolute top-1.5 right-2 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold text-white flex items-center justify-center" style={{ background: "var(--accent-rose)" }}>{badge > 9 ? "9+" : badge}</span>}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-        <div className="grid grid-cols-3 gap-2">
-          <button onClick={onToggleTheme} className="btn-outline !px-2">{isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}{isDark ? "Light" : "Dark"}</button>
-          <Link to="/Settings" onClick={onClose} className="btn-outline !px-2"><Settings className="w-4 h-4" /> Settings</Link>
-          <button onClick={logout} className="btn-outline !px-2" style={{ color: "var(--danger)" }}><LogOut className="w-4 h-4" /> Log out</button>
+        <div className="grid grid-cols-3 gap-y-4 gap-x-2">
+          {EXPLORE_NAV.map((item, i) => {
+            const active = isActivePath(location.pathname, item.path);
+            const badge = item.badge ? badges[item.badge] : 0;
+            return (
+              <Link key={item.path} to={item.path} onClick={onClose} className="rise-in relative flex flex-col items-center gap-1.5 active:scale-95 transition-transform" style={{ "--d": `${i * 30}ms` }} aria-current={active ? "page" : undefined}>
+                <AppIcon icon={item.icon} tint={item.tint} size={54} />
+                <span className="text-[11px] font-bold text-center leading-tight" style={{ color: active ? "var(--accent-rose)" : "var(--text-secondary)" }}>{item.label}</span>
+                {badge > 0 && <span className="absolute -top-1 right-3 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center" style={{ background: "var(--accent-rose)", boxShadow: "0 0 0 2px var(--surface)" }}>{badge > 9 ? "9+" : badge}</span>}
+              </Link>
+            );
+          })}
+        </div>
+        <div className="rounded-2xl overflow-hidden" style={{ background: "var(--surface-2)" }}>
+          {rows.map((item, i) => {
+            const badge = item.badge ? badges[item.badge] : 0;
+            return (
+              <Link key={item.path} to={item.path} onClick={onClose} className="flex items-center gap-3 px-3.5 h-11 text-sm font-semibold active:opacity-60" style={{ color: "var(--text-secondary)", borderTop: i ? "1px solid var(--border-c)" : "none" }}>
+                <item.icon className="w-[18px] h-[18px]" />
+                <span className="flex-1">{item.label}</span>
+                {badge > 0 && <span className="min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center" style={{ background: "var(--accent-rose)" }}>{badge > 9 ? "9+" : badge}</span>}
+              </Link>
+            );
+          })}
+          <button onClick={onToggleTheme} className="w-full flex items-center gap-3 px-3.5 h-11 text-sm font-semibold active:opacity-60" style={{ color: "var(--text-secondary)", borderTop: "1px solid var(--border-c)" }}>
+            {isDark ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}<span className="flex-1 text-left">{isDark ? "Light mode" : "Dark mode"}</span>
+          </button>
+          <button onClick={logout} className="w-full flex items-center gap-3 px-3.5 h-11 text-sm font-semibold active:opacity-60" style={{ color: "var(--danger)", borderTop: "1px solid var(--border-c)" }}>
+            <LogOut className="w-[18px] h-[18px]" /><span className="flex-1 text-left">Log out</span>
+          </button>
         </div>
       </div>
     </Popover>
   );
 }
 
+// SF Symbols for the native iOS tab bar.
+const NATIVE_TABS = [
+  { id: "/", title: "Home", icon: "house.fill" },
+  { id: "/Community", title: "Community", icon: "person.2.fill" },
+  { id: "create", title: "", icon: "plus", accent: true },
+  { id: "/Reels", title: "Reels", icon: "play.rectangle.fill" },
+  { id: "/DirectMessages", title: "Chat", icon: "bubble.left.and.bubble.right.fill" },
+];
+
 function MobileNav({ badges, isAdmin, isDark, onToggleTheme }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [sheet, setSheet] = useState(null); // "create" | "more" | null
   const createRef = useRef(null);
   const moreRef = useRef(null);
   useEffect(() => setSheet(null), [location.pathname, location.search]);
   const moreActive = !MOBILE_NAV.some((i) => i.path && isActivePath(location.pathname, i.path));
+  // In the iPhone / iPad app the tab bar is native (real Liquid Glass on iOS 26).
+  const current = NATIVE_TABS.find((t) => t.id !== "create" && isActivePath(location.pathname, t.id))?.id || "";
+  useNativeTabBar({
+    items: NATIVE_TABS,
+    selected: current,
+    badges: { "/DirectMessages": badges.dms || 0 },
+    dark: location.pathname.toLowerCase() === "/reels",
+    onSelect: (id) => {
+      if (id === "create") { setSheet((v) => (v === "create" ? null : "create")); return; }
+      if (id === current) { document.getElementById("main")?.scrollTo({ top: 0, behavior: "smooth" }); return; }
+      navigate(id);
+    },
+  });
   return (
     <>
       <Popover open={sheet === "create"} onClose={() => setSheet(null)} anchorRef={createRef} placement="top-center" width={300} label="Create">

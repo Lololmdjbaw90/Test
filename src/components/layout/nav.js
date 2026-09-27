@@ -29,6 +29,27 @@ export const NAV_SECTIONS = [
   },
 ];
 
+// The same pages in three tiers, so the important ones stand out:
+// big app-style tiles for the main places, medium for exploring, and a small
+// list for everything else. `tint` is the tile gradient.
+export const PRIMARY_NAV = [
+  { label: "Home", path: "/", icon: Home, tint: ["#ff8fb1", "#ff4d7d"] },
+  { label: "Community", path: "/Community", icon: Users, tint: ["#c4a1ff", "#8b6fd6"] },
+  { label: "Reels", path: "/Reels", icon: Clapperboard, tint: ["#ff9f6b", "#ff5f6d"] },
+  { label: "Messages", path: "/DirectMessages", icon: MessageCircle, badge: "dms", tint: ["#7cc7ff", "#4d8dff"] },
+];
+export const EXPLORE_NAV = [
+  { label: "Gallery", path: "/Gallery", icon: Grid2X2, tint: ["#ffb3c7", "#f06292"] },
+  { label: "Music", path: "/Music", icon: Music, tint: ["#8fe3c5", "#34b889"] },
+  { label: "Top Artists", path: "/TopArtists", icon: Crown, tint: ["#ffe08a", "#f5b43c"] },
+  { label: "Servers", path: "/Communities", icon: Server, tint: ["#a5b4fc", "#6366f1"] },
+  { label: "Friends", path: "/Friends", icon: UserCheck, badge: "friends", tint: ["#9be7ff", "#22a6d6"] },
+  { label: "Commissions", path: "/Commissions", icon: Store, tint: ["#f9a8d4", "#db2777"] },
+];
+export const MORE_NAV = [
+  { label: "What's new", path: "/Updates", icon: Megaphone, badge: "updates" },
+];
+
 export const ADMIN_SECTION = {
   label: "Admin",
   items: [

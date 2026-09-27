@@ -34,10 +34,17 @@ export default function AISetupCard() {
         </div>
         <button onClick={test} disabled={state.status === "testing"} className="btn-outline !min-h-0 !py-2 text-xs">{state.status === "testing" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Test AI</button>
       </div>
-      {showSteps && (
+      {state.status === "error" && state.error?.appCheck && (
+        <div className="text-sm space-y-1.5 rounded-2xl p-3" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+          <p className="font-bold" style={{ color: "var(--text-primary)" }}>App Check is blocking AI</p>
+          <p>Firebase now switches on App Check for AI Logic. The iPhone/iPad app is installed outside the App Store, so it can't prove itself with Apple's App Attest.</p>
+          <p>To use AI anyway: Firebase console → <strong>Security → App Check → APIs</strong> → <strong>Firebase AI Logic</strong> → <strong>Unenforce</strong>. (For a public App Store release, register the app with App Attest instead.)</p>
+        </div>
+      )}
+      {showSteps && !state.error?.appCheck && (
         <ol className="space-y-2 text-sm list-decimal pl-5" style={{ color: "var(--text-secondary)" }}>
           <li>Open the <a href={`https://console.firebase.google.com/project/${projectId}/overview`} target="_blank" rel="noreferrer" className="font-semibold underline inline-flex items-center gap-1">Firebase console <ExternalLink className="w-3 h-3" /></a>.</li>
-          <li>In the menu open <strong>AI Logic</strong> (under Build or AI) and tap <strong>Get started</strong>.</li>
+          <li>In the menu open <strong>AI Services → AI Logic</strong> and tap <strong>Get started</strong>.</li>
           <li>Pick <strong>Gemini Developer API</strong> (free to start, no card needed) and enable it. Skip the “add the SDK” steps — Sugerly already has it.</li>
           <li>Come back and tap <strong>Test AI</strong>.</li>
         </ol>

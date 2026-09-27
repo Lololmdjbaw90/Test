@@ -1,11 +1,12 @@
 import React, { useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronsLeft, ChevronsRight, LogOut, Moon, Plus, Settings, Sun } from "lucide-react";
+import { ChevronDown, ChevronsLeft, ChevronsRight, LogOut, Moon, Plus, Settings, Sun } from "lucide-react";
 import Avatar from "@/components/common/Avatar";
 import CreateMenu from "./CreateMenu";
 import Popover from "@/components/common/Popover";
-import { ADMIN_SECTION, NAV_SECTIONS, isActivePath } from "./nav";
+import { ADMIN_SECTION, EXPLORE_NAV, MORE_NAV, PRIMARY_NAV, isActivePath } from "./nav";
+import AppIcon from "./AppIcon";
 import { useAuth } from "@/lib/AuthContext";
 import { displayName, profileLink } from "@/lib/format";
 import { getLevelInfo } from "@/components/profile/LevelBadge";
@@ -25,24 +26,47 @@ export function Logo({ collapsed, bar }) {
   );
 }
 
-function NavItem({ item, active, collapsed, badge }) {
+function Badge({ value, collapsed }) {
+  if (!(value > 0)) return null;
+  return (
+    <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className={`text-[10px] font-bold text-white rounded-full flex items-center justify-center ${collapsed ? "absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1" : "relative min-w-[20px] h-5 px-1.5"}`} style={{ background: "var(--accent-rose)", boxShadow: "0 0 0 2px var(--surface)" }}>
+      {value > 99 ? "99+" : value}
+    </motion.span>
+  );
+}
+
+// Tier 1: the main places — big app-icon tiles.
+function PrimaryItem({ item, active, collapsed, badge }) {
+  return (
+    <Link to={item.path} title={collapsed ? item.label : undefined} aria-current={active ? "page" : undefined}
+      className={`relative flex items-center gap-3 rounded-[18px] transition-transform active:scale-[0.97] ${collapsed ? "justify-center h-14 w-14 mx-auto" : "px-2 h-14"}`}>
+      {active && <motion.span layoutId="side-lens" className="absolute inset-0 rounded-[18px] glass-lens" transition={{ type: "spring", stiffness: 500, damping: 36 }} />}
+      {!active && <span className="absolute inset-0 rounded-[18px] opacity-0 can-hover:hover:opacity-100 transition-opacity" style={{ background: "var(--surface-2)" }} />}
+      <AppIcon icon={item.icon} tint={item.tint} size={40} className="relative" />
+      {!collapsed && <span className="relative flex-1 truncate text-[15px] font-bold" style={{ color: active ? "var(--text-primary)" : "var(--text-secondary)" }}>{item.label}</span>}
+      <Badge value={badge} collapsed={collapsed} />
+    </Link>
+  );
+}
+
+// Tier 2 / 3: explore and the rest — plain rows, smaller for tier 3.
+function NavItem({ item, active, collapsed, badge, small = false }) {
   const Icon = item.icon;
   return (
     <Link
       to={item.path}
       title={collapsed ? item.label : undefined}
-      className={`relative flex items-center gap-3 rounded-2xl text-sm font-semibold transition-colors ${collapsed ? "justify-center h-11 w-11 mx-auto" : "px-3 h-11"}`}
-      style={{ color: active ? "var(--accent-rose)" : "var(--text-secondary)" }}
+      aria-current={active ? "page" : undefined}
+      className={`relative flex items-center gap-3 rounded-2xl font-semibold transition-colors ${small ? "text-[13px]" : "text-sm"} ${collapsed ? `justify-center ${small ? "h-9 w-9" : "h-11 w-11"} mx-auto` : `px-3 ${small ? "h-9" : "h-10"}`}`}
+      style={{ color: active ? "var(--accent-rose)" : small ? "var(--text-muted)" : "var(--text-secondary)" }}
     >
       {active && <span className="absolute inset-0 rounded-2xl enter-fade" style={{ background: "var(--pink-soft)", boxShadow: "inset 0 0 0 1px rgb(var(--accent-rgb) / 0.18)" }} />}
-      {!active && <span className="absolute inset-0 rounded-2xl opacity-0 hover:opacity-100 transition-opacity" style={{ background: "var(--surface-2)" }} />}
-      <Icon className="relative w-[18px] h-[18px] flex-shrink-0" />
+      {!active && <span className="absolute inset-0 rounded-2xl opacity-0 can-hover:hover:opacity-100 transition-opacity" style={{ background: "var(--surface-2)" }} />}
+      {item.tint && !small && !collapsed ? (
+        <span className="relative w-7 h-7 rounded-[9px] flex items-center justify-center flex-shrink-0" style={{ background: `linear-gradient(150deg, ${item.tint[0]}33, ${item.tint[1]}40)`, color: item.tint[1] }}><Icon className="w-4 h-4" /></span>
+      ) : <Icon className={`relative flex-shrink-0 ${small ? "w-4 h-4" : "w-[18px] h-[18px]"}`} />}
       {!collapsed && <span className="relative flex-1 truncate">{item.label}</span>}
-      {badge > 0 && (
-        <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className={`relative text-[10px] font-bold text-white rounded-full flex items-center justify-center ${collapsed ? "absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1" : "min-w-[20px] h-5 px-1.5"}`} style={{ background: "var(--accent-rose)", ...(collapsed ? { position: "absolute" } : {}) }}>
-          {badge > 99 ? "99+" : badge}
-        </motion.span>
-      )}
+      <Badge value={badge} collapsed={collapsed} />
     </Link>
   );
 }
@@ -52,7 +76,10 @@ export default function Sidebar({ collapsed, onToggleCollapsed, badges = {}, onT
   const location = useLocation();
   const [createOpen, setCreateOpen] = useState(false);
   const createRef = useRef(null);
-  const sections = isAdmin ? [...NAV_SECTIONS, ADMIN_SECTION] : NAV_SECTIONS;
+  const more = isAdmin ? [...MORE_NAV, ...ADMIN_SECTION.items] : MORE_NAV;
+  const moreActive = more.some((i) => isActivePath(location.pathname, i.path));
+  const [moreOpen, setMoreOpen] = useState(() => { try { return localStorage.getItem("mimilocks:__side_more") !== "closed"; } catch { return true; } });
+  const toggleMore = () => setMoreOpen((v) => { try { localStorage.setItem("mimilocks:__side_more", v ? "closed" : "open"); } catch { /* ignore */ } return !v; });
   const level = getLevelInfo(user?.xp || 0);
 
   return (
@@ -76,17 +103,28 @@ export default function Sidebar({ collapsed, onToggleCollapsed, badges = {}, onT
         </Popover>
       </div>
 
-      <nav className="flex-1 overflow-y-auto no-scrollbar px-3 py-2 space-y-5">
-        {sections.map((section) => (
-          <div key={section.label}>
-            {!collapsed ? <p className="eyebrow px-3 mb-1.5">{section.label}</p> : <div className="divider mx-3 mb-2 opacity-60" />}
-            <div className="space-y-0.5">
-              {section.items.map((item) => (
-                <NavItem key={item.path} item={item} active={isActivePath(location.pathname, item.path)} collapsed={collapsed} badge={item.badge ? badges[item.badge] : 0} />
-              ))}
-            </div>
+      <nav className="flex-1 overflow-y-auto no-scrollbar px-3 py-2 space-y-5" aria-label="Main">
+        <div className="space-y-1">
+          {PRIMARY_NAV.map((item) => <PrimaryItem key={item.path} item={item} active={isActivePath(location.pathname, item.path)} collapsed={collapsed} badge={item.badge ? badges[item.badge] : 0} />)}
+        </div>
+        <div>
+          {!collapsed ? <p className="eyebrow px-3 mb-1.5">Explore</p> : <div className="divider mx-3 mb-2 opacity-60" />}
+          <div className="space-y-0.5">
+            {EXPLORE_NAV.map((item) => <NavItem key={item.path} item={item} active={isActivePath(location.pathname, item.path)} collapsed={collapsed} badge={item.badge ? badges[item.badge] : 0} />)}
           </div>
-        ))}
+        </div>
+        <div>
+          {!collapsed ? (
+            <button onClick={toggleMore} className="w-full flex items-center gap-1 eyebrow px-3 mb-1.5" aria-expanded={moreOpen || moreActive}>
+              More <ChevronDown className={`w-3.5 h-3.5 transition-transform ${moreOpen || moreActive ? "" : "-rotate-90"}`} />
+            </button>
+          ) : <div className="divider mx-3 mb-2 opacity-60" />}
+          {(moreOpen || moreActive || collapsed) && (
+            <div className="space-y-0.5 enter-fade">
+              {more.map((item) => <NavItem key={item.path} item={item} small active={isActivePath(location.pathname, item.path)} collapsed={collapsed} badge={item.badge ? badges[item.badge] : 0} />)}
+            </div>
+          )}
+        </div>
       </nav>
 
       <div className="p-3 space-y-2 flex-shrink-0">

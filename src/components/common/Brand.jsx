@@ -12,9 +12,14 @@ export function BrandLogo({ height = 40, className = "", style }) {
       sizes={`${Math.round(height * 1.84)}px`}
       alt={APP_NAME}
       draggable={false}
-      decoding="async"
+      // Small and always on screen: decode right away and keep its space, so
+      // it never blinks out when the header re-renders.
+      decoding="sync"
+      fetchpriority="high"
+      width={Math.round(height * 1.84)}
+      height={height}
       className={`select-none ${className}`}
-      style={{ height, width: "auto", ...style }}
+      style={{ height, width: Math.round(height * 1.84), ...style }}
     />
   );
 }
@@ -25,7 +30,9 @@ export function BrandMark({ size = 40, className = "", style }) {
       src="/brand/sugerly-mark.webp"
       alt={APP_NAME}
       draggable={false}
-      decoding="async"
+      decoding="sync"
+      width={size}
+      height={size}
       className={`select-none ${className}`}
       style={{ width: size, height: size, ...style }}
     />

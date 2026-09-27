@@ -8,12 +8,30 @@
 import { base44, backendMode } from "@/api/base44Client";
 
 export const aiAvailable = backendMode === "firebase" && String(import.meta.env.VITE_AI || "").toLowerCase() !== "off";
-const MODELS = [import.meta.env.VITE_AI_MODEL || "gemini-2.5-flash", "gemini-flash-latest"];
+// Newest first; if Google retires one, the next is tried automatically.
+const MODELS = [...new Set([import.meta.env.VITE_AI_MODEL || "gemini-3.8-flash", "gemini-flash-latest", "gemini-2.5-flash"])];
+
+// Firebase App Check (Firebase turns it on for AI Logic during setup since
+// July 2026). On the website it uses reCAPTCHA Enterprise when
+// VITE_RECAPTCHA_ENTERPRISE_KEY is set; VITE_APPCHECK_DEBUG_TOKEN is for
+// local testing only.
+let appCheckReady = null;
+function ensureAppCheck(app) {
+  const site = import.meta.env.VITE_RECAPTCHA_ENTERPRISE_KEY;
+  const debug = import.meta.env.VITE_APPCHECK_DEBUG_TOKEN;
+  if (!site && !debug) return Promise.resolve();
+  appCheckReady ||= import("firebase/app-check").then(({ initializeAppCheck, ReCaptchaEnterpriseProvider }) => {
+    if (debug) self.FIREBASE_APPCHECK_DEBUG_TOKEN = debug;
+    try { initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(site || "debug"), isTokenAutoRefreshEnabled: true }); } catch { /* already set up */ }
+  }).catch(() => {});
+  return appCheckReady;
+}
 
 let sdk = null;
 async function generate(parts, { schema, temperature = 0.9 } = {}) {
   if (!aiAvailable) throw new Error("AI needs the online version of Sugerly.");
   sdk = sdk || await import("firebase/ai");
+  await ensureAppCheck(base44.firebase.app);
   const ai = sdk.getAI(base44.firebase.app, { backend: new sdk.GoogleAIBackend() });
   let lastError;
   for (const name of MODELS) {
@@ -36,7 +54,11 @@ async function generate(parts, { schema, temperature = 0.9 } = {}) {
 export function friendlyAIError(e) {
   const msg = String(e?.message || e || "");
   let text = "AI couldn't answer right now. Try again in a moment.";
-  if (/api.?(key|has not been used|not enabled|disabled)|SERVICE_DISABLED|API_NOT_ACTIVATED|firebasevertexai|generativelanguage.*(disabled|enable)/i.test(msg)) {
+  let appCheck = false;
+  if (/app.?check|attestation|X-Firebase-AppCheck|appCheck/i.test(msg)) {
+    appCheck = true;
+    text = "AI is blocked by App Check — an admin can fix it in Admin → Site → AI features.";
+  } else if (/api.?(key|has not been used|not enabled|disabled)|SERVICE_DISABLED|API_NOT_ACTIVATED|firebasevertexai|generativelanguage.*(disabled|enable)/i.test(msg)) {
     text = "AI isn't switched on for this app yet — an admin can turn it on in Admin → Site → AI features.";
   } else if (/quota|429|RESOURCE_EXHAUSTED|rate/i.test(msg)) {
     text = "AI is busy right now. Try again in a minute.";
@@ -48,6 +70,7 @@ export function friendlyAIError(e) {
   const err = new Error(text);
   err.cause = e;
   err.setup = text.includes("switched on");
+  err.appCheck = appCheck;
   return err;
 }
 

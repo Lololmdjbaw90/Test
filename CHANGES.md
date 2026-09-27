@@ -1,6 +1,21 @@
 # Changes
 
-## Video cuts, text you can rotate and scale, AI captions, smoother Reels (this update)
+## Comments v2, GIFs, native Liquid Glass tab bar, smoother app (this update)
+
+### New
+- **Comments** (`src/components/gallery/CommentSection.jsx`): likes on comments, threaded replies ("View N replies", @name), a Creator badge, a quick emoji row and GIFs. Your new comment shows first, then the most liked. Replying notifies the person you replied to.
+- **GIFs** (`src/lib/gifs.js`, `src/components/common/GifPicker.jsx`): a Discord-style GIPHY picker in comments, DMs and server channels. An admin adds a free GIPHY key in Admin → Site → GIFs; without one, people can paste any GIF link.
+- **Comments off**: creators can switch comments off when posting a reel or from the reel's ⋯ menu (enforced in the database rules too).
+- **Native iOS tab bar** (`ios/App/App/NativeTabBar.swift`, `src/lib/nativeTabBar.js`): in the iPhone/iPad app the tab bar is a real UIKit view over the web view, made of Liquid Glass (`UIGlassEffect`) when built with Xcode 26 (the IPA workflow picks Xcode 26 when the runner has it), with a blur on older iOS. It hides itself while sheets, viewers, the camera or the keyboard are up.
+- **Navigation by importance**: the sidebar has big app-icon tiles for Home, Community, Reels and Messages, medium rows for exploring, and a foldable "More"; the phone/tablet menu leads with big icons.
+- **App layout on iPad**: touch tablets use the phone-style app layout (floating tab bar, menu behind the avatar) instead of the desktop sidebar (`desk:` screen in `tailwind.config.js`).
+- **AI**: now uses `gemini-3.8-flash` (with fallbacks) and explains App Check if Firebase blocks AI Logic; optional web App Check with `VITE_RECAPTCHA_ENTERPRISE_KEY`.
+
+### Faster
+- Live blur only on the top bar, tab bar and sheets; other glass is drawn without blur on phones and tablets, and not at all over playing video.
+- The logo decodes right away and keeps its space, so it no longer blinks out.
+
+## Video cuts, text you can rotate and scale, AI captions, smoother Reels
 
 ### New
 - **Film in clips** (`src/components/reels/ReelCamera.jsx`): tap the shutter to record and tap again to pause, or hold it and let go. A bar across the top and the ring around the shutter show each clip; delete the last clip, record more, then tap ✓. A 3 s / 10 s timer with a countdown. Closing with clips asks before discarding them.

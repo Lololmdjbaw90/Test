@@ -46,6 +46,14 @@ jobs:
       - name: Copy it into the iOS project
         run: npx cap sync ios
 
+      # Xcode 26 (the iOS 26 SDK) gives the native tab bar real Liquid Glass;
+      # with an older Xcode it still builds, with a blur instead.
+      - name: Use the newest Xcode
+        run: |
+          XC=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -vi beta | sort -V | tail -1)
+          if [ -n "$XC" ]; then sudo xcode-select -s "$XC"; fi
+          xcodebuild -version
+
       - name: Build the app (unsigned)
         run: |
           xcodebuild \

@@ -60,7 +60,7 @@ function CommentRow({ c, me, ownerEmail, isReply, onReply, onLike, onDelete, lik
   const canDelete = me && (me.email === c.user_email || me.role === "admin" || me.email === ownerEmail);
   const [pop, setPop] = useState(0);
   return (
-    <motion.div layout="position" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -12 }} className={`flex gap-2.5 ${isReply ? "pl-11" : ""}`}>
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -12 }} className={`flex gap-2.5 ${isReply ? "pl-11" : ""}`}>
       <Link to={profileLink(c.user_email)} className="flex-shrink-0"><Avatar src={c.user_profile_picture} name={name} size={isReply ? 26 : 34} /></Link>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">

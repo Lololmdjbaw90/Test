@@ -36,6 +36,7 @@
     --surface: #ffffff;
     --surface-2: #f8f2f4;
     --surface-glass: rgb(255 255 255 / 0.72);
+    --surface-glass-solid: rgb(255 255 255 / 0.94);
     --border-c: #efe4e9;
     --border-strong: #e3d3db;
     --text-primary: #2a1620;
@@ -82,6 +83,7 @@
     --surface: #1a1117;
     --surface-2: #22171f;
     --surface-glass: rgb(26 17 23 / 0.72);
+    --surface-glass-solid: rgb(26 17 23 / 0.95);
     --border-c: #2d1f28;
     --border-strong: #3b2934;
     --text-primary: #f7edf2;
@@ -141,15 +143,32 @@
 
   .glass {
     background: var(--surface-glass);
-    backdrop-filter: blur(24px) saturate(180%);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+  }
+  /* Phones and tablets: live blur is expensive (every blurred spot is redrawn
+     whenever what's behind it moves), so small glass bits there are drawn
+     frosted without blur. Bars and sheets keep real blur (.glass-bar). */
+  @media (hover: none), (pointer: coarse) {
+    .glass { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--surface-glass-solid); }
+  }
+  .glass-bar {
+    background: var(--surface-glass);
+    backdrop-filter: blur(18px) saturate(180%);
+    -webkit-backdrop-filter: blur(18px) saturate(180%);
+  }
+  /* Glass look with no live blur, for things over video (reel buttons). */
+  .glass-chip {
+    background: linear-gradient(160deg, rgb(255 255 255 / 0.26), rgb(255 255 255 / 0.1));
+    box-shadow: inset 0 1px 0.5px rgb(255 255 255 / 0.45), inset 0 -1px 1px rgb(255 255 255 / 0.08), 0 4px 14px -6px rgb(0 0 0 / 0.45);
+    border: 1px solid rgb(255 255 255 / 0.18);
   }
   /* Liquid glass, like iOS 26: frosted, a bit of colour from what's behind,
      a bright rim on top and a soft inner glow. */
   .liquid-glass {
     background: linear-gradient(160deg, rgb(255 255 255 / 0.66), rgb(255 255 255 / 0.36));
-    backdrop-filter: blur(22px) saturate(200%);
-    -webkit-backdrop-filter: blur(22px) saturate(200%);
+    backdrop-filter: blur(18px) saturate(200%);
+    -webkit-backdrop-filter: blur(18px) saturate(200%);
     border: 1px solid rgb(255 255 255 / 0.65);
     box-shadow: inset 0 1px 0.5px rgb(255 255 255 / 0.95), inset 0 -1px 1px rgb(255 255 255 / 0.35), inset 0 0 14px rgb(255 255 255 / 0.3), 0 12px 32px -10px rgb(70 20 50 / 0.28);
   }
@@ -166,8 +185,8 @@
   .dark .glass-lens, .on-dark .glass-lens { background: linear-gradient(170deg, rgb(255 255 255 / 0.2), rgb(255 255 255 / 0.07)); box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.3), 0 4px 14px -4px rgb(0 0 0 / 0.5); }
   .liquid-sheet {
     background: rgb(255 255 255 / 0.8);
-    backdrop-filter: blur(30px) saturate(190%);
-    -webkit-backdrop-filter: blur(30px) saturate(190%);
+    backdrop-filter: blur(22px) saturate(190%);
+    -webkit-backdrop-filter: blur(22px) saturate(190%);
     box-shadow: inset 0 1px 0.5px rgb(255 255 255 / 0.95), 0 -12px 40px rgb(0 0 0 / 0.22);
   }
   .dark .liquid-sheet { background: rgb(30 21 27 / 0.82); box-shadow: inset 0 1px 0.5px rgb(255 255 255 / 0.14), 0 -12px 40px rgb(0 0 0 / 0.5); }
@@ -468,7 +487,8 @@
   .marquee { animation: marquee 7s linear infinite alternate; }
   .marquee-mask { overflow: hidden; -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
   /* The tab bar turns dark over Reels, like TikTok. */
-  .mobile-tabbar[data-dark="true"] { background: linear-gradient(160deg, rgb(60 50 58 / 0.5), rgb(10 6 9 / 0.45)) !important; border-color: rgb(255 255 255 / 0.16) !important; box-shadow: inset 0 1px 0.5px rgb(255 255 255 / 0.25), 0 12px 32px -10px rgb(0 0 0 / 0.6) !important; }
+  /* Over playing video the bar skips live blur (it would redraw every frame). */
+  .mobile-tabbar[data-dark="true"] { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: linear-gradient(160deg, rgb(58 48 56 / 0.86), rgb(14 9 13 / 0.9)) !important; border-color: rgb(255 255 255 / 0.16) !important; box-shadow: inset 0 1px 0.5px rgb(255 255 255 / 0.25), 0 12px 32px -10px rgb(0 0 0 / 0.6) !important; }
   .mobile-tabbar[data-dark="true"] a, .mobile-tabbar[data-dark="true"] > div > button:not([aria-label="Create"]) { color: rgb(255 255 255 / 0.7) !important; }
   .mobile-tabbar[data-dark="true"] [aria-current="page"] { color: #fff !important; }
   .mobile-tabbar[data-dark="true"] [aria-current="page"] > span:first-child { background: rgb(255 255 255 / 0.12) !important; }
@@ -540,6 +560,9 @@ button, [role="button"], [role="tab"] { -webkit-user-select: none; user-select: 
 .native-app input, .native-app textarea, .native-app [contenteditable], .native-app .select-text { -webkit-user-select: text; user-select: text; }
 .native-app img, .native-app a { -webkit-user-drag: none; -webkit-touch-callout: none; }
 @media (min-width: 420px) { .show-from-420 { display: flex; } }
+/* The native iOS tab bar replaces the web one (kept invisible so menus can
+   still anchor to its buttons). */
+.native-tabbar-on .mobile-tabbar { visibility: hidden !important; pointer-events: none !important; }
 /* Keyboard shortcuts mean nothing on a touch screen. */
 @media (hover: none), (pointer: coarse) { .kbd, .desktop-only { display: none !important; } }
 .native-app .kbd, .native-app .desktop-only { display: none !important; }
