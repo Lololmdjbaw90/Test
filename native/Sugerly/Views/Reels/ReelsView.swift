@@ -109,7 +109,8 @@ final class ReelVideo {
 enum ReelAudio {
     nonisolated(unsafe) private static var ready = false
     static func prepare() {
-        guard !ready else { return }
+        // (A voice channel switches the session to calls; switch back.)
+        if ready && AVAudioSession.sharedInstance().category == .playback { return }
         ready = true
         try? AVAudioSession.sharedInstance().setCategory(.playback)
     }

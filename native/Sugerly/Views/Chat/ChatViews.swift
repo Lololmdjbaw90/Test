@@ -99,8 +99,8 @@ struct ChatListView: View {
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 10) {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text(section == 0 ? "Messages" : "Servers").font(.display(38)).foregroundStyle(Palette.text)
                         .contentTransition(.opacity)
@@ -112,25 +112,34 @@ struct ChatListView: View {
                 }
                 .padding(.horizontal, 4)
                 SectionSwitch(options: [("Chats", "bubble.left.and.bubble.right.fill"), ("Servers", "person.3.fill")], selection: $section)
-                    .padding(.bottom, 4)
-                if section == 1 {
-                    ServersView(path: $path, embedded: true)
-                        .transition(.opacity.combined(with: .move(edge: .trailing)))
-                } else {
-                chatList
-                }
             }
             .padding(.horizontal, 14)
             .padding(.top, 10)
-            .padding(.bottom, 30)
+            .padding(.bottom, 8)
             .frame(maxWidth: 680)
-            .frame(maxWidth: .infinity)
-            .animation(.snappy, value: section)
+
+            if section == 1 {
+                ServerHubView(path: $path)
+                    .transition(.opacity)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 10) {
+                        chatList
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.top, 4)
+                    .padding(.bottom, 30)
+                    .frame(maxWidth: 680)
+                    .frame(maxWidth: .infinity)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .refreshable { await store.refresh(me: model.me?.email ?? "") }
+                .transition(.opacity)
+            }
         }
-        .scrollDismissesKeyboard(.interactively)
+        .animation(.snappy, value: section)
         .sugarBackground()
         .sugarTopBar($path)
-        .refreshable { await store.refresh(me: model.me?.email ?? "") }
         .sheet(isPresented: $starting) {
             NewChatView { email in
                 starting = false

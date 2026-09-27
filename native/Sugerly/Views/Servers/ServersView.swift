@@ -2,80 +2,7 @@ import SwiftUI
 import UIKit
 import PhotosUI
 
-// MARK: - Models (same collections as the website: Community, ServerChannel, ChannelMessage)
-
-struct Server: Identifiable, Hashable {
-    var id: String
-    var name: String
-    var description: String
-    var emoji: String
-    var iconURL: String
-    var bannerURL: String
-    var ownerEmail: String
-    var members: [String]
-    var welcome: String
-
-    init(_ d: Doc) {
-        id = d.str("id")
-        name = d.str("name")
-        description = d.str("description")
-        emoji = d.str("icon_emoji")
-        iconURL = d.str("icon_url")
-        bannerURL = d.str("banner_url")
-        ownerEmail = d.str("owner_email")
-        members = d.strs("member_emails")
-        welcome = d.str("welcome_message")
-    }
-}
-
-struct ServerChannel: Identifiable, Hashable {
-    var id: String
-    var serverId: String
-    var name: String
-    var type: String
-    var description: String
-    var position: Int
-    var isPrivate: Bool
-
-    var isVoice: Bool { type == "voice" }
-
-    init(_ d: Doc) {
-        id = d.str("id")
-        serverId = d.str("community_id")
-        name = d.str("name")
-        type = d.str("type")
-        description = d.str("description")
-        position = d.int("position")
-        isPrivate = d.bool("private")
-    }
-}
-
-struct ChannelMessage: Identifiable, Hashable {
-    var id: String
-    var text: String
-    var imageURL: String
-    var authorEmail: String
-    var authorName: String
-    var authorPicture: String
-    var replyPreview: String
-    var kind: String
-    var pinned: Bool
-    var created: String
-    var pending = false
-
-    init(_ d: Doc) {
-        id = d.str("id")
-        text = d.str("content")
-        imageURL = d.str("image_url")
-        authorEmail = d.str("user_email")
-        authorName = d.str("user_display_name")
-        authorPicture = d.str("user_profile_picture")
-        replyPreview = d.str("reply_to_preview")
-        kind = d.str("type")
-        pinned = d.bool("is_pinned")
-        created = d.str("created_date")
-    }
-}
+// MARK: - Server helpers (same writes as the website's lib/servers.js)
 
 enum ServerTemplate: String, CaseIterable, Identifiable {
     case art, friends, blank
@@ -92,14 +19,16 @@ enum ServerTemplate: String, CaseIterable, Identifiable {
 }
 
 enum Servers {
+    static let site = "https://sugerly.netlify.app"
+
     @MainActor
     static func join(_ server: Server, me: UserProfile) async throws {
         var members = server.members
         if !members.contains(me.email) { members.append(me.email) }
         try await FS.update("Community", server.id, ["member_emails": members, "updated_date": FS.nowISO()])
         try await ensureMembership(server.id, me: me)
-        let channels = (try? await FS.query("ServerChannel", [.equals("community_id", server.id)], orderBy: "position", descending: false)) ?? []
-        if let general = channels.map(ServerChannel.init).first(where: { !$0.isVoice }) {
+        let channels = (try? await FS.query("ServerChannel", [.equals("community_id", server.id)])) ?? []
+        if let general = channels.map(ServerChannel.init).sorted(by: { $0.position < $1.position }).first(where: { !$0.isVoice }) {
             _ = try? await FS.create("ChannelMessage", message(channel: general.id, server: server.id, me: me, text: "\(me.displayName) joined the server", imageURL: "", type: "join"))
         }
     }
@@ -146,119 +75,206 @@ enum Servers {
         if !type.isEmpty { doc["type"] = type }
         return doc
     }
+
+    static func slug(_ name: String, voice: Bool) -> String {
+        if voice { return String(name.trimmingCharacters(in: .whitespaces).prefix(40)) }
+        let lowered = name.lowercased().replacingOccurrences(of: " ", with: "-")
+        return String(lowered.filter { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }.prefix(40))
+    }
 }
 
 // Server icon: uploaded picture or emoji on a soft tile.
 struct ServerIcon: View {
     let server: Server
     var size: CGFloat = 52
+    var corner: CGFloat? = nil
+
     var body: some View {
+        let radius = corner ?? size * 0.32
         ZStack {
-            RoundedRectangle(cornerRadius: size * 0.32, style: .continuous).fill(Theme.soft)
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .fill(LinearGradient(colors: [Theme.light.opacity(0.35), Theme.soft], startPoint: .topLeading, endPoint: .bottomTrailing))
             if !server.iconURL.isEmpty {
                 RemoteImage(url: server.iconURL)
             } else {
-                Text(server.emoji.isEmpty ? "💬" : server.emoji).font(.system(size: size * 0.5))
+                Text(server.emoji.isEmpty ? "💬" : server.emoji).font(.system(size: size * 0.48))
             }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: size * 0.32, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
     }
 }
 
-// MARK: - Server list (Your servers / Discover)
+// MARK: - The hub: a rail of your servers + the open server (like Discord)
 
-struct ServersView: View {
+struct ServerHubView: View {
     @Binding var path: [Route]
-    var embedded = false
+    var initial: Server? = nil
     @Environment(AppModel.self) private var model
     @State private var servers: [Server] = []
-    @State private var loading = true
-    @State private var tab = 0
-    @State private var search = ""
+    @State private var selected: String?
+    @State private var stores: [String: ServerStore] = [:]
     @State private var creating = false
-    @State private var busy: String?
+    @State private var loaded = false
 
     private var me: String { model.me?.email ?? "" }
-
-    private var shown: [Server] {
-        let base = tab == 0 ? servers.filter { $0.members.contains(me) } : servers.sorted { $0.members.count > $1.members.count }
-        guard !search.isEmpty else { return base }
-        return base.filter { $0.name.localizedCaseInsensitiveContains(search) || $0.description.localizedCaseInsensitiveContains(search) }
-    }
+    private var mine: [Server] { servers.filter { $0.members.contains(me) } }
 
     var body: some View {
-        if embedded {
-            content
-        } else {
-            ScrollView { content.padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 30).frame(maxWidth: 680).frame(maxWidth: .infinity) }
-                .sugarBackground()
-                .navigationTitle("Servers")
-                .navigationBarTitleDisplayMode(.inline)
-                .refreshable { await load() }
-        }
-    }
-
-    private var content: some View {
-        LazyVStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Chip(title: "Your servers", icon: "house.fill", active: tab == 0) { withAnimation(.snappy) { tab = 0 } }
-                Chip(title: "Discover", icon: "sparkles", active: tab == 1) { withAnimation(.snappy) { tab = 1 } }
-                Spacer()
-                Button { creating = true } label: { Label("Create", systemImage: "plus") }
-                    .buttonStyle(GradientButtonStyle(height: 38, fullWidth: false))
-            }
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
-                TextField("Search servers…", text: $search).font(.jakarta(15))
-            }
-            .padding(.horizontal, 16)
-            .frame(height: 46)
-            .background(Palette.surface, in: Capsule())
-            .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
-
-            if loading && servers.isEmpty {
-                ForEach(0..<3, id: \.self) { _ in SkeletonBlock(height: 170, radius: 24) }
-            } else if shown.isEmpty {
-                EmptyCard(icon: "person.3.fill", title: tab == 0 ? "No servers yet" : "Nothing found", text: tab == 0 ? "Join one from Discover or create your own." : "Try another name.")
-                if tab == 0 {
-                    Button { withAnimation(.snappy) { tab = 1 } } label: { Label("Explore servers", systemImage: "sparkles") }
-                        .buttonStyle(OutlineButtonStyle())
+        HStack(spacing: 0) {
+            rail
+            Group {
+                if let id = selected, let store = stores[id] {
+                    ServerPanel(store: store, path: $path, onLeft: {
+                        selected = nil
+                        Task { await load() }
+                    })
+                    .id(id)
+                    .transition(.opacity)
+                } else {
+                    DiscoverServers(servers: servers, loaded: loaded, onOpen: open, onJoined: { server in
+                        if let i = servers.firstIndex(where: { $0.id == server.id }) { servers[i] = server }
+                        open(server)
+                    })
                 }
             }
-            ForEach(shown) { server in
-                ServerCard(server: server, joined: server.members.contains(me), busy: busy == server.id) {
-                    if server.members.contains(me) { path.append(.server(server)) } else { Task { await join(server) } }
-                }
-            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .task { await load() }
+        .task {
+            if let initial, stores[initial.id] == nil {
+                stores[initial.id] = ServerStore(initial)
+                selected = initial.id
+            }
+            await load()
+        }
         .fullScreenCover(isPresented: $creating) {
             CreateServerView { server in
                 servers.insert(server, at: 0)
-                path.append(.server(server))
+                open(server)
             }
         }
     }
 
+    private var rail: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 10) {
+                railButton(active: selected == nil) {
+                    Image(systemName: "safari.fill").font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(selected == nil ? .white : Theme.main)
+                        .frame(width: 50, height: 50)
+                        .background(selected == nil ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.surface), in: RoundedRectangle(cornerRadius: selected == nil ? 16 : 25, style: .continuous))
+                } action: { withAnimation(.snappy) { selected = nil } }
+
+                Capsule().fill(Palette.border).frame(width: 30, height: 2)
+
+                ForEach(mine) { server in
+                    railButton(active: selected == server.id) {
+                        ServerIcon(server: server, size: 50, corner: selected == server.id ? 16 : 25)
+                            .shadow(color: selected == server.id ? Theme.main.opacity(0.35) : .clear, radius: 8, y: 3)
+                    } action: { open(server) }
+                    .contextMenu {
+                        Button { UIPasteboard.general.string = "\(Servers.site)/CommunityChat?id=\(server.id)"; model.showToast("Invite link copied", icon: "link") } label: { Label("Copy invite link", systemImage: "link") }
+                    }
+                }
+
+                Button { creating = true } label: {
+                    Image(systemName: "plus").font(.system(size: 20, weight: .bold)).foregroundStyle(Palette.success)
+                        .frame(width: 50, height: 50)
+                        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 25, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 25, style: .continuous).strokeBorder(Palette.border, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])))
+                }
+                .buttonStyle(BouncyStyle())
+                .accessibilityLabel("Create a server")
+            }
+            .padding(.vertical, 12)
+            .frame(width: 74)
+        }
+        .frame(width: 74)
+        .background(Palette.surface2.opacity(0.7))
+        .overlay(alignment: .trailing) { Rectangle().fill(Palette.border).frame(width: 1) }
+    }
+
+    private func railButton<Label: View>(active: Bool, @ViewBuilder label: () -> Label, action: @escaping () -> Void) -> some View {
+        ZStack(alignment: .leading) {
+            Button(action: action) { label() }
+                .buttonStyle(BouncyStyle(scale: 0.9))
+                .frame(maxWidth: .infinity)
+            Capsule().fill(Theme.main)
+                .frame(width: 4, height: active ? 36 : 0)
+        }
+        .frame(width: 74)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: active)
+        .sensoryFeedback(.selection, trigger: active)
+    }
+
+    private func open(_ server: Server) {
+        if stores[server.id] == nil { stores[server.id] = ServerStore(server) }
+        withAnimation(.snappy) { selected = server.id }
+    }
+
     private func load() async {
-        defer { loading = false }
-        guard let docs = try? await FS.query("Community", orderBy: "created_date", limit: 150) else { return }
+        guard let docs = try? await FS.query("Community", orderBy: "created_date", limit: 150) else { loaded = true; return }
         servers = docs.map(Server.init)
+        loaded = true
+        if selected == nil && initial == nil, let first = mine.first { open(first) }
+    }
+}
+
+// Browse and join servers (the website's Communities page).
+struct DiscoverServers: View {
+    let servers: [Server]
+    let loaded: Bool
+    var onOpen: (Server) -> Void
+    var onJoined: (Server) -> Void
+    @Environment(AppModel.self) private var model
+    @State private var query = ""
+    @State private var busy: String?
+
+    private var shown: [Server] {
+        let list = servers.sorted { $0.members.count > $1.members.count }
+        guard !query.isEmpty else { return list }
+        return list.filter { $0.name.localizedCaseInsensitiveContains(query) || $0.description.localizedCaseInsensitiveContains(query) }
+    }
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Discover").font(.display(30)).foregroundStyle(Palette.text)
+                    Text("Find your people ✨").font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
+                }
+                SearchField(text: $query, placeholder: "Search servers…")
+                if !loaded {
+                    ForEach(0..<3, id: \.self) { _ in SkeletonBlock(height: 150, radius: 24) }
+                } else if shown.isEmpty {
+                    EmptyCard(icon: "person.3.fill", title: "Nothing found", text: "Try another name, or make your own with +.")
+                }
+                ForEach(shown) { server in
+                    let joined = server.members.contains(model.me?.email ?? "")
+                    ServerCard(server: server, joined: joined, busy: busy == server.id) {
+                        if joined { onOpen(server) } else { Task { await join(server) } }
+                    }
+                }
+            }
+            .padding(12)
+            .padding(.bottom, 20)
+        }
+        .scrollDismissesKeyboard(.interactively)
     }
 
     private func join(_ server: Server) async {
-        guard let meProfile = model.me else { return }
+        guard let me = model.me else { return }
         busy = server.id
         defer { busy = nil }
         do {
-            try await Servers.join(server, me: meProfile)
-            model.showToast("Welcome to \(server.name)!", icon: "party.popper.fill")
+            try await Servers.join(server, me: me)
             var joined = server
-            joined.members.append(meProfile.email)
-            if let i = servers.firstIndex(where: { $0.id == server.id }) { servers[i] = joined }
-            path.append(.server(joined))
-        } catch {}
+            joined.members.append(me.email)
+            model.showToast("Welcome to \(server.name)!", icon: "party.popper.fill")
+            onJoined(joined)
+        } catch {
+            model.showToast("Couldn't join — try again", error: true)
+        }
     }
 }
 
@@ -274,107 +290,127 @@ struct ServerCard: View {
                 ZStack(alignment: .bottomLeading) {
                     Group {
                         if server.bannerURL.isEmpty {
-                            LinearGradient(colors: [Theme.light.opacity(0.9), Theme.main.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            LinearGradient(colors: [Theme.light.opacity(0.9), Theme.main.opacity(0.75)], startPoint: .topLeading, endPoint: .bottomTrailing)
                         } else {
                             RemoteImage(url: server.bannerURL)
                         }
                     }
-                    .frame(height: 74)
+                    .frame(height: 70)
                     .clipped()
-                    ServerIcon(server: server, size: 56)
-                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.surface, lineWidth: 3))
-                        .offset(x: 14, y: 26)
+                    ServerIcon(server: server, size: 52)
+                        .overlay(RoundedRectangle(cornerRadius: 17, style: .continuous).strokeBorder(Palette.surface, lineWidth: 3))
+                        .offset(x: 12, y: 24)
                 }
-                .frame(height: 74)
+                .frame(height: 70)
                 HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(server.name).font(.jakarta(16, .heavy)).foregroundStyle(Palette.text).lineLimit(1)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(server.name).font(.jakarta(15, .heavy)).foregroundStyle(Palette.text).lineLimit(1)
                         if !server.description.isEmpty {
-                            Text(server.description).font(.jakarta(13)).foregroundStyle(Palette.text2).lineLimit(2).multilineTextAlignment(.leading)
+                            Text(server.description).font(.jakarta(12)).foregroundStyle(Palette.text2).lineLimit(2).multilineTextAlignment(.leading)
                         }
-                        Label("\(server.members.count) members", systemImage: "person.2.fill").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
+                        Label("\(server.members.count) members", systemImage: "person.2.fill").font(.jakarta(11, .semibold)).foregroundStyle(Palette.muted)
                     }
-                    Spacer(minLength: 8)
+                    Spacer(minLength: 6)
                     Group {
                         if busy {
                             ProgressView().tint(Theme.main)
                         } else if joined {
-                            Label("Open", systemImage: "arrow.right").font(.jakarta(13, .bold)).foregroundStyle(Theme.main)
+                            Text("Open").font(.jakarta(12, .heavy)).foregroundStyle(Theme.main)
+                                .padding(.horizontal, 12).frame(height: 30).background(Theme.soft, in: Capsule())
                         } else {
-                            Text("Join").font(.jakarta(13, .heavy)).foregroundStyle(.white)
-                                .padding(.horizontal, 16).frame(height: 32).background(Theme.gradient, in: Capsule())
-                                .shadow(color: Theme.main.opacity(0.35), radius: 8, y: 3)
+                            Text("Join").font(.jakarta(12, .heavy)).foregroundStyle(.white)
+                                .padding(.horizontal, 14).frame(height: 30).background(Theme.gradient, in: Capsule())
+                                .shadow(color: Theme.main.opacity(0.35), radius: 6, y: 3)
                         }
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.top, 34)
-                .padding(.bottom, 14)
+                .padding(.horizontal, 12)
+                .padding(.top, 30)
+                .padding(.bottom, 12)
             }
-            .sugarCard(radius: 24)
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .sugarCard(radius: 22)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
         .buttonStyle(BouncyStyle(scale: 0.97))
     }
 }
 
-// MARK: - One server: banner, channels, members
+// MARK: - One server: banner, channels (with who's in voice), roles
 
-struct ServerView: View {
-    @State var server: Server
+struct ServerPanel: View {
+    @Bindable var store: ServerStore
     @Binding var path: [Route]
+    var onLeft: () -> Void
     @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    @State private var channels: [ServerChannel] = []
-    @State private var loading = true
+    @Environment(VoiceEngine.self) private var voice
+    @State private var settings = false
+    @State private var membersShown = false
     @State private var confirmLeave = false
+    @State private var editingChannel: ServerChannel?
+    @State private var newChannelType: String?
 
     private var me: String { model.me?.email ?? "" }
+    private var access: Access { store.access(me, siteAdmin: model.me?.isAdmin ?? false) }
+    private var online: Int { store.server.members.filter { model.person($0)?.isOnline == true }.count }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 14) {
                 header
-                if !server.welcome.isEmpty {
+                if !store.server.welcome.isEmpty {
                     HStack(spacing: 10) {
-                        Image(systemName: "hand.wave.fill").foregroundStyle(Theme.gradient)
-                        Text(server.welcome).font(.jakarta(14, .medium)).foregroundStyle(Palette.text2)
+                        Text("👋").font(.system(size: 18))
+                        Text(store.server.welcome).font(.jakarta(13, .medium)).foregroundStyle(Palette.text2)
                     }
-                    .padding(14)
+                    .padding(12)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.soft, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .background(Theme.soft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
-                if loading && channels.isEmpty {
-                    ForEach(0..<4, id: \.self) { _ in SkeletonBlock(height: 52, radius: 16) }
+                if !store.loaded {
+                    ForEach(0..<4, id: \.self) { _ in SkeletonBlock(height: 44, radius: 14) }
                 }
-                let text = channels.filter { !$0.isVoice }
-                let voice = channels.filter(\.isVoice)
-                if !text.isEmpty {
-                    channelSection("TEXT CHANNELS", text)
-                }
-                if !voice.isEmpty {
-                    channelSection("VOICE CHANNELS", voice)
-                }
-                membersRow
-                if server.ownerEmail != me && server.members.contains(me) {
-                    Button(role: .destructive) { confirmLeave = true } label: { Label("Leave server", systemImage: "rectangle.portrait.and.arrow.right") }
-                        .buttonStyle(OutlineButtonStyle())
-                }
+                let visible = store.channels.filter { store.canView($0, access) }
+                section("TEXT CHANNELS", type: "text", visible.filter { !$0.isVoice })
+                section("VOICE CHANNELS", type: "voice", visible.filter(\.isVoice))
+                rolesSummary
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 30)
-            .frame(maxWidth: 680)
-            .frame(maxWidth: .infinity)
+            .padding(12)
+            .padding(.bottom, 20)
         }
-        .sugarBackground()
-        .navigationTitle(server.name)
-        .navigationBarTitleDisplayMode(.inline)
-        .refreshable { await load() }
-        .task { await load() }
-        .confirmationDialog("Leave \(server.name)?", isPresented: $confirmLeave, titleVisibility: .visible) {
-            Button("Leave", role: .destructive) {
+        .refreshable { await store.load() }
+        .task { await store.load() }
+        .task(id: store.server.id) {
+            // Keep "who's in voice" fresh.
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(6))
+                await store.loadVoice()
+            }
+        }
+        .sheet(isPresented: $settings) {
+            ServerSettingsView(store: store, onDeleted: onLeft).presentationCornerRadius(32)
+        }
+        .sheet(isPresented: $membersShown) {
+            MembersSheet(store: store) { route in
+                membersShown = false
+                Task { @MainActor in try? await Task.sleep(for: .milliseconds(300)); path.append(route) }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationCornerRadius(32)
+        }
+        .sheet(item: $editingChannel) { channel in
+            ChannelEditor(store: store, channel: channel, type: channel.type).presentationCornerRadius(32)
+        }
+        .sheet(item: Binding(get: { newChannelType.map { NewChannelKind(type: $0) } }, set: { newChannelType = $0?.type })) { kind in
+            ChannelEditor(store: store, channel: nil, type: kind.type).presentationCornerRadius(32)
+        }
+        .confirmationDialog("Leave \(store.server.name)?", isPresented: $confirmLeave, titleVisibility: .visible) {
+            Button("Leave server", role: .destructive) {
                 guard let meProfile = model.me else { return }
-                Task { try? await Servers.leave(server, me: meProfile); dismiss() }
+                Task {
+                    try? await Servers.leave(store.server, me: meProfile)
+                    model.showToast("You left \(store.server.name)", icon: "door.left.hand.open")
+                    onLeft()
+                }
             }
         }
     }
@@ -382,412 +418,177 @@ struct ServerView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 0) {
             Group {
-                if server.bannerURL.isEmpty {
-                    LinearGradient(colors: [Theme.light, Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing)
+                if store.server.bannerURL.isEmpty {
+                    ZStack {
+                        LinearGradient(colors: [Theme.light, Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        Circle().fill(.white.opacity(0.25)).frame(width: 120).blur(radius: 30).offset(x: 90, y: -30)
+                    }
                 } else {
-                    RemoteImage(url: server.bannerURL)
+                    RemoteImage(url: store.server.bannerURL)
                 }
             }
-            .frame(height: 130)
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .frame(height: 100)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(alignment: .bottomLeading) {
-                ServerIcon(server: server, size: 78)
-                    .overlay(RoundedRectangle(cornerRadius: 25, style: .continuous).strokeBorder(Palette.bg, lineWidth: 4))
-                    .shadow(color: Theme.main.opacity(0.3), radius: 12, y: 6)
-                    .offset(x: 18, y: 39)
+                ServerIcon(server: store.server, size: 60)
+                    .overlay(RoundedRectangle(cornerRadius: 19, style: .continuous).strokeBorder(Palette.bg, lineWidth: 4))
+                    .shadow(color: Theme.main.opacity(0.3), radius: 10, y: 4)
+                    .offset(x: 12, y: 30)
             }
-            VStack(alignment: .leading, spacing: 6) {
-                Text(server.name).font(.display(32)).foregroundStyle(Palette.text)
-                if !server.description.isEmpty {
-                    Text(server.description).font(.jakarta(14)).foregroundStyle(Palette.text2)
-                }
-                HStack(spacing: 14) {
-                    Label("\(server.members.count) members", systemImage: "person.2.fill")
-                    Label("\(onlineCount) online", systemImage: "circle.fill").foregroundStyle(Palette.success)
-                }
-                .font(.jakarta(12, .bold))
-                .foregroundStyle(Palette.muted)
-            }
-            .padding(.top, 48)
-        }
-        .padding(.top, 8)
-    }
-
-    private var onlineCount: Int { server.members.filter { model.person($0)?.isOnline == true }.count }
-
-    private func channelSection(_ title: String, _ list: [ServerChannel]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.jakarta(11, .heavy)).tracking(1.2).foregroundStyle(Palette.muted).padding(.leading, 6)
-            VStack(spacing: 2) {
-                ForEach(list) { channel in
-                    Button {
-                        if channel.isVoice { path.append(.voice(server, channel)) } else { path.append(.channel(server, channel)) }
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: channel.isVoice ? "speaker.wave.2.fill" : "number")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(Theme.main)
-                                .frame(width: 36, height: 36)
-                                .background(Theme.soft, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                            VStack(alignment: .leading, spacing: 1) {
-                                HStack(spacing: 4) {
-                                    Text(channel.name).font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
-                                    if channel.isPrivate { Image(systemName: "lock.fill").font(.system(size: 10)).foregroundStyle(Palette.muted) }
-                                }
-                                if !channel.description.isEmpty {
-                                    Text(channel.description).font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(1)
-                                }
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.muted)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(BouncyStyle(scale: 0.97))
-                }
-            }
-            .sugarCard(radius: 22, padding: 6)
-        }
-    }
-
-    private var membersRow: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("MEMBERS").font(.jakarta(11, .heavy)).tracking(1.2).foregroundStyle(Palette.muted).padding(.leading, 6)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 14) {
-                    ForEach(server.members.sorted { (model.person($0)?.isOnline == true ? 0 : 1) < (model.person($1)?.isOnline == true ? 0 : 1) }, id: \.self) { email in
-                        let person = model.person(email)
-                        Button { path.append(.person(email)) } label: {
-                            VStack(spacing: 6) {
-                                Avatar(url: person?.picture ?? "", name: person?.displayName ?? email, size: 54, online: person?.isOnline ?? false)
-                                    .overlay(alignment: .topTrailing) {
-                                        if email == server.ownerEmail {
-                                            Image(systemName: "crown.fill").font(.system(size: 12)).foregroundStyle(Palette.warning).offset(x: 2, y: -4)
-                                        }
-                                    }
-                                Text(person?.displayName ?? String(email.split(separator: "@").first ?? "")).font(.jakarta(11, .semibold)).foregroundStyle(Palette.text2).lineLimit(1)
-                            }
-                            .frame(width: 66)
-                        }
-                        .buttonStyle(BouncyStyle())
-                    }
-                }
-                .padding(.vertical, 4)
-                .padding(.horizontal, 4)
-            }
-        }
-    }
-
-    private func load() async {
-        defer { loading = false }
-        async let fresh = try? FS.get("Community", server.id)
-        async let list = try? FS.query("ServerChannel", [.equals("community_id", server.id)], orderBy: "position", descending: false)
-        if let doc = await fresh ?? nil { server = Server(doc) }
-        channels = ((await list) ?? []).map(ServerChannel.init).sorted { $0.position < $1.position }
-    }
-}
-
-// MARK: - A text channel
-
-struct ChannelChatView: View {
-    let server: Server
-    let channel: ServerChannel
-    @Environment(AppModel.self) private var model
-    @State private var messages: [ChannelMessage] = []
-    @State private var draft = ""
-    @State private var replyTo: ChannelMessage?
-    @State private var photo: PhotosPickerItem?
-    @State private var loaded = false
-    @State private var failed: String?
-    @State private var reporting: ReportSheet.Target?
-    @FocusState private var focused: Bool
-
-    private var me: String { model.me?.email ?? "" }
-    private var isMember: Bool { server.members.contains(me) }
-
-    var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2) {
-                    if loaded {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Image(systemName: "number").font(.system(size: 28, weight: .heavy)).foregroundStyle(.white)
-                                .frame(width: 64, height: 64).background(Theme.gradient, in: Circle())
-                                .shadow(color: Theme.main.opacity(0.35), radius: 12, y: 6)
-                            Text("Welcome to #\(channel.name)!").font(.display(28)).foregroundStyle(Palette.text)
-                            Text(channel.description.isEmpty ? "This is the start of the #\(channel.name) channel." : channel.description)
-                                .font(.jakarta(14)).foregroundStyle(Palette.muted)
-                        }
-                        .padding(.vertical, 20)
-                    }
-                    ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
-                        let previous = index > 0 ? messages[index - 1] : nil
-                        let grouped = previous != nil && previous!.authorEmail == message.authorEmail && previous!.kind != "join" && !gap(previous!, message)
-                        ChannelMessageRow(message: message, grouped: grouped, mine: message.authorEmail == me, onProfile: {})
-                            .id(message.id)
-                            .contextMenu {
-                                Button { replyTo = message; focused = true } label: { Label("Reply", systemImage: "arrowshape.turn.up.left") }
-                                if !message.text.isEmpty { Button { UIPasteboard.general.string = message.text; model.showToast("Copied", icon: "doc.on.doc.fill") } label: { Label("Copy", systemImage: "doc.on.doc") } }
-                                if message.authorEmail == me || model.me?.isAdmin == true {
-                                    Button(role: .destructive) { delete(message) } label: { Label("Delete", systemImage: "trash") }
-                                }
-                                if message.authorEmail != me {
-                                    Button { reporting = ReportSheet.Target(id: message.id, type: "message", ownerEmail: message.authorEmail, preview: message.text, link: "/CommunityChat?id=\(server.id)") } label: { Label("Report", systemImage: "flag") }
-                                }
-                            }
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-            }
-            .defaultScrollAnchor(.bottom)
-            .scrollDismissesKeyboard(.interactively)
-            .onChange(of: messages.last?.id) { _, id in
-                guard let id else { return }
-                withAnimation(.snappy) { proxy.scrollTo(id, anchor: .bottom) }
-            }
-        }
-        .sugarBackground()
-        .safeAreaInset(edge: .bottom, spacing: 0) { composer }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                HStack(spacing: 8) {
-                    ServerIcon(server: server, size: 30)
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("#\(channel.name)").font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
-                        Text(server.name).font(.jakarta(11, .semibold)).foregroundStyle(Palette.muted)
-                    }
-                }
-            }
-        }
-        .sheet(item: $reporting) { target in ReportSheet(target: target) }
-        .task { await poll() }
-        .onChange(of: photo) { _, item in
-            guard let item else { return }
-            Task { await sendPhoto(item) }
-        }
-    }
-
-    private var composer: some View {
-        VStack(spacing: 6) {
-            if let failed { Text(failed).font(.jakarta(12, .semibold)).foregroundStyle(Palette.danger) }
-            if let replyTo {
-                HStack {
-                    Image(systemName: "arrowshape.turn.up.left.fill").foregroundStyle(Theme.main)
-                    Text("Replying to \(replyTo.authorName)").font(.jakarta(12, .bold)).foregroundStyle(Palette.text2)
-                    Spacer()
-                    Button { self.replyTo = nil } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Palette.muted) }
-                }
-                .padding(.horizontal, 6)
-            }
-            if isMember {
-                HStack(alignment: .bottom, spacing: 10) {
-                    PhotosPicker(selection: $photo, matching: .images) {
-                        Image(systemName: "plus").font(.system(size: 18, weight: .bold)).foregroundStyle(Theme.main)
-                            .frame(width: 42, height: 42)
-                            .background(Theme.soft, in: Circle())
-                    }
-                    .buttonStyle(BouncyStyle())
-                    TextField("Message #\(channel.name)", text: $draft, axis: .vertical)
-                        .font(.jakarta(15))
-                        .focused($focused)
-                        .lineLimit(1...6)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 11)
-                        .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
-                    SendButton(enabled: !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) { Task { await send() } }
-                }
-            } else {
-                Text("Join the server to chat here.").font(.jakarta(14, .semibold)).foregroundStyle(Palette.muted).padding(.vertical, 10)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
-        .background {
-            Palette.surface
-                .shadow(color: Palette.shadow, radius: 10, y: -4)
-                .ignoresSafeArea(edges: .bottom)
-        }
-    }
-
-    private func gap(_ a: ChannelMessage, _ b: ChannelMessage) -> Bool {
-        guard let x = Dates.parse(a.created), let y = Dates.parse(b.created) else { return false }
-        return y.timeIntervalSince(x) > 7 * 60
-    }
-
-    private func poll() async {
-        while !Task.isCancelled {
-            await load()
-            let slow = FS.missingIndex.contains("ChannelMessage")
-            try? await Task.sleep(for: .seconds(slow ? 4 : 2.5))
-        }
-    }
-
-    private func load() async {
-        var filters: [FS.Filter] = [.equals("channel_id", channel.id)]
-        let newest = messages.last(where: { !$0.pending })?.created ?? ""
-        if loaded, !newest.isEmpty { filters.append(.after("created_date", ChatStore.minus(newest, seconds: 60))) }
-        guard let docs = try? await FS.query("ChannelMessage", filters, orderBy: "created_date", limit: loaded ? 60 : 150) else {
-            loaded = true
-            return
-        }
-        let known = Set(messages.map(\.id))
-        let fresh = docs.map(ChannelMessage.init).filter { !known.contains($0.id) }
-        let blocked = Set(model.me?.blocked ?? [])
-        if !fresh.isEmpty || !loaded {
-            withAnimation(loaded ? .snappy : nil) {
-                messages = (messages + fresh).filter { !blocked.contains($0.authorEmail) }.sorted { $0.created < $1.created }
-            }
-        }
-        loaded = true
-    }
-
-    private func send() async {
-        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, let meProfile = model.me else { return }
-        if Moderation.hasLink(text) && meProfile.isAdmin == false {
-            failed = "Links aren't allowed in server chats."
-            return
-        }
-        draft = ""
-        failed = nil
-        let data = Servers.message(channel: channel.id, server: server.id, me: meProfile, text: text, imageURL: "", reply: replyTo)
-        replyTo = nil
-        var pending = ChannelMessage(data)
-        pending.id = "pending-\(UUID().uuidString)"
-        pending.created = FS.nowISO()
-        pending.pending = true
-        withAnimation(.snappy) { messages.append(pending) }
-        do {
-            let doc = try await FS.create("ChannelMessage", data)
-            let created = ChannelMessage(doc)
-            if let i = messages.firstIndex(where: { $0.id == pending.id }) { messages[i] = created }
-        } catch {
-            withAnimation { messages.removeAll { $0.id == pending.id } }
-            draft = text
-            failed = "Couldn't send — \(error.localizedDescription)"
-        }
-    }
-
-    private func sendPhoto(_ item: PhotosPickerItem) async {
-        defer { photo = nil }
-        guard let meProfile = model.me,
-              let raw = try? await item.loadTransferable(type: Data.self),
-              let image = UIImage(data: raw), let jpeg = ImageTools.jpeg(image, maxSide: 1600) else { return }
-        do {
-            let url = try await StorageClient.upload(jpeg, contentType: "image/jpeg", fileExtension: "jpg")
-            let doc = try await FS.create("ChannelMessage", Servers.message(channel: channel.id, server: server.id, me: meProfile, text: "", imageURL: url))
-            withAnimation(.snappy) { messages.append(ChannelMessage(doc)) }
-        } catch {
-            failed = "Couldn't send the photo — \(error.localizedDescription)"
-        }
-    }
-
-    private func delete(_ message: ChannelMessage) {
-        withAnimation { messages.removeAll { $0.id == message.id } }
-        Task { try? await FS.delete("ChannelMessage", message.id) }
-    }
-}
-
-struct ChannelMessageRow: View {
-    let message: ChannelMessage
-    let grouped: Bool
-    let mine: Bool
-    var onProfile: () -> Void
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        if message.kind == "join" {
-            HStack(spacing: 8) {
-                Image(systemName: "arrow.right").font(.system(size: 11, weight: .heavy)).foregroundStyle(Palette.success)
-                Text(message.text).font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
-                Text(Dates.time(message.created)).font(.jakarta(11)).foregroundStyle(Palette.muted.opacity(0.7))
-            }
-            .padding(.vertical, 6)
-            .padding(.leading, 12)
-        } else {
-            HStack(alignment: .top, spacing: 10) {
-                if grouped {
-                    Color.clear.frame(width: 40, height: 1)
-                } else {
-                    Avatar(url: model.person(message.authorEmail)?.picture ?? message.authorPicture, name: message.authorName, size: 40)
-                }
+            HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    if !message.replyPreview.isEmpty {
-                        Label(message.replyPreview, systemImage: "arrowshape.turn.up.left.fill")
-                            .font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(1)
+                    Text(store.server.name).font(.display(26)).foregroundStyle(Palette.text).lineLimit(2)
+                    HStack(spacing: 10) {
+                        Label("\(store.server.members.count)", systemImage: "person.2.fill").foregroundStyle(Palette.muted)
+                        Label("\(online) online", systemImage: "circle.fill").foregroundStyle(Palette.success)
                     }
-                    if !grouped {
-                        HStack(spacing: 6) {
-                            Text(model.person(message.authorEmail)?.displayName ?? message.authorName)
-                                .font(.jakarta(14, .heavy))
-                                .foregroundStyle(mine ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.text))
-                            Text(Dates.ago(message.created)).font(.jakarta(11)).foregroundStyle(Palette.muted)
-                            if message.pinned { Image(systemName: "pin.fill").font(.system(size: 10)).foregroundStyle(Theme.main) }
+                    .font(.jakarta(12, .bold))
+                }
+                Spacer()
+            }
+            .padding(.top, 38)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    pill("person.2.fill", "Members") { membersShown = true }
+                    if access.can(.create_invite) {
+                        pill("link", "Invite") {
+                            UIPasteboard.general.string = "\(Servers.site)/CommunityChat?id=\(store.server.id)"
+                            model.showToast("Invite link copied", icon: "link")
                         }
                     }
-                    if !message.text.isEmpty {
-                        Text(message.text).font(.jakarta(15)).foregroundStyle(Palette.text).textSelection(.enabled)
+                    if access.can(.manage_server) || access.can(.manage_roles) || access.can(.manage_channels) {
+                        pill("gearshape.fill", "Settings") { settings = true }
                     }
-                    if !message.imageURL.isEmpty {
-                        RemoteImage(url: message.imageURL, contentMode: .fit)
-                            .frame(maxWidth: 260, maxHeight: 280, alignment: .leading)
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    if !access.isOwner && store.server.members.contains(me) {
+                        pill("rectangle.portrait.and.arrow.right", "Leave") { confirmLeave = true }
                     }
                 }
-                .opacity(message.pending ? 0.55 : 1)
-                Spacer(minLength: 0)
             }
-            .padding(.top, grouped ? 0 : 10)
+            .padding(.top, 10)
+        }
+    }
+
+    private func pill(_ icon: String, _ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.jakarta(12, .bold)).foregroundStyle(Theme.main)
+                .padding(.horizontal, 12).frame(height: 32)
+                .background(Theme.soft, in: Capsule())
+        }
+        .buttonStyle(BouncyStyle())
+    }
+
+    @ViewBuilder
+    private func section(_ title: String, type: String, _ list: [ServerChannel]) -> some View {
+        if !list.isEmpty || access.can(.manage_channels) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(title).font(.jakarta(11, .heavy)).tracking(1.1).foregroundStyle(Palette.muted)
+                    Spacer()
+                    if access.can(.manage_channels) {
+                        Button { newChannelType = type } label: {
+                            Image(systemName: "plus").font(.system(size: 13, weight: .bold)).foregroundStyle(Palette.muted).frame(width: 30, height: 26)
+                        }
+                        .accessibilityLabel("Add a \(type) channel")
+                    }
+                }
+                .padding(.leading, 6)
+                ForEach(list) { channel in
+                    channelRow(channel)
+                }
+            }
+        }
+    }
+
+    private func channelRow(_ channel: ServerChannel) -> some View {
+        let inVoice = store.voice[channel.id] ?? []
+        let here = voice.room?.id == channel.id
+        return VStack(alignment: .leading, spacing: 4) {
+            Button {
+                if channel.isVoice { path.append(.voice(store.server, channel)) } else { path.append(.channel(store.server, channel)) }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: channel.isVoice ? "speaker.wave.2.fill" : "number")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(here ? .white : Theme.main)
+                        .frame(width: 32, height: 32)
+                        .background(here ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Theme.soft), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 4) {
+                            Text(channel.name).font(.jakarta(15, .bold)).foregroundStyle(Palette.text).lineLimit(1)
+                            if channel.isPrivate { Image(systemName: "lock.fill").font(.system(size: 9)).foregroundStyle(Palette.muted) }
+                        }
+                        if !channel.description.isEmpty {
+                            Text(channel.description).font(.jakarta(11)).foregroundStyle(Palette.muted).lineLimit(1)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    if channel.isVoice && !inVoice.isEmpty {
+                        Text("\(inVoice.count)").font(.jakarta(11, .heavy)).foregroundStyle(Palette.success)
+                            .padding(.horizontal, 7).frame(height: 20).background(Palette.success.opacity(0.12), in: Capsule())
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 7)
+                .background(Palette.surface.opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(BouncyStyle(scale: 0.97))
+            .contextMenu {
+                if access.can(.manage_channels) {
+                    Button { editingChannel = channel } label: { Label("Edit channel", systemImage: "pencil") }
+                    Button(role: .destructive) {
+                        Task {
+                            try? await FS.delete("ServerChannel", channel.id)
+                            await store.load()
+                        }
+                    } label: { Label("Delete channel", systemImage: "trash") }
+                }
+            }
+            if channel.isVoice && !inVoice.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(inVoice) { p in
+                        HStack(spacing: 8) {
+                            Avatar(url: model.person(p.email)?.picture ?? p.picture, name: p.name, size: 22)
+                            Text(model.person(p.email)?.displayName ?? p.name).font(.jakarta(12, .semibold)).foregroundStyle(Palette.text2).lineLimit(1)
+                            if p.muted { Image(systemName: "mic.slash.fill").font(.system(size: 10)).foregroundStyle(Palette.muted) }
+                            if p.deafened { Image(systemName: "speaker.slash.fill").font(.system(size: 10)).foregroundStyle(Palette.muted) }
+                        }
+                    }
+                }
+                .padding(.leading, 50)
+            }
+        }
+    }
+
+    // Roles with their colours, like the website's member list header.
+    @ViewBuilder
+    private var rolesSummary: some View {
+        let roles = store.sortedRoles
+        if !roles.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("ROLES").font(.jakarta(11, .heavy)).tracking(1.1).foregroundStyle(Palette.muted).padding(.leading, 6)
+                FlowLayout(spacing: 6) {
+                    ForEach(roles) { role in
+                        let count = store.members.filter { $0.roles.contains(role.id) }.count
+                        HStack(spacing: 5) {
+                            Circle().fill(role.tint).frame(width: 9, height: 9)
+                            Text(role.name).font(.jakarta(12, .bold)).foregroundStyle(Palette.text2)
+                            Text("\(count)").font(.jakarta(11, .heavy)).foregroundStyle(Palette.muted)
+                        }
+                        .padding(.horizontal, 10).frame(height: 28)
+                        .background(Palette.surface, in: Capsule())
+                        .overlay(Capsule().strokeBorder(role.tint.opacity(0.4), lineWidth: 1))
+                    }
+                }
+            }
+            .padding(.top, 6)
         }
     }
 }
 
-// Voice channels: the website runs the call; in the app you can see who's
-// in there and hop in from the website.
-struct VoiceChannelView: View {
-    let server: Server
-    let channel: ServerChannel
-    @Environment(AppModel.self) private var model
-    @State private var inside: [String] = []
-
-    var body: some View {
-        VStack(spacing: 18) {
-            Spacer()
-            Image(systemName: "speaker.wave.3.fill").font(.system(size: 40, weight: .bold)).foregroundStyle(.white)
-                .frame(width: 110, height: 110).background(Theme.gradient, in: Circle())
-                .shadow(color: Theme.main.opacity(0.45), radius: 24, y: 10)
-            Text(channel.name).font(.display(34)).foregroundStyle(Palette.text)
-            Text(inside.isEmpty ? "Nobody's here right now." : "\(inside.count) in the channel").font(.jakarta(15)).foregroundStyle(Palette.muted)
-            HStack(spacing: -10) {
-                ForEach(inside.prefix(6), id: \.self) { email in
-                    Avatar(url: model.person(email)?.picture ?? "", name: model.person(email)?.displayName ?? email, size: 50)
-                        .overlay(Circle().strokeBorder(Palette.bg, lineWidth: 3))
-                }
-            }
-            Text("Voice chat runs on the Sugerly website for now — open it there to talk.")
-                .font(.jakarta(13)).foregroundStyle(Palette.text2).multilineTextAlignment(.center).padding(.horizontal, 40)
-            Link(destination: URL(string: "https://sugerly.netlify.app/CommunityChat?id=\(server.id)")!) {
-                Label("Open on the website", systemImage: "safari.fill")
-            }
-            .buttonStyle(GradientButtonStyle(fullWidth: false))
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
-        .sugarBackground()
-        .navigationTitle(channel.name)
-        .navigationBarTitleDisplayMode(.inline)
-        .task {
-            let docs = (try? await FS.query("VoicePresence", [.equals("channel_id", channel.id)])) ?? []
-            inside = docs.map { $0.str("user_email") }.filter { !$0.isEmpty }
-        }
-    }
-}
+struct NewChannelKind: Identifiable { var type: String; var id: String { type } }
+struct EmailBox: Identifiable { var email: String; var id: String { email } }
 
 // MARK: - Create a server
 
@@ -800,10 +601,12 @@ struct CreateServerView: View {
     @State private var about = ""
     @State private var welcome = ""
     @State private var emoji = "🌸"
+    @State private var icon: PhotosPickerItem?
+    @State private var iconImage: UIImage?
     @State private var busy = false
     @State private var error: String?
 
-    private let emojis = ["🌸", "🎨", "🫶", "✨", "🎧", "🌙", "🍓", "🦋", "🎮", "📚", "🌈", "🐱"]
+    static let emojis = ["🌸", "🎨", "🫶", "✨", "🎧", "🌙", "🍓", "🦋", "🎮", "📚", "🌈", "🐱"]
 
     var body: some View {
         ComposerScaffold(title: "Create a server", actionTitle: "Create", busy: busy, canPost: !name.trimmingCharacters(in: .whitespaces).isEmpty, onClose: { dismiss() }, onPost: { Task { await create() } }) {
@@ -830,20 +633,39 @@ struct CreateServerView: View {
                     }
                 }
                 Text("ICON").font(.jakarta(11, .heavy)).tracking(1.2).foregroundStyle(Palette.muted)
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 6), spacing: 8) {
-                    ForEach(emojis, id: \.self) { e in
-                        Button { emoji = e } label: {
-                            Text(e).font(.system(size: 24)).frame(maxWidth: .infinity).frame(height: 48)
-                                .background(emoji == e ? Theme.soft : Palette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(emoji == e ? Theme.main : Palette.border, lineWidth: emoji == e ? 2 : 1))
+                HStack(alignment: .top, spacing: 12) {
+                    PhotosPicker(selection: $icon, matching: .images) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Theme.soft)
+                            if let iconImage { Image(uiImage: iconImage).resizable().scaledToFill() } else { Text(emoji).font(.system(size: 36)) }
                         }
-                        .buttonStyle(BouncyStyle())
+                        .frame(width: 76, height: 76)
+                        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                        .overlay(alignment: .bottomTrailing) {
+                            Image(systemName: "camera.fill").font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                                .frame(width: 26, height: 26).background(Theme.gradient, in: Circle()).offset(x: 4, y: 4)
+                        }
+                    }
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 6), spacing: 6) {
+                        ForEach(Self.emojis, id: \.self) { e in
+                            Button { emoji = e; iconImage = nil; icon = nil } label: {
+                                Text(e).font(.system(size: 22)).frame(maxWidth: .infinity).frame(height: 36)
+                                    .background(emoji == e && iconImage == nil ? Theme.soft : Palette.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            }
+                            .buttonStyle(BouncyStyle())
+                        }
                     }
                 }
                 SugarField(placeholder: "Server name", text: $name)
                 SugarField(placeholder: "What's it about?", text: $about, lines: 2...4)
                 SugarField(placeholder: "Welcome message for new members", text: $welcome)
                 if let error { Text(error).font(.jakarta(13, .semibold)).foregroundStyle(Palette.danger) }
+            }
+        }
+        .onChange(of: icon) { _, item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) { iconImage = image }
             }
         }
     }
@@ -853,8 +675,13 @@ struct CreateServerView: View {
         busy = true
         defer { busy = false }
         do {
-            let server = try await Servers.create(me: meProfile, name: String(name.trimmingCharacters(in: .whitespaces).prefix(40)), description: String(about.trimmingCharacters(in: .whitespacesAndNewlines).prefix(160)), emoji: emoji, iconURL: "", welcome: String(welcome.trimmingCharacters(in: .whitespaces).prefix(160)), template: template)
+            var iconURL = ""
+            if let iconImage, let jpeg = ImageTools.jpeg(iconImage, maxSide: 512) {
+                iconURL = try await StorageClient.upload(jpeg, contentType: "image/jpeg", fileExtension: "jpg")
+            }
+            let server = try await Servers.create(me: meProfile, name: String(name.trimmingCharacters(in: .whitespaces).prefix(40)), description: String(about.trimmingCharacters(in: .whitespacesAndNewlines).prefix(160)), emoji: emoji, iconURL: iconURL, welcome: String(welcome.trimmingCharacters(in: .whitespaces).prefix(160)), template: template)
             dismiss()
+            model.showToast("\(server.name) is ready!", icon: "sparkles")
             onCreate(server)
         } catch {
             self.error = error.localizedDescription

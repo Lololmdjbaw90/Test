@@ -36,11 +36,11 @@ struct RouteView: View {
         case .gallery: GalleryView(path: $path)
         case .music: MusicView(path: $path)
         case .admin: AdminView()
-        case .servers: ServersView(path: $path)
+        case .servers: ServerHubView(path: $path).navigationTitle("Servers").navigationBarTitleDisplayMode(.inline).sugarBackground()
         case .people: PeopleView(path: $path)
-        case .server(let server): ServerView(server: server, path: $path)
+        case .server(let server): ServerHubView(path: $path, initial: server).navigationTitle(server.name).navigationBarTitleDisplayMode(.inline).sugarBackground()
         case .channel(let server, let channel): ChannelChatView(server: server, channel: channel)
-        case .voice(let server, let channel): VoiceChannelView(server: server, channel: channel)
+        case .voice(let server, let channel): VoiceRoomView(server: server, channel: channel)
         }
     }
 }
@@ -86,6 +86,7 @@ struct MainShell: View {
     @State private var posts = PostsStore()
     @State private var player = Player()
     @State private var notes = NotificationsStore()
+    @State private var voice = VoiceEngine()
     @State private var homePath: [Route] = []
     @State private var communityPath: [Route] = []
     @State private var galleryPath: [Route] = []
@@ -164,6 +165,7 @@ struct MainShell: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !barHidden {
                 VStack(spacing: 8) {
+                    VoiceDock()
                     if tab != .reels { MiniPlayer() }
                     SugarTabBar(tab: $tab, unread: chats.unread, dark: tab == .reels) { creating = true }
                 }
@@ -200,6 +202,8 @@ struct MainShell: View {
         .environment(posts)
         .environment(player)
         .environment(notes)
+        .environment(voice)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: voice.room?.id)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in typing = true }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in typing = false }
         .sheet(isPresented: $creating, onDismiss: {
