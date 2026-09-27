@@ -1,0 +1,5 @@
+Sugerly.xcodeproj/
+build/
+build.log
+Payload/
+*.ipa

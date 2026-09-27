@@ -1,0 +1,64 @@
+# Builds the native SwiftUI app (native/) on a GitHub Mac and uploads an
+# unsigned .ipa (install it with Sideloadly, like the other one). It's a
+# separate app (com.mimilocks.sugerly), so it can sit next to the current one.
+name: Build native iOS app (.ipa)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "native/**"
+      - ".github/workflows/ios-native.yml"
+
+jobs:
+  ipa:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use the newest Xcode
+        run: |
+          XC=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -vi beta | sort -V | tail -1)
+          if [ -n "$XC" ]; then sudo xcode-select -s "$XC"; fi
+          xcodebuild -version
+
+      - name: Generate the Xcode project
+        working-directory: native
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build (unsigned)
+        working-directory: native
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Sugerly.xcodeproj \
+            -scheme Sugerly \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build.log | grep -E "error:|warning: unused|BUILD (SUCCEEDED|FAILED)" || true
+          test -d build/Build/Products/Release-iphoneos/Sugerly.app
+
+      - name: Show compile errors
+        if: failure()
+        working-directory: native
+        run: grep -E "error:" build.log | head -80 || true
+
+      - name: Package the .ipa
+        working-directory: native
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/Sugerly.app Payload/
+          zip -qry Sugerly-native-unsigned.ipa Payload
+          ls -lh Sugerly-native-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sugerly-native-ipa
+          path: native/Sugerly-native-unsigned.ipa
+          retention-days: 30
