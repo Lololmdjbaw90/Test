@@ -74,7 +74,7 @@ function AnnouncementBar({ config }) {
       <div className="flex items-center gap-2.5 px-4 py-2 text-xs sm:text-sm font-semibold">
         <Megaphone className="w-4 h-4 flex-shrink-0" />
         <span className="flex-1 truncate">{text}</span>
-        <button onClick={() => { try { localStorage.setItem(key, "1"); } catch { /* ignore */ } setDismissed(true); }} className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-white/20" aria-label="Dismiss announcement"><X className="w-3.5 h-3.5" /></button>
+        <button onClick={() => { try { localStorage.setItem(key, "1"); } catch { /* ignore */ } setDismissed(true); }} className="tap-slop tap-slop-lg w-6 h-6 rounded-full flex items-center justify-center hover:bg-white/20" aria-label="Dismiss announcement"><X className="w-3.5 h-3.5" /></button>
       </div>
     </motion.div>
   );
@@ -108,7 +108,7 @@ function TopBar({ onSearch, user, badges, isDark, onToggleTheme }) {
       {user && (
         <>
           {/* On phones your avatar opens the menu with your profile and every page. */}
-          <button ref={avatarRef} onClick={() => { feedback("tap"); setMenuOpen((v) => !v); }} className="desk:hidden relative rounded-full" aria-label="Menu" aria-expanded={menuOpen}>
+          <button ref={avatarRef} onClick={() => { feedback("tap"); setMenuOpen((v) => !v); }} className="tap-slop desk:hidden relative rounded-full" aria-label="Menu" aria-expanded={menuOpen}>
             <Avatar src={user.profile_picture} name={displayName(user)} size={36} nitro={user.nitro_active} />
             {menuBadge > 0 && <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold text-white flex items-center justify-center" style={{ background: "var(--accent-rose)", boxShadow: "0 0 0 2px var(--surface)" }}>{menuBadge > 9 ? "9+" : menuBadge}</span>}
           </button>
@@ -341,7 +341,7 @@ export default function Layout() {
   const hideMobileNav = !wide && (path === "/communitychat" || inConversation);
 
   return (
-    <div className="app-shell flex h-[100dvh] overflow-hidden safe-top safe-x">
+    <div className="app-shell flex h-app overflow-hidden safe-top safe-x">
       <Sidebar collapsed={collapsed} onToggleCollapsed={toggleCollapsed} badges={badges} onToggleTheme={toggleTheme} isDark={isDark} />
       <div className="flex-1 min-w-0 flex flex-col relative">
         <OfflineBar />

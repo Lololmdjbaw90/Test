@@ -41,7 +41,13 @@ function Thumb({ post, onOpen, className = "" }) {
 // The post view: big picture (swipe for the next post, double-tap to like,
 // tap for full screen), the artist with a follow button, one row of actions,
 // the caption, comments, more from the artist and "More like this".
-export default function PostViewer({ post, onClose, liked, likeCount, onLike, onDelete, position, onPrev, onNext, saved, onSave, author, following, onFollow, related = [], moreFromAuthor = [], onOpenPost, onTag, likers = [] }) {
+export default function PostViewer(incoming) {
+  // While the window closes, keep showing what was open (the parent
+  // already cleared it) so the close animation doesn't collapse.
+  const last = useRef(incoming);
+  if (incoming.post) last.current = incoming;
+  const isOpen = !!incoming.post;
+  const { post, onClose, liked, likeCount, onLike, onDelete, position, onPrev, onNext, saved, onSave, author, following, onFollow, related = [], moreFromAuthor = [], onOpenPost, onTag, likers = [] } = isOpen ? incoming : { ...last.current, onClose: incoming.onClose };
   const { user } = useAuth();
   const canDelete = post && user && (user.email === post.user_email || user.role === "admin");
   const [zoom, setZoom] = useState(false);
@@ -65,7 +71,7 @@ export default function PostViewer({ post, onClose, liked, likeCount, onLike, on
   }, [post?.id]);
 
   useEffect(() => {
-    if (!post) { setZoom(false); return undefined; }
+    if (!isOpen) { setZoom(false); return undefined; }
     const onKey = (e) => {
       if (["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) return;
       if (e.key === "ArrowLeft") prev?.();
@@ -73,7 +79,7 @@ export default function PostViewer({ post, onClose, liked, likeCount, onLike, on
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [post, onPrev, onNext]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOpen, post, onPrev, onNext]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const share = async () => {
     const url = siteUrl(`/Community?post=${post.id}`);
@@ -105,7 +111,7 @@ export default function PostViewer({ post, onClose, liked, likeCount, onLike, on
   const open = (id) => { dir.current = 0; onOpenPost?.(id); };
 
   return (
-    <Modal open={!!post} onClose={onClose} size={post?.image_url ? "max-w-6xl" : "max-w-4xl"} padded={false} hideHeader autoFocus={false}>
+    <Modal open={isOpen} onClose={onClose} size={post?.image_url ? "max-w-6xl" : "max-w-4xl"} padded={false} hideHeader autoFocus={false}>
       {post && (
         <div ref={topRef} className="flex flex-col lg:flex-row lg:h-[84vh]">
           {/* media */}

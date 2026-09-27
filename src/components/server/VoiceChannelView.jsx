@@ -21,8 +21,8 @@ export default function VoiceChannelView({ channel, me, access = { connect: true
   // controls, and the tab bar steps aside); minimize to see the channel.
   const touch = useMediaQuery("(hover: none), (pointer: coarse), (max-width: 767px)");
   const [minimized, setMinimized] = useState(false);
-  useEffect(() => { if (joinedHere) setMinimized(false); }, [joinedHere]);
   const joinedHere = vs.room?.id === channel.id && (vs.connected || vs.connecting);
+  useEffect(() => { if (joinedHere) setMinimized(false); }, [joinedHere]);
   const { data: presence } = useLiveQuery("VoicePresence", { channel_id: channel.id });
   const inRoom = presence.filter((p) => now - (p.last_active || 0) < VOICE_STALE_MS);
 

@@ -77,10 +77,8 @@ export default function Gallery() {
   const toggleSave = async (art) => {
     feedback("save");
     const next = saved.includes(art.id) ? saved.filter((id) => id !== art.id) : [...saved, art.id];
-    try {
-      await updateMe({ saved_artworks: next });
-      toast.success(next.includes(art.id) ? "Saved to your collection" : "Removed from saved");
-    } catch (e) { toast.error(e?.message || "Could not save."); }
+    updateMe({ saved_artworks: next }).catch((e) => toast.error(e?.message || "Could not save."));
+    toast.success(next.includes(art.id) ? "Saved to your collection" : "Removed from saved");
   };
 
   const toggleFeatured = async (art) => {

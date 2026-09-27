@@ -53,7 +53,7 @@ export function SuggestedPeople({ items, followingSet, onFollow, variant = "list
       <div className="card !rounded-[1.75rem] py-4">
         <div className="flex items-center justify-between px-4 mb-3">
           <p className="font-bold text-sm" style={{ color: "var(--text-primary)" }}>Suggested for you</p>
-          <Link to="/Friends" className="text-xs font-bold" style={{ color: "var(--accent-rose)" }}>See all</Link>
+          <Link to="/Friends" className="tap-slop text-xs font-bold" style={{ color: "var(--accent-rose)" }}>See all</Link>
         </div>
         <div className="flex gap-3 overflow-x-auto no-scrollbar px-4 snap-x">
           {items.map(({ user, reason }) => (
@@ -75,7 +75,7 @@ export function SuggestedPeople({ items, followingSet, onFollow, variant = "list
     <section>
       <div className="flex items-center justify-between mb-2">
         <p className="font-bold text-sm" style={{ color: "var(--text-secondary)" }}>Suggested for you</p>
-        <Link to="/Friends" className="text-xs font-bold" style={{ color: "var(--accent-rose)" }}>See all</Link>
+        <Link to="/Friends" className="tap-slop text-xs font-bold" style={{ color: "var(--accent-rose)" }}>See all</Link>
       </div>
       <div className="space-y-1">
         {items.map(({ user, reason }, i) => (

@@ -138,7 +138,7 @@ export default function Legal({ doc: forced }) {
   const back = () => (window.history.length > 1 ? navigate(-1) : navigate("/"));
 
   return (
-    <div className="min-h-[100dvh] overflow-y-auto" style={{ background: "var(--app-bg)", paddingTop: "env(safe-area-inset-top)" }}>
+    <div className="h-full overflow-y-auto overscroll-contain" style={{ background: "var(--app-bg)", paddingTop: "env(safe-area-inset-top)" }}>
       <div className="max-w-2xl mx-auto px-5 py-6 pb-24">
         <div className="flex items-center gap-3 mb-6">
           <button onClick={back} className="icon-btn icon-btn-bordered" aria-label="Back"><ArrowLeft className="w-5 h-5" /></button>

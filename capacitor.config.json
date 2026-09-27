@@ -18,7 +18,7 @@
       "showSpinner": false
     },
     "Keyboard": {
-      "resize": "native",
+      "resize": "none",
       "resizeOnFullScreen": true
     },
     "StatusBar": {

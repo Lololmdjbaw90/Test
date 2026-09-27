@@ -64,7 +64,8 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="min-h-[100dvh] flex items-center justify-center p-4 app-shell relative overflow-hidden safe-top safe-x">
+    <div className="h-full overflow-y-auto overscroll-contain app-shell">
+    <div className="min-h-full flex items-center justify-center p-4 relative overflow-hidden safe-top safe-x">
       <div className="orb orb-a w-96 h-96 -top-24 -left-24" />
       <div className="orb orb-b w-[30rem] h-[30rem] -bottom-32 -right-32" />
       <div className="relative w-full max-w-lg">
@@ -175,6 +176,7 @@ export default function OnboardingPage() {
           )}
         </div>
       </div>
+    </div>
     </div>
   );
 }

@@ -23,7 +23,7 @@ function SectionTitle({ icon: Icon, title, to, linkLabel = "See all" }) {
     <div className="flex items-center gap-2.5 mb-4">
       <span className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: "var(--pink-soft)", color: "var(--accent-rose)" }}><Icon className="w-4 h-4" /></span>
       <h2 className="font-display text-xl sm:text-2xl font-semibold flex-1" style={{ color: "var(--text-primary)" }}>{title}</h2>
-      {to && <Link to={to} className="text-xs font-bold flex items-center gap-1 group" style={{ color: "var(--accent-rose)" }}>{linkLabel}<ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" /></Link>}
+      {to && <Link to={to} className="tap-slop text-xs font-bold flex items-center gap-1 group" style={{ color: "var(--accent-rose)" }}>{linkLabel}<ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" /></Link>}
     </div>
   );
 }

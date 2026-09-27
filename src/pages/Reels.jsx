@@ -21,7 +21,16 @@ import ReelStudio from "@/components/reels/ReelStudio";
 
 const TABS = [{ id: "following", label: "Following" }, { id: "foryou", label: "For you" }];
 const sessionSeed = Math.floor(Math.random() * 1e9);
-const viewedThisSession = new Set();
+// A view counts once per person (rewatches don't add up, even after
+// closing the app) and never on your own reels. Remembered per account on
+// this device.
+const VIEWED_KEY = (email) => `sugerly:viewed_reels:${email || "anon"}`;
+function viewedSet(email) {
+  try { return new Set(JSON.parse(localStorage.getItem(VIEWED_KEY(email)) || "[]")); } catch { return new Set(); }
+}
+function rememberViewed(email, set) {
+  try { localStorage.setItem(VIEWED_KEY(email), JSON.stringify([...set].slice(-4000))); } catch { /* storage full or blocked */ }
+}
 
 export default function ReelsPage() {
   const { user: me, updateMe } = useAuth();
@@ -178,7 +187,8 @@ export default function ReelsPage() {
     feedback("save");
     recordReelSignal(reel, { saved: !was });
     const next = was ? [...savedSet].filter((id) => id !== reel.id) : [...savedSet, reel.id];
-    try { await updateMe({ saved_reels: next }); if (!was) toast.success("Saved to your reels"); } catch (e) { toast.error(e?.message || "Could not save."); }
+    updateMe({ saved_reels: next }).catch((e) => toast.error(e?.message || "Could not save."));
+    if (!was) toast.success("Saved to your reels");
   };
   const share = (reel) => setShareFor(reel);
   const follow = async (email) => {
@@ -201,8 +211,11 @@ export default function ReelsPage() {
     try { await base44.entities.Reel.delete(reel.id); setOrder((o) => o.filter((x) => x.id !== reel.id)); toast.success("Reel deleted"); } catch (e) { toast.error(e?.message || "Could not delete."); }
   };
   const viewed = (reel) => {
-    if (viewedThisSession.has(reel.id)) return;
-    viewedThisSession.add(reel.id);
+    if (!me || reel.user_email === me.email) return;
+    const seen = viewedSet(me.email);
+    if (seen.has(reel.id)) return;
+    seen.add(reel.id);
+    rememberViewed(me.email, seen);
     base44.entities.Reel.update(reel.id, { views: (reel.views || 0) + 1 }).catch(() => {});
   };
   const setTag = (t) => setParams((p) => { const n = new URLSearchParams(p); if (t) n.set("tag", t); else n.delete("tag"); n.delete("r"); return n; });
@@ -232,7 +245,7 @@ export default function ReelsPage() {
           <span className="w-10" />
           <div className="flex-1 flex justify-center gap-5 pointer-events-auto">
             {TABS.map((t) => (
-              <button key={t.id} onClick={() => { if (t.id !== tab) { feedback("tab"); setTab(t.id); } }} className="relative py-1 text-[15px] font-bold transition-opacity" style={{ opacity: tab === t.id ? 1 : 0.6, textShadow: "0 1px 4px rgb(0 0 0 / 0.5)" }} aria-pressed={tab === t.id}>
+              <button key={t.id} onClick={() => { if (t.id !== tab) { feedback("tab"); setTab(t.id); } }} className="tap-slop relative py-1 text-[15px] font-bold transition-opacity" style={{ opacity: tab === t.id ? 1 : 0.6, textShadow: "0 1px 4px rgb(0 0 0 / 0.5)" }} aria-pressed={tab === t.id}>
                 {t.label}
                 <span className="absolute left-1/2 -bottom-0.5 w-6 h-[3px] -ml-3 rounded-full bg-white transition-all duration-300" style={{ opacity: tab === t.id ? 1 : 0, transform: `scaleX(${tab === t.id ? 1 : 0.2})` }} />
               </button>

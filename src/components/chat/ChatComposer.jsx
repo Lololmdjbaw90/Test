@@ -80,7 +80,7 @@ export default function ChatComposer({ placeholder, onSend, editing, onCancelEdi
   }
 
   return (
-    <form onSubmit={submit} className="px-3 sm:px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-4 pt-2 relative">
+    <form onSubmit={submit} className="px-3 sm:px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 relative">
       <AnimatePresence>
         {suggestions.length > 0 && (
           <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }} className="absolute bottom-full left-4 right-4 mb-1 rounded-2xl overflow-hidden z-20" style={{ background: "var(--surface)", border: "1px solid var(--border-c)", boxShadow: "var(--shadow-lg)" }}>
@@ -123,7 +123,7 @@ export default function ChatComposer({ placeholder, onSend, editing, onCancelEdi
           <>
             {allowAttachments && <button type="button" onClick={() => fileRef.current?.click()} className="icon-btn" aria-label="Attach image"><ImagePlus className="w-[18px] h-[18px]" /></button>}
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setFile(f); setPreview(URL.createObjectURL(f)); } e.target.value = ""; }} />
-            <button type="button" onClick={() => { feedback("tap"); setGifOpen((v) => !v); }} className="h-8 px-1.5 my-1 rounded-lg text-[10px] font-black tracking-wide flex-shrink-0" style={{ color: gifOpen ? "#fff" : "var(--text-muted)", background: gifOpen ? "rgb(var(--accent-rgb))" : "transparent", border: gifOpen ? "none" : "1.5px solid var(--text-muted)" }} aria-label="GIFs" aria-pressed={gifOpen}>GIF</button>
+            <button type="button" onClick={() => { feedback("tap"); setGifOpen((v) => !v); }} className="tap-slop h-8 px-1.5 my-1 rounded-lg text-[10px] font-black tracking-wide flex-shrink-0" style={{ color: gifOpen ? "#fff" : "var(--text-muted)", background: gifOpen ? "rgb(var(--accent-rgb))" : "transparent", border: gifOpen ? "none" : "1.5px solid var(--text-muted)" }} aria-label="GIFs" aria-pressed={gifOpen}>GIF</button>
           </>
         )}
         <EmojiPicker onPick={(e) => { setText((t) => t + e); taRef.current?.focus(); }} />

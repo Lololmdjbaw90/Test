@@ -89,7 +89,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-[100dvh] flex app-shell safe-top safe-x">
+    <div className="h-full overflow-y-auto overscroll-contain app-shell">
+    <div className="min-h-full flex safe-top safe-x">
       <ArtCollage />
       <div className="flex-1 lg:max-w-[560px] flex items-center justify-center p-5 sm:p-10 relative">
         <div className="orb orb-a w-72 h-72 -top-10 -right-10 lg:hidden" />
@@ -166,6 +167,7 @@ export default function LoginPage() {
           )}
         </motion.div>
       </div>
+    </div>
     </div>
   );
 }

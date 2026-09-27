@@ -6,7 +6,7 @@ import { X } from "lucide-react";
 // TikTok-style sheet: slides up from the bottom, drag the handle (or the
 // header) down to close, tap outside to close. With `anchorRef` it lines up
 // with that element (e.g. the reel column next to the iPad sidebar).
-export default function BottomSheet({ open, onClose, title, children, height = "72dvh", dark = false, label, anchorRef }) {
+export default function BottomSheet({ open, onClose, title, children, height = "calc(var(--app-h) * 0.72)", dark = false, label, anchorRef }) {
   const drag = useDragControls();
   const [box, setBox] = useState(null);
   useLayoutEffect(() => {
@@ -35,7 +35,7 @@ export default function BottomSheet({ open, onClose, title, children, height = "
           <motion.div className="absolute inset-0" style={{ background: "rgb(0 0 0 / 0.45)" }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
           <motion.div
             className={`absolute bottom-0 flex flex-col rounded-t-[1.9rem] overflow-hidden liquid-sheet ${box ? "" : "inset-x-0 mx-auto w-full max-w-lg"}`}
-            style={{ height, maxHeight: "88dvh", color: fg, paddingBottom: "env(safe-area-inset-bottom)", ...(box ? { left: box.left, width: box.width } : {}) }}
+            style={{ height, maxHeight: "calc(var(--app-h) * 0.88)", color: fg, paddingBottom: "env(safe-area-inset-bottom)", ...(box ? { left: box.left, width: box.width } : {}) }}
             initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 32, stiffness: 340 }}
             drag="y" dragControls={drag} dragListener={false}

@@ -89,7 +89,7 @@ export default function Popover({ open, onClose, anchorRef, placement = "bottom-
           dragConstraints={{ top: 0, bottom: 0 }}
           dragElastic={{ top: 0, bottom: 0.6 }}
           onDragEnd={(_, info) => { if (info.offset.y > 90 || info.velocity.y > 500) onClose?.(); }}
-          className={`relative w-full max-h-[calc(88dvh-env(safe-area-inset-top))] flex flex-col rounded-t-[1.75rem] overflow-hidden safe-bottom ${className}`}
+          className={`relative w-full max-h-[calc(var(--app-h)*0.88-env(safe-area-inset-top))] flex flex-col rounded-t-[1.75rem] overflow-hidden safe-bottom ${className}`}
           style={{ background: "var(--surface)", boxShadow: "var(--shadow-lg)", ...panelStyle }}
         >
           <div className="flex justify-center pt-2.5 pb-1 flex-shrink-0 cursor-grab"><span className="w-10 h-1.5 rounded-full" style={{ background: "var(--border-strong)" }} /></div>

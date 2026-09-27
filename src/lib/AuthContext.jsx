@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect, useCallback } from "react";
+import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { applyTheme } from "@/lib/theme";
 
@@ -42,12 +42,36 @@ export const AuthProvider = ({ children }) => {
     return () => clearInterval(interval);
   }, [isAuthenticated]);
 
-  // Update the profile and the in-memory user in one step.
+  // Update the profile. The app shows the change at once (save, follow,
+  // theme…) and writes it in the background; if the write fails the change
+  // is undone and the error is thrown as before. Quick repeated changes to
+  // the same field never get overwritten by an older, slower write.
+  const userRef = useRef(user);
+  userRef.current = user;
+  const pending = useRef({}); // field -> { value, seq } of the newest unsaved write
+  const seq = useRef(0);
   const updateMe = useCallback(async (data) => {
-    const updated = await base44.auth.updateMe(data);
-    setUser((prev) => ({ ...(prev || {}), ...data, ...(updated || {}) }));
+    const mine = ++seq.current;
+    const before = userRef.current;
+    Object.keys(data).forEach((k) => { pending.current[k] = { value: data[k], seq: mine }; });
+    setUser((prev) => ({ ...(prev || {}), ...data }));
     if ("theme" in data || "accent" in data) applyTheme({ theme: data.theme, accent: data.accent });
-    return updated;
+    const settle = () => {
+      const owned = Object.keys(data).filter((k) => pending.current[k]?.seq === mine);
+      owned.forEach((k) => { delete pending.current[k]; });
+      const newer = Object.fromEntries(Object.entries(pending.current).map(([k, p]) => [k, p.value]));
+      return { owned, newer };
+    };
+    try {
+      const updated = await base44.auth.updateMe(data);
+      const { newer } = settle();
+      if (updated) setUser((prev) => ({ ...(prev || {}), ...updated, ...newer }));
+      return updated;
+    } catch (e) {
+      const { owned } = settle();
+      if (owned.length) setUser((prev) => ({ ...(prev || {}), ...Object.fromEntries(owned.map((k) => [k, before?.[k]])) }));
+      throw e;
+    }
   }, []);
 
   const logout = () => { setUser(null); setIsAuthenticated(false); base44.auth.logout(); };

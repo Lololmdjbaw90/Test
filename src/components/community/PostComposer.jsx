@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ImagePlus, Loader2, Send, Shield, X } from "lucide-react";
+import { ImagePlus, Loader2, Send, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { checkText } from "@/lib/moderation";
@@ -83,7 +83,6 @@ export default function PostComposer({ autoOpen = false }) {
                 <AICaptionHelper kind="post" getImage={() => img} draft={desc} title={title} onPick={(o) => { if (o.title && !title.trim()) setTitle(o.title); setDesc(withHashtags(o)); }} />
               )}
               <div className="flex items-center gap-2">
-                <span className="text-[11px] flex items-center gap-1" style={{ color: "var(--text-muted)" }}><Shield className="w-3.5 h-3.5" /> Posts are auto-moderated</span>
                 <div className="flex-1" />
                 <button type="button" className="btn-ghost" onClick={reset}>Cancel</button>
                 <button type="submit" disabled={submitting || (!img && !desc.trim())} className="btn">{submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Send className="w-4 h-4" /> Publish</>}</button>

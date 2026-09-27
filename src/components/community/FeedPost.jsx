@@ -99,7 +99,7 @@ export default function FeedPost({ post, reason, me, author, comments = [], like
             {!isMine && !following && onFollow && (
               <>
                 <span style={{ color: "var(--text-muted)" }}>·</span>
-                <button onClick={() => onFollow(post.user_email)} className="text-sm font-bold flex-shrink-0 hover:opacity-80" style={{ color: "var(--accent-rose)" }}>Follow</button>
+                <button onClick={() => onFollow(post.user_email)} className="tap-slop text-sm font-bold flex-shrink-0 hover:opacity-80" style={{ color: "var(--accent-rose)" }}>Follow</button>
               </>
             )}
           </div>

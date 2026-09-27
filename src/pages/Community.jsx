@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, Bookmark, Download, Flame, Search, Shield, Sparkles, UserCheck, Users, X, Clock } from "lucide-react";
+import { ArrowUp, Bookmark, Download, Flame, Search, Sparkles, UserCheck, Users, X, Clock } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -75,7 +75,8 @@ export default function CommunityPage() {
     [...comments].reverse().forEach((c) => { (m[c.post_id] = m[c.post_id] || []).push(c); });
     return m;
   }, [comments]);
-  const taste = useMemo(() => buildTaste({ me, friends: friendEmails, posts, comments }), [me, friendEmails, posts, comments]);
+  // Only what the ranking uses: saving a post mustn't re-rank the whole feed.
+  const taste = useMemo(() => buildTaste({ me, friends: friendEmails, posts, comments }), [me?.email, me?.following, me?.interests, friendEmails, posts, comments]); // eslint-disable-line react-hooks/exhaustive-deps
   const circle = useMemo(() => new Set([...taste.following, ...taste.friends]), [taste]);
   const followingSet = taste.following;
   const saved = useMemo(() => new Set(me?.saved_posts || []), [me?.saved_posts]);
@@ -163,8 +164,11 @@ export default function CommunityPage() {
   };
   const save = async (post) => {
     feedback("save");
-    const next = saved.has(post.id) ? [...saved].filter((id) => id !== post.id) : [...saved, post.id];
-    try { await updateMe({ saved_posts: next }); if (!saved.has(post.id)) toast.success("Saved", { description: "Find it in the Saved tab" }); } catch (e) { toast.error(e?.message || "Could not save."); }
+    const was = saved.has(post.id);
+    const next = was ? [...saved].filter((id) => id !== post.id) : [...saved, post.id];
+    // Shows at once; the save finishes in the background.
+    updateMe({ saved_posts: next }).catch((e) => toast.error(e?.message || "Could not save."));
+    if (!was) toast.success("Saved", { description: "Find it in the Saved tab" });
   };
   const remove = async (post) => {
     const ok = await confirm({ title: "Delete post?", message: "This can't be undone.", confirmLabel: "Delete", danger: true });
@@ -199,7 +203,6 @@ export default function CommunityPage() {
           <header className="flex items-center gap-3 mb-5">
             <div className="flex-1 min-w-0">
               <h1 className="font-display text-3xl sm:text-4xl font-semibold leading-tight" style={{ color: "var(--text-primary)" }}>Community</h1>
-              <p className="text-sm flex items-center gap-1.5 mt-0.5" style={{ color: "var(--text-muted)" }}><Shield className="w-3.5 h-3.5" style={{ color: "var(--success)" }} /> {posts.length} posts · friendly & moderated</p>
             </div>
             <button onClick={() => setSearchOpen((v) => !v)} className="icon-btn icon-btn-bordered" aria-label="Search posts" aria-expanded={searchOpen}><Search className="w-[18px] h-[18px]" /></button>
             {isAdmin && <button onClick={() => exportToCsv(feed.map(({ post: p }) => ({ title: p.title || "", user: p.user_display_name, likes: p.likes?.length || 0, date: p.created_date })), "community")} className="icon-btn icon-btn-bordered" title="Export CSV" aria-label="Export CSV"><Download className="w-4 h-4" /></button>}
@@ -296,7 +299,6 @@ export default function CommunityPage() {
           <SuggestedPeople items={people.slice(0, 5)} followingSet={followingSet} onFollow={follow} />
           <TrendingTags tags={tags} active={tag} onTag={setTag} />
           <ServerSuggestions items={servers} />
-          <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>Your "For you" feed learns from who you follow, what you like and comment on, and your interests. Use "Not interested" on any post to tune it.</p>
         </aside>
       </div>
 

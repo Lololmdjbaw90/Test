@@ -307,6 +307,23 @@
     transition: background 160ms ease, color 160ms ease, scale 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
   }
   @media (hover: hover) { .icon-btn:hover { background: var(--pink-soft); color: var(--accent-rose); } }
+  /* Fingers need ~44pt targets (Apple's minimum). On touch screens controls
+     get a bit bigger, and small icon buttons get an invisible touch margin
+     (hit slop) so a near miss still counts. Explicit sizes (w-8…) keep their
+     look; only the touchable area grows. */
+  @media (hover: none), (pointer: coarse) {
+    .icon-btn { width: 2.75rem; height: 2.75rem; }
+    .btn, .btn-outline, .btn-ghost, .btn-danger { min-height: 2.75rem; }
+    .chip { min-height: 2.5rem; }
+    [role="tablist"] > [role="tab"] { min-height: 2.5rem; }
+    /* :where() = zero specificity, so anything positioned (absolute,
+       fixed…) keeps its position. */
+    :where(.icon-btn, .tap-slop, :is(button, a, [role="button"]):has(> svg:only-child)) { position: relative; }
+    :where(.icon-btn, .tap-slop, :is(button, a, [role="button"]):has(> svg:only-child))::before {
+      content: ""; position: absolute; inset: -6px; border-radius: inherit;
+    }
+    :where(.tap-slop-lg)::before { inset: -10px; }
+  }
   .icon-btn:active { scale: 0.92; }
   .icon-btn[data-active="true"] { background: var(--accent-grad); color: #fff; box-shadow: var(--shadow-accent); }
   .icon-btn-bordered { border-color: var(--border-c); background: var(--surface); }
@@ -567,6 +584,22 @@ button, [role="button"], [role="tab"] { -webkit-user-select: none; user-select: 
 .safe-x { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
 /* In the iOS app, the tab bar steps aside while the keyboard is open. */
 .keyboard-open .mobile-tabbar { display: none; }
+/* The app's height. In the iOS app the keyboard doesn't resize the web view
+   (that happened in one jump and could leave the page shifted); instead the
+   page is pinned and its bottom glides up with the keyboard (--kb, set in
+   src/lib/native.js). Fixed layers (sheets, menus, calls) live inside the
+   body, so they make room for the keyboard too. */
+:root { --kb: 0px; --app-h: 100dvh; }
+.h-app { height: 100dvh; }
+.native-app { --app-h: calc(100dvh - var(--kb)); background: var(--app-bg); }
+.native-app .h-app { height: 100%; }
+.native-app body {
+  position: fixed; top: 0; left: 0; right: 0; bottom: var(--kb); height: auto;
+  overflow: hidden; transform: translateZ(0);
+  transition: bottom 0.3s cubic-bezier(0.38, 0.7, 0.125, 1);
+}
+/* With the tab bar gone, its space goes to the chat. */
+.keyboard-open #main { padding-bottom: 0 !important; }
 /* The native app shouldn't select UI text on long-press like a web page. */
 .native-app body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .native-app input, .native-app textarea, .native-app [contenteditable], .native-app .select-text { -webkit-user-select: text; user-select: text; }

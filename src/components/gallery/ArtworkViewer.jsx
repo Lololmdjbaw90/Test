@@ -16,7 +16,13 @@ import { feedback } from "@/lib/feedback";
 // Artwork viewer. Phones and tablets: the image on top (swipe for the next
 // piece, tap for full screen), then title and artist, one row of actions,
 // details and comments. Desktop: image left, details right; ←/→ to browse.
-export default function ArtworkViewer({ artwork, position, onClose, onPrev, onNext, liked, likeCount, onLike, saved, onSave, isAdmin, onToggleFeatured, onDelete }) {
+export default function ArtworkViewer(incoming) {
+  // While the window closes, keep showing what was open (the parent
+  // already cleared it) so the close animation doesn't collapse.
+  const last = useRef(incoming);
+  if (incoming.artwork) last.current = incoming;
+  const isOpen = !!incoming.artwork;
+  const { artwork, position, onClose, onPrev, onNext, liked, likeCount, onLike, saved, onSave, isAdmin, onToggleFeatured, onDelete } = isOpen ? incoming : { ...last.current, onClose: incoming.onClose };
   const player = usePlayer();
   const [zoom, setZoom] = useState(false);
   const dir = useRef(0);
@@ -25,7 +31,7 @@ export default function ArtworkViewer({ artwork, position, onClose, onPrev, onNe
   const next = onNext ? () => { dir.current = 1; feedback("swipe"); onNext(); } : null;
 
   useEffect(() => {
-    if (!artwork) { setZoom(false); return undefined; }
+    if (!isOpen) { setZoom(false); return undefined; }
     const onKey = (e) => {
       if (["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) return;
       if (e.key === "ArrowLeft") prev?.();
@@ -33,7 +39,7 @@ export default function ArtworkViewer({ artwork, position, onClose, onPrev, onNe
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [artwork, onPrev, onNext]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOpen, artwork, onPrev, onNext]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const share = async () => {
     const url = siteUrl(`/Gallery?art=${artwork.id}`);
@@ -47,7 +53,7 @@ export default function ArtworkViewer({ artwork, position, onClose, onPrev, onNe
   const tags = artwork ? [artwork.medium && artwork.medium.replace("_", " "), artwork.year].filter(Boolean) : [];
 
   return (
-    <Modal open={!!artwork} onClose={onClose} size="max-w-6xl" padded={false} hideHeader autoFocus={false}>
+    <Modal open={isOpen} onClose={onClose} size="max-w-6xl" padded={false} hideHeader autoFocus={false}>
       {artwork && (
         <div className="flex flex-col lg:flex-row lg:h-[82vh]">
           {/* Image */}
