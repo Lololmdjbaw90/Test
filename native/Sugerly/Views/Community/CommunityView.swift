@@ -1027,6 +1027,7 @@ struct SugarField: View {
 struct PhotoPickerCard: View {
     @Binding var item: PhotosPickerItem?
     @Binding var image: UIImage?
+    @State private var editing = false
 
     var body: some View {
         Group {
@@ -1040,6 +1041,16 @@ struct PhotoPickerCard: View {
                             Image(systemName: "xmark").font(.system(size: 13, weight: .black)).foregroundStyle(.white)
                                 .frame(width: 32, height: 32).background(.black.opacity(0.5), in: Circle())
                         }
+                        .padding(10)
+                    }
+                    .overlay(alignment: .bottomTrailing) {
+                        Button { editing = true } label: {
+                            Label("Edit", systemImage: "wand.and.stars").font(.jakarta(13, .heavy)).foregroundStyle(.white)
+                                .padding(.horizontal, 14).frame(height: 36)
+                                .background(Theme.gradient, in: Capsule())
+                                .shadow(color: Theme.main.opacity(0.4), radius: 8, y: 3)
+                        }
+                        .buttonStyle(BouncyStyle())
                         .padding(10)
                     }
                     .transition(.scale(scale: 0.94).combined(with: .opacity))
@@ -1057,6 +1068,11 @@ struct PhotoPickerCard: View {
                     .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Theme.pink.opacity(0.35), style: StrokeStyle(lineWidth: 2, dash: [8, 6])))
                 }
                 .buttonStyle(BouncyStyle(scale: 0.97))
+            }
+        }
+        .fullScreenCover(isPresented: $editing) {
+            if let image {
+                PhotoEditorView(image: image) { edited in withAnimation(.snappy) { self.image = edited } }
             }
         }
         .onChange(of: item) { _, newItem in

@@ -155,6 +155,7 @@ struct HomeView: View {
     @State private var reels: [Reel] = []
     @State private var loaded = false
     @State private var appeared = false
+    @AppStorage("sugerly.dismissedAnnouncement") private var dismissedAnnouncement = ""
 
     private var greeting: String {
         let h = Calendar.current.component(.hour, from: Date())
@@ -164,6 +165,7 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
+                announcementBanner
                 hero.stagger(appeared, 0)
                 quickLinks.stagger(appeared, 1)
                 featured.stagger(appeared, 2)
@@ -201,6 +203,26 @@ struct HomeView: View {
         servers = (await serverDocs ?? []).map(Server.init)
         reels = (await reelDocs ?? []).map(Reel.init)
         loaded = true
+    }
+
+    // The admin's announcement (Admin → Site), until you close it.
+    @ViewBuilder
+    private var announcementBanner: some View {
+        let site = SiteTheme.shared
+        if site.announcementActive && !site.announcement.isEmpty && dismissedAnnouncement != site.announcement {
+            HStack(spacing: 10) {
+                Image(systemName: "megaphone.fill").font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
+                    .symbolEffect(.bounce, options: .repeat(2), value: appeared)
+                Text(site.announcement).font(.jakarta(14, .bold)).foregroundStyle(.white).frame(maxWidth: .infinity, alignment: .leading)
+                Button { withAnimation(.snappy) { dismissedAnnouncement = site.announcement } } label: {
+                    Image(systemName: "xmark").font(.system(size: 12, weight: .heavy)).foregroundStyle(.white.opacity(0.85)).frame(width: 28, height: 28)
+                }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            .background(Color(hex: site.announcementColor), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .shadow(color: Color(hex: site.announcementColor).opacity(0.4), radius: 12, y: 5)
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
     }
 
     // MARK: quick links (like the website's sidebar)

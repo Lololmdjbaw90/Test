@@ -183,12 +183,20 @@ final class SiteTheme {
     var primary: UInt32?
     var secondary: UInt32?
     var configId: String?
+    var announcement = ""
+    var announcementActive = false
+    var announcementColor: UInt32 = 0xD9577F
+    var defaultAccent = "rose"
 
     func load() async {
         guard let docs = try? await FS.query("SiteConfig", [.equals("key", "global")], limit: 1), let doc = docs.first else { return }
         configId = doc.str("id")
         primary = Self.hex(doc.str("app_primary"))
         secondary = Self.hex(doc.str("app_secondary"))
+        announcement = doc.str("announcement")
+        announcementActive = doc.bool("announcement_active")
+        announcementColor = Self.hex(doc.str("announcement_color")) ?? 0xD9577F
+        defaultAccent = doc.str("default_accent").isEmpty ? "rose" : doc.str("default_accent")
     }
 
     static func hex(_ s: String) -> UInt32? {
@@ -201,10 +209,31 @@ final class SiteTheme {
 }
 
 struct AdminView: View {
-    enum Tab: String, CaseIterable { case reports = "Reports", colors = "App colors" }
+    enum Tab: String, CaseIterable {
+        case overview = "Overview", users = "Users", content = "Content", servers = "Servers", reports = "Reports", colors = "Site"
+        var icon: String {
+            switch self {
+            case .overview: return "chart.bar.fill"
+            case .users: return "person.2.fill"
+            case .content: return "photo.stack.fill"
+            case .servers: return "server.rack"
+            case .reports: return "flag.fill"
+            case .colors: return "paintpalette.fill"
+            }
+        }
+    }
 
     @Environment(AppModel.self) private var model
-    @State private var tab: Tab = .reports
+    @State private var tab: Tab = .overview
+    @State private var data = AdminData()
+    @State private var search = ""
+    @State private var contentType = "All"
+    @State private var confirmDelete: AdminItem?
+    @State private var confirmRole: UserProfile?
+    @State private var announcement = ""
+    @State private var announcementOn = false
+    @State private var announcementColor = Color(hex: 0xD9577F)
+    @State private var defaultAccent = "rose"
     @State private var reports: [Doc] = []
     @State private var loading = true
     @State private var primary = Color(hex: 0xD9577F)
@@ -230,12 +259,24 @@ struct AdminView: View {
                         Text("Admin panel").font(.display(32)).foregroundStyle(Palette.text)
                     }
                 }
-                HStack(spacing: 8) {
-                    ForEach(Tab.allCases, id: \.self) { t in
-                        Chip(title: t.rawValue, icon: t == .reports ? "flag.fill" : "paintpalette.fill", active: tab == t) { withAnimation(.snappy) { tab = t } }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Tab.allCases, id: \.self) { t in
+                            Chip(title: t.rawValue, icon: t.icon, active: tab == t) { withAnimation(.snappy) { tab = t; search = "" } }
+                        }
                     }
+                    .padding(.vertical, 2)
                 }
-                if tab == .reports { reportsList } else { colors }
+                switch tab {
+                case .overview: overview
+                case .users: users
+                case .content: contentList
+                case .servers: serverList
+                case .reports: reportsList
+                case .colors:
+                    siteSettings
+                    colors
+                }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 30)
@@ -244,11 +285,283 @@ struct AdminView: View {
         }
         .sugarBackground()
         .navigationBarTitleDisplayMode(.inline)
+        .refreshable { await data.load(); await loadReports() }
         .task {
+            async let everything: Void = data.load()
             await loadReports()
             await SiteTheme.shared.load()
             if let p = SiteTheme.shared.primary { primary = Color(hex: p) }
             if let s = SiteTheme.shared.secondary { secondary = Color(hex: s) }
+            announcement = SiteTheme.shared.announcement
+            announcementOn = SiteTheme.shared.announcementActive
+            announcementColor = Color(hex: SiteTheme.shared.announcementColor)
+            defaultAccent = SiteTheme.shared.defaultAccent
+            if model.people.isEmpty { await model.loadPeople() }
+            await everything
+        }
+        .confirmationDialog("Delete this \(confirmDelete?.label.lowercased() ?? "item")?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }), titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                if let item = confirmDelete { Task { await remove(item) } }
+            }
+        }
+        .confirmationDialog(confirmRole?.role == "admin" ? "Remove admin from \(confirmRole?.displayName ?? "")?" : "Make \(confirmRole?.displayName ?? "") an admin?",
+                            isPresented: Binding(get: { confirmRole != nil }, set: { if !$0 { confirmRole = nil } }), titleVisibility: .visible) {
+            Button("Confirm", role: confirmRole?.role == "admin" ? .destructive : nil) {
+                if let u = confirmRole { Task { await setRole(u) } }
+            }
+        }
+    }
+
+    // MARK: overview
+
+    private var overview: some View {
+        let weekAgo = Dates.iso(Date().addingTimeInterval(-7 * 86_400))
+        let people = Array(model.people.values)
+        let online = people.filter(\.isOnline).count
+        return VStack(alignment: .leading, spacing: 14) {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                statCard("person.2.fill", "Members", "\(people.count)", "\(online) online", [0xFF7AA2, 0xD9577F])
+                statCard("photo.stack.fill", "Posts & art", "\(data.posts.count + data.art.count)", "+\(data.items.filter { $0.date > weekAgo && ($0.label == "Post" || $0.label == "Artwork") }.count) this week", [0xFFAA80, 0xEE6E40])
+                statCard("bubble.left.and.bubble.right.fill", "Messages", "\(data.items.filter { $0.label == "Message" || $0.label == "Comment" }.count)", "+\(data.items.filter { $0.date > weekAgo && ($0.label == "Message" || $0.label == "Comment") }.count) this week", [0xB19CFF, 0x7C5CF0])
+                statCard("music.note", "Tracks & servers", "\(data.tracks.count + data.servers.count)", "\(data.reels.count) reels", [0x7CBEFF, 0x2F80E0])
+            }
+            activityChart
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Latest content").font(.display(22)).foregroundStyle(Palette.text)
+                ForEach(data.items.prefix(8)) { item in
+                    HStack(spacing: 10) {
+                        Text(item.label).font(.jakarta(11, .heavy)).foregroundStyle(Theme.main)
+                            .frame(width: 74).padding(.vertical, 4).background(Theme.soft, in: Capsule())
+                        Text(item.title.isEmpty ? "—" : item.title).font(.jakarta(13)).foregroundStyle(Palette.text).lineLimit(1)
+                        Spacer()
+                        Text(Dates.ago(item.date)).font(.jakarta(11)).foregroundStyle(Palette.muted)
+                    }
+                }
+            }
+            .sugarCard(radius: 22, padding: 14)
+        }
+    }
+
+    private func statCard(_ icon: String, _ label: String, _ value: String, _ sub: String, _ colors: [UInt32]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: icon).font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
+                .frame(width: 36, height: 36)
+                .background(LinearGradient(colors: colors.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            Text(value).font(.display(30)).foregroundStyle(Palette.text).contentTransition(.numericText())
+            Text(label.uppercased()).font(.jakarta(10, .heavy)).tracking(0.8).foregroundStyle(Palette.muted)
+            Text(sub).font(.jakarta(11, .semibold)).foregroundStyle(Palette.text2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .sugarCard(radius: 22, padding: 14)
+    }
+
+    // New content per day for the last 14 days.
+    private var activityChart: some View {
+        let cal = Calendar.current
+        let days: [Date] = (0..<14).reversed().compactMap { cal.date(byAdding: .day, value: -$0, to: cal.startOfDay(for: Date())) }
+        var counts: [Int] = Array(repeating: 0, count: days.count)
+        for item in data.items {
+            guard let d = Dates.parse(item.date) else { continue }
+            let start = cal.startOfDay(for: d)
+            if let i = days.firstIndex(of: start) { counts[i] += 1 }
+        }
+        let top = max(1, counts.max() ?? 1)
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("Activity · 14 days").font(.display(22)).foregroundStyle(Palette.text)
+            HStack(alignment: .bottom, spacing: 5) {
+                ForEach(days.indices, id: \.self) { i in
+                    VStack(spacing: 4) {
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(Theme.gradient)
+                            .frame(height: max(4, 110 * CGFloat(counts[i]) / CGFloat(top)))
+                        Text(days[i].formatted(.dateTime.day())).font(.jakarta(9, .semibold)).foregroundStyle(Palette.muted)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .frame(height: 130, alignment: .bottom)
+        }
+        .sugarCard(radius: 22, padding: 14)
+    }
+
+    // MARK: users
+
+    private var users: some View {
+        let rank: (UserProfile) -> Int = { u in FirebaseConfig.siteOwners.contains(u.email) ? 0 : (u.role == "admin" ? 1 : 2) }
+        let list = model.people.values
+            .filter { search.isEmpty || $0.displayName.localizedCaseInsensitiveContains(search) || $0.email.localizedCaseInsensitiveContains(search) }
+            .sorted { rank($0) != rank($1) ? rank($0) < rank($1) : $0.displayName.lowercased() < $1.displayName.lowercased() }
+        let owner = FirebaseConfig.siteOwners.contains(model.me?.email ?? "")
+        return VStack(alignment: .leading, spacing: 10) {
+            SearchField(text: $search, placeholder: "Search users…")
+            Text("\(model.people.values.filter { rank($0) < 2 }.count) admins · \(owner ? "Tap the shield to make or remove admins." : "Only the site owner can add or remove admins.")")
+                .font(.jakarta(12)).foregroundStyle(Palette.muted)
+            ForEach(Array(list.prefix(200))) { u in
+                HStack(spacing: 12) {
+                    NavigationLink(value: Route.person(u.email)) {
+                        Avatar(url: u.picture, name: u.displayName, size: 42, online: u.isOnline)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(u.displayName).font(.jakarta(14, .bold)).foregroundStyle(Palette.text).lineLimit(1)
+                        Text("\(u.email) · joined \(Dates.ago(u.joined))").font(.jakarta(11)).foregroundStyle(Palette.muted).lineLimit(1)
+                    }
+                    Spacer()
+                    Text(FirebaseConfig.siteOwners.contains(u.email) ? "owner" : (u.role.isEmpty ? "user" : u.role))
+                        .font(.jakarta(10, .heavy)).foregroundStyle(rank(u) < 2 ? Theme.main : Palette.muted)
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(rank(u) < 2 ? Theme.soft : Palette.surface2, in: Capsule())
+                    if owner && u.email != model.me?.email && !FirebaseConfig.siteOwners.contains(u.email) {
+                        Button { confirmRole = u } label: {
+                            Image(systemName: u.role == "admin" ? "shield.slash.fill" : "checkmark.shield.fill")
+                                .foregroundStyle(u.role == "admin" ? Palette.danger : Palette.success)
+                                .frame(width: 34, height: 34)
+                        }
+                        .buttonStyle(BouncyStyle())
+                    }
+                }
+                .sugarCard(radius: 18, padding: 10)
+            }
+        }
+    }
+
+    private func setRole(_ u: UserProfile) async {
+        let next = u.role == "admin" ? "user" : "admin"
+        do {
+            try await FS.update("User", u.id, ["role": next, "updated_date": FS.nowISO()])
+            _ = try? await FS.create("Log", ["action": "role_change", "details": "\(u.email) → \(next)", "user_email": model.me?.email ?? ""])
+            await model.loadPeople()
+            model.showToast("Role updated", icon: "shield.fill")
+        } catch {
+            model.showToast("Couldn't change role — \(error.localizedDescription)", error: true)
+        }
+    }
+
+    // MARK: content
+
+    private var contentList: some View {
+        let types = ["All", "Post", "Artwork", "Track", "Reel", "Comment", "Message"]
+        let list = data.items.filter { (contentType == "All" || $0.label == contentType) && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search) || $0.owner.localizedCaseInsensitiveContains(search)) }
+        return VStack(alignment: .leading, spacing: 10) {
+            SearchField(text: $search, placeholder: "Search content…")
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(types, id: \.self) { t in
+                        Chip(title: t, active: contentType == t) { contentType = t }
+                    }
+                }
+            }
+            if data.loading && data.items.isEmpty { ForEach(0..<5, id: \.self) { _ in SkeletonRow() } }
+            ForEach(Array(list.prefix(150))) { item in
+                HStack(spacing: 12) {
+                    if !item.image.isEmpty {
+                        RemoteImage(url: item.image).frame(width: 48, height: 48).clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    } else {
+                        Image(systemName: "text.alignleft").foregroundStyle(Theme.main).frame(width: 48, height: 48).background(Theme.soft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.title.isEmpty ? "(no text)" : item.title).font(.jakarta(13, .semibold)).foregroundStyle(Palette.text).lineLimit(2)
+                        Text("\(item.label) · \(item.owner) · \(Dates.ago(item.date))").font(.jakarta(11)).foregroundStyle(Palette.muted).lineLimit(1)
+                    }
+                    Spacer()
+                    Button { confirmDelete = item } label: {
+                        Image(systemName: "trash.fill").foregroundStyle(Palette.danger).frame(width: 36, height: 36).background(Palette.danger.opacity(0.1), in: Circle())
+                    }
+                    .buttonStyle(BouncyStyle())
+                }
+                .sugarCard(radius: 18, padding: 10)
+            }
+        }
+    }
+
+    private func remove(_ item: AdminItem) async {
+        do {
+            try await FS.delete(item.collection, item.id)
+            _ = try? await FS.create("Log", ["action": "moderation_delete", "details": "Deleted \(item.label.lowercased()) \(item.id)", "user_email": model.me?.email ?? ""])
+            withAnimation(.snappy) { data.items.removeAll { $0.id == item.id && $0.collection == item.collection } }
+            if item.collection == "Community" { data.servers.removeAll { $0.id == item.id } }
+            model.showToast("\(item.label) deleted", icon: "trash.fill")
+        } catch {
+            model.showToast("Couldn't delete — \(error.localizedDescription)", error: true)
+        }
+        confirmDelete = nil
+    }
+
+    // MARK: servers
+
+    private var serverList: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(data.servers) { server in
+                HStack(spacing: 12) {
+                    ServerIcon(server: server, size: 44)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(server.name).font(.jakarta(14, .bold)).foregroundStyle(Palette.text)
+                        Text("\(server.members.count) members · owner \(model.person(server.ownerEmail)?.displayName ?? server.ownerEmail)").font(.jakarta(11)).foregroundStyle(Palette.muted).lineLimit(1)
+                    }
+                    Spacer()
+                    Button { confirmDelete = AdminItem(collection: "Community", label: "Server", id: server.id, title: server.name, owner: server.ownerEmail, date: "", image: server.iconURL) } label: {
+                        Image(systemName: "trash.fill").foregroundStyle(Palette.danger).frame(width: 36, height: 36).background(Palette.danger.opacity(0.1), in: Circle())
+                    }
+                    .buttonStyle(BouncyStyle())
+                }
+                .sugarCard(radius: 18, padding: 10)
+            }
+            if data.servers.isEmpty && !data.loading { EmptyCard(icon: "server.rack", title: "No servers", text: "Servers people create show up here.") }
+        }
+    }
+
+    // MARK: site settings
+
+    private var siteSettings: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Announcement banner").font(.display(22)).foregroundStyle(Palette.text)
+            SugarField(placeholder: "e.g. Art jam this Saturday in the Music Lounge!", text: $announcement)
+            HStack {
+                Toggle(isOn: $announcementOn) { Text("Show banner").font(.jakarta(14, .semibold)).foregroundStyle(Palette.text) }
+                    .tint(Theme.main)
+                ColorPicker("", selection: $announcementColor, supportsOpacity: false).labelsHidden()
+            }
+            .padding(12)
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            Text("Default accent for new members").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+            HStack(spacing: 8) {
+                ForEach(Accent.allCases) { a in
+                    Button { defaultAccent = a.rawValue } label: {
+                        Circle().fill(a.gradient).frame(width: 36, height: 36)
+                            .overlay(Circle().strokeBorder(.white, lineWidth: defaultAccent == a.rawValue ? 3 : 0))
+                            .shadow(color: a.main.opacity(defaultAccent == a.rawValue ? 0.5 : 0), radius: 6)
+                    }
+                    .buttonStyle(BouncyStyle())
+                }
+            }
+            Button { Task { await saveSite() } } label: { Label("Save site settings", systemImage: "checkmark") }
+                .buttonStyle(GradientButtonStyle(height: 46))
+            Divider().padding(.vertical, 6)
+            Text("App colours").font(.display(22)).foregroundStyle(Palette.text)
+        }
+    }
+
+    private func saveSite() async {
+        let fields: Doc = [
+            "announcement": String(announcement.prefix(160)), "announcement_active": announcementOn,
+            "announcement_color": SiteTheme.string(hexValue(announcementColor)), "default_accent": defaultAccent,
+            "updated_date": FS.nowISO(),
+        ]
+        do {
+            if let id = SiteTheme.shared.configId {
+                try await FS.update("SiteConfig", id, fields)
+            } else {
+                var doc = fields
+                doc["key"] = "global"
+                let created = try await FS.create("SiteConfig", doc)
+                SiteTheme.shared.configId = created.str("id")
+            }
+            SiteTheme.shared.announcement = announcement
+            SiteTheme.shared.announcementActive = announcementOn
+            SiteTheme.shared.announcementColor = hexValue(announcementColor)
+            SiteTheme.shared.defaultAccent = defaultAccent
+            model.showToast("Site settings saved", icon: "checkmark.seal.fill")
+        } catch {
+            model.showToast("Couldn't save — \(error.localizedDescription)", error: true)
         }
     }
 
@@ -412,5 +725,59 @@ struct AdminView: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+
+// Everything the admin panel moderates.
+struct AdminItem: Identifiable, Hashable {
+    var collection: String
+    var label: String
+    var id: String
+    var title: String
+    var owner: String
+    var date: String
+    var image: String
+}
+
+@MainActor
+@Observable
+final class AdminData {
+    var items: [AdminItem] = []
+    var posts: [Doc] = []
+    var art: [Doc] = []
+    var tracks: [Doc] = []
+    var reels: [Doc] = []
+    var servers: [Server] = []
+    var loading = false
+
+    func load() async {
+        loading = true
+        defer { loading = false }
+        async let p = try? FS.query("CommunityPost", orderBy: "created_date", limit: 200)
+        async let a = try? FS.query("Artwork", orderBy: "created_date", limit: 200)
+        async let t = try? FS.query("MusicReview", orderBy: "created_date", limit: 100)
+        async let r = try? FS.query("Reel", orderBy: "created_date", limit: 100)
+        async let c1 = try? FS.query("Comment", orderBy: "created_date", limit: 150)
+        async let c2 = try? FS.query("CommunityComment", orderBy: "created_date", limit: 150)
+        async let m = try? FS.query("ChannelMessage", orderBy: "created_date", limit: 150)
+        async let s = try? FS.query("Community", orderBy: "created_date", limit: 150)
+        posts = await p ?? []
+        art = await a ?? []
+        tracks = await t ?? []
+        reels = await r ?? []
+        let comments1 = await c1 ?? []
+        let comments2 = await c2 ?? []
+        let messages = await m ?? []
+        servers = (await s ?? []).map(Server.init)
+        var out: [AdminItem] = []
+        out += posts.map { AdminItem(collection: "CommunityPost", label: "Post", id: $0.str("id"), title: $0.str("title").isEmpty ? $0.str("description") : $0.str("title"), owner: $0.str("user_display_name"), date: $0.str("created_date"), image: $0.str("image_url")) }
+        out += art.map { AdminItem(collection: "Artwork", label: "Artwork", id: $0.str("id"), title: $0.str("title"), owner: $0.str("user_display_name"), date: $0.str("created_date"), image: $0.str("image_url")) }
+        out += tracks.map { AdminItem(collection: "MusicReview", label: "Track", id: $0.str("id"), title: $0.str("title"), owner: $0.str("user_display_name"), date: $0.str("created_date"), image: $0.str("cover_url")) }
+        out += reels.map { AdminItem(collection: "Reel", label: "Reel", id: $0.str("id"), title: $0.str("caption"), owner: $0.str("user_display_name"), date: $0.str("created_date"), image: $0.str("cover_url")) }
+        out += comments1.map { AdminItem(collection: "Comment", label: "Comment", id: $0.str("id"), title: $0.str("content"), owner: $0.str("user_display_name"), date: $0.str("created_date"), image: "") }
+        out += comments2.map { AdminItem(collection: "CommunityComment", label: "Comment", id: $0.str("id"), title: $0.str("content"), owner: $0.str("user_display_name"), date: $0.str("created_date"), image: "") }
+        out += messages.filter { $0.str("type") != "join" }.map { AdminItem(collection: "ChannelMessage", label: "Message", id: $0.str("id"), title: $0.str("content").isEmpty ? "📷 Image" : $0.str("content"), owner: $0.str("user_display_name"), date: $0.str("created_date"), image: $0.str("image_url")) }
+        items = out.sorted { $0.date > $1.date }
     }
 }
