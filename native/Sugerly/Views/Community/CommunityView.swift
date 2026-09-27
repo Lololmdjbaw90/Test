@@ -123,7 +123,9 @@ struct CommunityView: View {
             return all
         case .top:
             let weekAgo = Dates.iso(Date().addingTimeInterval(-7 * 86400))
-            return all.filter { $0.created > weekAgo }.sorted { ($0.likes.count + (store.commentCounts[$0.id] ?? 0) * 2) > ($1.likes.count + (store.commentCounts[$1.id] ?? 0) * 2) }
+            let counts = store.commentCounts
+            func points(_ p: Post) -> Int { p.likes.count + (counts[p.id] ?? 0) * 2 }
+            return all.filter { $0.created > weekAgo }.sorted { points($0) > points($1) }
         case .saved:
             let saved = Set(me.savedPosts)
             return all.filter { saved.contains($0.id) }

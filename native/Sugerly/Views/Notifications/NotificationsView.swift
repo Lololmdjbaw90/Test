@@ -299,7 +299,10 @@ struct AdminView: View {
         let ui = UIColor(c)
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         ui.getRed(&r, green: &g, blue: &b, alpha: &a)
-        return (UInt32(max(0, min(255, r * 255))) << 16) | (UInt32(max(0, min(255, g * 255))) << 8) | UInt32(max(0, min(255, b * 255)))
+        func byte(_ v: CGFloat) -> UInt32 { UInt32(Swift.max(0.0, Swift.min(255.0, Double(v) * 255.0))) }
+        let red: UInt32 = byte(r) << 16
+        let green: UInt32 = byte(g) << 8
+        return red | green | byte(b)
     }
 
     private func saveColors(reset: Bool) async {

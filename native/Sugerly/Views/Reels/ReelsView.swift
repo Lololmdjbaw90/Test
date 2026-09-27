@@ -128,11 +128,15 @@ struct ReelsView: View {
         guard let docs = try? await FS.query("Reel", orderBy: "created_date", limit: 120) else { return }
         let all = docs.map(Reel.init)
         // Freshest and most liked first, a little shuffled so it feels alive.
-        reels = all.sorted { a, b in
-            let sa = Double(a.likes.count * 3 + a.views) / pow(max(1, Date().timeIntervalSince(Dates.parse(a.created) ?? Date()) / 3600) + 2, 0.8)
-            let sb = Double(b.likes.count * 3 + b.views) / pow(max(1, Date().timeIntervalSince(Dates.parse(b.created) ?? Date()) / 3600) + 2, 0.8)
-            return sa > sb
+        let now = Date()
+        func score(_ r: Reel) -> Double {
+            let age: Double = now.timeIntervalSince(Dates.parse(r.created) ?? now) / 3600.0
+            let hours: Double = Swift.max(1.0, age) + 2.0
+            let points = Double(r.likes.count * 3 + r.views)
+            return points / pow(hours, 0.8)
         }
+        let scores = Dictionary(all.map { ($0.id, score($0)) }, uniquingKeysWith: { a, _ in a })
+        reels = all.sorted { (scores[$0.id] ?? 0) > (scores[$1.id] ?? 0) }
         if activeId == nil { activeId = reels.first?.id }
     }
 }
