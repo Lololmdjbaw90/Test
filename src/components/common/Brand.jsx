@@ -1,25 +1,46 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 
 // The Sugerly wordmark and its "S" mark (artwork lives in /public/brand;
 // the full-size source is in /brand).
 export const APP_NAME = "Sugerly";
 
+// The wordmark comes in one color per accent (Settings → Appearance);
+// Rose (pink) is the default. Width / height of each file after trimming.
+const LOGO_RATIO = { rose: 1.978, lavender: 1.995, mint: 2.023, peach: 1.983, sky: 2.019 };
+const currentAccent = () => {
+  const a = typeof document !== "undefined" ? document.documentElement.getAttribute("data-accent") : "";
+  return LOGO_RATIO[a] ? a : "rose";
+};
+
+// Follows the accent live (the theme code sets data-accent on <html>).
+export function useAccent() {
+  const [accent, setAccent] = useState(currentAccent);
+  useEffect(() => {
+    const mo = new MutationObserver(() => setAccent(currentAccent()));
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-accent"] });
+    return () => mo.disconnect();
+  }, []);
+  return accent;
+}
+
 export function BrandLogo({ height = 40, className = "", style }) {
+  const accent = useAccent();
+  const width = Math.round(height * LOGO_RATIO[accent]);
   return (
     <img
-      src="/brand/sugerly-logo-sm.webp"
-      srcSet="/brand/sugerly-logo-sm.webp 360w, /brand/sugerly-logo.webp 720w"
-      sizes={`${Math.round(height * 1.84)}px`}
+      src={`/brand/sugerly-logo-${accent}-sm.webp`}
+      srcSet={`/brand/sugerly-logo-${accent}-sm.webp 360w, /brand/sugerly-logo-${accent}.webp 720w`}
+      sizes={`${width}px`}
       alt={APP_NAME}
       draggable={false}
       // Small and always on screen: decode right away and keep its space, so
       // it never blinks out when the header re-renders.
       decoding="sync"
       fetchpriority="high"
-      width={Math.round(height * 1.84)}
+      width={width}
       height={height}
       className={`select-none ${className}`}
-      style={{ height, width: Math.round(height * 1.84), ...style }}
+      style={{ height, width, ...style }}
     />
   );
 }
