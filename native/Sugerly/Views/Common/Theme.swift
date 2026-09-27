@@ -289,25 +289,35 @@ struct XPBar: View {
     }
 }
 
-// Tiny logo with a soft shine, like the website's top bar.
+// Tiny logo with a soft shine, like the website's top bar. The shine is
+// clock-driven (no repeating animation that could leak into layout) and
+// clipped to the logo's own shape.
 struct BrandLogo: View {
     var height: CGFloat = 34
-    @State private var shine = false
+
+    private var logo: some View {
+        Image(Theme.accent.logo).resizable().scaledToFit().frame(height: height)
+    }
+
     var body: some View {
-        Image(Theme.accent.logo)
-            .resizable()
-            .scaledToFit()
-            .frame(height: height)
+        logo
             .overlay {
-                LinearGradient(colors: [.clear, .white.opacity(0.75), .clear], startPoint: .leading, endPoint: .trailing)
-                    .frame(width: height * 0.9)
-                    .rotationEffect(.degrees(18))
-                    .offset(x: shine ? height * 3 : -height * 3)
-                    .mask(Image(Theme.accent.logo).resizable().scaledToFit())
-                    .allowsHitTesting(false)
-            }
-            .onAppear {
-                withAnimation(.easeInOut(duration: 1.6).delay(1).repeatForever(autoreverses: false)) { shine = true }
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+                    let cycle: Double = 3.4
+                    let t = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: cycle)
+                    let progress: Double = Swift.min(1.0, t / 1.2)
+                    GeometryReader { geo in
+                        let w: CGFloat = geo.size.width
+                        let band: CGFloat = Swift.max(height * 0.8, w * 0.22)
+                        let x: CGFloat = -band + CGFloat(progress) * (w + band * 2)
+                        LinearGradient(colors: [.clear, .white.opacity(0.8), .clear], startPoint: .leading, endPoint: .trailing)
+                            .frame(width: band, height: geo.size.height * 1.6)
+                            .rotationEffect(.degrees(18))
+                            .position(x: x, y: geo.size.height / 2)
+                    }
+                }
+                .mask(logo)
+                .allowsHitTesting(false)
             }
             .accessibilityLabel("Sugerly")
     }

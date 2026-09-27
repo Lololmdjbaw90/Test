@@ -11,6 +11,10 @@ enum Route: Hashable {
     case music
     case notifications
     case admin
+    case servers
+    case server(Server)
+    case channel(Server, ServerChannel)
+    case voice(Server, ServerChannel)
 }
 
 enum AppTab: Hashable { case home, community, reels, chat }
@@ -33,6 +37,10 @@ struct RouteView: View {
         case .music: MusicView(path: $path)
         case .notifications: NotificationsView(path: $path)
         case .admin: AdminView()
+        case .servers: ServersView(path: $path)
+        case .server(let server): ServerView(server: server, path: $path)
+        case .channel(let server, let channel): ChannelChatView(server: server, channel: channel)
+        case .voice(let server, let channel): VoiceChannelView(server: server, channel: channel)
         }
     }
 }
@@ -387,6 +395,7 @@ struct MoreSheet: View {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                     tile("Music", "music.note", [0xFF7AA2, 0xD9577F]) { go(.music) }
                     tile("Gallery", "photo.stack.fill", [0xFFAA80, 0xEE6E40]) { go(.gallery) }
+                    tile("Servers", "person.3.fill", [0xFF9EC4, 0xE0508A]) { go(.servers) }
                     tile("Alerts", "bell.fill", [0xB19CFF, 0x7C5CF0]) { go(.notifications) }
                     tile("Settings", "gearshape.fill", [0x7CBEFF, 0x2F80E0]) { settings = true }
                     tile("Help", "questionmark.circle.fill", [0x5FD3B0, 0x16A37F]) { legal = .guidelines }

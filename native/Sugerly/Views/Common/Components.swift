@@ -1,3 +1,4 @@
+import ImageIO
 import SwiftUI
 import UIKit
 
@@ -43,25 +44,137 @@ struct Avatar: View {
 }
 
 // Picture from the web, with a soft placeholder while it loads.
+// Pictures load once, get shrunk to screen size off the main thread and stay
+// in memory, so feeds scroll without flashing or reloading.
+actor ImagePipeline {
+    static let shared = ImagePipeline()
+    private var running: [String: Task<UIImage?, Never>] = [:]
+
+    func load(_ url: String) async -> UIImage? {
+        if let hit = MemoryImages.get(url) { return hit }
+        if let task = running[url] { return await task.value }
+        let task = Task<UIImage?, Never>.detached(priority: .userInitiated) {
+            guard let link = URL(string: url) else { return nil }
+            var request = URLRequest(url: link)
+            request.cachePolicy = .returnCacheDataElseLoad
+            guard let (data, _) = try? await URLSession.shared.data(for: request) else { return nil }
+            return ImagePipeline.downsample(data, maxPixel: 1400)
+        }
+        running[url] = task
+        let image = await task.value
+        running[url] = nil
+        if let image { MemoryImages.set(image, for: url) }
+        return image
+    }
+
+    nonisolated static func downsample(_ data: Data, maxPixel: CGFloat) -> UIImage? {
+        let options = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(data as CFData, options) else { return UIImage(data: data) }
+        let thumb: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+        ]
+        guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, thumb as CFDictionary) else { return UIImage(data: data) }
+        return UIImage(cgImage: cg)
+    }
+}
+
+enum MemoryImages {
+    nonisolated(unsafe) private static let cache: NSCache<NSString, UIImage> = {
+        let c = NSCache<NSString, UIImage>()
+        c.totalCostLimit = 160 * 1024 * 1024
+        return c
+    }()
+    static func get(_ url: String) -> UIImage? { cache.object(forKey: url as NSString) }
+    static func set(_ image: UIImage, for url: String) {
+        let cost = Int(image.size.width * image.size.height * image.scale * image.scale * 4)
+        cache.setObject(image, forKey: url as NSString, cost: cost)
+    }
+}
+
+// A remote picture. In .fill mode it fills the space it's given and is
+// clipped to it (never pushes the layout wider); in .fit mode it shows the
+// whole picture.
 struct RemoteImage: View {
     var url: String
     var contentMode: ContentMode = .fill
+    @State private var image: UIImage?
+    @State private var failed = false
 
     var body: some View {
-        if let link = URL(string: url), !url.isEmpty {
-            AsyncImage(url: link, transaction: Transaction(animation: .easeOut(duration: 0.25))) { phase in
-                switch phase {
-                case .success(let image): image.resizable().aspectRatio(contentMode: contentMode)
-                case .failure: placeholder.overlay(Image(systemName: "photo").foregroundStyle(.secondary))
-                default: placeholder.overlay(ProgressView())
+        let shown = image ?? MemoryImages.get(url)
+        Group {
+            if let shown {
+                if contentMode == .fill {
+                    Color.clear
+                        .overlay { Image(uiImage: shown).resizable().scaledToFill() }
+                        .clipped()
+                } else {
+                    Image(uiImage: shown).resizable().scaledToFit()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            } else {
+                placeholder.overlay {
+                    if failed { Image(systemName: "photo").foregroundStyle(.secondary) }
                 }
             }
-        } else {
-            placeholder
+        }
+        .task(id: url) {
+            guard !url.isEmpty else { return }
+            if MemoryImages.get(url) != nil { image = MemoryImages.get(url); return }
+            let loaded = await ImagePipeline.shared.load(url)
+            if let loaded {
+                withAnimation(.easeOut(duration: 0.2)) { image = loaded }
+            } else {
+                failed = true
+            }
         }
     }
 
-    private var placeholder: some View { Rectangle().fill(Palette.surface2) }
+    private var placeholder: some View {
+        Rectangle().fill(Palette.surface2)
+            .overlay { LinearGradient(colors: [Theme.main.opacity(0.06), .clear], startPoint: .topLeading, endPoint: .bottomTrailing) }
+    }
+}
+
+// A drawing shown whole, at its own shape (never cropped). Very tall or very
+// wide pictures are letterboxed on a soft blurred copy of themselves.
+struct ArtImage: View {
+    var url: String
+    var tallest: CGFloat = 0.62 // width / height
+    var widest: CGFloat = 1.8
+    @State private var image: UIImage?
+
+    var body: some View {
+        let shown = image ?? MemoryImages.get(url)
+        let natural: CGFloat = shown.map { $0.size.width / Swift.max(1, $0.size.height) } ?? 0.8
+        let ratio: CGFloat = Swift.min(widest, Swift.max(tallest, natural))
+        Color.clear
+            .aspectRatio(ratio, contentMode: .fit)
+            .frame(maxWidth: .infinity)
+            .overlay {
+                if let shown {
+                    ZStack {
+                        if abs(ratio - natural) > 0.01 {
+                            Image(uiImage: shown).resizable().scaledToFill().blur(radius: 22).opacity(0.55)
+                        }
+                        Image(uiImage: shown).resizable().scaledToFit()
+                    }
+                    .transition(.opacity)
+                } else {
+                    Rectangle().fill(Palette.surface2).overlay(ProgressView().tint(Theme.main))
+                }
+            }
+            .clipped()
+            .task(id: url) {
+                guard !url.isEmpty, image == nil else { return }
+                if let loaded = await ImagePipeline.shared.load(url) {
+                    withAnimation(.easeOut(duration: 0.2)) { image = loaded }
+                }
+            }
+    }
 }
 
 typealias PrimaryButtonStyle = GradientButtonStyle

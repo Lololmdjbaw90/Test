@@ -71,13 +71,10 @@ struct GalleryView: View {
 
     private func column(_ list: [Artwork], tall: Bool) -> some View {
         LazyVStack(spacing: 12) {
-            ForEach(Array(list.enumerated()), id: \.element.id) { i, art in
+            ForEach(list) { art in
                 Button { path.append(.artwork(art)) } label: {
                     VStack(alignment: .leading, spacing: 0) {
-                        Rectangle().fill(Palette.surface2)
-                            .frame(height: (i + (tall ? 0 : 1)) % 3 == 0 ? 250 : 190)
-                            .overlay { RemoteImage(url: art.imageURL) }
-                            .clipped()
+                        ArtImage(url: art.imageURL, tallest: 0.55, widest: 1.5)
                             .overlay(alignment: .topLeading) {
                                 if art.featured {
                                     Label("Featured", systemImage: "star.fill").font(.jakarta(10, .heavy)).foregroundStyle(.white)
@@ -126,9 +123,7 @@ struct ArtworkDetailView: View {
     var body: some View {
         CommentsScreen(collection: "Comment", field: "artwork_id", targetId: artwork.id, ownerEmail: artwork.authorEmail, link: "/Gallery?art=\(artwork.id)") {
             VStack(alignment: .leading, spacing: 14) {
-                RemoteImage(url: artwork.imageURL, contentMode: .fit)
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 260)
+                ArtImage(url: artwork.imageURL, tallest: 0.5, widest: 2.2)
                     .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                     .shadow(color: Palette.shadow, radius: 16, y: 8)
                     .overlay {

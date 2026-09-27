@@ -10,14 +10,17 @@ final class PlayerUIView: UIView {
 
 struct LoopingVideo: UIViewRepresentable {
     let player: AVQueuePlayer
+    var fill = true
     func makeUIView(context: Context) -> PlayerUIView {
         let view = PlayerUIView()
         view.playerLayer.player = player
-        view.playerLayer.videoGravity = .resizeAspectFill
-        view.backgroundColor = .black
+        view.playerLayer.videoGravity = fill ? .resizeAspectFill : .resizeAspect
+        view.backgroundColor = .clear
         return view
     }
-    func updateUIView(_ view: PlayerUIView, context: Context) {}
+    func updateUIView(_ view: PlayerUIView, context: Context) {
+        view.playerLayer.videoGravity = fill ? .resizeAspectFill : .resizeAspect
+    }
 }
 
 @MainActor
@@ -27,10 +30,33 @@ final class ReelVideo {
     private var looper: AVPlayerLooper?
     var failed = false
     var ready = false
+    var portrait = true
     private var statusObservation: NSKeyValueObservation?
+    private var sizeObservation: NSKeyValueObservation?
+
+    // Videos are kept around for the few reels near the one on screen, so
+    // swiping to the next one starts right away.
+    private static var pool: [String: ReelVideo] = [:]
+    private static var order: [String] = []
+
+    static func get(_ id: String, url: URL, start: Double) -> ReelVideo {
+        if let hit = pool[id] { return hit }
+        let video = ReelVideo(url: url, start: start)
+        pool[id] = video
+        order.append(id)
+        while order.count > 5 {
+            let old = order.removeFirst()
+            pool[old]?.pause()
+            pool[old] = nil
+        }
+        return video
+    }
 
     init(url: URL, start: Double) {
-        let item = AVPlayerItem(url: url)
+        let asset = AVURLAsset(url: url)
+        let item = AVPlayerItem(asset: asset)
+        item.preferredForwardBufferDuration = 3
+        player.automaticallyWaitsToMinimizeStalling = false
         looper = AVPlayerLooper(player: player, templateItem: item, timeRange: CMTimeRange(start: CMTime(seconds: start, preferredTimescale: 600), end: .positiveInfinity))
         player.isMuted = false
         statusObservation = player.observe(\.currentItem?.status, options: [.new]) { [weak self] p, _ in
@@ -38,6 +64,12 @@ final class ReelVideo {
             Task { @MainActor in
                 if status == .failed { self?.failed = true }
                 if status == .readyToPlay { self?.ready = true }
+            }
+        }
+        sizeObservation = player.observe(\.currentItem?.presentationSize, options: [.new]) { [weak self] p, _ in
+            let size = p.currentItem?.presentationSize ?? .zero
+            Task { @MainActor in
+                if size.width > 0, size.height > 0 { self?.portrait = size.height >= size.width * 1.1 }
             }
         }
     }
@@ -79,19 +111,25 @@ struct ReelsView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView(.vertical) {
-                    LazyVStack(spacing: 0) {
-                        ForEach(shown) { reel in
-                            ReelPage(reel: reel, active: visible && activeId == reel.id, path: $path)
-                                .containerRelativeFrame([.horizontal, .vertical])
-                                .id(reel.id)
+                GeometryReader { geo in
+                    let list = shown
+                    let activeIndex = list.firstIndex { $0.id == activeId } ?? 0
+                    ScrollView(.vertical) {
+                        LazyVStack(spacing: 0) {
+                            ForEach(Array(list.enumerated()), id: \.element.id) { i, reel in
+                                ReelPage(reel: reel, active: visible && activeId == reel.id, near: abs(i - activeIndex) <= 1, path: $path)
+                                    .frame(width: geo.size.width, height: geo.size.height)
+                                    .clipped()
+                                    .id(reel.id)
+                            }
                         }
+                        .scrollTargetLayout()
                     }
-                    .scrollTargetLayout()
+                    .scrollTargetBehavior(.paging)
+                    .scrollPosition(id: $activeId)
+                    .scrollIndicators(.hidden)
+                    .scrollBounceBehavior(.basedOnSize)
                 }
-                .scrollTargetBehavior(.paging)
-                .scrollPosition(id: $activeId)
-                .scrollIndicators(.hidden)
                 .ignoresSafeArea()
             }
 
@@ -125,7 +163,11 @@ struct ReelsView: View {
 
     private func load() async {
         defer { loading = false }
-        guard let docs = try? await FS.query("Reel", orderBy: "created_date", limit: 120) else { return }
+        if let cached = Self.cache, reels.isEmpty {
+            reels = cached
+            if activeId == nil { activeId = reels.first?.id }
+        }
+        guard let docs = try? await FS.query("Reel", orderBy: "created_date", limit: 60) else { return }
         let all = docs.map(Reel.init)
         // Freshest and most liked first, a little shuffled so it feels alive.
         let now = Date()
@@ -136,15 +178,24 @@ struct ReelsView: View {
             return points / pow(hours, 0.8)
         }
         let scores = Dictionary(all.map { ($0.id, score($0)) }, uniquingKeysWith: { a, _ in a })
-        reels = all.sorted { (scores[$0.id] ?? 0) > (scores[$1.id] ?? 0) }
+        let sorted = all.sorted { (scores[$0.id] ?? 0) > (scores[$1.id] ?? 0) }
+        Self.cache = sorted
+        if reels.isEmpty { reels = sorted } else {
+            // Keep what's on screen in place; add new ones behind it.
+            let have = Set(reels.map(\.id))
+            reels += sorted.filter { !have.contains($0.id) }
+        }
         if activeId == nil { activeId = reels.first?.id }
     }
+
+    nonisolated(unsafe) private static var cache: [Reel]?
 }
 
 // One reel filling the screen.
 struct ReelPage: View {
     @State var reel: Reel
     let active: Bool
+    var near = true
     @Binding var path: [Route]
     var showBack = false
     @Environment(AppModel.self) private var model
@@ -187,7 +238,10 @@ struct ReelPage: View {
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { doubleTap() }
         .onTapGesture { togglePause() }
-        .onAppear { if active { start() } }
+        .onAppear {
+            if active { start() } else if near { preload() }
+        }
+        .onChange(of: near) { _, now in if now && !active { preload() } }
         .onDisappear { video?.pause(); sound?.pause() }
         .onChange(of: active) { _, now in
             if now { start() } else { video?.pause(); sound?.pause() }
@@ -213,7 +267,14 @@ struct ReelPage: View {
     private var media: some View {
         if reel.isVideo {
             if let video, !video.failed {
-                LoopingVideo(player: video.player).ignoresSafeArea()
+                ZStack {
+                    // The cover shows at once; the video fades in over it.
+                    if !video.ready { RemoteImage(url: reel.coverURL, contentMode: video.portrait ? .fill : .fit) }
+                    LoopingVideo(player: video.player, fill: video.portrait)
+                        .opacity(video.ready ? 1 : 0)
+                        .animation(.easeOut(duration: 0.2), value: video.ready)
+                    if !video.ready { ProgressView().tint(.white).controlSize(.large) }
+                }
             } else {
                 ZStack {
                     RemoteImage(url: reel.coverURL)
@@ -337,13 +398,19 @@ struct ReelPage: View {
         .buttonStyle(BouncyStyle(scale: 0.8))
     }
 
+    // Get the video ready (buffered, paused) before you swipe to it.
+    private func preload() {
+        guard reel.isVideo, video == nil, let url = URL(string: reel.mediaURL) else { return }
+        video = ReelVideo.get(reel.id, url: url, start: reel.trimStart)
+    }
+
     private func start() {
         if music.playing { music.pause() }
         if reel.isVideo {
             if video == nil, let url = URL(string: reel.mediaURL) {
-                try? AVAudioSession.sharedInstance().setCategory(.playback)
-                video = ReelVideo(url: url, start: reel.trimStart)
+                video = ReelVideo.get(reel.id, url: url, start: reel.trimStart)
             }
+            try? AVAudioSession.sharedInstance().setCategory(.playback)
             if !paused { video?.play() }
         }
         if !paused { startSound() }

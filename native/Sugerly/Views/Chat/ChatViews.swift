@@ -87,6 +87,7 @@ struct ChatListView: View {
     @Environment(ChatStore.self) private var store
     @State private var search = ""
     @State private var starting = false
+    @AppStorage("sugerly.chat.section") private var section = 0
 
     private var shown: [Conversation] {
         let blocked = Set(model.me?.blocked ?? [])
@@ -101,12 +102,53 @@ struct ChatListView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("Messages").font(.display(38)).foregroundStyle(Palette.text)
+                    Text(section == 0 ? "Messages" : "Servers").font(.display(38)).foregroundStyle(Palette.text)
+                        .contentTransition(.opacity)
                     Spacer()
-                    Button { starting = true } label: { Label("New", systemImage: "square.and.pencil") }
-                        .buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
+                    if section == 0 {
+                        Button { starting = true } label: { Label("New", systemImage: "square.and.pencil") }
+                            .buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
+                    }
                 }
                 .padding(.horizontal, 4)
+                SectionSwitch(options: [("Chats", "bubble.left.and.bubble.right.fill"), ("Servers", "person.3.fill")], selection: $section)
+                    .padding(.bottom, 4)
+                if section == 1 {
+                    ServersView(path: $path, embedded: true)
+                        .transition(.opacity.combined(with: .move(edge: .trailing)))
+                } else {
+                chatList
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            .padding(.bottom, 30)
+            .frame(maxWidth: 680)
+            .frame(maxWidth: .infinity)
+            .animation(.snappy, value: section)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .sugarBackground()
+        .sugarTopBar($path)
+        .refreshable { await store.refresh(me: model.me?.email ?? "") }
+        .sheet(isPresented: $starting) {
+            NewChatView { email in
+                starting = false
+                guard let me = model.me?.email else { return }
+                let id = Social.dmId(me, email)
+                let existing = store.conversations.first { $0.id == id }
+                let c = existing ?? Conversation(id: id, members: [me, email.lowercased()], isGroup: false, groupName: "", last: nil, unread: 0)
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(350))
+                    path.append(.chat(c))
+                }
+            }
+            .presentationCornerRadius(34)
+        }
+    }
+
+    @ViewBuilder
+    private var chatList: some View {
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
                     TextField("Search conversations…", text: $search).font(.jakarta(15))
@@ -129,31 +171,40 @@ struct ChatListView: View {
                     Button { path.append(.chat(c)) } label: { ConversationRow(conversation: c) }
                         .buttonStyle(BouncyStyle(scale: 0.97))
                 }
-            }
-            .padding(.horizontal, 14)
-            .padding(.top, 10)
-            .padding(.bottom, 30)
-            .frame(maxWidth: 680)
-            .frame(maxWidth: .infinity)
-        }
-        .scrollDismissesKeyboard(.interactively)
-        .sugarBackground()
-        .sugarTopBar($path)
-        .refreshable { await store.refresh(me: model.me?.email ?? "") }
-        .sheet(isPresented: $starting) {
-            NewChatView { email in
-                starting = false
-                guard let me = model.me?.email else { return }
-                let id = Social.dmId(me, email)
-                let existing = store.conversations.first { $0.id == id }
-                let c = existing ?? Conversation(id: id, members: [me, email.lowercased()], isGroup: false, groupName: "", last: nil, unread: 0)
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(350))
-                    path.append(.chat(c))
+    }
+}
+
+// Two big segments ("Chats | Servers") with a sliding pink pill.
+struct SectionSwitch: View {
+    let options: [(String, String)]
+    @Binding var selection: Int
+    @Namespace private var pill
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(Array(options.enumerated()), id: \.offset) { i, option in
+                Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { selection = i } } label: {
+                    Label(option.0, systemImage: option.1)
+                        .font(.jakarta(14, .bold))
+                        .foregroundStyle(selection == i ? .white : Palette.text2)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                        .background {
+                            if selection == i {
+                                Capsule().fill(Theme.gradient)
+                                    .shadow(color: Theme.main.opacity(0.35), radius: 8, y: 3)
+                                    .matchedGeometryEffect(id: "pill", in: pill)
+                            }
+                        }
+                        .contentShape(Capsule())
                 }
+                .buttonStyle(BouncyStyle(scale: 0.96))
             }
-            .presentationCornerRadius(34)
         }
+        .padding(4)
+        .background(Palette.surface, in: Capsule())
+        .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
+        .sensoryFeedback(.selection, trigger: selection)
     }
 }
 

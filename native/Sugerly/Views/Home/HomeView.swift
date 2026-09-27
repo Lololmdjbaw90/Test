@@ -151,6 +151,10 @@ struct HomeView: View {
     @Environment(Player.self) private var player
     @State private var artworks: [Artwork] = []
     @State private var tracks: [Track] = []
+    @State private var servers: [Server] = []
+    @State private var reels: [Reel] = []
+    @State private var loaded = false
+    @State private var appeared = false
 
     private var greeting: String {
         let h = Calendar.current.component(.hour, from: Date())
@@ -160,11 +164,18 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
-                hero
-                if !artworks.isEmpty { featured }
-                if !communityPicks.isEmpty { community }
-                if !tracks.isEmpty { freshTracks }
-                if !topArtists.isEmpty { artists }
+                hero.homeEnter(appeared, 0)
+                quickLinks.homeEnter(appeared, 1)
+                featured.homeEnter(appeared, 2)
+                if !reels.isEmpty { reelStrip.homeEnter(appeared, 3) }
+                community.homeEnter(appeared, 4)
+                freshTracks.homeEnter(appeared, 5)
+                artists.homeEnter(appeared, 6)
+                friendsRow.homeEnter(appeared, 7)
+                yourServers.homeEnter(appeared, 8)
+                Label("Last activity \(Dates.ago(posts.posts.first?.created ?? ""))", systemImage: "sparkles")
+                    .font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
+                    .frame(maxWidth: .infinity)
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -176,14 +187,153 @@ struct HomeView: View {
         .sugarTopBar($path)
         .refreshable { await load() }
         .task { await load() }
+        .onAppear { withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) { appeared = true } }
     }
 
     private func load() async {
         async let art = try? FS.query("Artwork", orderBy: "created_date", limit: 40)
         async let music = try? FS.query("MusicReview", orderBy: "created_date", limit: 8)
+        async let serverDocs = try? FS.query("Community", orderBy: "created_date", limit: 60)
+        async let reelDocs = try? FS.query("Reel", orderBy: "created_date", limit: 12)
         if posts.posts.isEmpty { await posts.load() }
         artworks = (await art ?? []).map(Artwork.init)
         tracks = (await music ?? []).map(Track.init)
+        servers = (await serverDocs ?? []).map(Server.init)
+        reels = (await reelDocs ?? []).map(Reel.init)
+        loaded = true
+    }
+
+    // MARK: quick links (like the website's sidebar)
+
+    private var quickLinks: some View {
+        let items: [(String, String, [UInt32], Route?)] = [
+            ("Gallery", "photo.stack.fill", [0xFFAA80, 0xEE6E40], .gallery),
+            ("Music", "music.note", [0xFF7AA2, 0xD9577F], .music),
+            ("Servers", "person.3.fill", [0xB19CFF, 0x7C5CF0], .servers),
+            ("Alerts", "bell.fill", [0x7CBEFF, 0x2F80E0], .notifications),
+        ]
+        return HStack(spacing: 10) {
+            ForEach(items, id: \.0) { item in
+                Button { if let r = item.3 { path.append(r) } } label: {
+                    VStack(spacing: 8) {
+                        Image(systemName: item.1)
+                            .font(.system(size: 19, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 50, height: 50)
+                            .background(LinearGradient(colors: item.2.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+                            .shadow(color: Color(hex: item.2[1]).opacity(0.35), radius: 10, y: 5)
+                        Text(item.0).font(.jakarta(12, .bold)).foregroundStyle(Palette.text2)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(BouncyStyle(scale: 0.9))
+            }
+        }
+        .padding(.vertical, 14)
+        .sugarCard(radius: 26)
+    }
+
+    // MARK: reels strip
+
+    private var reelStrip: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionHeader(icon: "play.rectangle.fill", title: "Fresh reels")
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 12) {
+                    ForEach(reels) { reel in
+                        Button { path.append(.reel(reel)) } label: {
+                            ZStack(alignment: .bottomLeading) {
+                                RemoteImage(url: reel.coverURL.isEmpty ? (reel.pictures.first ?? "") : reel.coverURL)
+                                LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .center, endPoint: .bottom)
+                                HStack(spacing: 4) {
+                                    Image(systemName: "play.fill")
+                                    Text("\(reel.views)")
+                                }
+                                .font(.jakarta(12, .heavy)).foregroundStyle(.white)
+                                .padding(10)
+                            }
+                            .frame(width: 124, height: 210)
+                            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(.white.opacity(0.5), lineWidth: 1))
+                            .shadow(color: Palette.shadow, radius: 10, y: 5)
+                        }
+                        .buttonStyle(BouncyStyle(scale: 0.95))
+                    }
+                }
+                .padding(.vertical, 6)
+            }
+            .scrollClipDisabled()
+        }
+    }
+
+    // MARK: friends & servers
+
+    private var friendsRow: some View {
+        let friends = mutualFriends.sorted { (model.person($0)?.isOnline == true ? 0 : 1) < (model.person($1)?.isOnline == true ? 0 : 1) }
+        return VStack(alignment: .leading, spacing: 14) {
+            SectionHeader(icon: "person.2.fill", title: "Friends")
+            if friends.isEmpty {
+                VStack(spacing: 10) {
+                    Text("Follow people back to become friends and see who's around.").font(.jakarta(14)).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
+                    Button { path.append(.gallery) } label: { Label("Find people", systemImage: "sparkles") }
+                        .buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
+                }
+                .frame(maxWidth: .infinity)
+                .sugarCard(radius: 24, padding: 20)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 16) {
+                        ForEach(friends, id: \.self) { email in
+                            let person = model.person(email)
+                            Button { path.append(.person(email)) } label: {
+                                VStack(spacing: 6) {
+                                    Avatar(url: person?.picture ?? "", name: person?.displayName ?? email, size: 62, online: person?.isOnline ?? false)
+                                    Text(person?.displayName ?? "").font(.jakarta(12, .semibold)).foregroundStyle(Palette.text2).lineLimit(1)
+                                }
+                                .frame(width: 74)
+                            }
+                            .buttonStyle(BouncyStyle())
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                .scrollClipDisabled()
+            }
+        }
+    }
+
+    private var yourServers: some View {
+        let me = model.me?.email ?? ""
+        let mine = servers.filter { $0.members.contains(me) }.prefix(6)
+        return VStack(alignment: .leading, spacing: 14) {
+            SectionHeader(icon: "server.rack", title: "Your servers") { path.append(.servers) }
+            if mine.isEmpty {
+                VStack(spacing: 10) {
+                    Text("Join a server to chat with the community.").font(.jakarta(14)).foregroundStyle(Palette.muted)
+                    Button { path.append(.servers) } label: { Label("Explore servers", systemImage: "bubble.left.and.bubble.right.fill") }
+                        .buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
+                }
+                .frame(maxWidth: .infinity)
+                .sugarCard(radius: 24, padding: 20)
+            } else {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                    ForEach(Array(mine)) { server in
+                        Button { path.append(.server(server)) } label: {
+                            HStack(spacing: 10) {
+                                ServerIcon(server: server, size: 44)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(server.name).font(.jakarta(14, .bold)).foregroundStyle(Palette.text).lineLimit(1)
+                                    Text("\(server.members.count) members").font(.jakarta(11)).foregroundStyle(Palette.muted)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .sugarCard(radius: 20, padding: 10)
+                        }
+                        .buttonStyle(BouncyStyle(scale: 0.96))
+                    }
+                }
+            }
+        }
     }
 
     // MARK: sections
@@ -248,6 +398,11 @@ struct HomeView: View {
             SectionHeader(icon: "star.fill", title: "Featured art") { path.append(.gallery) }
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
+                    if !loaded {
+                        ForEach(0..<4, id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: 26, style: .continuous).fill(Palette.surface2).frame(width: 220, height: 280)
+                        }
+                    }
                     ForEach(Array(list)) { art in
                         Button { path.append(.artwork(art)) } label: {
                             ZStack(alignment: .bottomLeading) {
@@ -279,21 +434,35 @@ struct HomeView: View {
 
     private var communityPicks: [Post] {
         let blocked = Set(model.me?.blocked ?? [])
-        return posts.posts.filter { !$0.imageURL.isEmpty && !blocked.contains($0.authorEmail) }
-            .sorted { $0.likes.count > $1.likes.count }
+        let me = model.me?.email ?? ""
+        return posts.posts.filter { !blocked.contains($0.authorEmail) && $0.authorEmail != me && (!$0.imageURL.isEmpty || !$0.text.isEmpty) }
+            .sorted { Self.pickScore($0) > Self.pickScore($1) }
             .prefix(6).map { $0 }
     }
 
     private var community: some View {
         VStack(alignment: .leading, spacing: 14) {
             SectionHeader(icon: "flame.fill", title: "For you in the community")
+            if communityPicks.isEmpty {
+                Text(loaded ? "Nothing new yet — share something!" : "Loading…").font(.jakarta(14)).foregroundStyle(Palette.muted)
+                    .frame(maxWidth: .infinity).sugarCard(radius: 24, padding: 20)
+            }
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                 ForEach(communityPicks) { post in
                     Button { path.append(.post(post)) } label: {
                         VStack(alignment: .leading, spacing: 0) {
-                            Rectangle().fill(Palette.surface2)
-                                .aspectRatio(0.85, contentMode: .fit)
-                                .overlay { RemoteImage(url: post.imageURL) }
+                            Rectangle().fill(post.imageURL.isEmpty ? AnyShapeStyle(LinearGradient(colors: [Theme.light.opacity(0.35), Palette.surface2], startPoint: .topLeading, endPoint: .bottomTrailing)) : AnyShapeStyle(Palette.surface2))
+                                .aspectRatio(0.8, contentMode: .fit)
+                                .overlay {
+                                    if post.imageURL.isEmpty {
+                                        Text("“\(String(post.text.prefix(90)))”")
+                                            .font(.display(18)).foregroundStyle(Palette.text2)
+                                            .padding(14)
+                                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                                    } else {
+                                        RemoteImage(url: post.imageURL)
+                                    }
+                                }
                                 .clipped()
                             HStack(spacing: 8) {
                                 Avatar(url: model.person(post.authorEmail)?.picture ?? post.authorPicture, name: post.authorName, size: 26)
@@ -320,6 +489,9 @@ struct HomeView: View {
                 ForEach(tracks.prefix(5)) { track in
                     TrackRow(track: track, list: tracks)
                 }
+                if tracks.isEmpty {
+                    Text(loaded ? "No tracks yet." : "Loading…").font(.jakarta(14)).foregroundStyle(Palette.muted).padding(20)
+                }
             }
             .sugarCard(radius: 26, padding: 8)
         }
@@ -336,6 +508,9 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 14) {
             SectionHeader(icon: "crown.fill", title: "Top artists")
             VStack(spacing: 2) {
+                if topArtists.isEmpty {
+                    Text("Post art to get on the board!").font(.jakarta(14)).foregroundStyle(Palette.muted).padding(20)
+                }
                 ForEach(Array(topArtists.enumerated()), id: \.offset) { index, entry in
                     let person = model.person(entry.0)
                     Button { path.append(.person(entry.0)) } label: {
@@ -365,6 +540,11 @@ struct HomeView: View {
     private var mutualFriends: [String] {
         guard let me = model.me else { return [] }
         return me.following.filter { model.person($0)?.following.contains(me.email) == true }
+    }
+
+    static func pickScore(_ p: Post) -> Int {
+        let bonus: Int = p.imageURL.isEmpty ? 0 : 3
+        return bonus + p.likes.count
     }
 
     static func compact(_ n: Int) -> String {
@@ -423,5 +603,15 @@ struct TrackRow: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .background(current ? Theme.pink.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+// Home sections slide up one after another, like the website's stagger.
+extension View {
+    func homeEnter(_ shown: Bool, _ index: Int) -> some View {
+        self
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown ? 0 : 24)
+            .animation(.spring(response: 0.55, dampingFraction: 0.85).delay(Double(index) * 0.06), value: shown)
     }
 }

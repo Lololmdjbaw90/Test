@@ -419,10 +419,8 @@ struct PostCard: View {
     }
 
     private var media: some View {
-        Rectangle().fill(Palette.surface2)
-            .frame(maxWidth: .infinity)
-            .frame(height: 360)
-            .overlay { RemoteImage(url: post.imageURL) }
+        ArtImage(url: post.imageURL, tallest: 0.7)
+            .background(Palette.surface2)
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay {
                 Image(systemName: "heart.fill")

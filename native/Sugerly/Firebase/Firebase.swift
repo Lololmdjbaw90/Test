@@ -39,7 +39,9 @@ enum HTTP {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         let object: Any = data.isEmpty ? [String: Any]() : ((try? JSONSerialization.jsonObject(with: data)) ?? [String: Any]())
         guard (200..<300).contains(status) else {
-            let error = (object as? [String: Any])?["error"]
+            // runQuery wraps its error in a list: [{"error": {...}}]
+            let wrapper = (object as? [String: Any]) ?? ((object as? [[String: Any]])?.first ?? [:])
+            let error = wrapper["error"]
             let message = (error as? [String: Any])?["message"] as? String ?? (error as? String) ?? "Something went wrong (\(status))."
             let code = (error as? [String: Any])?["status"] as? String ?? ""
             throw APIError(message: message, status: status, code: code)
@@ -293,6 +295,12 @@ enum FS {
     static func create(_ collection: String, _ data: Doc, id: String? = nil) async throws -> Doc {
         var comps = URLComponents(string: "\(base)/\(collection)")!
         if let id { comps.queryItems = [URLQueryItem(name: "documentId", value: id)] }
+        // Same bookkeeping fields the website adds to every new record.
+        var data = data
+        let now = nowISO()
+        if data["created_date"] == nil { data["created_date"] = now }
+        if data["updated_date"] == nil { data["updated_date"] = now }
+        if data["created_by"] == nil, let email = await MainActor.run(body: { AuthClient.shared.email }) { data["created_by"] = email }
         let fields: [String: Any] = data.mapValues { encode($0) }
         let body: [String: Any] = ["fields": fields]
         let json = try await HTTP.json(comps.url!, method: "POST", body: body, auth: try await bearer())
