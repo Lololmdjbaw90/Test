@@ -82,12 +82,11 @@ extension Conversation {
 }
 
 struct ChatListView: View {
+    @Binding var path: [Route]
     @Environment(AppModel.self) private var model
     @Environment(ChatStore.self) private var store
-    @State private var path: [Route] = []
     @State private var search = ""
     @State private var starting = false
-    @State private var posts = PostsStore()
 
     private var shown: [Conversation] {
         let blocked = Set(model.me?.blocked ?? [])
@@ -99,51 +98,61 @@ struct ChatListView: View {
     }
 
     var body: some View {
-        NavigationStack(path: $path) {
-            List(shown) { c in
-                NavigationLink(value: Route.chat(c)) {
-                    ConversationRow(conversation: c)
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Messages").font(.display(38)).foregroundStyle(Palette.text)
+                    Spacer()
+                    Button { starting = true } label: { Label("New", systemImage: "square.and.pencil") }
+                        .buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
                 }
-                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-            }
-            .listStyle(.plain)
-            .overlay {
+                .padding(.horizontal, 4)
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
+                    TextField("Search conversations…", text: $search).font(.jakarta(15))
+                }
+                .padding(.horizontal, 16)
+                .frame(height: 48)
+                .background(Palette.surface, in: Capsule())
+                .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
+                .padding(.bottom, 6)
+
                 if store.loading && store.conversations.isEmpty {
-                    ProgressView()
+                    ProgressView().frame(maxWidth: .infinity).padding(40)
                 } else if let error = store.error, store.conversations.isEmpty {
-                    ContentUnavailableView("Couldn't load chats", systemImage: "wifi.exclamationmark", description: Text(error))
-                } else if shown.isEmpty && !store.loading {
-                    ContentUnavailableView {
-                        Label(search.isEmpty ? "No messages yet" : "No chats found", systemImage: "bubble.left.and.bubble.right")
-                    } description: {
-                        Text(search.isEmpty ? "Start a chat with someone on Sugerly." : "Try another name.")
-                    } actions: {
-                        if search.isEmpty { Button("New message") { starting = true }.buttonStyle(.borderedProminent) }
-                    }
+                    EmptyCard(icon: "wifi.exclamationmark", title: "Couldn't load chats", text: error)
+                } else if shown.isEmpty {
+                    EmptyCard(icon: "bubble.left.and.bubble.right.fill", title: search.isEmpty ? "No messages yet" : "No chats found", text: search.isEmpty ? "Tap New to start a chat with someone on Sugerly." : "Try another name.")
+                }
+
+                ForEach(shown) { c in
+                    Button { path.append(.chat(c)) } label: { ConversationRow(conversation: c) }
+                        .buttonStyle(BouncyStyle(scale: 0.97))
                 }
             }
-            .searchable(text: $search, prompt: "Search chats")
-            .refreshable { await store.refresh(me: model.me?.email ?? "") }
-            .navigationTitle("Chat")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { starting = true } label: { Image(systemName: "square.and.pencil") }.accessibilityLabel("New message")
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            .padding(.bottom, 30)
+            .frame(maxWidth: 680)
+            .frame(maxWidth: .infinity)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .sugarBackground()
+        .sugarTopBar($path)
+        .refreshable { await store.refresh(me: model.me?.email ?? "") }
+        .sheet(isPresented: $starting) {
+            NewChatView { email in
+                starting = false
+                guard let me = model.me?.email else { return }
+                let id = Social.dmId(me, email)
+                let existing = store.conversations.first { $0.id == id }
+                let c = existing ?? Conversation(id: id, members: [me, email.lowercased()], isGroup: false, groupName: "", last: nil, unread: 0)
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(350))
+                    path.append(.chat(c))
                 }
             }
-            .navigationDestination(for: Route.self) { route in RouteView(route: route, store: posts, path: $path) }
-            .sheet(isPresented: $starting) {
-                NewChatView { email in
-                    starting = false
-                    guard let me = model.me?.email else { return }
-                    let id = Social.dmId(me, email)
-                    let existing = store.conversations.first { $0.id == id }
-                    let c = existing ?? Conversation(id: id, members: [me, email.lowercased()], isGroup: false, groupName: "", last: nil, unread: 0)
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(350))
-                        path.append(.chat(c))
-                    }
-                }
-            }
+            .presentationCornerRadius(34)
         }
     }
 }
@@ -155,34 +164,37 @@ struct ConversationRow: View {
     var body: some View {
         let me = model.me?.email ?? ""
         let other = conversation.others(me).first.flatMap { model.person($0) }
-        HStack(spacing: 12) {
+        let unread = conversation.unread > 0
+        HStack(spacing: 14) {
             if conversation.isGroup {
-                ZStack {
-                    Circle().fill(LinearGradient(colors: [Theme.lavender, Theme.pink], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    Image(systemName: "person.3.fill").foregroundStyle(.white).font(.system(size: 18))
-                }
-                .frame(width: 52, height: 52)
+                Image(systemName: "person.3.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
+                    .frame(width: 56, height: 56)
+                    .background(LinearGradient(colors: [Theme.lavender, Theme.pink], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             } else {
-                Avatar(url: conversation.picture(model), name: conversation.title(model), size: 52, online: other?.isOnline ?? false)
+                Avatar(url: conversation.picture(model), name: conversation.title(model), size: 56, online: other?.isOnline ?? false)
             }
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text(conversation.title(model)).font(.body.weight(.semibold)).lineLimit(1)
+                    Text(conversation.title(model)).font(.jakarta(16, .bold)).foregroundStyle(Palette.text).lineLimit(1)
                     Spacer()
-                    Text(Dates.ago(conversation.last?.created ?? "")).font(.caption).foregroundStyle(.secondary)
+                    Text(Dates.ago(conversation.last?.created ?? "")).font(.jakarta(12, unread ? .bold : .regular)).foregroundStyle(unread ? Theme.pink : Palette.muted)
                 }
                 HStack {
-                    Text(preview(me)).font(.subheadline).foregroundStyle(conversation.unread > 0 ? .primary : .secondary).lineLimit(2)
+                    Text(preview(me)).font(.jakarta(14, unread ? .semibold : .regular)).foregroundStyle(unread ? Palette.text : Palette.muted).lineLimit(1)
                     Spacer()
-                    if conversation.unread > 0 {
+                    if unread {
                         Text("\(min(conversation.unread, 99))")
-                            .font(.caption2.weight(.bold)).foregroundStyle(.white)
-                            .padding(.horizontal, 7).padding(.vertical, 3)
-                            .background(Theme.pink, in: Capsule())
+                            .font(.jakarta(11, .heavy)).foregroundStyle(.white)
+                            .padding(.horizontal, 8).frame(minHeight: 22)
+                            .background(Theme.gradient, in: Capsule())
+                            .shadow(color: Theme.pink.opacity(0.4), radius: 6, y: 3)
                     }
                 }
             }
         }
+        .padding(12)
+        .background(unread ? Theme.pink.opacity(0.06) : Palette.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(unread ? Theme.pink.opacity(0.25) : Palette.border, lineWidth: 1))
     }
 
     private func preview(_ me: String) -> String {
@@ -215,11 +227,14 @@ struct ChatView: View {
             ScrollView {
                 LazyVStack(spacing: 4) {
                     if loaded && messages.isEmpty {
-                        VStack(spacing: 10) {
-                            Avatar(url: conversation.picture(model), name: conversation.title(model), size: 72)
-                            Text(conversation.title(model)).font(.title3.bold())
-                            Text("Say hi 👋").foregroundStyle(.secondary)
+                        VStack(spacing: 12) {
+                            Avatar(url: conversation.picture(model), name: conversation.title(model), size: 88)
+                                .overlay(Circle().strokeBorder(Theme.gradient, lineWidth: 3))
+                                .shadow(color: Theme.pink.opacity(0.3), radius: 14, y: 6)
+                            Text(conversation.title(model)).font(.display(28)).foregroundStyle(Palette.text)
+                            Text("Say hi 👋").font(.jakarta(15)).foregroundStyle(Palette.muted)
                         }
+                        .frame(maxWidth: .infinity)
                         .padding(.top, 60)
                     }
                     ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
@@ -250,11 +265,22 @@ struct ChatView: View {
                 withAnimation(.snappy) { proxy.scrollTo(id, anchor: .bottom) }
             }
         }
-        .background(Theme.background)
-        .safeAreaInset(edge: .bottom) { composer }
-        .navigationTitle(conversation.title(model))
+        .sugarBackground()
+        .safeAreaInset(edge: .bottom, spacing: 0) { composer }
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .tabBar)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                let other = conversation.others(me).first.flatMap { model.person($0) }
+                HStack(spacing: 10) {
+                    Avatar(url: conversation.picture(model), name: conversation.title(model), size: 34, online: other?.isOnline ?? false)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(conversation.title(model)).font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
+                        Text(conversation.isGroup ? "\(conversation.members.count) members" : (other?.isOnline == true ? "Online" : "Offline"))
+                            .font(.jakarta(11, .semibold)).foregroundStyle(other?.isOnline == true ? Palette.success : Palette.muted)
+                    }
+                }
+            }
+        }
         .sheet(item: $reporting) { target in ReportSheet(target: target) }
         .task { await poll() }
         .onChange(of: photo) { _, item in
@@ -265,27 +291,34 @@ struct ChatView: View {
 
     private var composer: some View {
         VStack(spacing: 4) {
-            if let failed { Text(failed).font(.caption).foregroundStyle(.red) }
+            if let failed { Text(failed).font(.jakarta(12, .semibold)).foregroundStyle(Palette.danger) }
             HStack(alignment: .bottom, spacing: 10) {
                 PhotosPicker(selection: $photo, matching: .images) {
-                    Image(systemName: "photo").font(.system(size: 20)).frame(width: 36, height: 38)
+                    Image(systemName: "photo.fill").font(.system(size: 18, weight: .semibold)).foregroundStyle(Theme.pink)
+                        .frame(width: 42, height: 42)
+                        .background(Theme.pink.opacity(0.1), in: Circle())
                 }
+                .buttonStyle(BouncyStyle())
                 .accessibilityLabel("Send a photo")
-                TextField("Message", text: $draft, axis: .vertical)
+                TextField("Message \(conversation.title(model))", text: $draft, axis: .vertical)
+                    .font(.jakarta(15))
                     .lineLimit(1...6)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                Button { Task { await send() } } label: {
-                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 34)).symbolRenderingMode(.hierarchical)
-                }
-                .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .sensoryFeedback(.impact(weight: .medium), trigger: messages.count)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 11)
+                    .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+                SendButton(enabled: !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) { Task { await send() } }
+                    .sensoryFeedback(.impact(weight: .medium), trigger: messages.count)
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.bar)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .background {
+            Palette.surface
+                .shadow(color: Palette.shadow, radius: 10, y: -4)
+                .ignoresSafeArea(edges: .bottom)
+        }
     }
 
     private func gap(_ a: Message, _ b: Message) -> Bool {
@@ -403,36 +436,43 @@ struct Bubble: View {
         VStack(alignment: mine ? .trailing : .leading, spacing: 3) {
             if showTime {
                 Text(Dates.ago(message.created) == "now" ? "Now" : Dates.time(message.created))
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.jakarta(11, .bold))
+                    .foregroundStyle(Palette.muted)
+                    .padding(.horizontal, 12).padding(.vertical, 4)
+                    .background(Palette.surface2, in: Capsule())
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
             }
-            if showName { Text(message.authorName).font(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.horizontal, 12) }
+            if showName { Text(message.authorName).font(.jakarta(12, .bold)).foregroundStyle(Theme.pink).padding(.horizontal, 12) }
             HStack {
-                if mine { Spacer(minLength: 48) }
+                if mine { Spacer(minLength: 56) }
                 VStack(alignment: .leading, spacing: 6) {
                     if !message.imageURL.isEmpty {
-                        RemoteImage(url: message.imageURL, contentMode: .fill)
-                            .frame(width: 220, height: 220)
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        Rectangle().fill(Palette.surface2).frame(width: 230, height: 230)
+                            .overlay { RemoteImage(url: message.imageURL) }
+                            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     }
                     if !message.text.isEmpty {
                         Text(message.text)
-                            .foregroundStyle(mine ? .white : .primary)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 9)
+                            .font(.jakarta(15))
+                            .foregroundStyle(mine ? .white : Palette.text)
+                            .padding(.horizontal, 15)
+                            .padding(.vertical, 10)
                             .background {
                                 if mine {
-                                    RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.gradient)
+                                    UnevenRoundedRectangle(topLeadingRadius: 22, bottomLeadingRadius: 22, bottomTrailingRadius: 6, topTrailingRadius: 22, style: .continuous)
+                                        .fill(Theme.gradient)
+                                        .shadow(color: Theme.pink.opacity(0.3), radius: 8, y: 4)
                                 } else {
-                                    RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.card)
+                                    UnevenRoundedRectangle(topLeadingRadius: 22, bottomLeadingRadius: 6, bottomTrailingRadius: 22, topTrailingRadius: 22, style: .continuous)
+                                        .fill(Palette.surface)
+                                        .overlay(UnevenRoundedRectangle(topLeadingRadius: 22, bottomLeadingRadius: 6, bottomTrailingRadius: 22, topTrailingRadius: 22, style: .continuous).stroke(Palette.border, lineWidth: 1))
                                 }
                             }
                     }
                 }
                 .opacity(message.pending ? 0.6 : 1)
-                if !mine { Spacer(minLength: 48) }
+                if !mine { Spacer(minLength: 56) }
             }
         }
     }
@@ -461,25 +501,48 @@ struct NewChatView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            List(people) { person in
-                Button { onPick(person.email) } label: {
-                    HStack(spacing: 12) {
-                        Avatar(url: person.picture, name: person.displayName, size: 44, online: person.isOnline)
-                        VStack(alignment: .leading) {
-                            Text(person.displayName).font(.body.weight(.semibold)).foregroundStyle(.primary)
-                            if !person.bio.isEmpty { Text(person.bio).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+        VStack(spacing: 14) {
+            HStack {
+                Text("New message").font(.display(28)).foregroundStyle(Palette.text)
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(Palette.text2)
+                        .frame(width: 36, height: 36).background(Palette.surface, in: Circle())
+                }
+                .buttonStyle(BouncyStyle())
+            }
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
+                TextField("Search people", text: $search).font(.jakarta(15))
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 48)
+            .background(Palette.surface, in: Capsule())
+            .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    if model.people.isEmpty { ProgressView().padding(30) }
+                    ForEach(people) { person in
+                        Button { onPick(person.email) } label: {
+                            HStack(spacing: 12) {
+                                Avatar(url: person.picture, name: person.displayName, size: 48, online: person.isOnline)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(person.displayName).font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
+                                    Text(person.bio.isEmpty ? "On Sugerly" : person.bio).font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(1)
+                                }
+                                Spacer()
+                                Image(systemName: "paperplane.fill").foregroundStyle(Theme.pink)
+                            }
+                            .padding(12)
+                            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                         }
+                        .buttonStyle(BouncyStyle(scale: 0.97))
                     }
                 }
             }
-            .listStyle(.plain)
-            .overlay { if model.people.isEmpty { ProgressView() } }
-            .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search people")
-            .navigationTitle("New message")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
-            .task { if model.people.isEmpty { await model.loadPeople() } }
         }
+        .padding(18)
+        .sugarBackground()
+        .task { if model.people.isEmpty { await model.loadPeople() } }
     }
 }

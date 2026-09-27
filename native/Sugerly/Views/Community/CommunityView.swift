@@ -2,18 +2,13 @@ import SwiftUI
 import UIKit
 import PhotosUI
 
-enum Route: Hashable {
-    case post(Post)
-    case person(String)
-    case chat(Conversation)
-}
-
-// Posts shared by the whole app (feed, post page, profiles) so a like or a
-// save shows everywhere at once.
+// Posts shared by the whole app (feed, post page, profiles, Home) so a like
+// or a save shows everywhere at once.
 @MainActor
 @Observable
 final class PostsStore {
     var posts: [Post] = []
+    var commentCounts: [String: Int] = [:]
     var loading = false
     var error: String?
 
@@ -21,8 +16,12 @@ final class PostsStore {
         loading = true
         defer { loading = false }
         do {
+            async let comments = try? FS.query("CommunityComment", orderBy: "created_date", limit: 400)
             let docs = try await FS.query("CommunityPost", orderBy: "created_date", limit: 150)
             posts = docs.map(Post.init)
+            var counts: [String: Int] = [:]
+            for c in (await comments ?? []) { counts[c.str("post_id"), default: 0] += 1 }
+            commentCounts = counts
             error = nil
         } catch {
             if posts.isEmpty { self.error = error.localizedDescription }
@@ -33,13 +32,16 @@ final class PostsStore {
         if let i = posts.firstIndex(where: { $0.id == post.id }) { posts[i] = post }
     }
 
-    func toggleLike(_ post: Post, me: String) {
+    func toggleLike(_ post: Post, me: UserProfile?) {
+        guard let me else { return }
         var next = post
-        if next.likes.contains(me) { next.likes.removeAll { $0 == me } } else { next.likes.append(me) }
+        let liking = !next.likes.contains(me.email)
+        if liking { next.likes.append(me.email) } else { next.likes.removeAll { $0 == me.email } }
         replace(next)
         Task {
             do {
                 try await FS.update("CommunityPost", post.id, ["likes": next.likes, "updated_date": FS.nowISO()])
+                if liking { Notify.send(to: post.authorEmail, from: me, type: "like", message: "\(me.displayName) liked your post\(post.title.isEmpty ? "" : " \"\(post.title)\"")", link: "/Community?post=\(post.id)") }
             } catch {
                 self.replace(post)
             }
@@ -52,107 +54,289 @@ final class PostsStore {
     }
 }
 
-struct CommunityView: View {
-    enum Feed: String, CaseIterable { case latest = "Latest", following = "Following", saved = "Saved" }
+// Notifications for likes, follows and comments (like the website sends).
+enum Notify {
+    @MainActor
+    static func send(to email: String, from me: UserProfile, type: String, message: String, link: String) {
+        guard !email.isEmpty, email != me.email else { return }
+        let now = FS.nowISO()
+        let data: Doc = [
+            "to_email": email, "from_email": me.email, "from_display_name": me.displayName,
+            "from_profile_picture": me.picture, "type": type, "message": message, "link": link,
+            "is_read": false, "created_by": me.email, "created_date": now, "updated_date": now,
+        ]
+        Task { try? await FS.create("Notification", data) }
+    }
+}
 
+// Words that start with # in a caption.
+enum Hashtags {
+    static func find(_ text: String) -> [String] {
+        text.split(whereSeparator: { $0.isWhitespace }).compactMap { word in
+            guard word.hasPrefix("#") else { return nil }
+            let tag = word.dropFirst().filter { $0.isLetter || $0.isNumber || $0 == "_" }.lowercased()
+            return tag.count >= 2 ? tag : nil
+        }
+    }
+
+    // Caption with #tags in the accent colour.
+    static func styled(_ text: String) -> AttributedString {
+        var out = AttributedString()
+        let words = text.split(separator: " ", omittingEmptySubsequences: false)
+        for (i, word) in words.enumerated() {
+            var piece = AttributedString(String(word))
+            if word.hasPrefix("#") && word.count > 1 {
+                piece.foregroundColor = Theme.pink
+                piece.font = Font.jakarta(15, .bold)
+            }
+            out += piece
+            if i < words.count - 1 { out += AttributedString(" ") }
+        }
+        return out
+    }
+}
+
+struct CommunityView: View {
+    enum Feed: String, CaseIterable { case forYou = "For you", following = "Following", latest = "Latest", top = "Top", saved = "Saved" }
+
+    @Binding var path: [Route]
+    var compose: () -> Void
     @Environment(AppModel.self) private var model
-    @State private var store = PostsStore()
-    @State private var feed: Feed = .latest
-    @State private var path: [Route] = []
-    @State private var composing = false
+    @Environment(PostsStore.self) private var store
+    @State private var feed: Feed = .forYou
+    @State private var tag: String?
     @State private var reporting: ReportSheet.Target?
+    @State private var dismissed = Set<String>()
 
     private var visible: [Post] {
         guard let me = model.me else { return [] }
         let blocked = Set(me.blocked)
-        let all = store.posts.filter { !blocked.contains($0.authorEmail) }
+        var all = store.posts.filter { !blocked.contains($0.authorEmail) }
+        if let tag { all = all.filter { Hashtags.find($0.title + " " + $0.text).contains(tag) } }
+        let following = Set(me.following)
         switch feed {
-        case .latest: return all
+        case .forYou:
+            return all.sorted { score($0, following) > score($1, following) }
         case .following:
-            let following = Set(me.following)
             return all.filter { following.contains($0.authorEmail) || $0.authorEmail == me.email }
+        case .latest:
+            return all
+        case .top:
+            let weekAgo = Dates.iso(Date().addingTimeInterval(-7 * 86400))
+            return all.filter { $0.created > weekAgo }.sorted { ($0.likes.count + (store.commentCounts[$0.id] ?? 0) * 2) > ($1.likes.count + (store.commentCounts[$1.id] ?? 0) * 2) }
         case .saved:
             let saved = Set(me.savedPosts)
             return all.filter { saved.contains($0.id) }
         }
     }
 
-    var body: some View {
-        NavigationStack(path: $path) {
-            ScrollView {
-                LazyVStack(spacing: 14) {
-                    Picker("Feed", selection: $feed.animation(.snappy)) {
-                        ForEach(Feed.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.bottom, 4)
+    // Recent, liked and from people you follow floats up.
+    private func score(_ p: Post, _ following: Set<String>) -> Double {
+        let hours = max(0, Date().timeIntervalSince(Dates.parse(p.created) ?? Date()) / 3600)
+        let engagement = Double(p.likes.count) + Double(store.commentCounts[p.id] ?? 0) * 2 + 1
+        let boost = following.contains(p.authorEmail) ? 1.6 : 1
+        return engagement * boost / pow(hours + 2, 1.15)
+    }
 
-                    ForEach(visible) { post in
-                        PostCard(post: post, store: store, path: $path, reporting: $reporting)
-                            .transition(.opacity.combined(with: .scale(scale: 0.98)))
+    private var trending: [String] {
+        var counts: [String: Int] = [:]
+        for p in store.posts { for t in Set(Hashtags.find(p.title + " " + p.text)) { counts[t, default: 0] += 1 } }
+        return counts.sorted { $0.value > $1.value }.prefix(8).map(\.key)
+    }
+
+    private var storyPeople: [String] {
+        let threeDays = Dates.iso(Date().addingTimeInterval(-3 * 86400))
+        var seen = Set<String>()
+        var out: [String] = []
+        for p in store.posts where p.created > threeDays && p.authorEmail != model.me?.email && !seen.contains(p.authorEmail) {
+            seen.insert(p.authorEmail)
+            out.append(p.authorEmail)
+        }
+        return Array(out.prefix(14))
+    }
+
+    private var suggestions: [UserProfile] {
+        guard let me = model.me else { return [] }
+        let following = Set(me.following)
+        let blocked = Set(me.blocked)
+        return model.people.values
+            .filter { $0.email != me.email && !following.contains($0.email) && !blocked.contains($0.email) && !dismissed.contains($0.email) }
+            .sorted { $0.isOnline && !$1.isOnline }
+            .prefix(8).map { $0 }
+    }
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 18) {
+                Text("Community").font(.display(38)).foregroundStyle(Palette.text).padding(.horizontal, 4)
+                stories
+                composerCard
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        chip(.forYou, "sparkles"); chip(.following, "person.crop.circle.badge.checkmark"); chip(.latest, "clock"); chip(.top, "flame"); chip(.saved, "bookmark")
+                    }
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 4)
+                }
+                if !trending.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            Label("Trending", systemImage: "chart.line.uptrend.xyaxis").font(.jakarta(13, .bold)).foregroundStyle(Theme.pink)
+                            ForEach(trending, id: \.self) { t in
+                                Chip(title: "#\(t)", active: tag == t) { withAnimation(.snappy) { tag = tag == t ? nil : t } }
+                            }
+                        }
+                        .padding(.horizontal, 4)
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.top, 6)
-                .padding(.bottom, 24)
-                .frame(maxWidth: 680)
-                .frame(maxWidth: .infinity)
-            }
-            .background(Theme.background)
-            .overlay {
+
                 if store.loading && store.posts.isEmpty {
-                    ProgressView()
-                } else if let error = store.error, store.posts.isEmpty {
-                    ContentUnavailableView("Couldn't load posts", systemImage: "wifi.exclamationmark", description: Text(error))
-                } else if visible.isEmpty && !store.loading {
-                    ContentUnavailableView(feed == .saved ? "No saved posts" : feed == .following ? "Nothing from people you follow" : "No posts yet",
-                                           systemImage: feed == .saved ? "bookmark" : "sparkles",
-                                           description: Text(feed == .saved ? "Tap the bookmark on any post to keep it here." : "Be the first to share something!"))
+                    ProgressView().frame(maxWidth: .infinity).padding(40)
+                } else if visible.isEmpty {
+                    EmptyCard(icon: feed == .saved ? "bookmark.fill" : "sparkles",
+                              title: feed == .saved ? "No saved posts" : feed == .following ? "Nothing from people you follow" : "Nothing here yet",
+                              text: feed == .saved ? "Tap the bookmark on any post to keep it here." : "Be the first to share something!")
+                }
+
+                ForEach(Array(visible.enumerated()), id: \.element.id) { index, post in
+                    PostCard(post: post, path: $path, reporting: $reporting)
+                        .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                    if index == 1 && !suggestions.isEmpty && feed == .forYou { suggested }
                 }
             }
-            .refreshable { await store.load() }
-            .navigationTitle("Community")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { composing = true } label: { Image(systemName: "square.and.pencil") }
-                        .accessibilityLabel("New post")
-                }
-            }
-            .navigationDestination(for: Route.self) { route in
-                RouteView(route: route, store: store, path: $path)
-            }
-            .sheet(isPresented: $composing) {
-                NewPostView { await store.load() }
-            }
-            .sheet(item: $reporting) { target in ReportSheet(target: target) }
-            .task { if store.posts.isEmpty { await store.load() } }
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            .padding(.bottom, 30)
+            .frame(maxWidth: 680)
+            .frame(maxWidth: .infinity)
+            .animation(.snappy, value: feed)
         }
+        .sugarBackground()
+        .sugarTopBar($path)
+        .refreshable { await store.load() }
+        .sheet(item: $reporting) { target in ReportSheet(target: target) }
+        .task { if store.posts.isEmpty { await store.load() } }
+    }
+
+    private func chip(_ f: Feed, _ icon: String) -> some View {
+        Chip(title: f.rawValue, icon: icon, active: feed == f) { feed = f }
+    }
+
+    private var stories: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 14) {
+                Button(action: compose) {
+                    VStack(spacing: 6) {
+                        Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 64)
+                            .overlay(alignment: .bottomTrailing) {
+                                Image(systemName: "plus").font(.system(size: 12, weight: .black)).foregroundStyle(.white)
+                                    .frame(width: 24, height: 24).background(Theme.gradient, in: Circle())
+                                    .overlay(Circle().strokeBorder(Palette.bg, lineWidth: 2.5))
+                            }
+                        Text("Your post").font(.jakarta(12, .semibold)).foregroundStyle(Palette.text2)
+                    }
+                }
+                .buttonStyle(BouncyStyle())
+                ForEach(storyPeople, id: \.self) { email in
+                    let person = model.person(email)
+                    Button { path.append(.person(email)) } label: {
+                        VStack(spacing: 6) {
+                            Avatar(url: person?.picture ?? "", name: person?.displayName ?? email, size: 60, online: person?.isOnline ?? false)
+                                .padding(3)
+                                .overlay(Circle().strokeBorder(AngularGradient(colors: [Theme.light, Theme.main, Color(hex: 0xF0A020), Theme.light], center: .center), lineWidth: 2.5))
+                            Text(person?.displayName ?? "").font(.jakarta(12, .semibold)).foregroundStyle(Palette.text).lineLimit(1).frame(width: 70)
+                        }
+                    }
+                    .buttonStyle(BouncyStyle())
+                }
+            }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 4)
+        }
+    }
+
+    private var composerCard: some View {
+        Button(action: compose) {
+            HStack(spacing: 12) {
+                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 44)
+                Text("Share your latest piece, \(model.me?.displayName.split(separator: " ").first.map(String.init) ?? "")…")
+                    .font(.jakarta(15)).foregroundStyle(Palette.muted).lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16).frame(height: 46)
+                    .background(Palette.surface2, in: Capsule())
+                Image(systemName: "photo.fill").font(.system(size: 18)).foregroundStyle(Theme.gradient)
+            }
+            .sugarCard(radius: 26, padding: 12)
+        }
+        .buttonStyle(BouncyStyle(scale: 0.97))
+    }
+
+    private var suggested: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Suggested for you").font(.jakarta(17, .bold)).foregroundStyle(Palette.text)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(suggestions) { person in
+                        VStack(spacing: 8) {
+                            Avatar(url: person.picture, name: person.displayName, size: 64, online: person.isOnline)
+                            Text(person.displayName).font(.jakarta(14, .bold)).foregroundStyle(Palette.text).lineLimit(1)
+                            Text(person.isOnline ? "Online now" : "On Sugerly").font(.jakarta(11)).foregroundStyle(Palette.muted)
+                            Button {
+                                guard let me = model.me else { return }
+                                Task {
+                                    try? await model.updateMe(["following": me.following + [person.email]])
+                                    Notify.send(to: person.email, from: me, type: "follow", message: "\(me.displayName) started following you", link: "/Profile?email=\(me.email)")
+                                }
+                            } label: { Label("Follow", systemImage: "person.badge.plus").font(.jakarta(13, .bold)) }
+                                .buttonStyle(GradientButtonStyle(height: 36))
+                        }
+                        .frame(width: 150)
+                        .padding(14)
+                        .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .overlay(alignment: .topTrailing) {
+                            Button { withAnimation { _ = dismissed.insert(person.email) } } label: {
+                                Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.muted).frame(width: 30, height: 30)
+                            }
+                        }
+                        .onTapGesture { path.append(.person(person.email)) }
+                    }
+                }
+            }
+        }
+        .sugarCard(radius: 26, padding: 14)
     }
 }
 
-// Where a tap leads, used by every tab's navigation stack.
-struct RouteView: View {
-    let route: Route
-    var store: PostsStore
-    @Binding var path: [Route]
-
+struct EmptyCard: View {
+    let icon: String
+    let title: String
+    let text: String
     var body: some View {
-        switch route {
-        case .post(let post): PostDetailView(postId: post.id, initial: post, store: store, path: $path)
-        case .person(let email): PersonView(email: email, store: store, path: $path)
-        case .chat(let conversation): ChatView(conversation: conversation)
+        VStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 26, weight: .bold)).foregroundStyle(.white)
+                .frame(width: 64, height: 64)
+                .background(Theme.gradient, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .shadow(color: Theme.pink.opacity(0.4), radius: 12, y: 6)
+            Text(title).font(.display(24)).foregroundStyle(Palette.text).multilineTextAlignment(.center)
+            Text(text).font(.jakarta(14)).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
         }
+        .frame(maxWidth: .infinity)
+        .padding(28)
+        .sugarCard(radius: 28)
     }
 }
+
+// MARK: - Post card
 
 struct PostCard: View {
     let post: Post
-    var store: PostsStore
     @Binding var path: [Route]
     @Binding var reporting: ReportSheet.Target?
     var openable = true
 
     @Environment(AppModel.self) private var model
+    @Environment(PostsStore.self) private var store
     @State private var heart = false
     @State private var confirmDelete = false
 
@@ -160,92 +344,37 @@ struct PostCard: View {
     private var liked: Bool { post.likes.contains(me) }
     private var saved: Bool { model.me?.savedPosts.contains(post.id) ?? false }
     private var author: UserProfile? { model.person(post.authorEmail) }
+    private var following: Bool { model.me?.following.contains(post.authorEmail) ?? false }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                Button { path.append(.person(post.authorEmail)) } label: {
-                    HStack(spacing: 10) {
-                        Avatar(url: author?.picture ?? post.authorPicture, name: author?.displayName ?? post.authorName, size: 40, online: author?.isOnline ?? false)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(author?.displayName ?? post.authorName).font(.subheadline.weight(.bold)).foregroundStyle(.primary)
-                            Text(Dates.ago(post.created)).font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-                Spacer()
-                Menu {
-                    if !post.text.isEmpty { Button { UIPasteboard.general.string = post.text } label: { Label("Copy text", systemImage: "doc.on.doc") } }
-                    if post.authorEmail != me {
-                        Button { reporting = ReportSheet.Target(id: post.id, type: "post", ownerEmail: post.authorEmail, preview: post.title.isEmpty ? post.text : post.title, link: "/Community?post=\(post.id)") } label: { Label("Report", systemImage: "flag") }
-                    }
-                    if post.authorEmail == me || model.me?.isAdmin == true {
-                        Button(role: .destructive) { confirmDelete = true } label: { Label("Delete", systemImage: "trash") }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis").font(.body.weight(.semibold)).frame(width: 36, height: 36).contentShape(Rectangle())
-                }
-                .foregroundStyle(.secondary)
-            }
-
+            header
             if !post.title.isEmpty || !post.text.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
-                    if !post.title.isEmpty { Text(post.title).font(.headline) }
-                    if !post.text.isEmpty { Text(post.text).font(.body).lineLimit(openable ? 6 : nil) }
+                    if !post.title.isEmpty { Text(post.title).font(.jakarta(17, .bold)).foregroundStyle(Palette.text) }
+                    if !post.text.isEmpty { Text(Hashtags.styled(post.text)).font(.jakarta(15)).foregroundStyle(Palette.text).lineLimit(openable ? 6 : nil) }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
-                .onTapGesture { if openable { path.append(.post(post)) } }
+                .onTapGesture { open() }
             }
-
-            if !post.imageURL.isEmpty {
-                RemoteImage(url: post.imageURL, contentMode: .fill)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 340)
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .overlay {
-                        Image(systemName: "heart.fill")
-                            .font(.system(size: 90))
-                            .foregroundStyle(.white)
-                            .shadow(radius: 12)
-                            .scaleEffect(heart ? 1 : 0.4)
-                            .opacity(heart ? 1 : 0)
+            if !post.imageURL.isEmpty { media }
+            actions
+            if !post.likes.isEmpty { likedBy }
+            if openable {
+                Button { open() } label: {
+                    HStack(spacing: 10) {
+                        Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 30)
+                        Text((store.commentCounts[post.id] ?? 0) > 0 ? "View \(store.commentCounts[post.id] ?? 0) comments…" : "Add a comment…")
+                            .font(.jakarta(14)).foregroundStyle(Palette.muted)
+                        Spacer()
                     }
-                    .contentShape(Rectangle())
-                    .onTapGesture(count: 2) { doubleTapLike() }
-                    .onTapGesture { if openable { path.append(.post(post)) } }
+                }
+                .buttonStyle(.plain)
             }
-
-            HStack(spacing: 18) {
-                Button { store.toggleLike(post, me: me) } label: {
-                    Label("\(post.likes.count)", systemImage: liked ? "heart.fill" : "heart")
-                        .foregroundStyle(liked ? Theme.pink : .primary)
-                        .contentTransition(.symbolEffect(.replace))
-                }
-                .sensoryFeedback(.impact(weight: .light), trigger: liked)
-                Button { if openable { path.append(.post(post)) } } label: {
-                    Label("Comments", systemImage: "bubble.right")
-                        .labelStyle(.iconOnly)
-                }
-                ShareLink(item: post.title.isEmpty ? post.text : post.title, subject: Text("Sugerly")) {
-                    Image(systemName: "square.and.arrow.up")
-                }
-                Spacer()
-                Button { toggleSave() } label: {
-                    Image(systemName: saved ? "bookmark.fill" : "bookmark")
-                        .foregroundStyle(saved ? Theme.pink : .primary)
-                        .contentTransition(.symbolEffect(.replace))
-                }
-                .sensoryFeedback(.impact(weight: .light), trigger: saved)
-                .accessibilityLabel(saved ? "Remove from saved" : "Save")
-            }
-            .font(.title3)
-            .buttonStyle(.plain)
-            .labelStyle(TightLabel())
         }
-        .padding(14)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .padding(16)
+        .sugarCard(radius: 28)
         .confirmationDialog("Delete this post?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 Task {
@@ -256,11 +385,119 @@ struct PostCard: View {
         } message: { Text("This can't be undone.") }
     }
 
-    private func doubleTapLike() {
-        if !liked { store.toggleLike(post, me: me) }
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.55)) { heart = true }
+    private var header: some View {
+        HStack(spacing: 10) {
+            Button { path.append(.person(post.authorEmail)) } label: {
+                Avatar(url: author?.picture ?? post.authorPicture, name: author?.displayName ?? post.authorName, size: 46, online: author?.isOnline ?? false)
+            }
+            .buttonStyle(BouncyStyle())
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(author?.displayName ?? post.authorName).font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
+                    if post.authorEmail != me && !following {
+                        Text("·").foregroundStyle(Palette.muted)
+                        Button("Follow") { follow() }.font(.jakarta(14, .bold)).foregroundStyle(Theme.pink).buttonStyle(.plain)
+                    }
+                }
+                Text(Dates.ago(post.created) + (post.title.isEmpty ? "" : " · \(post.title)")).font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(1)
+            }
+            Spacer()
+            Menu {
+                if !post.text.isEmpty { Button { UIPasteboard.general.string = post.text } label: { Label("Copy text", systemImage: "doc.on.doc") } }
+                if post.authorEmail != me {
+                    Button { reporting = ReportSheet.Target(id: post.id, type: "post", ownerEmail: post.authorEmail, preview: post.title.isEmpty ? post.text : post.title, link: "/Community?post=\(post.id)") } label: { Label("Report", systemImage: "flag") }
+                }
+                if post.authorEmail == me || model.me?.isAdmin == true {
+                    Button(role: .destructive) { confirmDelete = true } label: { Label("Delete", systemImage: "trash") }
+                }
+            } label: {
+                Image(systemName: "ellipsis").font(.system(size: 16, weight: .bold)).foregroundStyle(Palette.muted).frame(width: 36, height: 36).contentShape(Rectangle())
+            }
+        }
+    }
+
+    private var media: some View {
+        Rectangle().fill(Palette.surface2)
+            .frame(maxWidth: .infinity)
+            .frame(height: 360)
+            .overlay { RemoteImage(url: post.imageURL) }
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay {
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 96))
+                    .foregroundStyle(Theme.gradient)
+                    .shadow(color: Theme.pink.opacity(0.6), radius: 20)
+                    .scaleEffect(heart ? 1 : 0.3)
+                    .opacity(heart ? 1 : 0)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) { doubleTapLike() }
+            .onTapGesture { open() }
+    }
+
+    private var actions: some View {
+        HStack(spacing: 20) {
+            Button { store.toggleLike(post, me: model.me) } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: liked ? "heart.fill" : "heart")
+                        .foregroundStyle(liked ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.text2))
+                        .symbolEffect(.bounce, value: liked)
+                    Text("\(post.likes.count)").font(.jakarta(15, .bold)).foregroundStyle(liked ? Theme.pink : Palette.text2)
+                }
+            }
+            .sensoryFeedback(.impact(weight: .light), trigger: liked)
+            Button { open() } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "bubble.right").foregroundStyle(Palette.text2)
+                    Text("\(store.commentCounts[post.id] ?? 0)").font(.jakarta(15, .bold)).foregroundStyle(Palette.text2)
+                }
+            }
+            ShareLink(item: post.title.isEmpty ? post.text : post.title, subject: Text("Sugerly")) {
+                Image(systemName: "paperplane").foregroundStyle(Palette.text2)
+            }
+            Spacer()
+            Button { toggleSave() } label: {
+                Image(systemName: saved ? "bookmark.fill" : "bookmark")
+                    .foregroundStyle(saved ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.text2))
+                    .symbolEffect(.bounce, value: saved)
+            }
+            .sensoryFeedback(.impact(weight: .light), trigger: saved)
+            .accessibilityLabel(saved ? "Remove from saved" : "Save")
+        }
+        .font(.system(size: 21, weight: .semibold))
+        .buttonStyle(BouncyStyle(scale: 0.85))
+    }
+
+    private var likedBy: some View {
+        let likers = post.likes.compactMap { model.person($0) }
+        return HStack(spacing: 8) {
+            HStack(spacing: -8) {
+                ForEach(likers.prefix(3)) { p in
+                    Avatar(url: p.picture, name: p.displayName, size: 24).overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
+                }
+            }
+            if let first = likers.first {
+                (Text("Liked by ") + Text(first.displayName).bold() + Text(post.likes.count > 1 ? " and \(post.likes.count - 1) other\(post.likes.count == 2 ? "" : "s")" : ""))
+                    .font(.jakarta(13)).foregroundStyle(Palette.text2).lineLimit(1)
+            }
+        }
+    }
+
+    private func open() { if openable { path.append(.post(post)) } }
+
+    private func follow() {
+        guard let me = model.me else { return }
         Task {
-            try? await Task.sleep(for: .milliseconds(650))
+            try? await model.updateMe(["following": me.following + [post.authorEmail]])
+            Notify.send(to: post.authorEmail, from: me, type: "follow", message: "\(me.displayName) started following you", link: "/Profile?email=\(me.email)")
+        }
+    }
+
+    private func doubleTapLike() {
+        if !liked { store.toggleLike(post, me: model.me) }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { heart = true }
+        Task {
+            try? await Task.sleep(for: .milliseconds(700))
             withAnimation(.easeOut(duration: 0.25)) { heart = false }
         }
     }
@@ -273,22 +510,39 @@ struct PostCard: View {
     }
 }
 
-struct TightLabel: LabelStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 5) {
-            configuration.icon
-            configuration.title.font(.subheadline.weight(.semibold)).monospacedDigit()
-        }
-    }
-}
-
 // MARK: - A post with its comments
 
 struct PostDetailView: View {
     let postId: String
     let initial: Post
-    var store: PostsStore
     @Binding var path: [Route]
+
+    @Environment(AppModel.self) private var model
+    @Environment(PostsStore.self) private var store
+    @State private var reporting: ReportSheet.Target?
+
+    private var post: Post { store.posts.first { $0.id == postId } ?? initial }
+
+    var body: some View {
+        CommentsScreen(collection: "CommunityComment", field: "post_id", targetId: postId, ownerEmail: post.authorEmail, link: "/Community?post=\(postId)") {
+            PostCard(post: post, path: $path, reporting: $reporting, openable: false)
+        }
+        .navigationTitle("Post")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $reporting) { target in ReportSheet(target: target) }
+    }
+}
+
+// A scrolling page with something on top (post, artwork, reel) and its
+// comments, with replies and likes, and a comment box that rides the keyboard.
+struct CommentsScreen<Header: View>: View {
+    let collection: String
+    let field: String
+    let targetId: String
+    let ownerEmail: String
+    let link: String
+    var disabled = false
+    @ViewBuilder var header: () -> Header
 
     @Environment(AppModel.self) private var model
     @State private var comments: [Comment] = []
@@ -298,30 +552,26 @@ struct PostDetailView: View {
     @State private var reporting: ReportSheet.Target?
     @FocusState private var typing: Bool
 
-    private var post: Post { store.posts.first { $0.id == postId } ?? initial }
     struct Thread: Identifiable {
         let parent: Comment
         let replies: [Comment]
         var id: String { parent.id }
     }
+
     private var threads: [Thread] {
         let blocked = Set(model.me?.blocked ?? [])
         let visible = comments.filter { !blocked.contains($0.authorEmail) }
-        let top = visible.filter { $0.parentId.isEmpty }
-        return top.map { parent in Thread(parent: parent, replies: visible.filter { $0.parentId == parent.id }) }
+        return visible.filter { $0.parentId.isEmpty }.map { parent in Thread(parent: parent, replies: visible.filter { $0.parentId == parent.id }) }
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                PostCard(post: post, store: store, path: $path, reporting: $reporting, openable: false)
-
-                Text(comments.isEmpty ? "No comments yet" : "\(comments.count) comments")
-                    .font(.headline)
-                    .padding(.horizontal, 4)
-
-                ForEach(threads) { thread in
-                    VStack(alignment: .leading, spacing: 12) {
+                header()
+                Text(comments.isEmpty ? "No comments yet" : "\(comments.count) comment\(comments.count == 1 ? "" : "s")")
+                    .font(.display(22)).foregroundStyle(Palette.text).padding(.horizontal, 4)
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(threads) { thread in
                         CommentRow(comment: thread.parent, onReply: { reply(to: thread.parent) }, onReport: { report(thread.parent) }, onDelete: { delete(thread.parent) }, onLike: { like(thread.parent) })
                         ForEach(thread.replies) { r in
                             CommentRow(comment: r, onReply: { reply(to: thread.parent) }, onReport: { report(r) }, onDelete: { delete(r) }, onLike: { like(r) })
@@ -329,52 +579,56 @@ struct PostDetailView: View {
                         }
                     }
                 }
+                .padding(.horizontal, 4)
             }
             .padding(14)
+            .padding(.bottom, 10)
             .frame(maxWidth: 680)
             .frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
-        .background(Theme.background)
-        .navigationTitle("Post")
-        .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom) { composer }
+        .sugarBackground()
+        .safeAreaInset(edge: .bottom, spacing: 0) { if !disabled { composer } }
         .sheet(item: $reporting) { target in ReportSheet(target: target) }
-        .task { await loadComments() }
-        .refreshable { await loadComments() }
+        .task { await load() }
+        .refreshable { await load() }
     }
 
     private var composer: some View {
         VStack(spacing: 6) {
             if let replyTo {
                 HStack {
-                    Text("Replying to \(replyTo.authorName)").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    Text("Replying to \(replyTo.authorName)").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
                     Spacer()
-                    Button { withAnimation { self.replyTo = nil } } label: { Image(systemName: "xmark.circle.fill") }.foregroundStyle(.secondary)
+                    Button { withAnimation { self.replyTo = nil } } label: { Image(systemName: "xmark.circle.fill") }.foregroundStyle(Palette.muted)
                 }
                 .padding(.horizontal, 6)
             }
             HStack(alignment: .bottom, spacing: 10) {
-                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 34)
+                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 36)
                 TextField("Add a comment…", text: $draft, axis: .vertical)
+                    .font(.jakarta(15))
                     .lineLimit(1...5)
                     .focused($typing)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                Button { Task { await send() } } label: {
-                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 32)).symbolRenderingMode(.hierarchical)
-                }
-                .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sending)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(typing ? Theme.pink.opacity(0.5) : Palette.border, lineWidth: 1.2))
+                SendButton(enabled: !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !sending) { Task { await send() } }
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.bar)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .background {
+            Palette.surface
+                .shadow(color: Palette.shadow, radius: 10, y: -4)
+                .ignoresSafeArea(edges: .bottom)
+        }
     }
 
-    private func loadComments() async {
-        guard let docs = try? await FS.query("CommunityComment", [.equals("post_id", postId)]) else { return }
+    private func load() async {
+        guard let docs = try? await FS.query(collection, [.equals(field, targetId)]) else { return }
         withAnimation(.snappy) { comments = docs.map(Comment.init).sorted { $0.created < $1.created } }
     }
 
@@ -391,7 +645,7 @@ struct PostDetailView: View {
         defer { sending = false }
         let now = FS.nowISO()
         let data: Doc = [
-            "post_id": postId, "content": text, "gif_url": "",
+            field: targetId, "content": text, "gif_url": "",
             "parent_id": replyTo.map { $0.parentId.isEmpty ? $0.id : $0.parentId } ?? "",
             "reply_to_email": replyTo?.authorEmail ?? "", "reply_to_name": replyTo?.authorName ?? "",
             "user_email": me.email, "user_display_name": me.displayName, "user_full_name": me.displayName,
@@ -399,12 +653,14 @@ struct PostDetailView: View {
             "created_by": me.email, "created_date": now, "updated_date": now,
         ]
         do {
-            let created = try await FS.create("CommunityComment", data)
+            let created = try await FS.create(collection, data)
             withAnimation(.snappy) {
                 comments.append(Comment(created))
                 draft = ""
-                replyTo = nil
             }
+            let target = replyTo?.authorEmail ?? ownerEmail
+            Notify.send(to: target, from: me, type: "comment", message: "\(me.displayName) \(replyTo == nil ? "commented" : "replied"): \"\(text.prefix(60))\"", link: link)
+            replyTo = nil
         } catch {}
     }
 
@@ -413,16 +669,35 @@ struct PostDetailView: View {
         var next = c
         if next.likes.contains(me) { next.likes.removeAll { $0 == me } } else { next.likes.append(me) }
         comments[i] = next
-        Task { try? await FS.update("CommunityComment", c.id, ["likes": next.likes, "updated_date": FS.nowISO()]) }
+        Task { try? await FS.update(collection, c.id, ["likes": next.likes, "updated_date": FS.nowISO()]) }
     }
 
     private func report(_ c: Comment) {
-        reporting = ReportSheet.Target(id: c.id, type: "comment", ownerEmail: c.authorEmail, preview: c.text, link: "/Community?post=\(postId)")
+        reporting = ReportSheet.Target(id: c.id, type: "comment", ownerEmail: c.authorEmail, preview: c.text, link: link)
     }
 
     private func delete(_ c: Comment) {
         withAnimation { comments.removeAll { $0.id == c.id || $0.parentId == c.id } }
-        Task { try? await FS.delete("CommunityComment", c.id) }
+        Task { try? await FS.delete(collection, c.id) }
+    }
+}
+
+struct SendButton: View {
+    let enabled: Bool
+    var action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "arrow.up")
+                .font(.system(size: 17, weight: .heavy))
+                .foregroundStyle(.white)
+                .frame(width: 42, height: 42)
+                .background(Theme.gradient, in: Circle())
+                .shadow(color: Theme.pink.opacity(enabled ? 0.5 : 0), radius: 10, y: 4)
+                .opacity(enabled ? 1 : 0.4)
+        }
+        .buttonStyle(BouncyStyle(scale: 0.85))
+        .disabled(!enabled)
+        .animation(.snappy, value: enabled)
     }
 }
 
@@ -438,27 +713,39 @@ struct CommentRow: View {
         let me = model.me?.email ?? ""
         let liked = comment.likes.contains(me)
         HStack(alignment: .top, spacing: 10) {
-            Avatar(url: model.person(comment.authorEmail)?.picture ?? comment.authorPicture, name: comment.authorName, size: 34)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(comment.authorName).font(.subheadline.weight(.bold))
-                    Text(Dates.ago(comment.created)).font(.caption).foregroundStyle(.secondary)
+            Avatar(url: model.person(comment.authorEmail)?.picture ?? comment.authorPicture, name: comment.authorName, size: 36)
+            VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(comment.authorName).font(.jakarta(13, .bold)).foregroundStyle(Palette.text)
+                    if !comment.text.isEmpty { Text(comment.text).font(.jakarta(15)).foregroundStyle(Palette.text) }
+                    if !comment.gifURL.isEmpty {
+                        RemoteImage(url: comment.gifURL, contentMode: .fit).frame(maxWidth: 200, maxHeight: 160).clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
                 }
-                if !comment.text.isEmpty { Text(comment.text).font(.subheadline) }
-                if !comment.gifURL.isEmpty {
-                    RemoteImage(url: comment.gifURL, contentMode: .fit).frame(maxWidth: 200, maxHeight: 160).clipShape(RoundedRectangle(cornerRadius: 12))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+                HStack(spacing: 14) {
+                    Text(Dates.ago(comment.created)).foregroundStyle(Palette.muted)
+                    Button("Reply", action: onReply).foregroundStyle(Palette.text2)
                 }
-                Button("Reply", action: onReply).font(.caption.weight(.semibold)).foregroundStyle(.secondary).buttonStyle(.plain)
+                .font(.jakarta(12, .bold))
+                .buttonStyle(.plain)
+                .padding(.leading, 6)
             }
-            Spacer()
+            Spacer(minLength: 0)
             Button(action: onLike) {
                 VStack(spacing: 2) {
-                    Image(systemName: liked ? "heart.fill" : "heart").foregroundStyle(liked ? Theme.pink : .secondary)
-                    if !comment.likes.isEmpty { Text("\(comment.likes.count)").font(.caption2).foregroundStyle(.secondary) }
+                    Image(systemName: liked ? "heart.fill" : "heart")
+                        .foregroundStyle(liked ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.muted))
+                        .symbolEffect(.bounce, value: liked)
+                    if !comment.likes.isEmpty { Text("\(comment.likes.count)").font(.jakarta(11, .bold)).foregroundStyle(Palette.muted) }
                 }
                 .frame(width: 32)
+                .padding(.top, 10)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(BouncyStyle(scale: 0.8))
             .sensoryFeedback(.impact(weight: .light), trigger: liked)
         }
         .contextMenu {
@@ -483,57 +770,19 @@ struct NewPostView: View {
     @State private var error: String?
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack(spacing: 10) {
-                        Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 40)
-                        Text(model.me?.displayName ?? "").font(.headline)
-                    }
-                    TextField("Title (optional)", text: $title).font(.title3.weight(.semibold))
-                    TextField("What's on your mind?", text: $text, axis: .vertical).lineLimit(4...12)
-                    if let image {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFit()
-                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                            .overlay(alignment: .topTrailing) {
-                                Button { withAnimation { self.image = nil; item = nil } } label: {
-                                    Image(systemName: "xmark.circle.fill").font(.title2).symbolRenderingMode(.palette).foregroundStyle(.white, .black.opacity(0.5))
-                                }
-                                .padding(8)
-                            }
-                            .transition(.scale(scale: 0.95).combined(with: .opacity))
-                    }
-                    PhotosPicker(selection: $item, matching: .images) {
-                        Label(image == nil ? "Add a picture" : "Change picture", systemImage: "photo.on.rectangle.angled")
-                            .font(.subheadline.weight(.semibold))
-                            .padding(.horizontal, 16).padding(.vertical, 10)
-                            .background(Color(.tertiarySystemFill), in: Capsule())
-                    }
-                    if let error { Text(error).font(.footnote).foregroundStyle(.red) }
-                }
-                .padding(20)
-            }
-            .scrollDismissesKeyboard(.interactively)
-            .navigationTitle("New post")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button { Task { await post() } } label: { if posting { ProgressView() } else { Text("Post").bold() } }
-                        .disabled(posting || (image == nil && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+        ComposerScaffold(title: "New post", actionTitle: "Post", busy: posting, canPost: image != nil || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, onClose: { dismiss() }, onPost: { Task { await post() } }) {
+            HStack(spacing: 12) {
+                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 46)
+                VStack(alignment: .leading) {
+                    Text(model.me?.displayName ?? "").font(.jakarta(16, .bold)).foregroundStyle(Palette.text)
+                    Text("Posting to Community").font(.jakarta(12)).foregroundStyle(Palette.muted)
                 }
             }
-            .onChange(of: item) { _, newItem in
-                Task {
-                    if let data = try? await newItem?.loadTransferable(type: Data.self), let picked = UIImage(data: data) {
-                        withAnimation(.snappy) { image = picked }
-                    }
-                }
-            }
+            SugarField(placeholder: "Title (optional)", text: $title)
+            SugarField(placeholder: "What's on your mind? Add #tags!", text: $text, lines: 4...12)
+            PhotoPickerCard(item: $item, image: $image)
+            if let error { Text(error).font(.jakarta(13, .semibold)).foregroundStyle(Palette.danger) }
         }
-        .interactiveDismissDisabled(posting)
     }
 
     private func post() async {
@@ -558,6 +807,120 @@ struct NewPostView: View {
             dismiss()
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+}
+
+// Shared look for the "new post / artwork / track" screens.
+struct ComposerScaffold<Content: View>: View {
+    let title: String
+    let actionTitle: String
+    let busy: Bool
+    let canPost: Bool
+    var onClose: () -> Void
+    var onPost: () -> Void
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button(action: onClose) {
+                    Image(systemName: "xmark").font(.system(size: 16, weight: .bold)).foregroundStyle(Palette.text2)
+                        .frame(width: 40, height: 40).background(Palette.surface, in: Circle())
+                        .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
+                }
+                .buttonStyle(BouncyStyle())
+                Spacer()
+                Text(title).font(.display(24)).foregroundStyle(Palette.text)
+                Spacer()
+                Button(action: onPost) {
+                    if busy { ProgressView().tint(.white) } else { Text(actionTitle) }
+                }
+                .buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
+                .disabled(busy || !canPost)
+                .opacity(canPost ? 1 : 0.5)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) { content() }
+                    .padding(18)
+                    .frame(maxWidth: 640)
+                    .frame(maxWidth: .infinity)
+            }
+            .scrollDismissesKeyboard(.interactively)
+        }
+        .sugarBackground()
+        .interactiveDismissDisabled(busy)
+    }
+}
+
+struct SugarField: View {
+    let placeholder: String
+    @Binding var text: String
+    var lines: ClosedRange<Int>? = nil
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        Group {
+            if let lines {
+                TextField(placeholder, text: $text, axis: .vertical).lineLimit(lines)
+            } else {
+                TextField(placeholder, text: $text)
+            }
+        }
+        .font(.jakarta(16))
+        .focused($focused)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(focused ? Theme.pink.opacity(0.55) : Palette.border, lineWidth: focused ? 2 : 1))
+        .shadow(color: focused ? Theme.pink.opacity(0.18) : .clear, radius: 10, y: 4)
+        .animation(.snappy(duration: 0.2), value: focused)
+    }
+}
+
+struct PhotoPickerCard: View {
+    @Binding var item: PhotosPickerItem?
+    @Binding var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .overlay(alignment: .topTrailing) {
+                        Button { withAnimation(.snappy) { self.image = nil; item = nil } } label: {
+                            Image(systemName: "xmark").font(.system(size: 13, weight: .black)).foregroundStyle(.white)
+                                .frame(width: 32, height: 32).background(.black.opacity(0.5), in: Circle())
+                        }
+                        .padding(10)
+                    }
+                    .transition(.scale(scale: 0.94).combined(with: .opacity))
+            } else {
+                PhotosPicker(selection: $item, matching: .images) {
+                    VStack(spacing: 10) {
+                        Image(systemName: "photo.badge.plus")
+                            .font(.system(size: 30, weight: .semibold))
+                            .foregroundStyle(Theme.gradient)
+                        Text("Add a picture").font(.jakarta(15, .bold)).foregroundStyle(Theme.pink)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 170)
+                    .background(Theme.pink.opacity(0.06), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Theme.pink.opacity(0.35), style: StrokeStyle(lineWidth: 2, dash: [8, 6])))
+                }
+                .buttonStyle(BouncyStyle(scale: 0.97))
+            }
+        }
+        .onChange(of: item) { _, newItem in
+            Task {
+                if let data = try? await newItem?.loadTransferable(type: Data.self), let picked = UIImage(data: data) {
+                    withAnimation(.snappy) { image = picked }
+                }
+            }
         }
     }
 }

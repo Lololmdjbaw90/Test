@@ -1,14 +1,6 @@
 import SwiftUI
 import UIKit
 
-enum Theme {
-    static let pink = Color(red: 1.0, green: 0.30, blue: 0.49)
-    static let rose = Color(red: 0.93, green: 0.36, blue: 0.56)
-    static let lavender = Color(red: 0.72, green: 0.52, blue: 0.98)
-    static let gradient = LinearGradient(colors: [Color(red: 1.0, green: 0.45, blue: 0.62), Color(red: 0.93, green: 0.30, blue: 0.52)], startPoint: .topLeading, endPoint: .bottomTrailing)
-    static let background = Color(.systemGroupedBackground)
-    static let card = Color(.secondarySystemGroupedBackground)
-}
 
 // Round profile picture with the person's initial as a fallback.
 struct Avatar: View {
@@ -44,7 +36,7 @@ struct Avatar: View {
         ZStack {
             Theme.gradient
             Text(String(name.first ?? "?").uppercased())
-                .font(.system(size: size * 0.42, weight: .bold, design: .rounded))
+                .font(.jakarta(size * 0.4, .bold))
                 .foregroundStyle(.white)
         }
     }
@@ -69,22 +61,10 @@ struct RemoteImage: View {
         }
     }
 
-    private var placeholder: some View { Rectangle().fill(Color(.tertiarySystemFill)) }
+    private var placeholder: some View { Rectangle().fill(Palette.surface2) }
 }
 
-struct PrimaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.headline)
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity, minHeight: 50)
-            .background(Theme.gradient, in: Capsule())
-            .shadow(color: Theme.pink.opacity(0.35), radius: 10, y: 5)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .opacity(configuration.isPressed ? 0.9 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
-    }
-}
+typealias PrimaryButtonStyle = GradientButtonStyle
 
 // Report a post, comment, message or person (App Store requirement for
 // apps with user content). Lands in Admin → Reports on the website.

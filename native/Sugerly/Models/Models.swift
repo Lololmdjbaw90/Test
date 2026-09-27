@@ -54,6 +54,13 @@ struct UserProfile: Identifiable, Hashable {
     var xp: Int
     var coins: Int
     var lastSeen: String
+    var accent: String
+    var theme: String
+    var lastDailyClaim: String
+    var dailyStreak: Int
+    var joined: String
+    var savedArtworks: [String]
+    var savedReels: [String]
 
     init(_ d: Doc) {
         id = d.str("id")
@@ -70,6 +77,13 @@ struct UserProfile: Identifiable, Hashable {
         xp = d.int("xp")
         coins = d.int("coins")
         lastSeen = d.str("last_seen")
+        accent = d.str("accent")
+        theme = d.str("theme")
+        lastDailyClaim = d.str("last_daily_claim")
+        dailyStreak = d.int("daily_streak")
+        joined = d.str("created_date")
+        savedArtworks = d.strs("saved_artworks")
+        savedReels = d.strs("saved_reels")
     }
 
     var isAdmin: Bool { role == "admin" || FirebaseConfig.siteOwners.contains(email) }
@@ -77,7 +91,7 @@ struct UserProfile: Identifiable, Hashable {
         guard let seen = Dates.parse(lastSeen) else { return false }
         return Date().timeIntervalSince(seen) < 5 * 60
     }
-    var level: Int { max(1, Int((Double(xp) / 300).squareRoot()) + 1) }
+    var level: Int { LevelInfo(xp: xp).level }
 }
 
 struct Post: Identifiable, Hashable {
@@ -182,4 +196,144 @@ enum Social {
         "Spam or scam", "Harassment or bullying", "Hate speech", "Nudity or sexual content",
         "Violence or threats", "Stolen art / copyright", "Pretending to be someone else", "Something else",
     ]
+}
+
+struct Artwork: Identifiable, Hashable {
+    var id: String
+    var title: String
+    var text: String
+    var imageURL: String
+    var medium: String
+    var authorEmail: String
+    var authorName: String
+    var authorPicture: String
+    var likes: [String]
+    var featured: Bool
+    var created: String
+
+    init(_ d: Doc) {
+        id = d.str("id")
+        title = d.str("title")
+        text = d.str("description")
+        imageURL = d.str("image_url")
+        medium = d.str("medium").replacingOccurrences(of: "_", with: " ")
+        authorEmail = d.str("user_email").lowercased()
+        authorName = d.str("user_display_name")
+        authorPicture = d.str("user_profile_picture")
+        likes = d.strs("likes")
+        featured = d.bool("is_featured") || d.bool("featured")
+        created = d.str("created_date")
+    }
+}
+
+// Songs people upload to the Music tab (stored as "MusicReview" on the website).
+struct Track: Identifiable, Hashable {
+    var id: String
+    var title: String
+    var artist: String
+    var audioURL: String
+    var coverURL: String
+    var genre: String
+    var mood: String
+    var authorEmail: String
+    var likes: [String]
+    var created: String
+    var external: URL? = nil
+
+    init(_ d: Doc) {
+        id = d.str("id")
+        title = d.str("title").isEmpty ? "Untitled" : d.str("title")
+        artist = d.str("user_display_name")
+        audioURL = d.str("music_url")
+        coverURL = d.str("cover_url")
+        genre = d.str("genre")
+        mood = d.str("mood")
+        authorEmail = d.str("user_email").lowercased()
+        likes = d.strs("likes")
+        created = d.str("created_date")
+    }
+
+    init(id: String, title: String, artist: String, audioURL: String, coverURL: String, external: URL?) {
+        self.id = id
+        self.title = title
+        self.artist = artist
+        self.audioURL = audioURL
+        self.coverURL = coverURL
+        genre = ""
+        mood = ""
+        authorEmail = ""
+        likes = []
+        created = ""
+        self.external = external
+    }
+}
+
+struct Reel: Identifiable, Hashable {
+    var id: String
+    var kind: String
+    var mediaURL: String
+    var mediaURLs: [String]
+    var coverURL: String
+    var caption: String
+    var musicTitle: String
+    var musicArtist: String
+    var musicURL: String
+    var musicSource: String
+    var authorEmail: String
+    var authorName: String
+    var authorPicture: String
+    var likes: [String]
+    var views: Int
+    var commentsOff: Bool
+    var trimStart: Double
+    var created: String
+
+    init(_ d: Doc) {
+        id = d.str("id")
+        kind = d.str("kind")
+        mediaURL = d.str("media_url")
+        mediaURLs = d.strs("media_urls")
+        coverURL = d.str("cover_url")
+        caption = d.str("caption")
+        musicTitle = d.str("music_title")
+        musicArtist = d.str("music_artist")
+        musicURL = d.str("music_url")
+        musicSource = d.str("music_source")
+        authorEmail = d.str("user_email").lowercased()
+        authorName = d.str("user_display_name")
+        authorPicture = d.str("user_profile_picture")
+        likes = d.strs("likes")
+        views = d.int("views")
+        commentsOff = d.bool("comments_off")
+        let edits = d["edits"] as? [String: Any] ?? [:]
+        trimStart = (edits["trim_start"] as? Double) ?? Double((edits["trim_start"] as? Int) ?? 0)
+        created = d.str("created_date")
+    }
+
+    var isVideo: Bool { kind == "video" || (mediaURLs.isEmpty && [".mp4", ".mov", ".m4v", ".webm"].contains(where: { mediaURL.lowercased().contains($0) })) }
+    var pictures: [String] { mediaURLs.isEmpty ? [mediaURL] : mediaURLs }
+}
+
+struct AppNotification: Identifiable, Hashable {
+    var id: String
+    var type: String
+    var message: String
+    var link: String
+    var fromEmail: String
+    var fromName: String
+    var fromPicture: String
+    var read: Bool
+    var created: String
+
+    init(_ d: Doc) {
+        id = d.str("id")
+        type = d.str("type")
+        message = d.str("message")
+        link = d.str("link")
+        fromEmail = d.str("from_email").lowercased()
+        fromName = d.str("from_display_name")
+        fromPicture = d.str("from_profile_picture")
+        read = d.bool("is_read")
+        created = d.str("created_date")
+    }
 }

@@ -18,26 +18,25 @@ struct LoginView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 22) {
-                Image("Logo")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(height: 84)
+                BrandLogo(height: 84)
+                    .shadow(color: Theme.main.opacity(0.4), radius: 22)
                     .padding(.top, 48)
                     .accessibilityLabel("Sugerly")
 
                 VStack(spacing: 6) {
                     Text(register ? "Join Sugerly" : "Welcome back")
-                        .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                        .font(.display(38, relativeTo: .largeTitle))
+                        .foregroundStyle(Theme.gradient)
                         .contentTransition(.opacity)
                     Text(register ? "A cozy home for artists." : "Log in to pick up where you left off.")
+                        .font(.jakarta(15, .medium))
                         .foregroundStyle(.secondary)
                 }
 
-                Picker("", selection: $register.animation(.snappy)) {
-                    Text("Log in").tag(false)
-                    Text("Sign up").tag(true)
+                HStack(spacing: 10) {
+                    Chip(title: "Log in", icon: "heart.fill", active: !register) { withAnimation(.snappy) { register = false } }
+                    Chip(title: "Sign up", icon: "sparkles", active: register) { withAnimation(.snappy) { register = true } }
                 }
-                .pickerStyle(.segmented)
 
                 VStack(spacing: 12) {
                     if register {
@@ -66,7 +65,7 @@ struct LoginView: View {
                 if register {
                     Toggle(isOn: $agreed) {
                         (Text("I agree to the ") + Text("Terms").bold() + Text(" and ") + Text("Community Guidelines").bold())
-                            .font(.footnote)
+                            .font(.jakarta(13))
                     }
                     .toggleStyle(.switch)
                     .tint(Theme.pink)
@@ -75,7 +74,8 @@ struct LoginView: View {
                         Button("Guidelines") { legal = .guidelines }
                         Button("Privacy") { legal = .privacy }
                     }
-                    .font(.footnote.weight(.semibold))
+                    .font(.jakarta(13, .bold))
+                    .foregroundStyle(Theme.main)
                 }
 
                 if let error {
@@ -102,7 +102,8 @@ struct LoginView: View {
 
                 if !register {
                     Button("Forgot password?") { Task { await reset() } }
-                        .font(.footnote.weight(.semibold))
+                        .font(.jakarta(13, .bold))
+                        .foregroundStyle(Theme.main)
                 }
             }
             .padding(.horizontal, 24)
@@ -111,19 +112,21 @@ struct LoginView: View {
             .frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
-        .background(Theme.background.ignoresSafeArea())
+        .sugarBackground()
         .sensoryFeedback(.error, trigger: error)
         .sheet(item: $legal) { doc in LegalView(doc: doc) }
     }
 
     private func field<Content: View>(icon: String, content: Content) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon).foregroundStyle(.secondary).frame(width: 20)
-            content
+            Image(systemName: icon).foregroundStyle(Theme.main).frame(width: 20)
+            content.font(.jakarta(16, .medium))
         }
         .padding(.horizontal, 16)
-        .frame(minHeight: 52)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .frame(minHeight: 54)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.main.opacity(0.25), lineWidth: 1.5))
+        .shadow(color: Theme.main.opacity(0.12), radius: 12, y: 4)
     }
 
     private func submit() async {

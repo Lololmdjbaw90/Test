@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 
 // The signed-in person and everything shared across tabs.
 @MainActor
@@ -75,6 +76,15 @@ final class AppModel {
 
     func person(_ email: String) -> UserProfile? { people[email.lowercased()] }
 
+    var accent: Accent { Accent(rawValue: me?.accent ?? "") ?? .rose }
+    var colorScheme: ColorScheme? {
+        switch me?.theme {
+        case "dark": return .dark
+        case "light": return .light
+        default: return nil
+        }
+    }
+
     // Changes your profile at once and saves in the background; undone if saving fails.
     func updateMe(_ fields: Doc) async throws {
         guard let current = me else { return }
@@ -96,6 +106,8 @@ final class AppModel {
             "id": u.id, "email": u.email, "display_name": u.displayName, "profile_picture": u.picture,
             "banner_url": u.banner, "bio": u.bio, "role": u.role, "following": u.following,
             "saved_posts": u.savedPosts, "blocked": u.blocked, "xp": u.xp, "coins": u.coins, "last_seen": u.lastSeen,
+            "accent": u.accent, "theme": u.theme, "last_daily_claim": u.lastDailyClaim, "daily_streak": u.dailyStreak,
+            "created_date": u.joined, "saved_artworks": u.savedArtworks, "saved_reels": u.savedReels,
         ]
     }
 
