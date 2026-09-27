@@ -1,5 +1,7 @@
 # Sugerly on iPhone and iPad
 
+> **Releasing on the App Store from Windows?** Follow [APP_STORE.md](APP_STORE.md) — GitHub builds, signs and uploads the app for you.
+
 There are two ways to get Sugerly onto an iPhone or iPad. Both use the same
 code as the website, so every feature (feed, music, servers, DMs, voice and
 video calls) works in all of them.

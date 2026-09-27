@@ -2,8 +2,8 @@
 # download from the run's "Artifacts" section.
 #
 # The .ipa is unsigned: install it on your own device with Sideloadly or
-# AltStore (they sign it with your Apple ID), or sign it yourself. For
-# TestFlight / the App Store, archive from Xcode instead — see IOS_APP.md.
+# AltStore (they sign it with your Apple ID). For TestFlight / the App
+# Store use the "Upload to App Store" workflow — see APP_STORE.md.
 #
 # Run it any time from the Actions tab → "Build iOS app (.ipa)" → Run workflow
 # (the manual button appears once this file is on the default branch).

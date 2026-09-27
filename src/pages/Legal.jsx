@@ -1,14 +1,19 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, FileText, HelpCircle, LifeBuoy, Shield, Users } from "lucide-react";
+import { ArrowLeft, Check, FileText, HelpCircle, LifeBuoy, Loader2, Send, Shield, Users } from "lucide-react";
+import { base44 } from "@/api/base44Client";
+import { useAuth } from "@/lib/AuthContext";
+import { displayName } from "@/lib/format";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { BrandLogo } from "@/components/common/Brand";
+import { LEGAL_SITE } from "@/lib/site";
 
 // Terms, Privacy Policy, Community Guidelines and Help & FAQ. Reachable
 // without logging in (App Store review, the sign-up screen).
 // NOTE for the owner: this is a solid starting point written for how Sugerly
-// works, not legal advice — have it checked before a public release and set
-// the support email in Admin → Site.
+// works, not legal advice — have it checked before a public release.
+// Support works without an email address: the "Contact us" form on the Help
+// page lands in Admin → Reports (type "support"); answer by DM.
 const UPDATED = "September 27, 2026";
 
 const DOCS = {
@@ -69,6 +74,60 @@ const FAQ = [
   ["Is Sugerly free?", "Yes. Coins and levels are just for fun and have no money value."],
 ];
 
+// Support without an email address: the message is stored like a report
+// (only admins can read it) and the team answers with a direct message.
+function ContactForm({ email }) {
+  const { user } = useAuth();
+  const [text, setText] = useState("");
+  const [state, setState] = useState("idle"); // idle | sending | sent | error
+  const send = async (e) => {
+    e.preventDefault();
+    if (!text.trim() || !user) return;
+    setState("sending");
+    try {
+      await base44.entities.Report.create({
+        target_type: "support",
+        target_id: user.email,
+        target_owner_email: user.email,
+        target_preview: "",
+        link: `/Profile?email=${encodeURIComponent(user.email)}`,
+        reason: "Support request",
+        details: text.trim().slice(0, 1000),
+        reporter_email: user.email,
+        reporter_name: displayName(user),
+        status: "open",
+      });
+      setText("");
+      setState("sent");
+    } catch {
+      setState("error");
+    }
+  };
+  return (
+    <section id="contact" className="card-sm p-5 mt-6 scroll-mt-6">
+      <h2 className="font-bold flex items-center gap-2 mb-1" style={{ color: "var(--text-primary)" }}><LifeBuoy className="w-5 h-5" style={{ color: "rgb(var(--accent-rgb))" }} /> Contact us</h2>
+      <p className="text-sm mb-3" style={{ color: "var(--text-secondary)" }}>
+        Questions, problems, account or privacy requests — write to the Sugerly team and we'll reply with a message in the app{email ? <> (or email <a href={`mailto:${email}`} className="font-semibold underline">{email}</a>)</> : ""}.
+      </p>
+      {LEGAL_SITE ? (
+        <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>In the Sugerly app, open Settings → Help & legal → Help & FAQ → Contact us.</p>
+      ) : !user ? (
+        <Link to="/Login" className="btn-primary inline-flex">Log in to contact us</Link>
+      ) : state === "sent" ? (
+        <p className="text-sm font-semibold flex items-center gap-2" style={{ color: "var(--success)" }}><Check className="w-4 h-4" /> Sent! We'll get back to you in your messages.</p>
+      ) : (
+        <form onSubmit={send} className="space-y-2">
+          <textarea className="input min-h-[110px] resize-y" maxLength={1000} placeholder="How can we help?" value={text} onChange={(e) => setText(e.target.value)} aria-label="Your message" required />
+          {state === "error" && <p className="text-xs" style={{ color: "var(--danger)" }}>Couldn't send — check your connection and try again.</p>}
+          <button type="submit" className="btn-primary" disabled={state === "sending" || !text.trim()}>
+            {state === "sending" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Send
+          </button>
+        </form>
+      )}
+    </section>
+  );
+}
+
 export default function Legal({ doc: forced }) {
   const params = useParams();
   const navigate = useNavigate();
@@ -105,7 +164,7 @@ export default function Legal({ doc: forced }) {
               <section>
                 <h2 className="font-bold mb-1" style={{ color: "var(--text-primary)" }}>Contact</h2>
                 <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                  {email ? <>Questions or requests: <a href={`mailto:${email}`} className="font-semibold underline">{email}</a>.</> : "Questions or requests: use Report → \"Something else\" in the app and our team will get back to you."}
+                  Questions or requests: {email ? <>email <a href={`mailto:${email}`} className="font-semibold underline">{email}</a> or </> : ""}use the <Link to="/Help#contact" className="font-semibold underline">Contact us</Link> form and our team will reply in the app.
                 </p>
               </section>
             </div>
@@ -121,12 +180,7 @@ export default function Legal({ doc: forced }) {
                 </details>
               ))}
             </div>
-            <div className="card-sm p-4 mt-6 flex items-start gap-3">
-              <LifeBuoy className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: "rgb(var(--accent-rgb))" }} />
-              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                Still need help? {email ? <>Email <a href={`mailto:${email}`} className="font-semibold underline">{email}</a>.</> : "Use Report → \"Something else\" in the app and our team will reply."}
-              </p>
-            </div>
+            <ContactForm email={email} />
           </article>
         )}
       </div>

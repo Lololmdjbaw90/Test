@@ -156,10 +156,13 @@
      without live blur, which kept the screen redrawing while scrolling. */
   @media (hover: none), (pointer: coarse) {
     .glass-bar { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: var(--surface-glass-solid) !important; }
-    .liquid-glass { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: linear-gradient(160deg, rgb(255 255 255 / 0.97), rgb(255 255 255 / 0.9)); }
-    .dark .liquid-glass, .liquid-glass.on-dark { background: linear-gradient(160deg, rgb(62 46 58 / 0.96), rgb(24 16 22 / 0.95)); }
-    .liquid-sheet { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgb(255 255 255 / 0.98); }
-    .dark .liquid-sheet { background: rgb(30 21 27 / 0.98); }
+    /* !important: the normal (see-through) .liquid-glass rules come later
+       in this file and would otherwise win, leaving an unblurred see-through
+       bar with the page's text showing through it. */
+    .liquid-glass { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: linear-gradient(160deg, rgb(255 255 255), rgb(250 243 247)) !important; }
+    .dark .liquid-glass, .liquid-glass.on-dark { background: linear-gradient(160deg, rgb(62 46 58), rgb(24 16 22)) !important; }
+    .liquid-sheet { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgb(255 255 255 / 0.98) !important; }
+    .dark .liquid-sheet { background: rgb(30 21 27 / 0.98) !important; }
   }
   .glass-bar {
     background: var(--surface-glass);

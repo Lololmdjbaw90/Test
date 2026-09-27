@@ -2,6 +2,11 @@
   command = "npm run build"
   publish = "dist"
 
+# Sugerly is an iPhone / iPad app: the website only shows Help & legal
+# (the App Store links to /Legal/privacy and /Help).
+[build.environment]
+  VITE_LEGAL_SITE = "true"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

@@ -10,6 +10,7 @@ import { ConfirmProvider } from "@/components/common/Modal";
 import { CenterSpinner } from "@/components/common/Page";
 import Layout from "./Layout.jsx";
 import ErrorBoundary from "@/components/common/ErrorBoundary";
+import { LEGAL_SITE } from "@/lib/site";
 import Login from "./pages/Login";
 import { BrandLogo } from "@/components/common/Brand";
 
@@ -52,6 +53,16 @@ function RequireAuth({ children }) {
 
 const AppRoutes = () => {
   const { authChecked, isAuthenticated } = useAuth();
+  if (LEGAL_SITE) {
+    return (
+      <Suspense fallback={<Splash />}>
+        <Routes>
+          <Route path="/Legal/:doc" element={<Legal />} />
+          <Route path="*" element={<Legal doc="help" />} />
+        </Routes>
+      </Suspense>
+    );
+  }
   if (!authChecked) return <Splash />;
   return (
     <ErrorBoundary>
