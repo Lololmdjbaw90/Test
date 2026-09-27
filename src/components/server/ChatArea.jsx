@@ -131,7 +131,7 @@ export default function ChatArea({ channel, community, me, roles, members, actor
     el.animate([{ backgroundColor: "rgba(217, 87, 127, 0.22)" }, { backgroundColor: "rgba(217, 87, 127, 0)" }], { duration: 1600 });
   };
 
-  const send = async ({ text, file }) => {
+  const send = async ({ text, file, gif }) => {
     try {
       if (editing) {
         await base44.entities.ChannelMessage.update(editing.id, { content: text, is_edited: true });
@@ -144,7 +144,7 @@ export default function ChatArea({ channel, community, me, roles, members, actor
         toast.error("Message blocked", { description: mod.reason });
         return false;
       }
-      const image_url = file ? (await base44.integrations.Core.UploadFile({ file })).file_url : "";
+      const image_url = gif || (file ? (await base44.integrations.Core.UploadFile({ file })).file_url : "");
       await base44.entities.ChannelMessage.create({
         channel_id: channel.id,
         community_id: community.id,

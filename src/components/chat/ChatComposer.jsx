@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, ImagePlus, Loader2, Lock, Pencil, Reply, Send, X } from "lucide-react";
 import EmojiPicker from "./EmojiPicker";
+import GifPicker from "@/components/common/GifPicker";
 import { feedback } from "@/lib/feedback";
 
 // Shared message input: autosizing textarea, emoji picker, image attachment,
@@ -13,6 +14,7 @@ export default function ChatComposer({ placeholder, onSend, editing, onCancelEdi
   const [sending, setSending] = useState(false);
   const [mention, setMention] = useState(null);
   const [mentionIndex, setMentionIndex] = useState(0);
+  const [gifOpen, setGifOpen] = useState(false);
   const taRef = useRef(null);
   const fileRef = useRef(null);
 
@@ -40,6 +42,13 @@ export default function ChatComposer({ placeholder, onSend, editing, onCancelEdi
     taRef.current?.focus();
   };
   const clearFile = () => { setFile(null); setPreview(null); };
+  const sendGif = async (gif) => {
+    setGifOpen(false);
+    setSending(true);
+    const ok = await onSend({ text: "", file: null, gif });
+    setSending(false);
+    if (ok !== false) feedback("send");
+  };
 
   const submit = async (e) => {
     e?.preventDefault();
@@ -104,11 +113,19 @@ export default function ChatComposer({ placeholder, onSend, editing, onCancelEdi
           </motion.div>
         )}
       </AnimatePresence>
+      <AnimatePresence>
+        {gifOpen && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} transition={{ duration: 0.18 }} className="mb-2">
+            <GifPicker onPick={sendGif} onClose={() => setGifOpen(false)} />
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="flex items-end gap-1.5 rounded-[1.4rem] p-1.5 transition-shadow focus-within:shadow-[0_0_0_4px_rgb(var(--accent-rgb)/0.12)]" style={{ background: "var(--surface-2)", border: "1px solid var(--border-c)" }}>
         {!editing && (
           <>
             {allowAttachments && <button type="button" onClick={() => fileRef.current?.click()} className="icon-btn" aria-label="Attach image"><ImagePlus className="w-[18px] h-[18px]" /></button>}
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setFile(f); setPreview(URL.createObjectURL(f)); } e.target.value = ""; }} />
+            <button type="button" onClick={() => { feedback("tap"); setGifOpen((v) => !v); }} className="h-8 px-1.5 my-1 rounded-lg text-[10px] font-black tracking-wide flex-shrink-0" style={{ color: gifOpen ? "#fff" : "var(--text-muted)", background: gifOpen ? "rgb(var(--accent-rgb))" : "transparent", border: gifOpen ? "none" : "1.5px solid var(--text-muted)" }} aria-label="GIFs" aria-pressed={gifOpen}>GIF</button>
           </>
         )}
         <EmojiPicker onPick={(e) => { setText((t) => t + e); taRef.current?.focus(); }} />

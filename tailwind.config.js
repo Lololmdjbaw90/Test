@@ -27,6 +27,9 @@ export default {
       screens: { "2xl": "1400px" },
     },
     extend: {
+      // The desktop layout (sidebar, no tab bar) is for computers with a
+      // mouse. Phones and tablets, touch screens, get the app layout.
+      screens: { desk: { raw: "(min-width: 768px) and (hover: hover) and (pointer: fine)" } },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

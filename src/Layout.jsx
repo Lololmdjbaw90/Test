@@ -89,7 +89,7 @@ function TopBar({ onSearch, user, badges, isDark, onToggleTheme }) {
   const showBack = location.pathname !== "/" && canGoBack();
   return (
     <header className="flex-shrink-0 h-16 flex items-center gap-3 px-4 sm:px-6 relative z-20 glass" style={{ borderBottom: "1px solid var(--border-c)" }}>
-      <div className="md:hidden flex items-center gap-1">
+      <div className="desk:hidden flex items-center gap-1">
         {showBack ? (
           <button onClick={() => navigate(-1)} className="icon-btn -ml-2" aria-label="Go back"><ArrowLeft className="w-5 h-5" /></button>
         ) : <Logo bar />}
@@ -100,12 +100,12 @@ function TopBar({ onSearch, user, badges, isDark, onToggleTheme }) {
         <span className="kbd">Ctrl</span><span className="kbd -ml-2">K</span>
       </button>
       <div className="flex-1" />
-      <button onClick={onSearch} className="icon-btn icon-btn-bordered sm:hidden" aria-label="Search"><Search className="w-[18px] h-[18px]" /></button>
+      <button onClick={onSearch} className="w-10 h-10 rounded-full flex items-center justify-center liquid-glass sm:hidden" aria-label="Search"><Search className="w-[18px] h-[18px]" /></button>
       {user && <NotificationBell me={user} />}
       {user && (
         <>
           {/* On phones your avatar opens the menu with your profile and every page. */}
-          <button ref={avatarRef} onClick={() => { feedback("tap"); setMenuOpen((v) => !v); }} className="md:hidden relative rounded-full" aria-label="Menu" aria-expanded={menuOpen}>
+          <button ref={avatarRef} onClick={() => { feedback("tap"); setMenuOpen((v) => !v); }} className="desk:hidden relative rounded-full" aria-label="Menu" aria-expanded={menuOpen}>
             <Avatar src={user.profile_picture} name={displayName(user)} size={36} nitro={user.nitro_active} />
             {menuBadge > 0 && <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold text-white flex items-center justify-center" style={{ background: "var(--accent-rose)", boxShadow: "0 0 0 2px var(--surface)" }}>{menuBadge > 9 ? "9+" : menuBadge}</span>}
           </button>
@@ -174,7 +174,7 @@ function MobileNav({ badges, isAdmin, isDark, onToggleTheme }) {
         <CreateMenu isAdmin={isAdmin} onDone={() => setSheet(null)} className="pb-4" />
       </Popover>
       <MoreSheet open={sheet === "more"} onClose={() => setSheet(null)} anchorRef={moreRef} badges={badges} isDark={isDark} onToggleTheme={onToggleTheme} />
-      <nav className={`mobile-tabbar md:hidden fixed inset-x-3 z-[65] liquid-glass rounded-[30px] ${location.pathname.toLowerCase() === "/reels" ? "on-dark" : ""}`} data-dark={location.pathname.toLowerCase() === "/reels"} style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 6px)" }} aria-label="Main">
+      <nav className={`mobile-tabbar desk:hidden fixed inset-x-3 mx-auto max-w-[560px] z-[65] liquid-glass rounded-[30px] ${location.pathname.toLowerCase() === "/reels" ? "on-dark" : ""}`} data-dark={location.pathname.toLowerCase() === "/reels"} style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 6px)" }} aria-label="Main">
         <div className="flex items-center justify-around h-[62px] px-1">
           {MOBILE_NAV.map((item) => {
             if (item.label === "create") {
@@ -227,7 +227,8 @@ export default function Layout() {
   const mainRef = useRef(null);
   const [collapsedPref, setCollapsed] = useState(() => { try { return localStorage.getItem("mimilocks:__sidebar") === "collapsed"; } catch { return false; } });
   // Tablets in portrait (iPad) get the compact icon sidebar so content has room.
-  const tablet = useMediaQuery("(min-width: 768px) and (max-width: 1023px)");
+  const wide = useMediaQuery("(min-width: 768px)");
+  const tablet = useMediaQuery("(min-width: 768px) and (max-width: 1023px) and (hover: hover) and (pointer: fine)");
   const [tabletOpen, setTabletOpen] = useState(false);
   const collapsed = tablet ? !tabletOpen : collapsedPref;
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -295,7 +296,8 @@ export default function Layout() {
   const path = location.pathname.toLowerCase();
   // Inside a server or an open conversation the tab bar steps aside (like iMessage).
   const inConversation = path === "/directmessages" && /[?&](with|c)=/.test(location.search);
-  const hideMobileNav = path === "/communitychat" || inConversation;
+  // (Phones only: on a tablet the chat has room and the tab bar is the way out.)
+  const hideMobileNav = !wide && (path === "/communitychat" || inConversation);
 
   return (
     <div className="app-shell flex h-[100dvh] overflow-hidden safe-top safe-x">
@@ -308,7 +310,7 @@ export default function Layout() {
         <AnnouncementBar config={siteConfig} />
         <VoiceDock />
         {!fullHeight && <TopBar onSearch={() => setPaletteOpen(true)} user={user} badges={badges} isDark={isDark} onToggleTheme={toggleTheme} />}
-        <main ref={mainRef} id="main" className={`flex-1 min-h-0 relative ${fullHeight ? `overflow-hidden ${hideMobileNav ? "" : "pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-0"}` : "overflow-y-auto overflow-x-hidden scroll"}`}>
+        <main ref={mainRef} id="main" className={`flex-1 min-h-0 relative ${fullHeight ? `overflow-hidden ${hideMobileNav ? "" : "pb-[calc(72px+env(safe-area-inset-bottom))] desk:pb-0"}` : "overflow-y-auto overflow-x-hidden scroll"}`}>
           {/* Enter-only transition keyed by route; no exit phase that could stall navigation. */}
           <div key={location.pathname} className={`page-enter ${fullHeight ? "h-full" : "min-h-full"}`}>
             <ErrorBoundary resetKey={location.pathname}>{outlet}</ErrorBoundary>

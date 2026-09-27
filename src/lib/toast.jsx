@@ -25,7 +25,7 @@ const ICONS = { success: CheckCircle2, error: AlertCircle, info: Info };
 const COLORS = { success: "var(--success)", error: "var(--danger)", info: "var(--accent-rose)" };
 
 export function Toaster() {
-  const top = useMediaQuery("(max-width: 767px)"); // phones: toasts drop in from the top
+  const top = useMediaQuery("(max-width: 767px), (hover: none), (pointer: coarse)"); // phones: toasts drop in from the top
   const [items, setItems] = useState([]);
   useEffect(() => {
     const onToast = (t) => {

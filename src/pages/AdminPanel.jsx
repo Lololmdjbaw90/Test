@@ -14,6 +14,7 @@ import Avatar from "@/components/common/Avatar";
 import AdminSiteSettings from "@/components/admin/AdminSiteSettings";
 import { RulesSetupCard } from "@/components/admin/RulesSetup";
 import AISetupCard from "@/components/admin/AISetup";
+import GifSetupCard from "@/components/admin/GifSetup";
 
 const COLLECTIONS = ["User", "Artwork", "CommunityPost", "Comment", "CommunityComment", "ChannelMessage", "Community", "ServerChannel", "MusicReview", "Commission", "Report"];
 // Where each kind of reported thing lives, so "Remove content" can delete it.
@@ -70,7 +71,7 @@ export default function AdminPanel() {
   const { user: me, isAdmin } = useAuth();
   const confirm = useConfirm();
   const [data, setData] = useState(null);
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState(() => (new URLSearchParams(window.location.search).get("tab") === "settings" ? "settings" : "overview"));
   const [search, setSearch] = useState("");
   const [contentType, setContentType] = useState("all");
 
@@ -260,7 +261,7 @@ export default function AdminPanel() {
         </div>
       )}
 
-      {tab === "settings" && <div className="max-w-2xl space-y-6"><RulesSetupCard /><AISetupCard /><AdminSiteSettings /></div>}
+      {tab === "settings" && <div className="max-w-2xl space-y-6"><RulesSetupCard /><AISetupCard /><GifSetupCard /><AdminSiteSettings /></div>}
     </Page>
   );
 }

@@ -122,7 +122,7 @@ export default function DMChatWindow({ conversation, me, onCall }) {
   };
   const jump = () => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
 
-  const send = async ({ text, file }) => {
+  const send = async ({ text, file, gif }) => {
     try {
       if (editing) {
         await base44.entities.DirectMessage.update(editing.id, { content: text, is_edited: true });
@@ -131,7 +131,7 @@ export default function DMChatWindow({ conversation, me, onCall }) {
       }
       const mod = await checkText(text, { user: me, where: "direct message" });
       if (!mod.safe) { toast.error("Message blocked", { description: mod.reason }); return false; }
-      const image_url = file ? (await base44.integrations.Core.UploadFile({ file })).file_url : "";
+      const image_url = gif || (file ? (await base44.integrations.Core.UploadFile({ file })).file_url : "");
       const members = isGroup ? [...new Set(conversation.group.member_emails || [])].sort() : [me.email, conversation.otherUser.email].sort();
       await base44.entities.DirectMessage.create({
         conversation_id: conversation.id,

@@ -539,6 +539,7 @@ button, [role="button"], [role="tab"] { -webkit-user-select: none; user-select: 
 .native-app body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .native-app input, .native-app textarea, .native-app [contenteditable], .native-app .select-text { -webkit-user-select: text; user-select: text; }
 .native-app img, .native-app a { -webkit-user-drag: none; -webkit-touch-callout: none; }
+@media (min-width: 420px) { .show-from-420 { display: flex; } }
 /* Keyboard shortcuts mean nothing on a touch screen. */
 @media (hover: none), (pointer: coarse) { .kbd, .desktop-only { display: none !important; } }
 .native-app .kbd, .native-app .desktop-only { display: none !important; }

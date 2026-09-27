@@ -59,7 +59,7 @@ export default function Sidebar({ collapsed, onToggleCollapsed, badges = {}, onT
     <motion.aside
       animate={{ width: collapsed ? 84 : 264 }}
       transition={{ type: "spring", stiffness: 320, damping: 34 }}
-      className="hidden md:flex flex-col h-full flex-shrink-0 relative z-30 glass"
+      className="hidden desk:flex flex-col h-full flex-shrink-0 relative z-30 glass"
       style={{ borderRight: "1px solid var(--border-c)" }}
     >
       <div className={`h-[84px] flex items-center flex-shrink-0 ${collapsed ? "justify-center" : "px-5"}`}>

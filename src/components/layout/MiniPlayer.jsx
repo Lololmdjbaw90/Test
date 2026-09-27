@@ -15,7 +15,7 @@ export default function MiniPlayer({ raised }) {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 40, scale: 0.95 }}
           transition={{ type: "spring", stiffness: 360, damping: 30 }}
-          className={`fixed z-[60] left-3 right-3 md:left-auto md:right-5 md:w-[360px] ${raised ? "bottom-[calc(84px+env(safe-area-inset-bottom))]" : "bottom-[calc(0.75rem+env(safe-area-inset-bottom))]"} md:bottom-5 glass rounded-3xl overflow-hidden`}
+          className={`fixed z-[60] left-3 right-3 desk:left-auto desk:right-5 desk:w-[360px] ${raised ? "bottom-[calc(84px+env(safe-area-inset-bottom))]" : "bottom-[calc(0.75rem+env(safe-area-inset-bottom))]"} md:bottom-5 glass rounded-3xl overflow-hidden`}
           style={{ border: "1px solid var(--border-c)", boxShadow: "var(--shadow-lg)" }}
           role="region"
           aria-label="Music player"
@@ -60,7 +60,7 @@ export default function MiniPlayer({ raised }) {
               <div className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white opacity-0 group-hover:opacity-100 transition-opacity" style={{ left: `calc(${pct}% - 6px)`, boxShadow: "var(--shadow-sm)" }} />
             </div>
             <span className="text-[10px] tabular-nums w-8 text-right" style={{ color: "var(--text-muted)" }}>{formatTime(p.duration)}</span>
-            <button className="icon-btn w-7 h-7 hidden md:inline-flex" onClick={() => p.setVolume(p.volume > 0 ? 0 : 0.8)} aria-label={p.volume > 0 ? "Mute" : "Unmute"}>
+            <button className="icon-btn w-7 h-7 hidden desk:inline-flex" onClick={() => p.setVolume(p.volume > 0 ? 0 : 0.8)} aria-label={p.volume > 0 ? "Mute" : "Unmute"}>
               {p.volume > 0 ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
             </button>
           </div>

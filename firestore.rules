@@ -104,15 +104,30 @@ service cloud.firestore {
     match /Comment/{id} {
       allow read: if signedIn();
       allow create: if ownsIncomingData();
-      allow update, delete: if isAdmin() || ownsResource();
+      // Anyone signed in can like a comment (only the likes change).
+      allow update: if isAdmin() || ownsResource() || (signedIn() && onlyChanged(['likes', 'updated_date', 'updated_at']));
+      allow delete: if isAdmin() || ownsResource();
+    }
+
+    // Comments on reels have post_id "reel_<reel id>".
+    function reelOf(postId) {
+      return get(/databases/$(database)/documents/Reel/$(postId.replace('^reel_', '')));
+    }
+    function isReelComment(data) {
+      return data.get('post_id', '') is string && data.get('post_id', '').matches('reel_.+');
     }
 
     match /CommunityComment/{id} {
       allow read: if signedIn();
-      allow create: if ownsIncomingData();
-      allow update: if isAdmin() || ownsResource();
-      // Profile owners can moderate their own message board (post_id "profile_<email>").
-      allow delete: if isAdmin() || ownsResource() || (signedIn() && resource.data.post_id == 'profile_' + ownEmail());
+      // No new comments on a reel whose creator turned comments off.
+      allow create: if ownsIncomingData()
+        && (!isReelComment(request.resource.data) || reelOf(request.resource.data.post_id).data.get('comments_off', false) != true);
+      allow update: if isAdmin() || ownsResource() || (signedIn() && onlyChanged(['likes', 'updated_date', 'updated_at']));
+      // Profile owners moderate their message board (post_id "profile_<email>");
+      // reel creators can remove comments on their reels.
+      allow delete: if isAdmin() || ownsResource()
+        || (signedIn() && resource.data.post_id == 'profile_' + ownEmail())
+        || (signedIn() && isReelComment(resource.data) && reelOf(resource.data.post_id).data.user_email == ownEmail());
     }
 
     match /ProfileMessage/{id} {

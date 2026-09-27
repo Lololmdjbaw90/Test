@@ -1,7 +1,7 @@
 import React, { memo, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bookmark, Check, FastForward, Flag, Heart, Loader2, MessageCircle, MoreHorizontal, Music2, Play, Plus, Send, Sparkles, ThumbsDown, Trash2, Volume2, VolumeX } from "lucide-react";
+import { Bookmark, Check, FastForward, Flag, Heart, Loader2, MessageCircle, MessageCircleOff, MoreHorizontal, Music2, Play, Plus, Send, Sparkles, ThumbsDown, Trash2, Volume2, VolumeX } from "lucide-react";
 import Avatar from "@/components/common/Avatar";
 import Popover from "@/components/common/Popover";
 import ReelMedia from "./ReelMedia";
@@ -195,7 +195,7 @@ function ReelItem({ reel, reason, active, near, me, author, following, liked, sa
           </AnimatePresence>
         </div>
         <RailButton icon={Heart} label={liked ? "Unlike" : "Like"} count={likes} active={liked} fill pop={likePop} burst={likePop} delay={40} onClick={() => { feedback(liked ? "unlike" : "like"); if (!liked) setLikePop((n) => n + 1); actions.like(reel); }} />
-        <RailButton icon={MessageCircle} label="Comments" count={commentCount} delay={80} onClick={() => { feedback("tap"); actions.comments(reel); }} />
+        <RailButton icon={reel.comments_off ? MessageCircleOff : MessageCircle} label="Comments" count={reel.comments_off ? undefined : commentCount} delay={80} onClick={() => { feedback("tap"); actions.comments(reel); }} />
         <RailButton icon={Bookmark} label={saved ? "Unsave" : "Save"} active={saved} activeColor="#ffd35c" fill pop={saved ? 1 : 0} delay={120} onClick={() => actions.save(reel)} />
         <RailButton icon={Send} label="Share" delay={160} onClick={() => actions.share(reel)} />
         <button ref={menuRef} onClick={(e) => { e.stopPropagation(); setMenuOpen(true); }} className="rise-in w-12 h-12 rounded-full flex items-center justify-center text-white active:scale-90 transition-transform" style={{ background: "rgb(255 255 255 / 0.13)", "--d": "200ms" }} aria-label="More options"><MoreHorizontal className="w-6 h-6" /></button>
@@ -204,6 +204,7 @@ function ReelItem({ reel, reason, active, near, me, author, following, liked, sa
           <div className="p-2 pt-0">
             <button className="w-full flex items-center gap-3 p-3 rounded-xl text-sm font-semibold hover:bg-[var(--surface-2)]" style={{ color: "var(--text-primary)" }} onClick={() => { setMenuOpen(false); actions.hide(reel); }}><ThumbsDown className="w-4 h-4" /> Not interested</button>
             {me && reel.user_email !== me.email && <button className="w-full flex items-center gap-3 p-3 rounded-xl text-sm font-semibold hover:bg-[var(--surface-2)]" style={{ color: "var(--text-primary)" }} onClick={() => { setMenuOpen(false); actions.report(reel); }}><Flag className="w-4 h-4" /> Report</button>}
+            {me && me.email === reel.user_email && <button className="w-full flex items-center gap-3 p-3 rounded-xl text-sm font-semibold hover:bg-[var(--surface-2)]" style={{ color: "var(--text-primary)" }} onClick={() => { setMenuOpen(false); actions.setComments(reel, !!reel.comments_off); }}>{reel.comments_off ? <MessageCircle className="w-4 h-4" /> : <MessageCircleOff className="w-4 h-4" />} {reel.comments_off ? "Turn on comments" : "Turn off comments"}</button>}
             {me && (me.email === reel.user_email || me.role === "admin") && <button className="w-full flex items-center gap-3 p-3 rounded-xl text-sm font-semibold hover:bg-[var(--surface-2)]" style={{ color: "var(--danger)" }} onClick={() => { setMenuOpen(false); actions.remove(reel); }}><Trash2 className="w-4 h-4" /> Delete reel</button>}
           </div>
         </Popover>

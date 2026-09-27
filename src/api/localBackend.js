@@ -125,13 +125,19 @@ function communityUpdateAllowed(user, current, data) {
   if (fields(["perm_index", "everyone_permissions"]) && hasServerPerm(user, current.id, "manage_roles")) return true;
   return false;
 }
-const LIKEABLE = ["Artwork", "CommunityPost", "MusicReview", "Reel"];
+const LIKEABLE = ["Artwork", "CommunityPost", "MusicReview", "Reel", "Comment", "CommunityComment"];
 
+// Comments on reels have post_id "reel_<id>".
+function reelOfComment(c) {
+  const id = String(c?.post_id || "");
+  return id.startsWith("reel_") ? loadCollection("Reel").find((r) => r.id === id.slice(5)) : null;
+}
 function canCreate(user, name, data) {
   if (!user) return false;
   if (isAdminUser(user)) return true;
   if (name === "SiteConfig" || name === "Log" || name === "User" || name === "AppUpdate") return false;
   if (name === "Reel") return same(data?.user_email, user.email);
+  if (name === "CommunityComment" && reelOfComment(data)?.comments_off) return false;
   if (name === "ServerChannel") return hasServerPerm(user, data?.community_id, "manage_channels");
   if (name === "ServerRole") return hasServerPerm(user, data?.community_id, "manage_roles");
   if (name === "ServerMember") return hasServerPerm(user, data?.community_id, "manage_roles") || (same(data?.user_email, user.email) && !(data?.roles || []).length);
@@ -198,7 +204,7 @@ function canDelete(user, name, current) {
     case "GroupChat": return same(current?.owner_email, email);
     case "Notification": return same(current?.to_email, email);
     case "ArtworkPing": return same(current?.from_email, email) || same(current?.to_email, email);
-    case "CommunityComment": return isOwner(user, current) || current?.post_id === `profile_${email}`;
+    case "CommunityComment": return isOwner(user, current) || current?.post_id === `profile_${email}` || same(reelOfComment(current)?.user_email, email);
     case "VoicePresence": return isOwner(user, current) || (current?.last_active || 0) < Date.now() - 60000;
     case "VoiceSignal": return isOwner(user, current) || same(current?.to_email, email);
     case "Call": return same(current?.caller_email, email);

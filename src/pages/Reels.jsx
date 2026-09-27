@@ -189,6 +189,13 @@ export default function ReelsPage() {
     toast("Got it — you'll see fewer reels like this");
     setOrder((o) => o.filter((x) => x.id !== reel.id));
   };
+  const setComments = async (reel, on) => {
+    try {
+      await base44.entities.Reel.update(reel.id, { comments_off: !on });
+      feedback("toggle");
+      toast.success(on ? "Comments are on" : "Comments are off for this reel");
+    } catch (e) { toast.error(e?.message || "Could not change comments."); }
+  };
   const remove = async (reel) => {
     if (!(await confirm({ title: "Delete this reel?", message: "It will be removed for everyone.", confirmLabel: "Delete", danger: true }))) return;
     try { await base44.entities.Reel.delete(reel.id); setOrder((o) => o.filter((x) => x.id !== reel.id)); toast.success("Reel deleted"); } catch (e) { toast.error(e?.message || "Could not delete."); }
@@ -210,6 +217,7 @@ export default function ReelsPage() {
   latest.current = {
     like, save, share, follow, hide, remove, viewed, tag: setTag, setSound,
     comments: setCommentsFor,
+    setComments,
     report: (r) => openReport({ type: "reel", id: r.id, owner: r.user_email, preview: r.caption, link: `/Reels?r=${r.id}` }),
   };
   const actions = useMemo(() => new Proxy({}, { get: (_, key) => (...args) => latest.current[key]?.(...args) }), []);
@@ -294,10 +302,13 @@ export default function ReelsPage() {
         )}
       </div>
 
-      <BottomSheet anchorRef={scroller} open={!!commentsFor} onClose={() => setCommentsFor(null)} title={commentsFor ? `${commentCounts[commentsFor.id] || 0} comment${commentCounts[commentsFor.id] === 1 ? "" : "s"}` : ""} label="Comments">
+      <BottomSheet anchorRef={scroller} open={!!commentsFor} onClose={() => setCommentsFor(null)} title={!commentsFor ? "" : byId.get(commentsFor.id)?.comments_off ? "Comments" : `${commentCounts[commentsFor.id] || 0} comment${commentCounts[commentsFor.id] === 1 ? "" : "s"}`} label="Comments">
         {commentsFor && (
-          <div onSubmitCapture={() => recordReelSignal(commentsFor, { commented: true })}>
-            <CommentSection entity="CommunityComment" field="post_id" targetId={`reel_${commentsFor.id}`} ownerEmail={commentsFor.user_email} link={`/Reels?r=${commentsFor.id}`} showTitle={false} />
+          <div className="flex-1 flex flex-col" onSubmitCapture={() => recordReelSignal(commentsFor, { commented: true })}>
+            <CommentSection entity="CommunityComment" field="post_id" targetId={`reel_${commentsFor.id}`} ownerEmail={commentsFor.user_email} link={`/Reels?r=${commentsFor.id}`} showTitle={false} sheet disabled={!!byId.get(commentsFor.id)?.comments_off} />
+            {byId.get(commentsFor.id)?.comments_off && commentsFor.user_email === me?.email && (
+              <div className="flex justify-center -mt-4"><button className="btn" onClick={() => setComments(commentsFor, true)}>Turn comments back on</button></div>
+            )}
           </div>
         )}
       </BottomSheet>

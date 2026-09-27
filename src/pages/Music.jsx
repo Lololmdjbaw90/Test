@@ -198,7 +198,7 @@ function Hero({ pick, player, queue }) {
             <motion.button whileTap={{ scale: 0.94 }} onClick={() => player.toggle(asQueueItem(t), queue)} className="h-10 sm:h-12 px-5 sm:px-6 rounded-full bg-white font-bold flex items-center gap-2" style={{ color: "#1d1018" }}>
               {playing ? <><Pause className="w-5 h-5" /> Pause</> : <><Play className="w-5 h-5" /> Play</>}
             </motion.button>
-            <span className="text-xs font-semibold opacity-90 hidden min-[420px]:flex items-center gap-3">
+            <span className="text-xs font-semibold opacity-90 hidden show-from-420 items-center gap-3">
               {t.plays > 0 && <span className="flex items-center gap-1"><Headphones className="w-3.5 h-3.5" /> {compactNumber(t.plays)}</span>}
               {t.genre && <span>{t.genre}</span>}{t.mood && <span>· {t.mood}</span>}
             </span>

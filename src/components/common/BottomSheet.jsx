@@ -49,7 +49,7 @@ export default function BottomSheet({ open, onClose, title, children, height = "
                 <button onClick={onClose} onPointerDown={(e) => e.stopPropagation()} className="absolute right-0 w-8 h-8 rounded-full flex items-center justify-center" aria-label="Close"><X className="w-5 h-5" /></button>
               </div>
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 pb-4">{children}</div>
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 pb-4 flex flex-col">{children}</div>
           </motion.div>
         </div>
       )}

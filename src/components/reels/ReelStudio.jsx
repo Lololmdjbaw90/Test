@@ -43,6 +43,7 @@ function PostStep({ media, edits, music, coverTime, coverUrl, onBack, onPosted }
   const { user } = useAuth();
   const [caption, setCaption] = useState("");
   const [busy, setBusy] = useState("");
+  const [allowComments, setAllowComments] = useState(true);
   const tags = hashtags(caption);
   const clips = media.kind === "video" ? clipsOf(edits, media.duration) : [];
 
@@ -75,7 +76,7 @@ function PostStep({ media, edits, music, coverTime, coverUrl, onBack, onPosted }
         user_email: user.email, user_display_name: displayName(user), user_profile_picture: user.profile_picture || "",
         kind: media.kind, media_url: mediaUrl, cover_url: cover, caption: caption.trim(), tags,
         music_url: music?.url || "", music_title: music?.title || "", music_artist: music?.artist || "",
-        edits: finalEdits, likes: [], views: 0, duration: Math.round(span * 10) / 10,
+        edits: finalEdits, likes: [], views: 0, duration: Math.round(span * 10) / 10, comments_off: !allowComments,
       });
       toast.success("Your reel is live ✨");
       onPosted(created.id);
@@ -119,6 +120,12 @@ function PostStep({ media, edits, music, coverTime, coverUrl, onBack, onPosted }
           {(edits.text || []).length > 0 && <li>🔤 {edits.text.length} text{edits.text.length === 1 ? "" : "s"}</li>}
           <li>👀 Everyone on Sugerly can watch it in Reels</li>
         </ul>
+        <button type="button" role="switch" aria-checked={allowComments} onClick={() => { feedback("toggle"); setAllowComments((v) => !v); }} className="mt-4 w-full flex items-center gap-3 p-3 rounded-2xl text-left" style={{ background: "rgb(255 255 255 / 0.08)" }}>
+          <span className="flex-1 text-sm font-bold">Allow comments</span>
+          <span className="relative w-12 h-7 rounded-full transition-colors" style={{ background: allowComments ? "#34c759" : "rgb(255 255 255 / 0.25)" }}>
+            <span className="absolute top-0.5 w-6 h-6 rounded-full bg-white shadow transition-all" style={{ left: allowComments ? 22 : 2 }} />
+          </span>
+        </button>
       </div>
       <div className="flex-shrink-0 px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
         <button onClick={post} disabled={!!busy} className="btn w-full !py-3.5 text-base">{busy ? <><Loader2 className="w-5 h-5 animate-spin" /> {busy}</> : <><Send className="w-5 h-5" /> Post reel</>}</button>
