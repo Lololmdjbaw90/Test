@@ -593,13 +593,18 @@ button, [role="button"], [role="tab"] { -webkit-user-select: none; user-select: 
 .h-app { height: 100dvh; }
 .native-app { --app-h: calc(100dvh - var(--kb)); background: var(--app-bg); }
 .native-app .h-app { height: 100%; }
+.native-app { --kb-anim: 0.28s cubic-bezier(0.38, 0.7, 0.125, 1); }
 .native-app body {
   position: fixed; top: 0; left: 0; right: 0; bottom: var(--kb); height: auto;
   overflow: hidden; transform: translateZ(0);
-  transition: bottom 0.3s cubic-bezier(0.38, 0.7, 0.125, 1);
+  transition: bottom var(--kb-anim);
 }
-/* With the tab bar gone, its space goes to the chat. */
+/* With the tab bar and the music player out of the way, their space goes to
+   the chat — gliding in step with the keyboard, so the message box moves in
+   one smooth motion instead of dropping and then jumping up. */
+.native-app #main { transition: padding-bottom var(--kb-anim); }
 .keyboard-open #main { padding-bottom: 0 !important; }
+.keyboard-open .mini-player { opacity: 0 !important; pointer-events: none; }
 /* The native app shouldn't select UI text on long-press like a web page. */
 .native-app body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .native-app input, .native-app textarea, .native-app [contenteditable], .native-app .select-text { -webkit-user-select: text; user-select: text; }

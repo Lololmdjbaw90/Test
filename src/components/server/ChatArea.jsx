@@ -15,6 +15,7 @@ import ChatComposer from "@/components/chat/ChatComposer";
 import RichText, { mentionedNames } from "@/components/chat/RichText";
 import { QUICK_REACTIONS } from "@/components/chat/EmojiPicker";
 import { useBlocked } from "@/lib/safety";
+import { useStickToBottom } from "@/lib/useStickToBottom";
 
 const compact = (s) => String(s || "").replace(/\s+/g, "").toLowerCase();
 
@@ -99,6 +100,7 @@ export default function ChatArea({ channel, community, me, roles, members, actor
   const [tapped, setTapped] = useState(null); // message showing its action bar on touch screens
   const scrollRef = useRef(null);
   const [atBottom, setAtBottom] = useState(true);
+  useStickToBottom(scrollRef, atBottom);
   const [replyTo, setReplyTo] = useState(null);
   const [editing, setEditing] = useState(null);
   const [showSearch, setShowSearch] = useState(false);

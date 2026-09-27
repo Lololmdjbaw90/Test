@@ -339,6 +339,8 @@ export default function Layout() {
   const inConversation = path === "/directmessages" && /[?&](with|c)=/.test(location.search);
   // (Phones only: on a tablet the chat has room and the tab bar is the way out.)
   const hideMobileNav = !wide && (path === "/communitychat" || inConversation);
+  // Chats have their message box at the bottom: keep it above the music player too.
+  const chatPage = path === "/communitychat" || path === "/directmessages";
 
   return (
     <div className="app-shell flex h-app overflow-hidden safe-top safe-x">
@@ -351,7 +353,9 @@ export default function Layout() {
         <AnnouncementBar config={siteConfig} />
         <VoiceDock />
         {!fullHeight && <TopBar onSearch={() => setPaletteOpen(true)} user={user} badges={badges} isDark={isDark} onToggleTheme={toggleTheme} />}
-        <main ref={mainRef} id="main" className={`flex-1 min-h-0 relative ${fullHeight ? `overflow-hidden ${hideMobileNav ? "" : "pb-[calc(72px+env(safe-area-inset-bottom))] desk:pb-0"}` : "overflow-y-auto overflow-x-hidden scroll"}`}>
+        <main ref={mainRef} id="main" className={`flex-1 min-h-0 relative ${fullHeight ? `overflow-hidden ${chatPage
+            ? (hideMobileNav ? "pb-[var(--mini-h,0px)]" : "pb-[calc(72px+env(safe-area-inset-bottom)+var(--mini-h,0px))] desk:pb-[var(--mini-h,0px)]")
+            : (hideMobileNav ? "" : "pb-[calc(72px+env(safe-area-inset-bottom))] desk:pb-0")}` : "overflow-y-auto overflow-x-hidden scroll"}`}>
           {/* Enter-only transition keyed by route; no exit phase that could stall navigation. */}
           <div key={location.pathname} className={`page-enter ${fullHeight ? "h-full" : "min-h-full"}`}>
             <ErrorBoundary resetKey={location.pathname}>{outlet}</ErrorBoundary>

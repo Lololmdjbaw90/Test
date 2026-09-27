@@ -15,6 +15,7 @@ import RichText from "@/components/chat/RichText";
 import { QUICK_REACTIONS } from "@/components/chat/EmojiPicker";
 import { callSummary } from "@/lib/calls";
 import { useBlocked } from "@/lib/safety";
+import { useStickToBottom } from "@/lib/useStickToBottom";
 
 // Centered "Missed call / Call · 4:12" notice with a call-back button.
 function CallNotice({ msg, me, onCall }) {
@@ -102,6 +103,7 @@ export default function DMChatWindow({ conversation, me, onCall }) {
   const isGroup = conversation.type === "group";
   const scrollRef = useRef(null);
   const [atBottom, setAtBottom] = useState(true);
+  useStickToBottom(scrollRef, atBottom);
   const [editing, setEditing] = useState(null);
   const [tapped, setTapped] = useState(null); // bubble showing its actions on touch screens
   const { data: raw, loading } = useLiveQuery("DirectMessage", { conversation_id: conversation.id, member_emails: { $contains: me.email } }, { sort: "-created_date", limit: 200 });

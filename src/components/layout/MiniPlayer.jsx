@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Music2, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX, X } from "lucide-react";
 import { formatTime, usePlayer } from "@/lib/player";
@@ -7,15 +7,29 @@ import { formatTime, usePlayer } from "@/lib/player";
 export default function MiniPlayer({ raised }) {
   const p = usePlayer();
   const pct = p.duration ? (p.time / p.duration) * 100 : 0;
+  // Chats read --mini-h to keep their message box clear of the player.
+  const box = useRef(null);
+  const shown = !!p.track;
+  useEffect(() => {
+    const root = document.documentElement;
+    const el = box.current;
+    if (!shown || !el) { root.style.removeProperty("--mini-h"); return undefined; }
+    const set = () => root.style.setProperty("--mini-h", `${Math.round(el.offsetHeight + 20)}px`);
+    set();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(set) : null;
+    ro?.observe(el);
+    return () => { ro?.disconnect(); root.style.removeProperty("--mini-h"); };
+  }, [shown]);
   return (
     <AnimatePresence>
       {p.track && (
         <motion.div
+          ref={box}
           initial={{ opacity: 0, y: 40, scale: 0.95 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 40, scale: 0.95 }}
           transition={{ type: "spring", stiffness: 360, damping: 30 }}
-          className={`fixed z-[60] left-3 right-3 mx-auto max-w-[560px] desk:mx-0 desk:left-auto desk:right-5 desk:w-[360px] ${raised ? "bottom-[calc(80px+env(safe-area-inset-bottom))]" : "bottom-[calc(0.75rem+env(safe-area-inset-bottom))]"} desk:bottom-5 glass rounded-3xl overflow-hidden`}
+          className={`fixed z-[60] left-3 right-3 mx-auto max-w-[560px] desk:mx-0 desk:left-auto desk:right-5 desk:w-[360px] ${raised ? "bottom-[calc(80px+env(safe-area-inset-bottom))]" : "bottom-[calc(0.75rem+env(safe-area-inset-bottom))]"} desk:bottom-5 glass rounded-3xl overflow-hidden mini-player`}
           style={{ border: "1px solid var(--border-c)", boxShadow: "var(--shadow-lg)" }}
           role="region"
           aria-label="Music player"
