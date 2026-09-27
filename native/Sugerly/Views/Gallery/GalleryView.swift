@@ -217,9 +217,14 @@ struct ZoomImage: View {
     @State private var scale: CGFloat = 1
     @State private var offset: CGSize = .zero
 
+    private var backdrop: Double {
+        let pulled = Double(abs(offset.height)) / 400.0
+        return 1.0 - Swift.min(0.6, pulled)
+    }
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Color.black.ignoresSafeArea().opacity(1 - min(0.6, abs(offset.height) / 400))
+            Color.black.ignoresSafeArea().opacity(backdrop)
             RemoteImage(url: url, contentMode: .fit)
                 .scaleEffect(scale)
                 .offset(offset)
