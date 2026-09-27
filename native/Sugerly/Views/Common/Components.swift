@@ -195,6 +195,7 @@ struct ReportSheet: View {
 enum Moderation {
     static func hasLink(_ text: String) -> Bool {
         let pattern = #"([a-z][a-z0-9+.-]*://|mailto:|www\.|[a-z0-9][a-z0-9.-]*\.[a-z]{2,63}\b|\b[0-9]{1,3}(\.[0-9]{1,3}){3}\b)"#
-        return text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+        let normalized = text.precomposedStringWithCompatibilityMapping.replacingOccurrences(of: "[\\u200B-\\u200D\\uFEFF]", with: "", options: .regularExpression)
+        return normalized.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
     }
 }

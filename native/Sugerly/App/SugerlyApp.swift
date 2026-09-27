@@ -46,17 +46,14 @@ struct RootView: View {
 }
 
 struct SplashView: View {
-    @State private var pulse = false
     var body: some View {
         ZStack {
             Theme.background.ignoresSafeArea()
-            Image("Logo")
-                .resizable()
-                .scaledToFit()
-                .frame(height: 80)
-                .scaleEffect(pulse ? 1.05 : 1)
-                .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
-                .onAppear { pulse = true }
+            VStack(spacing: 24) {
+                Image("Logo").resizable().scaledToFit().frame(width: 220, height: 90)
+                Text("Your little corner of the internet.").font(.system(.subheadline, design: .rounded)).foregroundStyle(Theme.pink)
+                ProgressView().tint(Theme.pink)
+            }
         }
     }
 }

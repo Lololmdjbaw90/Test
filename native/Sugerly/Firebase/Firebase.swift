@@ -339,10 +339,11 @@ enum FS {
 
     // Stable, bounded pages. The document-ID tie-breaker prevents lost items
     // when several posts share a creation timestamp. Never fall back to a scan.
-    static func page(_ collection: String, after cursor: Doc? = nil, size: Int = 30, equalTo: (String, String)? = nil) async throws -> (rows: [Doc], more: Bool) {
+    static func page(_ collection: String, after cursor: Doc? = nil, size: Int = 30, equalTo: (String, String)? = nil, descending: Bool = true) async throws -> (rows: [Doc], more: Bool) {
         let count = min(100, max(1, size))
+        let direction = descending ? "DESCENDING" : "ASCENDING"
         var query: Doc = ["from": [["collectionId": collection]], "limit": count + 1,
-            "orderBy": [["field": ["fieldPath": "created_date"], "direction": "DESCENDING"], ["field": ["fieldPath": "__name__"], "direction": "DESCENDING"]]]
+            "orderBy": [["field": ["fieldPath": "created_date"], "direction": direction], ["field": ["fieldPath": "__name__"], "direction": direction]]]
         if let (field, value) = equalTo { query["where"] = ["fieldFilter": ["field": ["fieldPath": field], "op": "EQUAL", "value": encode(value)]] }
         if let cursor {
             query["startAt"] = ["before": false, "values": [encode(cursor.str("created_date")), ["referenceValue": "\(base.replacingOccurrences(of: "https://firestore.googleapis.com/v1/", with: ""))/\(collection)/\(cursor.str("id"))"]]]

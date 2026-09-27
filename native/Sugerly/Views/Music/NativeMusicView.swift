@@ -17,6 +17,7 @@ final class NativeMusicPlayer {
     var error: String?
     let player = AVPlayer()
     private var status: NSKeyValueObservation?
+    private var itemStatus: NSKeyValueObservation?
     init() {
         status = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
             Task { @MainActor [weak self] in self?.playing = player.timeControlStatus == .playing }
@@ -25,8 +26,13 @@ final class NativeMusicPlayer {
     func toggle(_ next: NativeTrack) {
         guard let url = URL(string: next.url), ["https", "http"].contains(url.scheme?.lowercased() ?? "") else { error = "This track is unavailable."; return }
         if track?.id != next.id {
+            error = nil
             track = next
-            player.replaceCurrentItem(with: AVPlayerItem(url: url))
+            let item = AVPlayerItem(url: url)
+            itemStatus = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+                Task { @MainActor [weak self] in if item.status == .failed { self?.error = "This track couldn't play. Try another song." } }
+            }
+            player.replaceCurrentItem(with: item)
         } else if playing { pause(); return }
         if player.currentItem?.status == .failed { error = "This track couldn't play. Try another song."; return }
         if let item = player.currentItem, item.duration.seconds.isFinite, player.currentTime().seconds >= item.duration.seconds - 0.1 { player.seek(to: .zero) }
@@ -85,6 +91,7 @@ struct NativeMusicView: View {
                             .padding(14).background(Theme.card, in: Capsule()).overlay(Capsule().stroke(Theme.border, lineWidth: 1))
                         Text("30-second previews from Deezer").font(.caption).foregroundStyle(.secondary)
                     }
+                    if let playbackError = music.error { Text(playbackError).font(.footnote).foregroundStyle(.red) }
                     ForEach(tracks) { track in
                         Button {
                             if let onPick { onPick(track); dismiss() } else { music.toggle(track) }
@@ -94,7 +101,7 @@ struct NativeMusicView: View {
                         Text(error).font(.footnote).foregroundStyle(.secondary)
                         Button("Try again") { Task { await load() } }.buttonStyle(.bordered)
                     } else if more {
-                        ProgressView().frame(maxWidth: .infinity).padding().onAppear { if !loading { Task { await load() } } }
+                        ProgressView().id("\(offset)-\(cursor?.str("id") ?? "start")").frame(maxWidth: .infinity).padding().onAppear { if !loading { Task { await load() } } }
                     } else if tracks.isEmpty { Text("No songs found.").foregroundStyle(.secondary).padding() }
                 }.padding(18).frame(maxWidth: 680).frame(maxWidth: .infinity)
             }.background(Theme.background)

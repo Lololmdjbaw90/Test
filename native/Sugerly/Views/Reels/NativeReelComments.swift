@@ -47,7 +47,7 @@ struct NativeReelComments: View {
         loading = true; error = nil
         defer { loading = false }
         do {
-            let page = try await FS.page("CommunityComment", after: cursor, equalTo: ("post_id", "reel_\(reel.id)"))
+            let page = try await FS.page("CommunityComment", after: cursor, equalTo: ("post_id", "reel_\(reel.id)"), descending: false)
             let known = Set(comments.map(\.id))
             comments += page.rows.map(Comment.init).filter { !known.contains($0.id) }
             cursor = page.rows.last ?? cursor; more = page.more
@@ -63,7 +63,7 @@ struct NativeReelComments: View {
             guard let latest = try await FS.get("Reel", reel.id), !latest.bool("comments_off") else { throw APIError(message: "Comments are closed for this reel.") }
             let data: Doc = ["post_id": "reel_\(reel.id)", "content": text, "parent_id": reply.map { $0.parentId.isEmpty ? $0.id : $0.parentId } ?? "", "reply_to_name": reply?.authorName ?? "", "reply_to_email": reply?.authorEmail ?? "", "user_email": me.email, "user_display_name": me.displayName, "user_profile_picture": me.picture, "likes": [String](), "created_by": me.email, "created_date": FS.nowISO(), "updated_date": FS.nowISO()]
             let created = try await FS.create("CommunityComment", data)
-            comments.insert(Comment(created), at: 0); draft = ""; reply = nil
+            comments.append(Comment(created)); draft = ""; reply = nil
         } catch { self.error = error.localizedDescription }
     }
     private func remove(_ comment: Comment) async {

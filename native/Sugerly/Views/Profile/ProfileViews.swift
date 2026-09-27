@@ -22,6 +22,7 @@ struct ProfileView: View {
             .navigationTitle(model.me?.displayName ?? "Profile")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) { NativeWordmark() }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { settings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Settings")
                 }

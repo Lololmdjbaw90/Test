@@ -40,7 +40,7 @@ struct NativeReelsView: View {
                         VStack(spacing: 16) {
                             if let error { Text(error).multilineTextAlignment(.center); Button("Try again") { Task { await load() } } }
                             else { ProgressView().tint(.white) }
-                        }.padding().containerRelativeFrame([.horizontal, .vertical]).onAppear { Task { await load() } }
+                        }.id(cursor?.str("id") ?? "initial").padding().containerRelativeFrame([.horizontal, .vertical]).onAppear { Task { await load() } }
                     }
                 }.scrollTargetLayout()
             }.scrollTargetBehavior(.paging).scrollPosition(id: $selected).scrollIndicators(.hidden)
@@ -125,14 +125,22 @@ struct NativeReelCard: View {
                     let p = AVPlayer(url: url); p.isMuted = muted || (reel.data["edits"] as? Doc ?? [:]).bool("muted"); player = p
                     let edits = reel.data["edits"] as? Doc ?? [:]
                     let start = edits["trim_start"] as? Double ?? 0
+                    if let end = edits["trim_end"] as? Double, end > start { p.currentItem?.forwardPlaybackEndTime = CMTime(seconds: end, preferredTimescale: 600) }
                     p.seek(to: CMTime(seconds: start, preferredTimescale: 600))
                     p.playImmediately(atRate: Float(edits["speed"] as? Double ?? 1))
                 }
-                if let url = URL(string: reel.data.str("music_url")), !reel.data.str("music_url").isEmpty { let p = AVPlayer(url: url); p.isMuted = muted; audio = p; p.play() }
+                var musicURL = reel.data.str("music_url")
+                let source = reel.data.str("music_source")
+                if source.hasPrefix("deezer:"), let url = URL(string: "https://api.deezer.com/track/\(source.dropFirst(7))"), let data = try? await HTTP.json(url) as? Doc, !data.str("preview").isEmpty { musicURL = data.str("preview") }
+                guard !Task.isCancelled, active else { return }
+                if let url = URL(string: musicURL), !musicURL.isEmpty { let p = AVPlayer(url: url); p.isMuted = muted; audio = p; p.play() }
             }
             .onReceive(NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)) { event in
                 guard active, let item = event.object as? AVPlayerItem else { return }
-                if item === player?.currentItem { player?.seek(to: .zero); player?.play() }
+                if item === player?.currentItem {
+                    let edits = reel.data["edits"] as? Doc ?? [:]
+                    player?.seek(to: CMTime(seconds: edits["trim_start"] as? Double ?? 0, preferredTimescale: 600)); player?.playImmediately(atRate: Float(edits["speed"] as? Double ?? 1))
+                }
                 if item === audio?.currentItem { audio?.seek(to: .zero); audio?.play() }
             }
             .onDisappear { player?.pause(); audio?.pause(); player = nil; audio = nil }
