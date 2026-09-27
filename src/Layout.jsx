@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useOutlet } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, LogOut, MessageCircle, Megaphone, Moon, Plus, Search, Settings, Sun, X } from "lucide-react";
+import { ArrowLeft, HelpCircle, LogOut, MessageCircle, Megaphone, Moon, Plus, Search, Settings, Sun, X } from "lucide-react";
 import Sidebar, { Logo } from "@/components/layout/Sidebar";
 import CommandPalette from "@/components/layout/CommandPalette";
 import CreateMenu from "@/components/layout/CreateMenu";
@@ -13,7 +13,7 @@ import CallManager from "@/components/voice/CallManager";
 import { ADMIN_SECTION, EXPLORE_NAV, MOBILE_NAV, MORE_NAV, NAV_SECTIONS, isActivePath } from "@/components/layout/nav";
 import AppIcon from "@/components/layout/AppIcon";
 import { getLevelInfo } from "@/components/profile/LevelBadge";
-import { useNativeTabBar } from "@/lib/nativeTabBar";
+import { useMinimizeOnScroll, useNativeTabBar } from "@/lib/nativeTabBar";
 import Popover from "@/components/common/Popover";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import NotificationBell from "@/components/notifications/NotificationBell";
@@ -125,7 +125,7 @@ function MoreSheet({ open, onClose, anchorRef, badges, isDark, onToggleTheme, pl
   const { user, isAdmin, logout } = useAuth();
   const location = useLocation();
   const level = getLevelInfo(user?.xp || 0);
-  const rows = [...MORE_NAV, { label: "Settings", path: "/Settings", icon: Settings }, ...(isAdmin ? ADMIN_SECTION.items : [])];
+  const rows = [...MORE_NAV, { label: "Settings", path: "/Settings", icon: Settings }, { label: "Help & legal", path: "/Help", icon: HelpCircle }, ...(isAdmin ? ADMIN_SECTION.items : [])];
   return (
     <Popover open={open} onClose={onClose} anchorRef={anchorRef} placement={placement} width={352} label="Menu">
       <div className="px-4 pb-4 pt-1 space-y-4">
@@ -194,11 +194,14 @@ function MobileNav({ badges, isAdmin, isDark, onToggleTheme }) {
   const moreActive = !MOBILE_NAV.some((i) => i.path && isActivePath(location.pathname, i.path));
   // In the iPhone / iPad app the tab bar is native (real Liquid Glass on iOS 26).
   const current = NATIVE_TABS.find((t) => t.id !== "create" && isActivePath(location.pathname, t.id))?.id || "";
+  const onReels = location.pathname.toLowerCase() === "/reels";
+  const minimized = useMinimizeOnScroll(onReels || !!sheet, location.pathname) && !sheet;
   useNativeTabBar({
     items: NATIVE_TABS,
     selected: current,
     badges: { "/DirectMessages": badges.dms || 0 },
-    dark: location.pathname.toLowerCase() === "/reels",
+    dark: onReels,
+    minimized,
     onSelect: (id) => {
       if (id === "create") { setSheet((v) => (v === "create" ? null : "create")); return; }
       if (id === current) { document.getElementById("main")?.scrollTo({ top: 0, behavior: "smooth" }); return; }
@@ -212,7 +215,7 @@ function MobileNav({ badges, isAdmin, isDark, onToggleTheme }) {
         <CreateMenu isAdmin={isAdmin} onDone={() => setSheet(null)} className="pb-4" />
       </Popover>
       <MoreSheet open={sheet === "more"} onClose={() => setSheet(null)} anchorRef={moreRef} badges={badges} isDark={isDark} onToggleTheme={onToggleTheme} />
-      <nav className={`mobile-tabbar desk:hidden fixed inset-x-3 mx-auto max-w-[560px] z-[65] liquid-glass rounded-[30px] ${location.pathname.toLowerCase() === "/reels" ? "on-dark" : ""}`} data-dark={location.pathname.toLowerCase() === "/reels"} style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 6px)" }} aria-label="Main">
+      <nav className={`mobile-tabbar desk:hidden fixed inset-x-3 mx-auto max-w-[560px] z-[65] liquid-glass rounded-[30px] ${onReels ? "on-dark" : ""} ${minimized ? "is-min" : ""}`} data-dark={location.pathname.toLowerCase() === "/reels"} style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 6px)" }} aria-label="Main">
         <div className="flex items-center justify-around h-[62px] px-1">
           {MOBILE_NAV.map((item) => {
             if (item.label === "create") {

@@ -578,6 +578,10 @@ button, [role="button"], [role="tab"] { -webkit-user-select: none; user-select: 
 @keyframes logo-twinkle { 0%, 100% { transform: scale(0.4) rotate(0deg); opacity: 0.2; } 50% { transform: scale(1) rotate(45deg); opacity: 1; } }
 /* The native iOS tab bar replaces the web one (kept invisible so menus can
    still anchor to its buttons). */
+/* Tab bar shrinks while scrolling down, comes back on scroll up. */
+.mobile-tabbar { transform-origin: 50% 100%; transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1); will-change: transform; }
+.mobile-tabbar.is-min { transform: translate3d(0, 8px, 0) scale(0.9); }
+@media (prefers-reduced-motion: reduce) { .mobile-tabbar { transition: none; } }
 .native-tabbar-on .mobile-tabbar { visibility: hidden !important; pointer-events: none !important; }
 /* Keyboard shortcuts mean nothing on a touch screen. */
 @media (hover: none), (pointer: coarse) { .kbd, .desktop-only { display: none !important; } }

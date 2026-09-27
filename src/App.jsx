@@ -28,6 +28,7 @@ const CommunityChat = lazy(() => import("./pages/CommunityChat"));
 const Friends = lazy(() => import("./pages/Friends"));
 const Reels = lazy(() => import("./pages/Reels"));
 const Updates = lazy(() => import("./pages/Updates"));
+const Legal = lazy(() => import("./pages/Legal"));
 const Commissions = lazy(() => import("./pages/Commissions"));
 const TopArtists = lazy(() => import("./pages/TopArtists"));
 const DirectMessages = lazy(() => import("./pages/DirectMessages"));
@@ -57,6 +58,9 @@ const AppRoutes = () => {
     <Suspense fallback={<Splash />}>
       <Routes>
         <Route path="/Login" element={isAuthenticated ? <Navigate to="/" replace /> : <Login />} />
+        {/* Terms, privacy, guidelines and help work without logging in. */}
+        <Route path="/Legal/:doc" element={<Suspense fallback={<CenterSpinner />}><Legal /></Suspense>} />
+        <Route path="/Help" element={<Suspense fallback={<CenterSpinner />}><Legal doc="help" /></Suspense>} />
         <Route path="/Onboarding" element={<RequireAuth><Onboarding /></RequireAuth>} />
         <Route element={<RequireAuth><Layout /></RequireAuth>}>
           <Route path="/" element={<Suspense fallback={<CenterSpinner />}><Home /></Suspense>} />

@@ -21,6 +21,7 @@ public class NativeTabBarPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "setSelected", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setBadges", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setDark", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setMinimized", returnType: CAPPluginReturnPromise),
     ]
     private var bar: GlassTabBar?
 
@@ -56,8 +57,18 @@ public class NativeTabBarPlugin: CAPPlugin, CAPBridgedPlugin {
                 ])
                 self.bar = bar
             }
-            self.bar?.setItems(items, selected: selected)
+            // Re-showing after a sheet closes sends no items: just fade back in,
+            // don't rebuild the buttons (that caused the flicker).
+            if !items.isEmpty { self.bar?.setItems(items, selected: selected) }
             self.bar?.setVisible(true)
+            call.resolve()
+        }
+    }
+
+    @objc func setMinimized(_ call: CAPPluginCall) {
+        let value = call.getBool("minimized") ?? false
+        DispatchQueue.main.async {
+            self.bar?.setMinimized(value)
             call.resolve()
         }
     }
@@ -274,13 +285,33 @@ final class GlassTabBar: UIView {
         }
     }
 
-    func setVisible(_ visible: Bool) {
-        if visible { isHidden = false }
-        UIView.animate(withDuration: 0.25, delay: 0, options: [.beginFromCurrentState], animations: {
-            self.alpha = visible ? 1 : 0
-            self.transform = visible ? .identity : CGAffineTransform(translationX: 0, y: 24)
+    private var visible = true
+    private var minimized = false
+
+    private var restingTransform: CGAffineTransform {
+        // Scrolling down shrinks the bar a little and tucks it lower, like
+        // Safari / Apple Music on iOS 26; scrolling up brings it back.
+        minimized ? CGAffineTransform(translationX: 0, y: 10).scaledBy(x: 0.9, y: 0.9) : .identity
+    }
+
+    func setVisible(_ show: Bool) {
+        guard show != visible || (show && isHidden) else { return }
+        visible = show
+        if show { isHidden = false }
+        UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.9, initialSpringVelocity: 0, options: [.beginFromCurrentState, .allowUserInteraction], animations: {
+            self.alpha = show ? 1 : 0
+            self.transform = show ? self.restingTransform : CGAffineTransform(translationX: 0, y: 30)
         }, completion: { _ in
-            if !visible { self.isHidden = true }
+            if !self.visible { self.isHidden = true }
+        })
+    }
+
+    func setMinimized(_ value: Bool) {
+        guard value != minimized else { return }
+        minimized = value
+        guard visible else { return }
+        UIView.animate(withDuration: 0.4, delay: 0, usingSpringWithDamping: 0.82, initialSpringVelocity: 0, options: [.beginFromCurrentState, .allowUserInteraction], animations: {
+            self.transform = self.restingTransform
         })
     }
 }

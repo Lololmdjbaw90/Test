@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Eye, EyeOff, Heart, Loader2, Lock, Mail, Music2, Palette, Sparkles, UserRound, Users } from "lucide-react";
 import { base44, backendMode } from "@/api/base44Client";
@@ -45,6 +45,7 @@ function ArtCollage() {
 export default function LoginPage() {
   const [mode, setMode] = useState("login");
   const [showPassword, setShowPassword] = useState(false);
+  const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState({ email: "", password: "", display_name: "" });
@@ -58,6 +59,7 @@ export default function LoginPage() {
   const submit = async (e) => {
     e.preventDefault();
     setError("");
+    if (mode === "register" && !agreed) { setError("Please agree to the Terms and Community Guidelines to sign up."); return; }
     setLoading(true);
     try {
       if (mode === "reset") {
@@ -141,6 +143,12 @@ export default function LoginPage() {
                 </motion.div>
               )}
             </AnimatePresence>
+            {mode === "register" && (
+              <label className="flex items-start gap-2.5 text-xs leading-snug cursor-pointer" style={{ color: "var(--text-secondary)" }}>
+                <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[rgb(var(--accent-rgb))]" aria-label="I agree to the Terms and Community Guidelines" />
+                <span>I'm at least 13 and I agree to the <Link to="/Legal/terms" className="font-bold underline">Terms</Link> and <Link to="/Legal/guidelines" className="font-bold underline">Community Guidelines</Link>, and I've read the <Link to="/Legal/privacy" className="font-bold underline">Privacy Policy</Link>. No bullying, hate or explicit content — it gets removed.</span>
+              </label>
+            )}
             <button disabled={loading} className="btn w-full py-3 text-sm" type="submit">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <>{mode === "login" ? "Log in" : mode === "register" ? "Create account" : "Send reset link"} <ArrowRight className="w-4 h-4" /></>}
             </button>

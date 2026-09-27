@@ -26,8 +26,35 @@ function useCoveredScreen(enabled) {
   return covered;
 }
 
+// True while the user scrolls down a page (any vertical scroller), false again
+// as soon as they scroll back up or change page: the tab bar shrinks out of
+// the way like Safari / Apple Music on iOS 26.
+export function useMinimizeOnScroll(disabled, resetKey) {
+  const [min, setMin] = useState(false);
+  useEffect(() => {
+    setMin(false);
+    if (disabled) return undefined;
+    const last = new WeakMap();
+    let frame = 0;
+    const onScroll = (e) => {
+      const el = e.target === document ? document.scrollingElement : e.target;
+      if (!el || typeof el.scrollTop !== "number" || el.closest?.('[aria-modal="true"]')) return;
+      const top = el.scrollTop;
+      const prev = last.get(el);
+      last.set(el, top);
+      if (prev === undefined || Math.abs(top - prev) < 6) return;
+      const next = top > prev && top > 80 && top + el.clientHeight < el.scrollHeight - 4;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setMin((v) => (v === next ? v : next)));
+    };
+    document.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () => { document.removeEventListener("scroll", onScroll, { capture: true }); cancelAnimationFrame(frame); };
+  }, [disabled, resetKey]);
+  return min;
+}
+
 // Returns true once the native bar is showing (then hide the web one).
-export function useNativeTabBar({ items, selected, badges, dark, onSelect }) {
+export function useNativeTabBar({ items, selected, badges, dark, minimized, onSelect }) {
   const [on, setOn] = useState(false);
   const handler = useRef(onSelect);
   handler.current = onSelect;
@@ -55,9 +82,14 @@ export function useNativeTabBar({ items, selected, badges, dark, onSelect }) {
   useEffect(() => { if (on) NativeTabBar.setSelected({ id: selected || "" }).catch(() => {}); }, [on, selected]);
   useEffect(() => { if (on) NativeTabBar.setBadges({ badges }).catch(() => {}); }, [on, JSON.stringify(badges)]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (on) NativeTabBar.setDark({ dark: !!dark }).catch(() => {}); }, [on, dark]);
+  useEffect(() => { if (on) NativeTabBar.setMinimized({ minimized: !!minimized }).catch(() => {}); }, [on, minimized]);
+  // Hide under sheets / the keyboard, then just fade back in: no items, so the
+  // buttons aren't rebuilt (that made the bar flicker).
+  const wasCovered = useRef(false);
   useEffect(() => {
-    if (!on) return;
-    (covered ? NativeTabBar.hide() : NativeTabBar.show({ items, selected })).catch(() => {});
-  }, [on, covered]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!on || covered === wasCovered.current) return;
+    wasCovered.current = covered;
+    (covered ? NativeTabBar.hide() : NativeTabBar.show({})).catch(() => {});
+  }, [on, covered]);
   return on;
 }

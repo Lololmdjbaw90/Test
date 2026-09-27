@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Ban, Bookmark, Calendar, Check, Clock, Flag, Grid3X3, Heart, Loader2, MessageCircle, MessageSquare, MoreHorizontal, Pencil, Shield, Sparkles, UserCheck, UserPlus, Users } from "lucide-react";
+import { Ban, Bookmark, Clapperboard, Calendar, Check, Clock, Flag, Grid3X3, Heart, Loader2, MessageCircle, MessageSquare, MoreHorizontal, Pencil, Shield, Sparkles, UserCheck, UserPlus, Users } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -15,6 +15,7 @@ import Avatar from "@/components/common/Avatar";
 import PostCard from "@/components/community/PostCard";
 import PostViewer from "@/components/community/PostViewer";
 import ProfileMessageBoard from "@/components/profile/ProfileMessageBoard";
+import ProfileReels from "@/components/profile/ProfileReels";
 import NameStylePicker, { getNameStyle } from "@/components/profile/NameStylePicker";
 import LevelBadge, { getLevelInfo } from "@/components/profile/LevelBadge";
 import NitroBadge from "@/components/profile/NitroBadge";
@@ -129,6 +130,7 @@ export default function ProfilePage() {
 
   const tabs = [
     { id: "posts", label: "Posts", icon: Grid3X3, count: posts.length },
+    { id: "reels", label: "Reels", icon: Clapperboard },
     { id: "guestbook", label: "Guestbook", icon: MessageCircle },
     ...(isOwn ? [{ id: "saved", label: "Saved", icon: Bookmark }, { id: "shop", label: "Shop", icon: Sparkles }] : []),
   ];
@@ -223,6 +225,7 @@ export default function ProfilePage() {
                 ))}
               </div>
             ))}
+            {tab === "reels" && <ProfileReels email={email} isOwn={isOwn} />}
             {tab === "guestbook" && <ProfileMessageBoard profileUser={profile} />}
             {tab === "saved" && isOwn && (savedArt.length === 0 && savedPosts.length === 0 ? (
               <EmptyState icon={Bookmark} title="Nothing saved yet" text="Tap the bookmark on posts and gallery pieces to collect them here." action={<Link to="/Community" className="btn">Browse the feed</Link>} />

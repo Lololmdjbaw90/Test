@@ -25,11 +25,12 @@ const SECTIONS = [
   { id: "feedback", label: "Sounds & haptics", icon: Volume2 },
   { id: "app", label: "Get the app", icon: Smartphone },
   { id: "account", label: "Account & data", icon: Database },
+  { id: "legal", label: "Help & legal", icon: Shield },
 ];
 
 function Section({ id, icon: Icon, title, subtitle, children }) {
   return (
-    <motion.section id={id} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-40px" }} className="card p-5 sm:p-7 scroll-mt-24">
+    <section id={id} className="card p-5 sm:p-7 scroll-mt-24 enter">
       <div className="flex items-center gap-3 mb-6">
         <span className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: "var(--pink-soft)", color: "var(--accent-rose)" }}><Icon className="w-5 h-5" /></span>
         <div>
@@ -38,7 +39,7 @@ function Section({ id, icon: Icon, title, subtitle, children }) {
         </div>
       </div>
       {children}
-    </motion.section>
+    </section>
   );
 }
 
@@ -196,6 +197,13 @@ export default function SettingsPage() {
             <InstallCard />
           </Section>
 
+          <Section id="legal" icon={Shield} title="Help & legal" subtitle="Answers, and the rules everyone agrees to.">
+            <div className="grid sm:grid-cols-2 gap-2">
+              {[["/Help", "Help & FAQ"], ["/Legal/guidelines", "Community Guidelines"], ["/Legal/terms", "Terms of Use"], ["/Legal/privacy", "Privacy Policy"]].map(([to, label]) => (
+                <Link key={to} to={to} className="card-sm p-4 text-sm font-semibold flex items-center justify-between" style={{ color: "var(--text-primary)" }}>{label}<span aria-hidden="true">›</span></Link>
+              ))}
+            </div>
+          </Section>
           <Section id="account" icon={Database} title="Account & data" subtitle={backendMode === "firebase" ? "Your account is stored securely in Firebase." : "Demo mode: everything is saved in this browser only."}>
             <div className="space-y-3">
               <div className="card-sm p-4 flex items-center gap-3">
