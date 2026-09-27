@@ -17,7 +17,7 @@ enum Route: Hashable {
     case voice(Server, ServerChannel)
 }
 
-enum AppTab: Hashable { case home, community, gallery, reels, chat }
+enum AppTab: Hashable { case home, community, gallery, reels, chat, me }
 
 enum Composer: String, Identifiable { case post, artwork, reel, track; var id: String { rawValue } }
 
@@ -91,6 +91,7 @@ struct MainShell: View {
     @State private var galleryPath: [Route] = []
     @State private var reelsPath: [Route] = []
     @State private var chatPath: [Route] = []
+    @State private var mePath: [Route] = []
     @State private var creating = false
     @State private var pendingComposer: Composer?
     @State private var composer: Composer?
@@ -104,6 +105,7 @@ struct MainShell: View {
         case .gallery: return galleryPath
         case .reels: return reelsPath
         case .chat: return chatPath
+        case .me: return mePath
         }
     }
     private var barHidden: Bool { typing || !currentPath.isEmpty }
@@ -115,6 +117,7 @@ struct MainShell: View {
         case .gallery: return $galleryPath
         case .reels: return $reelsPath
         case .chat: return $chatPath
+        case .me: return $mePath
         }
     }
 
@@ -148,6 +151,14 @@ struct MainShell: View {
                 ChatListView(path: $chatPath).sugarRoutes($chatPath)
             }
             .tag(AppTab.chat)
+            .toolbar(.hidden, for: .tabBar)
+
+            NavigationStack(path: $mePath) {
+                PersonView(email: model.me?.email ?? "", path: $mePath)
+                    .sugarTopBar($mePath)
+                    .sugarRoutes($mePath)
+            }
+            .tag(AppTab.me)
             .toolbar(.hidden, for: .tabBar)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -229,7 +240,7 @@ struct MainShell: View {
     }
 }
 
-// MARK: - Floating tab bar: a soft pink candy pill plus a round + button
+// MARK: - Floating tab bar: one soft pill, the pink + raised in the middle
 
 struct SugarTabBar: View {
     @Binding var tab: AppTab
@@ -238,90 +249,116 @@ struct SugarTabBar: View {
     var onCreate: () -> Void
     @Namespace private var lens
     @State private var plusSpin = false
+    @Environment(AppModel.self) private var model
 
     var body: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 0) {
-                item(.home, "Home", "house", "house.fill")
-                item(.community, "Social", "heart.text.square", "heart.text.square.fill")
-                item(.gallery, "Gallery", "paintpalette", "paintpalette.fill")
-                item(.reels, "Reels", "play.rectangle", "play.rectangle.fill")
-                item(.chat, "Chat", "bubble.left.and.bubble.right", "bubble.left.and.bubble.right.fill", badge: unread)
-            }
-            .padding(.horizontal, 5)
-            .frame(height: 64)
-            .background {
-                Capsule().fill(dark ? Color(hex: 0x1D1019).opacity(0.92) : Palette.surface.opacity(0.96))
-                    .overlay(Capsule().fill(LinearGradient(colors: [Theme.light.opacity(dark ? 0.12 : 0.16), .clear], startPoint: .top, endPoint: .bottom)))
-                    .overlay(Capsule().strokeBorder(dark ? Color.white.opacity(0.12) : Theme.light.opacity(0.55), lineWidth: 1.2))
-                    .shadow(color: Theme.main.opacity(dark ? 0.25 : 0.2), radius: 18, y: 8)
-            }
-            // Only the bar animates; the page switch itself is instant.
-            .animation(.spring(response: 0.38, dampingFraction: 0.72), value: tab)
-
+        HStack(spacing: 0) {
+            item(.home, "Home", "house", "house.fill")
+            item(.community, "Community", "person.2", "person.2.fill")
+            item(.gallery, "Gallery", "paintpalette", "paintpalette.fill")
             Button {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.55)) { plusSpin.toggle() }
                 onCreate()
             } label: {
                 Image(systemName: "plus")
-                    .font(.system(size: 24, weight: .heavy))
+                    .font(.system(size: 24, weight: .semibold))
                     .foregroundStyle(.white)
                     .rotationEffect(.degrees(plusSpin ? 90 : 0))
-                    .frame(width: 60, height: 60)
+                    .frame(width: 58, height: 58)
                     .background(Theme.gradient, in: Circle())
-                    .overlay(Circle().fill(LinearGradient(colors: [.white.opacity(0.35), .clear], startPoint: .top, endPoint: .center)).padding(2))
-                    .overlay(Circle().strokeBorder(.white.opacity(0.6), lineWidth: 1.5))
-                    .shadow(color: Theme.main.opacity(0.5), radius: 14, y: 6)
+                    .overlay(Circle().fill(LinearGradient(colors: [.white.opacity(0.3), .clear], startPoint: .top, endPoint: .center)).padding(2))
+                    .shadow(color: Theme.main.opacity(0.45), radius: 12, y: 5)
             }
             .buttonStyle(BouncyStyle(scale: 0.85))
+            .padding(.horizontal, 4)
             .accessibilityLabel("Create")
+            item(.reels, "Reels", "film.stack", "film.stack.fill")
+            item(.chat, "Chat", "bubble.left", "bubble.left.fill", badge: unread)
+            meItem
         }
+        .padding(.horizontal, 6)
+        .frame(height: 70)
+        .background {
+            Capsule().fill(dark ? Color(hex: 0x2A2226).opacity(0.94) : Palette.surface.opacity(0.97))
+                .overlay(Capsule().strokeBorder(dark ? Color.white.opacity(0.1) : Palette.border, lineWidth: 1))
+                .shadow(color: dark ? .black.opacity(0.4) : Theme.main.opacity(0.14), radius: 18, y: 8)
+        }
+        .animation(.spring(response: 0.38, dampingFraction: 0.75), value: tab)
         .padding(.horizontal, 12)
     }
 
     private func item(_ t: AppTab, _ title: String, _ icon: String, _ filled: String, badge: Int = 0) -> some View {
         let active = tab == t
-        return Button {
-            guard tab != t else { return }
-            var tx = Transaction()
-            tx.disablesAnimations = true
-            withTransaction(tx) { tab = t }
-        } label: {
+        return Button { select(t) } label: {
             VStack(spacing: 3) {
                 Image(systemName: active ? filled : icon)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 19, weight: .medium))
                     .symbolEffect(.bounce.up, value: active)
-                Text(title).font(.jakarta(9.5, .heavy)).lineLimit(1).minimumScaleFactor(0.7)
+                Text(title).font(.jakarta(10, .bold)).lineLimit(1).minimumScaleFactor(0.65)
             }
-            .foregroundStyle(active ? AnyShapeStyle(Color.white) : AnyShapeStyle(dark ? Color.white.opacity(0.7) : Palette.muted))
+            .foregroundStyle(active ? (dark ? AnyShapeStyle(Color.white) : AnyShapeStyle(Theme.main)) : AnyShapeStyle(dark ? Color.white.opacity(0.6) : Palette.muted))
             .frame(maxWidth: .infinity)
-            .frame(height: 54)
-            .background {
-                if active {
-                    Capsule().fill(Theme.gradient)
-                        .overlay(Capsule().fill(LinearGradient(colors: [.white.opacity(0.3), .clear], startPoint: .top, endPoint: .center)).padding(1.5))
-                        .shadow(color: Theme.main.opacity(0.4), radius: 8, y: 3)
-                        .matchedGeometryEffect(id: "lens", in: lens)
-                }
-            }
-            .overlay(alignment: .topTrailing) {
-                if badge > 0 {
-                    Text(badge > 9 ? "9+" : "\(badge)")
-                        .font(.jakarta(10, .heavy))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 5)
-                        .frame(minWidth: 18, minHeight: 18)
-                        .background(Palette.danger, in: Capsule())
-                        .overlay(Capsule().strokeBorder(.white, lineWidth: 1.5))
-                        .offset(x: -4, y: 2)
-                        .transition(.scale.combined(with: .opacity))
-                }
-            }
+            .frame(height: 56)
+            .background { lensView(active) }
+            .overlay(alignment: .topTrailing) { badgeView(badge) }
             .contentShape(Capsule())
         }
         .buttonStyle(BouncyStyle(scale: 0.88))
         .sensoryFeedback(.selection, trigger: active)
         .accessibilityLabel(title)
+    }
+
+    private var meItem: some View {
+        let active = tab == .me
+        return Button { select(.me) } label: {
+            VStack(spacing: 3) {
+                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 22)
+                    .overlay(Circle().strokeBorder(active ? Theme.main : Color.clear, lineWidth: 1.5))
+                Text("Me").font(.jakarta(10, .bold))
+            }
+            .foregroundStyle(active ? (dark ? AnyShapeStyle(Color.white) : AnyShapeStyle(Theme.main)) : AnyShapeStyle(dark ? Color.white.opacity(0.6) : Palette.muted))
+            .frame(maxWidth: .infinity)
+            .frame(height: 56)
+            .background { lensView(active) }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(BouncyStyle(scale: 0.88))
+        .sensoryFeedback(.selection, trigger: active)
+        .accessibilityLabel("Your profile")
+    }
+
+    @ViewBuilder
+    private func lensView(_ active: Bool) -> some View {
+        if active {
+            Capsule()
+                .fill(dark ? Color.white.opacity(0.12) : Color.white)
+                .overlay(Capsule().fill(dark ? Color.clear : Theme.main.opacity(0.06)))
+                .shadow(color: dark ? .clear : Theme.main.opacity(0.18), radius: 8, y: 3)
+                .padding(.horizontal, 2)
+                .matchedGeometryEffect(id: "lens", in: lens)
+        }
+    }
+
+    @ViewBuilder
+    private func badgeView(_ badge: Int) -> some View {
+        if badge > 0 {
+            Text(badge > 9 ? "9+" : "\(badge)")
+                .font(.jakarta(10, .heavy))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 5)
+                .frame(minWidth: 18, minHeight: 18)
+                .background(Theme.gradient, in: Capsule())
+                .overlay(Capsule().strokeBorder(dark ? Color.clear : .white, lineWidth: 1.5))
+                .offset(x: -2, y: 2)
+                .transition(.scale.combined(with: .opacity))
+        }
+    }
+
+    private func select(_ t: AppTab) {
+        guard tab != t else { return }
+        var tx = Transaction()
+        tx.disablesAnimations = true
+        withTransaction(tx) { tab = t }
     }
 }
 

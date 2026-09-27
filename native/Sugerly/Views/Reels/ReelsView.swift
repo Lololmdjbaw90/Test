@@ -1,5 +1,7 @@
 import SwiftUI
 import AVFoundation
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import UIKit
 
 // A looping video filling its frame (no controls), for reels.
@@ -39,9 +41,9 @@ final class ReelVideo {
     private static var pool: [String: ReelVideo] = [:]
     private static var order: [String] = []
 
-    static func get(_ id: String, url: URL, start: Double) -> ReelVideo {
+    static func get(_ id: String, url: URL, start: Double, filter: String = "none", speed: Double = 1) -> ReelVideo {
         if let hit = pool[id] { return hit }
-        let video = ReelVideo(url: url, start: start)
+        let video = ReelVideo(url: url, start: start, filter: filter, speed: speed)
         pool[id] = video
         order.append(id)
         while order.count > 5 {
@@ -52,11 +54,25 @@ final class ReelVideo {
         return video
     }
 
-    init(url: URL, start: Double) {
+    var progress: Double = 0
+    private var timeObserver: Any?
+
+    init(url: URL, start: Double, filter: String = "none", speed: Double = 1) {
         let asset = AVURLAsset(url: url)
         let item = AVPlayerItem(asset: asset)
         item.preferredForwardBufferDuration = 3
         player.automaticallyWaitsToMinimizeStalling = false
+        player.defaultRate = Float(max(0.25, min(3, speed)))
+        if filter != "none" {
+            // The website's filter, drawn live on the video.
+            Task { [weak self] in
+                guard let composition = try? await AVMutableVideoComposition.videoComposition(with: asset, applyingCIFiltersWithHandler: { request in
+                    request.finish(with: WebFilter.apply(filter, to: request.sourceImage), context: nil)
+                }) else { return }
+                guard let self else { return }
+                for item in self.player.items() { item.videoComposition = composition }
+            }
+        }
         looper = AVPlayerLooper(player: player, templateItem: item, timeRange: CMTimeRange(start: CMTime(seconds: start, preferredTimescale: 600), end: .positiveInfinity))
         player.isMuted = false
         statusObservation = player.observe(\.currentItem?.status, options: [.new]) { [weak self] p, _ in
@@ -74,7 +90,18 @@ final class ReelVideo {
         }
     }
 
-    func play() { player.play() }
+    func play() {
+        player.play()
+        if timeObserver == nil {
+            timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.1, preferredTimescale: 600), queue: .main) { [weak self] time in
+                MainActor.assumeIsolated {
+                    guard let self, let item = self.player.currentItem else { return }
+                    let total = item.duration.seconds
+                    if total.isFinite, total > 0 { self.progress = min(1, max(0, time.seconds / total)) }
+                }
+            }
+        }
+    }
     func pause() { player.pause() }
 }
 
@@ -236,6 +263,8 @@ struct ReelPage: View {
     @State private var comments = false
     @State private var slide = 0
     @State private var reporting: ReportSheet.Target?
+    @State private var commentCount = 0
+    @AppStorage("sugerly.reels.muted") private var muted = false
 
     private var me: String { model.me?.email ?? "" }
     private var liked: Bool { reel.likes.contains(me) }
@@ -247,6 +276,9 @@ struct ReelPage: View {
         ZStack {
             Color.black
             media
+            if !reel.texts.isEmpty {
+                ReelTextLayer(texts: reel.texts, active: active).allowsHitTesting(false)
+            }
             LinearGradient(colors: [.black.opacity(0.35), .clear, .clear, .black.opacity(0.7)], startPoint: .top, endPoint: .bottom)
                 .allowsHitTesting(false)
             if paused {
@@ -274,6 +306,14 @@ struct ReelPage: View {
         .onChange(of: active) { _, now in
             if now { start() } else { video?.pause(); sound?.pause() }
         }
+        .onChange(of: muted) { _, now in
+            video?.player.isMuted = now || reel.muted
+            sound?.isMuted = now
+        }
+        .task(id: reel.id) {
+            let docs = (try? await FS.query("CommunityComment", [.equals("post_id", "reel_\(reel.id)")], limit: 200)) ?? []
+            commentCount = docs.count
+        }
         .sheet(isPresented: $comments) {
             NavigationStack {
                 CommentsScreen(collection: "CommunityComment", field: "post_id", targetId: "reel_\(reel.id)", ownerEmail: reel.authorEmail, link: "/Reels?r=\(reel.id)", disabled: reel.commentsOff) {
@@ -299,6 +339,7 @@ struct ReelPage: View {
                     // The cover shows at once; the video fades in over it.
                     if !video.ready { RemoteImage(url: reel.coverURL, contentMode: video.portrait ? .fill : .fit) }
                     LoopingVideo(player: video.player, fill: video.portrait)
+                        .scaleEffect(x: reel.mirror ? -1 : 1, y: 1)
                         .opacity(video.ready ? 1 : 0)
                         .animation(.easeOut(duration: 0.2), value: video.ready)
                     if !video.ready { ProgressView().tint(.white).controlSize(.large) }
@@ -334,111 +375,172 @@ struct ReelPage: View {
         }
     }
 
+    // Everything drawn over the reel, laid out like the website: info at the
+    // bottom left, round buttons down the right, the song disc at the bottom.
     private var overlay: some View {
-        VStack {
+        VStack(spacing: 0) {
             if showBack {
                 HStack {
                     Button { dismiss() } label: {
                         Image(systemName: "chevron.left").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
-                            .frame(width: 42, height: 42).background(.white.opacity(0.18), in: Circle())
+                            .frame(width: 44, height: 44).background(.white.opacity(0.2), in: Circle())
+                            .overlay(Circle().strokeBorder(.white.opacity(0.3), lineWidth: 1))
                     }
                     Spacer()
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 54)
             }
+            if muted && active {
+                Button { withAnimation(.snappy) { muted = false } } label: {
+                    Label("Tap for sound", systemImage: "speaker.slash.fill")
+                        .font(.jakarta(14, .bold)).foregroundStyle(.white)
+                        .padding(.horizontal, 16).frame(height: 38)
+                        .background(Color(hex: 0x2A1620).opacity(0.55), in: Capsule())
+                }
+                .buttonStyle(BouncyStyle())
+                .padding(.top, showBack ? 10 : 108)
+                .transition(.scale.combined(with: .opacity))
+            }
             Spacer()
             HStack(alignment: .bottom, spacing: 12) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Button { path.append(.person(reel.authorEmail)) } label: {
-                        HStack(spacing: 8) {
-                            Text("@\(author?.displayName ?? reel.authorName)").font(.jakarta(16, .heavy)).foregroundStyle(.white)
-                            Text(Dates.ago(reel.created)).font(.jakarta(13)).foregroundStyle(.white.opacity(0.7))
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    if !reel.caption.isEmpty {
-                        Text(Hashtags.styled(reel.caption)).font(.jakarta(15)).foregroundStyle(.white).lineLimit(3)
-                    }
-                    if !reel.musicTitle.isEmpty {
-                        Label("\(reel.musicTitle)\(reel.musicArtist.isEmpty ? "" : " · \(reel.musicArtist)")", systemImage: "music.note")
-                            .font(.jakarta(13, .semibold)).foregroundStyle(.white.opacity(0.9)).lineLimit(1)
-                    }
-                }
-                .shadow(color: .black.opacity(0.5), radius: 4)
-                Spacer()
+                info
+                Spacer(minLength: 8)
                 actions
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 110)
+            .padding(.leading, 16)
+            .padding(.trailing, 10)
+            .padding(.bottom, 14)
+            if reel.isVideo, let video {
+                ReelProgress(video: video)
+            }
         }
+        .padding(.bottom, showBack ? 20 : 110)
+    }
+
+    private var relation: String? {
+        guard let meProfile = model.me, reel.authorEmail != me else { return nil }
+        let theyFollow = author?.following.contains(me) ?? false
+        if following && theyFollow { return "From your friend" }
+        if following { return "From someone you follow" }
+        if theyFollow { return "Follows you" }
+        if reel.likes.count >= 10 { return "Trending" }
+        _ = meProfile
+        return nil
+    }
+
+    private var info: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button { path.append(.person(reel.authorEmail)) } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("@\(author?.displayName ?? reel.authorName)").font(.jakarta(17, .heavy)).foregroundStyle(.white)
+                    Text("· \(Dates.ago(reel.created))").font(.jakarta(13)).foregroundStyle(.white.opacity(0.7))
+                }
+            }
+            .buttonStyle(.plain)
+            if let relation {
+                Label(relation, systemImage: "sparkles")
+                    .font(.jakarta(12, .bold)).foregroundStyle(.white)
+                    .padding(.horizontal, 12).frame(height: 28)
+                    .background(.white.opacity(0.2), in: Capsule())
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.25), lineWidth: 1))
+            }
+            if !reel.caption.isEmpty {
+                Text(ReelCaption.styled(reel.caption)).font(.jakarta(15)).foregroundStyle(.white).lineLimit(3)
+            }
+            if !reel.musicTitle.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "music.note").font(.system(size: 14, weight: .semibold))
+                    Text("\(reel.musicTitle)\(reel.musicArtist.isEmpty ? "" : " · \(reel.musicArtist)")").lineLimit(1)
+                }
+                .font(.jakarta(14, .medium)).foregroundStyle(.white.opacity(0.95))
+            }
+        }
+        .shadow(color: .black.opacity(0.45), radius: 4)
     }
 
     private var actions: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 14) {
             Button { path.append(.person(reel.authorEmail)) } label: {
-                Avatar(url: author?.picture ?? reel.authorPicture, name: reel.authorName, size: 50)
-                    .overlay(Circle().strokeBorder(.white, lineWidth: 2))
+                Avatar(url: author?.picture ?? reel.authorPicture, name: reel.authorName, size: 54)
+                    .overlay(Circle().strokeBorder(.white, lineWidth: 2.5))
                     .overlay(alignment: .bottom) {
                         if !following && reel.authorEmail != me {
-                            Image(systemName: "plus").font(.system(size: 11, weight: .black)).foregroundStyle(.white)
-                                .frame(width: 22, height: 22).background(Theme.gradient, in: Circle()).offset(y: 10)
+                            Image(systemName: "plus").font(.system(size: 12, weight: .black)).foregroundStyle(.white)
+                                .frame(width: 24, height: 24).background(Theme.gradient, in: Circle())
+                                .overlay(Circle().strokeBorder(.white, lineWidth: 1.5))
+                                .offset(y: 11)
                                 .onTapGesture { follow() }
+                                .transition(.scale.combined(with: .opacity))
                         }
                     }
             }
             .buttonStyle(BouncyStyle())
-            action(liked ? "heart.fill" : "heart", "\(reel.likes.count)", tint: liked) { toggleLike() }
+            .padding(.bottom, 6)
+            bubble(liked ? "heart.fill" : "heart", count: reel.likes.count, tint: liked) { toggleLike() }
                 .sensoryFeedback(.impact(weight: .light), trigger: liked)
-            action("bubble.right.fill", reel.commentsOff ? "Off" : "Chat") { comments = true }
-            action(saved ? "bookmark.fill" : "bookmark", saved ? "Saved" : "Save", tint: saved) { toggleSave() }
+            bubble("bubble.left", count: reel.commentsOff ? nil : commentCount) { comments = true }
+            bubble(saved ? "bookmark.fill" : "bookmark", tint: saved) { toggleSave() }
             ShareLink(item: reel.caption.isEmpty ? "A reel on Sugerly" : reel.caption) {
-                VStack(spacing: 4) {
-                    Image(systemName: "paperplane.fill").font(.system(size: 24, weight: .bold))
-                    Text("Share").font(.jakarta(11, .bold))
-                }
-                .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.4), radius: 4)
+                bubbleLabel("paperplane", tint: false)
             }
+            .buttonStyle(BouncyStyle(scale: 0.85))
             Menu {
                 if reel.authorEmail != me {
                     Button { reporting = ReportSheet.Target(id: reel.id, type: "reel", ownerEmail: reel.authorEmail, preview: reel.caption, link: "/Reels?r=\(reel.id)") } label: { Label("Report", systemImage: "flag") }
                 } else {
-                    Button(role: .destructive) { Task { try? await FS.delete("Reel", reel.id) } } label: { Label("Delete reel", systemImage: "trash") }
+                    Button(role: .destructive) { Task { try? await FS.delete("Reel", reel.id); model.showToast("Reel deleted", icon: "trash.fill") } } label: { Label("Delete reel", systemImage: "trash") }
                 }
+                Button { muted.toggle() } label: { Label(muted ? "Sound on" : "Mute", systemImage: muted ? "speaker.wave.2" : "speaker.slash") }
             } label: {
-                Image(systemName: "ellipsis").font(.system(size: 22, weight: .bold)).foregroundStyle(.white).frame(width: 44, height: 30)
+                bubbleLabel("ellipsis", tint: false)
             }
+            MusicDisc(picture: author?.picture ?? reel.authorPicture, name: reel.authorName, spinning: active && !paused)
+                .padding(.top, 4)
         }
     }
 
-    private func action(_ icon: String, _ label: String, tint: Bool = false, run: @escaping () -> Void) -> some View {
+    // Round frosted button with an optional count under it (like the website).
+    private func bubble(_ icon: String, count: Int? = nil, tint: Bool = false, run: @escaping () -> Void) -> some View {
         Button(action: run) {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 27, weight: .bold))
-                    .foregroundStyle(tint ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Color.white))
-                    .symbolEffect(.bounce, value: tint)
-                Text(label).font(.jakarta(12, .bold)).foregroundStyle(.white)
+            VStack(spacing: 5) {
+                bubbleLabel(icon, tint: tint)
+                if let count {
+                    Text("\(count)").font(.jakarta(13, .heavy)).foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.4), radius: 3)
+                        .contentTransition(.numericText())
+                }
             }
-            .shadow(color: .black.opacity(0.4), radius: 4)
         }
-        .buttonStyle(BouncyStyle(scale: 0.8))
+        .buttonStyle(BouncyStyle(scale: 0.85))
+    }
+
+    private func bubbleLabel(_ icon: String, tint: Bool) -> some View {
+        Image(systemName: icon)
+            .font(.system(size: 22, weight: .bold))
+            .foregroundStyle(tint ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Color.white))
+            .symbolEffect(.bounce, value: tint)
+            .frame(width: 54, height: 54)
+            .background(.white.opacity(0.2), in: Circle())
+            .background(.ultraThinMaterial.opacity(0.5), in: Circle())
+            .overlay(Circle().strokeBorder(.white.opacity(0.35), lineWidth: 1))
+            .shadow(color: .black.opacity(0.15), radius: 6, y: 2)
     }
 
     // Get the video ready (buffered, paused) before you swipe to it.
     private func preload() {
         guard reel.isVideo, video == nil, let url = URL(string: reel.mediaURL) else { return }
-        video = ReelVideo.get(reel.id, url: url, start: reel.trimStart)
+        video = ReelVideo.get(reel.id, url: url, start: reel.trimStart, filter: reel.filterId, speed: reel.speed)
     }
 
     private func start() {
         if music.playing { music.pause() }
         if reel.isVideo {
             if video == nil, let url = URL(string: reel.mediaURL) {
-                video = ReelVideo.get(reel.id, url: url, start: reel.trimStart)
+                video = ReelVideo.get(reel.id, url: url, start: reel.trimStart, filter: reel.filterId, speed: reel.speed)
             }
             ReelAudio.prepare()
+            video?.player.isMuted = muted || reel.muted
             if !paused { video?.play() }
         }
         if !paused { startSound() }
@@ -460,6 +562,7 @@ struct ReelPage: View {
             }
             guard active, wanted == reel.id, sound == nil, let url = URL(string: link), !link.isEmpty else { return }
             let p = AVPlayer(url: url)
+            p.isMuted = muted
             p.play()
             sound = p
         }
@@ -535,5 +638,176 @@ struct SingleReelView: View {
         ReelPage(reel: reel, active: true, path: $path, showBack: true)
             .ignoresSafeArea()
             .toolbar(.hidden, for: .navigationBar)
+    }
+}
+
+// The thin progress line under a playing reel (its own view, so only it
+// redraws as the video plays).
+struct ReelProgress: View {
+    let video: ReelVideo
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Rectangle().fill(.white.opacity(0.25))
+                Rectangle().fill(.white).frame(width: geo.size.width * video.progress)
+            }
+        }
+        .frame(height: 3)
+    }
+}
+
+// The spinning record at the bottom of the buttons.
+struct MusicDisc: View {
+    let picture: String
+    let name: String
+    let spinning: Bool
+    @State private var angle: Double = 0
+
+    var body: some View {
+        Avatar(url: picture, name: name, size: 30)
+            .padding(10)
+            .background(Circle().fill(LinearGradient(colors: [Color(hex: 0x333333), Color(hex: 0x0A0A0A)], startPoint: .top, endPoint: .bottom)))
+            .overlay(Circle().strokeBorder(.white.opacity(0.15), lineWidth: 1))
+            .rotationEffect(.degrees(angle))
+            .task(id: spinning) {
+                while spinning && !Task.isCancelled {
+                    withAnimation(.linear(duration: 4)) { angle += 90 }
+                    try? await Task.sleep(for: .seconds(4))
+                }
+            }
+    }
+}
+
+// Caption with bold hashtags.
+enum ReelCaption {
+    static func styled(_ text: String) -> AttributedString {
+        var out = AttributedString()
+        for (i, word) in text.split(separator: " ", omittingEmptySubsequences: false).enumerated() {
+            var piece = AttributedString((i > 0 ? " " : "") + word)
+            if word.hasPrefix("#") || word.hasPrefix("@") { piece.font = Font.jakarta(15, .heavy) }
+            out += piece
+        }
+        return out
+    }
+}
+
+// Text stickers from reels made on the website, drawn over the video.
+struct ReelTextLayer: View {
+    let texts: [ReelText]
+    let active: Bool
+    @State private var shown = false
+
+    var body: some View {
+        GeometryReader { geo in
+            ForEach(texts) { t in
+                label(t, width: geo.size.width)
+                    .rotationEffect(.degrees(t.rot))
+                    .scaleEffect(shown || t.anim == "none" ? 1 : 0.4)
+                    .opacity(shown || t.anim == "none" ? 1 : 0)
+                    .position(x: t.x * geo.size.width, y: t.y * geo.size.height)
+            }
+        }
+        .onChange(of: active, initial: true) { _, now in
+            if now {
+                shown = false
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.55).delay(0.15)) { shown = true }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func label(_ t: ReelText, width: CGFloat) -> some View {
+        let size = max(10, width * t.size)
+        let color = ReelText.hex(t.color)
+        let contrast: UInt32 = ReelText.isLight(color) ? 0x2A1620 : 0xFFFFFF
+        let font: Font = {
+            switch t.font {
+            case "bubbly": return .custom("Bubbly-Regular", size: size)
+            case "cute": return .custom("CuteHereRegular", size: size)
+            case "serif": return .custom("Georgia-BoldItalic", size: size)
+            case "mono": return .system(size: size, weight: .bold, design: .monospaced)
+            default: return .custom("PlusJakartaSans-ExtraBold", size: size)
+            }
+        }()
+        let base = Text(t.text).font(font).multilineTextAlignment(.center).lineSpacing(0)
+        Group {
+            switch t.style {
+            case "pill":
+                let bg: UInt32 = t.bg.isEmpty ? (ReelText.isLight(color) ? 0xD9577F : 0xFFFFFF) : ReelText.hex(t.bg)
+                base.foregroundStyle(Color(hex: color))
+                    .padding(.horizontal, size * 0.55).padding(.vertical, size * 0.18)
+                    .background(Color(hex: bg).opacity(0.94), in: RoundedRectangle(cornerRadius: size * 0.45, style: .continuous))
+                    .shadow(color: .black.opacity(0.18), radius: size * 0.3, y: size * 0.08)
+            case "outline":
+                base.foregroundStyle(Color(hex: color)).modifier(OutlineText(on: true, color: Color(hex: contrast)))
+            case "neon":
+                base.foregroundStyle(.white)
+                    .shadow(color: Color(hex: color), radius: size * 0.22)
+                    .shadow(color: Color(hex: color), radius: size * 0.5)
+            case "shadow":
+                base.foregroundStyle(Color(hex: color)).shadow(color: Color(hex: contrast), radius: 0, x: size * 0.07, y: size * 0.07)
+            default:
+                base.foregroundStyle(Color(hex: color)).shadow(color: .black.opacity(0.55), radius: size * 0.3, y: size * 0.05)
+            }
+        }
+        .frame(maxWidth: width * 0.92)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+// The website's photo/video filters (CSS steps + tint + vignette) in Core Image.
+enum WebFilter {
+    static func apply(_ id: String, to input: CIImage) -> CIImage {
+        let extent = input.extent
+        var img = input.clampedToExtent()
+        func controls(brightness: Double = 1, contrast: Double = 1, saturation: Double = 1) {
+            let f = CIFilter.colorControls()
+            f.inputImage = img
+            f.brightness = Float((brightness - 1) * 0.5)
+            f.contrast = Float(contrast)
+            f.saturation = Float(saturation)
+            img = f.outputImage ?? img
+        }
+        func sepia(_ amount: Double) {
+            let f = CIFilter.sepiaTone()
+            f.inputImage = img
+            f.intensity = Float(amount)
+            img = f.outputImage ?? img
+        }
+        func hue(_ degrees: Double) {
+            let f = CIFilter.hueAdjust()
+            f.inputImage = img
+            f.angle = Float(degrees * .pi / 180)
+            img = f.outputImage ?? img
+        }
+        func tint(_ r: Double, _ g: Double, _ b: Double, _ a: Double) {
+            let color = CIImage(color: CIColor(red: r / 255, green: g / 255, blue: b / 255, alpha: a)).cropped(to: extent)
+            let f = CIFilter.softLightBlendMode()
+            f.inputImage = color
+            f.backgroundImage = img
+            img = f.outputImage ?? img
+        }
+        func vignette(_ amount: Double) {
+            let f = CIFilter.vignette()
+            f.inputImage = img
+            f.intensity = Float(amount * 2.2)
+            f.radius = 1.5
+            img = f.outputImage ?? img
+        }
+        switch id {
+        case "sugar": controls(brightness: 1.06, contrast: 1.04, saturation: 1.15); hue(-8); tint(255, 150, 190, 0.18)
+        case "peach": controls(brightness: 1.05, saturation: 1.2); sepia(0.18); tint(255, 170, 120, 0.16)
+        case "dreamy": controls(brightness: 1.1, contrast: 0.86, saturation: 1.1); tint(210, 190, 255, 0.2)
+        case "vivid": controls(contrast: 1.15, saturation: 1.55)
+        case "pop": controls(brightness: 1.05, contrast: 1.25, saturation: 1.35); vignette(0.25)
+        case "golden": controls(brightness: 1.04, saturation: 1.35); sepia(0.3); hue(-6); vignette(0.2)
+        case "cool": controls(contrast: 1.05, saturation: 1.1); hue(12); tint(120, 170, 255, 0.14)
+        case "fade": controls(brightness: 1.08, contrast: 0.8, saturation: 0.8)
+        case "vintage": sepia(0.45); controls(brightness: 1.05, contrast: 0.92, saturation: 1.1); vignette(0.35)
+        case "mono": controls(contrast: 1.05, saturation: 0)
+        case "noir": controls(brightness: 0.95, contrast: 1.45, saturation: 0); vignette(0.45)
+        default: break
+        }
+        return img.cropped(to: extent)
     }
 }

@@ -326,8 +326,13 @@ struct ReelStudioView: View {
         .preferredColorScheme(.dark)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: step)
         .fullScreenCover(isPresented: $camera) {
-            CameraCapture { url in camera = false; Task { await openVideo(url) } } onCancel: { camera = false }
-                .ignoresSafeArea()
+            RecorderView(onVideo: { url in
+                camera = false
+                Task { await openVideo(url) }
+            }, onPhotos: { images in
+                camera = false
+                openPhotos(images)
+            }, onClose: { camera = false })
         }
         .sheet(item: $editingText) { sticker in
             TextStickerEditor(sticker: sticker) { updated in
@@ -364,14 +369,14 @@ struct ReelStudioView: View {
                     .shadow(color: Theme.pink.opacity(0.6), radius: 24, y: 10)
             }
             Text("Make something cute").font(.display(34)).foregroundStyle(.white)
-            Text("Film a video or pick one — or choose several pictures for a slideshow.")
+            Text("Film in clips (pause, delete, start over), snap photos, or pick from your library.")
                 .font(.jakarta(15)).foregroundStyle(.white.opacity(0.7)).multilineTextAlignment(.center).padding(.horizontal, 30)
             Spacer()
             if loadingPick {
                 ProgressView().tint(.white).padding()
             }
             VStack(spacing: 12) {
-                Button { camera = true } label: { Label("Record a video", systemImage: "record.circle") }
+                Button { camera = true } label: { Label("Open camera", systemImage: "camera.fill") }
                     .buttonStyle(GradientButtonStyle(height: 56))
                 PhotosPicker(selection: $items, maxSelectionCount: 10, matching: .any(of: [.videos, .images])) {
                     Label("Choose from library", systemImage: "photo.on.rectangle.angled")
@@ -405,33 +410,20 @@ struct ReelStudioView: View {
                         }
                         .tabViewStyle(.page(indexDisplayMode: .always))
                         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-                    }
-                    ForEach($stickers) { $sticker in
-                        StickerView(sticker: $sticker, frame: geo.size, onEdit: { checkpoint(); editingText = sticker }, onDragging: { active, trash in
-                            draggingSticker = active
-                            overTrash = trash
-                        }, onDrop: { trash in
-                            checkpoint()
-                            if trash { withAnimation(.snappy) { stickers.removeAll { $0.id == sticker.id } } }
-                        })
-                    }
-                    if draggingSticker {
-                        VStack {
-                            Spacer()
-                            Image(systemName: "trash.fill")
-                                .font(.system(size: overTrash ? 24 : 18, weight: .bold))
-                                .foregroundStyle(.white)
-                                .frame(width: overTrash ? 64 : 50, height: overTrash ? 64 : 50)
-                                .background(overTrash ? Palette.danger : Color.black.opacity(0.5), in: Circle())
-                                .overlay(Circle().strokeBorder(.white.opacity(0.7), lineWidth: 2))
-                                .animation(.spring(response: 0.25, dampingFraction: 0.6), value: overTrash)
-                                .padding(.bottom, 16)
-                        }
                         .allowsHitTesting(false)
-                        .transition(.scale.combined(with: .opacity))
                     }
+                    StickerCanvas(stickers: $stickers, size: geo.size, onEdit: { sticker in
+                        checkpoint()
+                        editingText = sticker
+                    }, onTapEmpty: {
+                        if asset != nil {
+                            if player.timeControlStatus == .playing { player.pause(); soundPlayer?.pause() } else { player.play(); soundPlayer?.play() }
+                        }
+                    }, onSwipe: { step in
+                        guard !photos.isEmpty else { return }
+                        withAnimation(.snappy) { slide = min(photos.count - 1, max(0, slide + step)) }
+                    }, onBegin: { checkpoint() })
                 }
-                .sensoryFeedback(.impact(weight: .medium), trigger: overTrash)
             }
             .aspectRatio(9 / 16, contentMode: .fit)
             .frame(maxHeight: .infinity)
@@ -731,6 +723,11 @@ struct ReelStudioView: View {
         for item in list {
             if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) { images.append(image) }
         }
+        guard !images.isEmpty else { return }
+        openPhotos(images)
+    }
+
+    private func openPhotos(_ images: [UIImage]) {
         guard !images.isEmpty else { return }
         photos = images
         previewPhotos = []

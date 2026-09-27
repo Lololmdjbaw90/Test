@@ -48,78 +48,197 @@ extension CGImagePropertyOrientation {
     }
 }
 
-// A text or emoji sticker on the preview: drag to move, pinch to resize,
-// twist to turn, tap to edit, drop on the bin to delete.
-struct StickerView: View {
-    @Binding var sticker: TextSticker
-    let frame: CGSize
-    var onEdit: () -> Void
-    var onDragging: (Bool, Bool) -> Void
-    var onDrop: (Bool) -> Void
+// Where each sticker sits on the canvas (for finding the one under a finger).
+struct StickerRectsKey: PreferenceKey {
+    static let defaultValue: [UUID: CGRect] = [:]
+    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
+    }
+}
+
+// All the stickers plus one gesture layer on top of the preview. One finger
+// drags the sticker under it (drop it on the bin to delete), two fingers
+// pinch to resize and twist to turn, a tap edits it. Touching empty space
+// taps / swipes the media underneath instead.
+struct StickerCanvas: View {
+    @Binding var stickers: [TextSticker]
+    let size: CGSize
+    var onEdit: (TextSticker) -> Void
+    var onTapEmpty: () -> Void
+    var onSwipe: (Int) -> Void
+    var onBegin: () -> Void
+
+    private enum Mode { case sticker, swipe }
+    @State private var rects: [UUID: CGRect] = [:]
+    @State private var mode: Mode?
+    @State private var grabbed: UUID?
+    @State private var selected: UUID?
     @State private var drag: CGSize = .zero
+    @State private var transformTarget: UUID?
     @State private var pinch: CGFloat = 1
     @State private var twist: Angle = .zero
-    @State private var active = false
-
-    private var fontSize: CGFloat { frame.width * sticker.baseSize * sticker.scale }
-
-    private func overTrash(_ translation: CGSize) -> Bool {
-        let y = sticker.y * frame.height + translation.height
-        let x = sticker.x * frame.width + translation.width
-        return y > frame.height - 90 && abs(x - frame.width / 2) < 80
-    }
+    @State private var overTrash = false
 
     var body: some View {
-        if !sticker.text.isEmpty {
-            label
-                .scaleEffect(pinch * (active ? 1.06 : 1))
-                .rotationEffect(.radians(sticker.rotation) + twist)
-                .opacity(active && overTrash(drag) ? 0.5 : 1)
-                .contentShape(Rectangle())
-                .highPriorityGesture(moveGesture)
-                .simultaneousGesture(
-                    MagnifyGesture()
-                        .onChanged { pinch = $0.magnification }
-                        .onEnded { v in
-                            sticker.scale = min(4, max(0.35, sticker.scale * v.magnification))
-                            pinch = 1
+        ZStack {
+            ForEach(stickers) { sticker in
+                let isGrabbed = grabbed == sticker.id
+                let isTransformed = transformTarget == sticker.id
+                StickerLabel(sticker: sticker, width: size.width)
+                    .background {
+                        GeometryReader { g in
+                            Color.clear.preference(key: StickerRectsKey.self, value: [sticker.id: g.frame(in: .named("stickerCanvas"))])
                         }
-                )
-                .simultaneousGesture(
-                    RotateGesture()
-                        .onChanged { twist = $0.rotation }
-                        .onEnded { v in
-                            sticker.rotation += v.rotation.radians
-                            twist = .zero
-                        }
-                )
-                .onTapGesture(perform: onEdit)
-                .position(x: sticker.x * frame.width + drag.width, y: sticker.y * frame.height + drag.height)
+                    }
+                    .scaleEffect((isTransformed ? pinch : 1) * (isGrabbed ? 1.06 : 1))
+                    .rotationEffect(.radians(sticker.rotation) + (isTransformed ? twist : .zero))
+                    .opacity(isGrabbed && overTrash ? 0.45 : 1)
+                    .shadow(color: selected == sticker.id ? Theme.main.opacity(0.6) : .clear, radius: 10)
+                    .position(x: sticker.x * size.width + (isGrabbed ? drag.width : 0), y: sticker.y * size.height + (isGrabbed ? drag.height : 0))
+                    .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isGrabbed)
+            }
+            if mode == .sticker {
+                VStack {
+                    Spacer()
+                    Image(systemName: "trash.fill")
+                        .font(.system(size: overTrash ? 24 : 18, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: overTrash ? 66 : 50, height: overTrash ? 66 : 50)
+                        .background(overTrash ? Palette.danger : Color.black.opacity(0.5), in: Circle())
+                        .overlay(Circle().strokeBorder(.white.opacity(0.7), lineWidth: 2))
+                        .animation(.spring(response: 0.25, dampingFraction: 0.6), value: overTrash)
+                        .padding(.bottom, 16)
+                }
+                .transition(.scale.combined(with: .opacity))
+            }
         }
+        .frame(width: size.width, height: size.height)
+        .coordinateSpace(name: "stickerCanvas")
+        .onPreferenceChange(StickerRectsKey.self) { rects = $0 }
+        .contentShape(Rectangle())
+        .gesture(dragGesture)
+        .simultaneousGesture(magnifyGesture)
+        .simultaneousGesture(rotateGesture)
+        .simultaneousGesture(
+            SpatialTapGesture(coordinateSpace: .named("stickerCanvas")).onEnded { v in
+                if let id = hit(v.location), let sticker = stickers.first(where: { $0.id == id }) {
+                    selected = id
+                    onEdit(sticker)
+                } else {
+                    selected = nil
+                    onTapEmpty()
+                }
+            }
+        )
+        .sensoryFeedback(.impact(weight: .medium), trigger: overTrash)
+        .sensoryFeedback(.selection, trigger: grabbed)
     }
 
-    private var moveGesture: some Gesture {
-        DragGesture(minimumDistance: 2)
+    private func hit(_ point: CGPoint) -> UUID? {
+        for sticker in stickers.reversed() {
+            if let rect = rects[sticker.id], rect.insetBy(dx: -18, dy: -18).contains(point) { return sticker.id }
+        }
+        return nil
+    }
+
+    private func isOverTrash(_ id: UUID, _ translation: CGSize) -> Bool {
+        guard let sticker = stickers.first(where: { $0.id == id }) else { return false }
+        let x = sticker.x * size.width + translation.width
+        let y = sticker.y * size.height + translation.height
+        return y > size.height - 100 && abs(x - size.width / 2) < 90
+    }
+
+    private var dragGesture: some Gesture {
+        DragGesture(minimumDistance: 3, coordinateSpace: .named("stickerCanvas"))
             .onChanged { v in
-                if !active { withAnimation(.spring(response: 0.25)) { active = true } }
+                if mode == nil {
+                    if let id = hit(v.startLocation) {
+                        mode = .sticker
+                        grabbed = id
+                        selected = id
+                        onBegin()
+                    } else {
+                        mode = .swipe
+                    }
+                }
+                guard mode == .sticker, let id = grabbed else { return }
                 drag = v.translation
-                onDragging(true, overTrash(v.translation))
+                let trash = isOverTrash(id, v.translation)
+                if trash != overTrash { overTrash = trash }
             }
             .onEnded { v in
-                let trash = overTrash(v.translation)
-                if !trash {
-                    sticker.x = min(0.97, max(0.03, sticker.x + v.translation.width / frame.width))
-                    sticker.y = min(0.97, max(0.03, sticker.y + v.translation.height / frame.height))
+                defer {
+                    mode = nil
+                    grabbed = nil
+                    drag = .zero
+                    overTrash = false
                 }
-                drag = .zero
-                withAnimation(.spring(response: 0.25)) { active = false }
-                onDragging(false, false)
-                onDrop(trash)
+                if mode == .swipe {
+                    if abs(v.translation.width) > 50, abs(v.translation.width) > abs(v.translation.height) {
+                        onSwipe(v.translation.width < 0 ? 1 : -1)
+                    }
+                    return
+                }
+                guard let id = grabbed, let i = stickers.firstIndex(where: { $0.id == id }) else { return }
+                if isOverTrash(id, v.translation) {
+                    withAnimation(.snappy) { stickers.remove(at: i) }
+                    selected = nil
+                } else {
+                    stickers[i].x = min(0.97, max(0.03, stickers[i].x + v.translation.width / size.width))
+                    stickers[i].y = min(0.97, max(0.03, stickers[i].y + v.translation.height / size.height))
+                }
             }
     }
 
-    @ViewBuilder
-    private var label: some View {
+    private func target() -> UUID? {
+        transformTarget ?? grabbed ?? selected ?? stickers.last?.id
+    }
+
+    private var magnifyGesture: some Gesture {
+        MagnifyGesture()
+            .onChanged { v in
+                if transformTarget == nil {
+                    transformTarget = target()
+                    if transformTarget != nil { onBegin() }
+                }
+                pinch = v.magnification
+            }
+            .onEnded { v in
+                if let id = transformTarget, let i = stickers.firstIndex(where: { $0.id == id }) {
+                    stickers[i].scale = min(4, max(0.35, stickers[i].scale * v.magnification))
+                }
+                pinch = 1
+                if twist == .zero { transformTarget = nil }
+            }
+    }
+
+    private var rotateGesture: some Gesture {
+        RotateGesture()
+            .onChanged { v in
+                if transformTarget == nil {
+                    transformTarget = target()
+                    if transformTarget != nil { onBegin() }
+                }
+                twist = v.rotation
+            }
+            .onEnded { v in
+                if let id = transformTarget, let i = stickers.firstIndex(where: { $0.id == id }) {
+                    stickers[i].rotation += v.rotation.radians
+                }
+                twist = .zero
+                if pinch == 1 { transformTarget = nil }
+            }
+    }
+}
+
+// How a sticker looks (no touches — the canvas handles those).
+struct StickerLabel: View {
+    let sticker: TextSticker
+    let width: CGFloat
+
+    private var fontSize: CGFloat { width * sticker.baseSize * sticker.scale }
+
+    var body: some View {
         if sticker.isEmoji {
             Text(sticker.text).font(.system(size: fontSize)).fixedSize()
         } else {
@@ -128,7 +247,7 @@ struct StickerView: View {
                 .font(.custom(sticker.font.uiName, size: size))
                 .foregroundStyle(Color(hex: sticker.inkColor))
                 .multilineTextAlignment(sticker.textAlignment)
-                .frame(maxWidth: frame.width * 0.9)
+                .frame(maxWidth: width * 0.9)
                 .fixedSize(horizontal: false, vertical: true)
                 .modifier(OutlineText(on: sticker.style == .outline, color: sticker.color == 0x2A1620 ? .white : Color(hex: 0x2A1620)))
                 .padding(.horizontal, size * 0.45)

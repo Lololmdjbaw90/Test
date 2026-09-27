@@ -294,6 +294,12 @@ struct Reel: Identifiable, Hashable {
     var commentsOff: Bool
     var trimStart: Double
     var created: String
+    // Website edits played live on top of the video.
+    var texts: [ReelText] = []
+    var filterId = "none"
+    var speed: Double = 1
+    var muted = false
+    var mirror = false
 
     init(_ d: Doc) {
         id = d.str("id")
@@ -313,7 +319,15 @@ struct Reel: Identifiable, Hashable {
         views = d.int("views")
         commentsOff = d.bool("comments_off")
         let edits = d["edits"] as? [String: Any] ?? [:]
-        trimStart = (edits["trim_start"] as? Double) ?? Double((edits["trim_start"] as? Int) ?? 0)
+        trimStart = ReelText.num(edits["trim_start"]) ?? 0
+        if let clips = edits["clips"] as? [Any], let first = clips.first as? [String: Any], let start = ReelText.num(first["start"]) {
+            trimStart = start
+        }
+        texts = (edits["text"] as? [Any] ?? []).compactMap { ($0 as? [String: Any]).map(ReelText.init) }.filter { !$0.text.isEmpty }
+        filterId = edits["filter"] as? String ?? "none"
+        speed = ReelText.num(edits["speed"]) ?? 1
+        muted = edits["muted"] as? Bool ?? false
+        mirror = edits["mirror"] as? Bool ?? false
         created = d.str("created_date")
     }
 
@@ -342,5 +356,54 @@ struct AppNotification: Identifiable, Hashable {
         fromPicture = d.str("from_profile_picture")
         read = d.bool("is_read")
         created = d.str("created_date")
+    }
+}
+
+// A text sticker made on the website: { text, x, y (0…1), size (of the
+// frame width), rot (degrees), color, font, style, anim }.
+struct ReelText: Hashable, Identifiable {
+    var id: String
+    var text: String
+    var x: Double
+    var y: Double
+    var size: Double
+    var rot: Double
+    var color: String
+    var bg: String
+    var font: String
+    var style: String
+    var anim: String
+
+    init(_ d: [String: Any]) {
+        id = d["id"] as? String ?? UUID().uuidString
+        text = d["text"] as? String ?? ""
+        x = ReelText.num(d["x"]) ?? 0.5
+        y = ReelText.num(d["y"]) ?? 0.4
+        size = ReelText.num(d["size"]) ?? 0.07
+        rot = ReelText.num(d["rot"]) ?? 0
+        color = d["color"] as? String ?? "#ffffff"
+        bg = d["bg"] as? String ?? ""
+        font = d["font"] as? String ?? "sans"
+        let st = d["style"] as? String ?? ""
+        style = st.isEmpty ? (bg.isEmpty ? "plain" : "pill") : st
+        anim = d["anim"] as? String ?? "none"
+    }
+
+    static func num(_ any: Any?) -> Double? {
+        if let v = any as? Double { return v }
+        if let v = any as? Int { return Double(v) }
+        if let v = any as? String { return Double(v) }
+        return nil
+    }
+
+    static func hex(_ s: String) -> UInt32 {
+        var h = s.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+        if h.count == 3 { h = h.map { "\($0)\($0)" }.joined() }
+        return UInt32(h.prefix(6), radix: 16) ?? 0xFFFFFF
+    }
+
+    static func isLight(_ v: UInt32) -> Bool {
+        let r = Double((v >> 16) & 0xFF), g = Double((v >> 8) & 0xFF), b = Double(v & 0xFF)
+        return (r * 299 + g * 587 + b * 114) / 1000 > 150
     }
 }
