@@ -41,6 +41,7 @@ export function useNativeTabBar({ items, selected, badges, dark, onSelect }) {
     NativeTabBar.show({ items, selected }).then(async () => {
       if (!alive) return;
       sub = await NativeTabBar.addListener("select", ({ id }) => handler.current?.(id));
+      if (!alive) { sub.remove(); return; }
       setOn(true);
       document.documentElement.classList.add("native-tabbar-on");
     }).catch(() => { /* plugin missing: keep the web tab bar */ });

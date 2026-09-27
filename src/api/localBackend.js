@@ -236,6 +236,22 @@ function publish(name, event) { emit(name, event); broadcast(name, event); }
 // ---------- entity factory ----------
 function makeEntity(name) {
   return {
+    async page(queryObject = null, { sort = "-created_date", limit = 30, cursor = null } = {}) {
+      const desc = sort.startsWith("-");
+      const field = desc ? sort.slice(1) : sort;
+      const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0) * (desc ? -1 : 1);
+      let rows = loadCollection(name).filter(r => matchesQuery(r, queryObject || {})).sort((a,b) => compare(a[field], b[field]) || compare(a.id,b.id));
+      if (cursor) rows = rows.filter(r => compare(r[field], cursor.value) > 0 || (r[field] === cursor.value && compare(r.id, cursor.id) > 0));
+      const size = Math.max(1, Math.min(100, limit));
+      const hasMore = rows.length > size;
+      rows = rows.slice(0, size);
+      const last = rows.at(-1);
+      return { rows, hasMore, cursor: last ? { value: last[field], id: last.id } : cursor };
+    },
+    async changeMembership(id, email, joined) {
+      const community = await this.get(id);
+      return this.update(id, { member_emails: joined ? [...new Set([...(community.member_emails || []), email])] : (community.member_emails || []).filter(e => e !== email) });
+    },
     async list(sort, limit) {
       return sortAndLimit(loadCollection(name), sort, limit);
     },

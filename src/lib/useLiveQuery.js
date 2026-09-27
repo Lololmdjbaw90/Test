@@ -36,7 +36,9 @@ export function useLiveQuery(entityName, query = null, { sort = null, limit = nu
   }, [key]);
 
   useEffect(() => {
-    if (!enabled) { setData([]); setLoading(false); return undefined; }
+    if (!enabled) { version.current++; setData([]); setLoading(false); return undefined; }
+    setError(null);
+    setData([]);
     const entity = base44.entities[entityName];
     const watchdog = setTimeout(() => setLoading(false), LOADING_TIMEOUT);
 
@@ -57,13 +59,13 @@ export function useLiveQuery(entityName, query = null, { sort = null, limit = nu
         setError(e);
         setLoading(false);
       });
-      return () => { active = false; clearTimeout(watchdog); unsub?.(); };
+      return () => { active = false; version.current++; clearTimeout(watchdog); unsub?.(); };
     }
 
     load().finally(() => clearTimeout(watchdog));
     if (!live) return () => { clearTimeout(watchdog); version.current++; };
     const unsub = entity.subscribe((event) => {
-      setData((prev) => applyEvent(prev, event, { sort }));
+      setData((prev) => applyEvent(prev, event, { sort, limit }));
       if (!event.initial) onEventRef.current?.(event);
     }, query, { sort, limit });
     return () => { clearTimeout(watchdog); version.current++; unsub?.(); };

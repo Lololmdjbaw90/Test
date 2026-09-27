@@ -32,12 +32,17 @@
     <style>
       #app-loading{position:fixed;inset:0;z-index:99999;background:#fbf7f6;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;font-family:'Plus Jakarta Sans',system-ui,sans-serif;transition:opacity .45s ease}
       .dark #app-loading{background:#110a0f}
-      #app-loading img{height:72px;width:auto;animation:pulse 1.6s ease-in-out infinite}
+      #app-loading img{height:72px;width:146px;object-fit:contain}
+      #app-loading p{color:#88767f;font-size:13px;margin:0}
+      .startup-track{width:112px;height:3px;background:#ddced544;border-radius:4px;overflow:hidden}
+      .startup-track span{display:block;width:40%;height:100%;background:#dc6c96;border-radius:4px;animation:startup-progress 1.4s ease-in-out infinite}
+      @keyframes startup-progress{from{transform:translateX(-100%)}to{transform:translateX(350%)}}
+      @media(prefers-reduced-motion:reduce){.startup-track span{animation:none;transform:translateX(75%)}}
       @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
     </style>
   </head>
   <body>
-    <div id="app-loading"><img src="/brand/sugerly-logo-rose-sm.webp" alt="Sugerly" /></div>
+    <div id="app-loading"><img src="/brand/sugerly-logo-rose-sm.webp" alt="Sugerly" /><p role="status">Opening your world…</p><div class="startup-track"><span></span></div></div>
     <script>(function(){var a=document.documentElement.getAttribute("data-accent");if(/^(lavender|mint|peach|sky)$/.test(a||"")){var i=document.querySelector("#app-loading img");if(i)i.src="/brand/sugerly-logo-"+a+"-sm.webp";}})();</script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>

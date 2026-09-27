@@ -12,7 +12,8 @@ import RangeSlider from "@/components/media/RangeSlider";
 import ClipTimeline from "./ClipTimeline";
 import { STICKER_ANIMS, STICKER_COLORS, STICKER_FONTS, STICKER_STYLES, StickerView, normalizeSticker } from "./Sticker";
 import { MAX_SECONDS } from "./ReelCamera";
-import { PHOTO_SECONDS } from "./ReelMedia";
+import { photoDuration, slideAt } from "@/lib/slideshow";
+import ReelMusicPicker from "./ReelMusicPicker";
 
 const SPEEDS = [0.5, 1, 1.5, 2];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -78,7 +79,7 @@ export default function ReelEditor({ media, initial, onChange, onBack, onNext })
   const { state, set, undo, redo, canUndo, canRedo } = useHistory(initial);
   const { edits, music, coverTime } = state;
   const clips = useMemo(() => (isVideo ? clipsOf(edits, media.duration) : []), [isVideo, edits, media.duration]);
-  const total = isVideo ? totalLength(clips) : PHOTO_SECONDS;
+  const total = isVideo ? totalLength(clips) : photoDuration(media.photos?.length || 1);
   const [tool, setTool] = useState(isVideo ? "cuts" : "filters");
   const [playing, setPlaying] = useState(true);
   const [time, setTime] = useState(0);
@@ -96,7 +97,7 @@ export default function ReelEditor({ media, initial, onChange, onBack, onNext })
   const clipIndex = useRef(0);
   const timeRef = useRef(0);
   const musicSrc = useMediaSrc(music?.url || "");
-  const { data: tracks } = useLiveQuery("MusicReview", null, { sort: "-created_date", limit: 40, live: false });
+  const { data: tracks } = useLiveQuery("MusicReview", null, { sort: "-created_date", limit: 40, live: false, enabled: tool === "sound" });
 
   useEffect(() => { onChange?.(state); }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
   const setEdits = (fn, opts) => set((s) => ({ ...s, edits: typeof fn === "function" ? fn(s.edits) : { ...s.edits, ...fn } }), opts);
@@ -146,7 +147,7 @@ export default function ReelEditor({ media, initial, onChange, onBack, onNext })
         for (let k = 0; k < clipIndex.current; k++) out += clips[k].end - clips[k].start;
         timeRef.current = out + Math.max(0, v.currentTime - clips[clipIndex.current].start);
       } else if (!isVideo && playing) {
-        timeRef.current = (timeRef.current + (now - last) / 1000) % PHOTO_SECONDS;
+        timeRef.current = (timeRef.current + (now - last) / 1000) % total;
       }
       last = now;
       if (now - lastUi > 70) { lastUi = now; setTime(timeRef.current); }
@@ -154,7 +155,7 @@ export default function ReelEditor({ media, initial, onChange, onBack, onNext })
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [isVideo, clips, playing]);
+  }, [isVideo, clips, playing, total]);
 
   useEffect(() => { if (tool === "cover") seek(coverTime || 0); }, [tool, coverTime]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -317,7 +318,7 @@ export default function ReelEditor({ media, initial, onChange, onBack, onNext })
             <video ref={videoRef} src={media.url} playsInline autoPlay muted={!!edits.muted}
               className="absolute inset-0 w-full h-full object-cover pointer-events-none" style={{ filter: filterCss(edits.filter), transform: edits.mirror ? "scaleX(-1)" : undefined }} />
           ) : (
-            <img src={media.url} alt="" draggable={false} className="absolute inset-0 w-full h-full object-cover pointer-events-none" style={{ filter: filterCss(edits.filter) }} />
+            <img src={media.photos?.[slideAt(time, media.photos.length)]?.url || media.url} alt="" draggable={false} className="absolute inset-0 w-full h-full object-cover pointer-events-none" style={{ filter: filterCss(edits.filter) }} />
           )}
           <FilterLayers filter={edits.filter} />
           {/* centre guides */}
@@ -439,6 +440,7 @@ export default function ReelEditor({ media, initial, onChange, onBack, onNext })
                     <span className="text-xs font-bold opacity-70">{edits.muted ? "Off" : "On"}</span>
                   </button>
                 )}
+                <ReelMusicPicker selected={music} onPick={(music) => { set((s) => ({ ...s, music })); setPlaying(true); }} />
                 <div className="max-h-40 overflow-y-auto no-scrollbar space-y-1">
                   <button onClick={() => set((s) => ({ ...s, music: null }))} className="w-full flex items-center gap-3 p-2 rounded-xl text-left" style={{ background: !music ? "rgb(255 255 255 / 0.14)" : "transparent" }}>
                     <span className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: "rgb(255 255 255 / 0.1)" }}><VolumeX className="w-4 h-4" /></span>

@@ -11,6 +11,7 @@ import { CenterSpinner } from "@/components/common/Page";
 import Layout from "./Layout.jsx";
 import ErrorBoundary from "@/components/common/ErrorBoundary";
 import Login from "./pages/Login";
+import { isNative } from "@/lib/native";
 import { BrandLogo } from "@/components/common/Brand";
 
 // Pages are code-split so the first load stays small.
@@ -37,7 +38,9 @@ const PageNotFound = lazy(() => import("./lib/PageNotFound"));
 function Splash() {
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 app-shell">
-      <BrandLogo height={72} className="animate-pulse" />
+      <BrandLogo height={72} />
+      <p role="status" className="text-sm" style={{ color: "var(--text-muted)" }}>Opening your world…</p>
+      <div className="startup-track"><span /></div>
     </div>
   );
 }
@@ -88,6 +91,7 @@ const AppRoutes = () => {
 
 export default function App() {
   useEffect(() => {
+    if (isNative()) import("@capacitor/splash-screen").then(({ SplashScreen }) => SplashScreen.hide({ fadeOutDuration: 200 })).catch(() => {});
     const el = document.getElementById("app-loading");
     if (!el) return;
     el.style.opacity = "0";

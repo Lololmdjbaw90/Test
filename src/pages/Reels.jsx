@@ -3,6 +3,8 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Camera, ChevronDown, ChevronUp, Clapperboard, Loader2, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
+import { usePagedQuery } from "@/lib/usePagedQuery";
+import LoadMore from "@/components/common/LoadMore";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { useFriendships, splitFriendships, toggleFollow } from "@/lib/social";
 import { rankReels, recordReelSignal } from "@/lib/reelRank";
@@ -39,7 +41,7 @@ export default function ReelsPage() {
   const startId = params.get("r");
   const creating = params.get("create") === "1";
 
-  const { data: reels, setData, loading } = useLiveQuery("Reel", null, { sort: "-created_date", limit: 250 });
+  const { data: reels, setData, loading, loadMore, loadingMore, hasMore, error } = usePagedQuery("Reel", null, { limit: 30 });
   const { data: users } = useLiveQuery("User", null, { live: false });
   const usersByEmail = useMemo(() => Object.fromEntries(users.map((u) => [u.email, u])), [users]);
   const { friendships } = useFriendships(me?.email);
@@ -222,6 +224,8 @@ export default function ReelsPage() {
   };
   const actions = useMemo(() => new Proxy({}, { get: (_, key) => (...args) => latest.current[key]?.(...args) }), []);
 
+  useEffect(() => { if (!loading && !error && hasMore && active >= order.length - 4) loadMore(); }, [active, order.length, loading, error, hasMore, loadMore]);
+
   const items = order.map((x) => ({ ...x, reel: byId.get(x.id) })).filter((x) => x.reel);
 
   return (
@@ -314,6 +318,7 @@ export default function ReelsPage() {
       </BottomSheet>
       <ShareSheet anchorRef={scroller} reel={shareFor} me={me} friendEmails={friendEmails} usersByEmail={usersByEmail} onClose={() => setShareFor(null)} onShared={() => shareFor && recordReelSignal(shareFor, { shared: true })} />
 
+      {error && <div className="absolute bottom-24 left-0 right-0 z-20"><LoadMore hasMore={hasMore} loading={loadingMore} error={error} onLoad={loadMore} /></div>}
       {creating && <ReelStudio onClose={closeStudio} />}
     </div>
   );

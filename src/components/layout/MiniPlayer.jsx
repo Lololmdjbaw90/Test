@@ -1,11 +1,11 @@
 import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Music2, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX, X } from "lucide-react";
-import { formatTime, usePlayer } from "@/lib/player";
+import { formatTime, usePlayer, usePlayerProgress } from "@/lib/player";
 
 // Floating player that keeps the current track going across pages.
 export default function MiniPlayer({ raised }) {
-  const p = usePlayer();
+  const p = { ...usePlayer(), ...usePlayerProgress() };
   const pct = p.duration ? (p.time / p.duration) * 100 : 0;
   return (
     <AnimatePresence>

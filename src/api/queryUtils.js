@@ -38,6 +38,7 @@ export function sortRecords(records, sort) {
     if (av == null && bv == null) return 0;
     if (av == null) return -1;
     if (bv == null) return 1;
+    if (av === bv) return String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0;
     if (typeof av === "number" && typeof bv === "number") return av - bv;
     const as = String(av), bs = String(bv);
     return as < bs ? -1 : as > bs ? 1 : 0;
@@ -52,7 +53,7 @@ export function sortAndLimit(records, sort, limit) {
 
 // Apply a realtime event ({ type, id, data }) to a list held in React state.
 // Creates and updates are upserts so duplicate deliveries are harmless.
-export function applyEvent(list, event, { sort, prepend = false } = {}) {
+export function applyEvent(list, event, { sort, limit, prepend = false } = {}) {
   if (!event) return list;
   if (event.type === "delete") return list.filter((r) => r.id !== event.id);
   if (!event.data) return list;
@@ -61,5 +62,5 @@ export function applyEvent(list, event, { sort, prepend = false } = {}) {
     ? list.map((r) => (r.id === event.data.id ? { ...r, ...event.data } : r))
     : prepend ? [event.data, ...list] : [...list, event.data];
   if (sort) next = sortRecords(next, sort);
-  return next;
+  return limit != null ? next.slice(0, limit) : next;
 }

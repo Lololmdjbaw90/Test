@@ -20,6 +20,7 @@ function onTrackStart(t) {
 // Global audio player: tracks keep playing while you move around the site.
 // track = { id, title, artist, src, cover }
 const PlayerContext = createContext(null);
+const PlayerProgressContext = createContext({ time: 0, duration: 0 });
 
 export function PlayerProvider({ children }) {
   const audioRef = useRef(null);
@@ -84,15 +85,15 @@ export function PlayerProvider({ children }) {
   }, []);
 
   const value = useMemo(() => ({
-    track, queue, playing, time, duration, volume,
+    track, queue, playing, volume,
     play, pause, toggle, next: () => step(1), prev: () => step(-1), seek, setVolume, close,
     isCurrent: (id) => track?.id === id,
     isPlaying: (id) => track?.id === id && playing,
-  }), [track, queue, playing, time, duration, volume, play, pause, toggle, step, seek, setVolume, close]);
+  }), [track, queue, playing, volume, play, pause, toggle, step, seek, setVolume, close]);
 
   return (
     <PlayerContext.Provider value={value}>
-      {children}
+      <PlayerProgressContext.Provider value={useMemo(() => ({ time, duration }), [time, duration])}>{children}</PlayerProgressContext.Provider>
       <audio
         ref={audioRef}
         preload="metadata"
@@ -112,6 +113,8 @@ export function usePlayer() {
   if (!ctx) throw new Error("usePlayer must be used within a PlayerProvider");
   return ctx;
 }
+
+export const usePlayerProgress = () => useContext(PlayerProgressContext);
 
 export function formatTime(s) {
   if (!Number.isFinite(s) || s < 0) return "0:00";

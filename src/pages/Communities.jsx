@@ -4,6 +4,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Check, Compass, Crown, ImagePlus, Loader2, LogIn, Plus, Server, Sparkles, Users } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
+import { usePagedQuery } from "@/lib/usePagedQuery";
+import LoadMore from "@/components/common/LoadMore";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { SERVER_TEMPLATES, createServer, joinServer } from "@/lib/servers";
 import { toast } from "@/lib/toast";
@@ -90,7 +92,7 @@ export default function CommunitiesPage() {
   const [tab, setTab] = useState("discover");
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(null);
-  const { data: servers, loading } = useLiveQuery("Community", null, { sort: "-created_date" });
+  const { data: servers, loading, loadMore, loadingMore, hasMore, error } = usePagedQuery("Community", tab === "joined" ? { member_emails: { $contains: user.email } } : tab === "mine" ? { owner_email: user.email } : null, { limit: 30 });
   const { data: users } = useLiveQuery("User", null, { live: false });
   const usersByEmail = useMemo(() => Object.fromEntries(users.map((u) => [u.email, u])), [users]);
   const { friendships } = useFriendships(user?.email);
@@ -180,6 +182,7 @@ export default function CommunitiesPage() {
           })}
         </div>
       )}
+      <LoadMore hasMore={hasMore} loading={loadingMore} error={error} onLoad={loadMore} />
       <CreateServerModal open={params.get("create") === "1"} onClose={() => setParams({})} />
     </Page>
   );

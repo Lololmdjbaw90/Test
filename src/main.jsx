@@ -7,5 +7,5 @@ import { registerServiceWorker } from '@/lib/pwa'
 import { initNative } from '@/lib/native'
 
 registerServiceWorker()
-initNative()
+initNative().catch(error => console.warn("Native initialization:", error))
 ReactDOM.createRoot(document.getElementById('root')).render(<App />)

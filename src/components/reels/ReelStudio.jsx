@@ -14,7 +14,9 @@ import AICaptionHelper from "@/components/ai/AICaptionHelper";
 import { withHashtags } from "@/lib/ai";
 import ReelCamera, { MAX_SECONDS } from "./ReelCamera";
 import ReelEditor from "./ReelEditor";
-import { PHOTO_SECONDS, TextStickers } from "./ReelMedia";
+import { TextStickers } from "./ReelMedia";
+
+import { photoDuration } from "@/lib/slideshow";
 
 // A frame of the video as a JPEG (for the cover and the filter thumbnails).
 function grabFrame(url, time, { filter = "none", mirror = false, width = 720 } = {}) {
@@ -37,7 +39,7 @@ function grabFrame(url, time, { filter = "none", mirror = false, width = 720 } =
 }
 
 // Seconds of finished reel (after cuts and speed).
-const reelLength = (media, edits) => (media.kind === "video" ? totalLength(clipsOf(edits, media.duration)) / (edits.speed || 1) : PHOTO_SECONDS);
+const reelLength = (media, edits) => (media.kind === "video" ? totalLength(clipsOf(edits, media.duration)) / (edits.speed || 1) : photoDuration(media.photos?.length || 1));
 
 function PostStep({ media, edits, music, coverTime, coverUrl, onBack, onPosted }) {
   const { user } = useAuth();
@@ -51,13 +53,17 @@ function PostStep({ media, edits, music, coverTime, coverUrl, onBack, onPosted }
     if (busy) return;
     try {
       const upload = async (file) => (await base44.integrations.Core.UploadFile({ file })).file_url;
-      let mediaUrl, cover, finalEdits = { trim_start: 0, trim_end: 0, filter: "none", speed: 1, muted: false, text: [], mirror: false, ...edits };
+      let mediaUrl, cover, photo_urls = [], finalEdits = { trim_start: 0, trim_end: 0, filter: "none", speed: 1, muted: false, text: [], mirror: false, ...edits };
       if (media.kind === "photo") {
         setBusy("Applying your filter…");
         // The filter is drawn into the photo; text stays live so it can animate.
-        const baked = await bakePhoto(media.file, { filter: edits.filter, max: 1440 });
-        setBusy("Uploading…");
-        mediaUrl = await upload(baked);
+        const photos = media.photos?.length ? media.photos : [media];
+        for (const [i, photo] of photos.entries()) {
+          setBusy(`Uploading photo ${i + 1} of ${photos.length}…`);
+          const baked = await bakePhoto(photo.file, { filter: edits.filter, max: 1440 });
+          photo_urls.push(await upload(baked));
+        }
+        mediaUrl = photo_urls[0];
         cover = mediaUrl;
         finalEdits = { ...finalEdits, filter: "none" };
         delete finalEdits.clips;
@@ -74,7 +80,7 @@ function PostStep({ media, edits, music, coverTime, coverUrl, onBack, onPosted }
       const span = reelLength(media, edits);
       const created = await base44.entities.Reel.create({
         user_email: user.email, user_display_name: displayName(user), user_profile_picture: user.profile_picture || "",
-        kind: media.kind, media_url: mediaUrl, cover_url: cover, caption: caption.trim(), tags,
+        kind: media.kind, photo_urls, media_url: mediaUrl, cover_url: cover, caption: caption.trim(), tags,
         music_url: music?.url || "", music_title: music?.title || "", music_artist: music?.artist || "",
         edits: finalEdits, likes: [], views: 0, duration: Math.round(span * 10) / 10, comments_off: !allowComments,
       });
@@ -148,7 +154,10 @@ export default function ReelStudio({ onClose }) {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = prev; };
   }, []);
-  useEffect(() => () => { if (media?.url) URL.revokeObjectURL(media.url); }, [media]);
+  useEffect(() => () => {
+    new Set([media?.url, media?.thumb, ...(media?.photos || []).map(p => p.url)]).forEach(url => { if (url) URL.revokeObjectURL(url); });
+  }, [media]);
+  useEffect(() => () => { if (coverUrl?.startsWith("blob:") && coverUrl !== media?.url) URL.revokeObjectURL(coverUrl); }, [coverUrl]);
 
   const captured = async (m) => {
     feedback("success");

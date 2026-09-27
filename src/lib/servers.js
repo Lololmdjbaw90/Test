@@ -43,13 +43,13 @@ export async function createServer({ me, name, description, icon_emoji, icon_url
 
 // Creates the signed-in user's ServerMember row if it doesn't exist yet.
 export async function ensureMembership(community, me) {
-  const existing = await base44.entities.ServerMember.filter({ community_id: community.id, user_email: me.email }).catch(() => []);
+  const existing = await base44.entities.ServerMember.filter({ community_id: community.id, user_email: me.email });
   if (existing.length) return existing[0];
   return base44.entities.ServerMember.create({ community_id: community.id, user_email: me.email, user_display_name: displayName(me), user_profile_picture: me.profile_picture || "", roles: [], nickname: "" });
 }
 
 export async function joinServer(community, me) {
-  await base44.entities.Community.update(community.id, { member_emails: [...new Set([...(community.member_emails || []), me.email])] });
+  await base44.entities.Community.changeMembership(community.id, me.email, true);
   await ensureMembership(community, me);
   const channels = await base44.entities.ServerChannel.filter({ community_id: community.id }, "position").catch(() => []);
   const general = channels.find((c) => c.type !== "voice");
@@ -63,7 +63,7 @@ export async function joinServer(community, me) {
 }
 
 export async function leaveServer(community, me) {
-  await base44.entities.Community.update(community.id, { member_emails: (community.member_emails || []).filter((e) => e !== me.email) });
+  await base44.entities.Community.changeMembership(community.id, me.email, false);
   const rows = await base44.entities.ServerMember.filter({ community_id: community.id, user_email: me.email }).catch(() => []);
   await Promise.all(rows.map((r) => base44.entities.ServerMember.delete(r.id).catch(() => {})));
 }

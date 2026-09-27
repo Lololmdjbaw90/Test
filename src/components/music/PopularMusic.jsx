@@ -1,27 +1,18 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { ExternalLink, Loader2, Pause, Play, Search } from "lucide-react";
-import { MUSIC_GENRES, catalogTracks } from "@/lib/musicCatalog";
+import { MUSIC_GENRES } from "@/lib/musicCatalog";
 import { usePlayer } from "@/lib/player";
 import { feedback } from "@/lib/feedback";
+
+import { useCatalog } from "@/lib/useCatalog";
+import LoadMore from "@/components/common/LoadMore";
 
 // "Top charts" on the Music tab: popular songs by genre, and search.
 export default function PopularMusic() {
   const player = usePlayer();
   const [genre, setGenre] = useState(0);
   const [query, setQuery] = useState("");
-  const [tracks, setTracks] = useState([]);
-  const [state, setState] = useState("loading");
-
-  useEffect(() => {
-    const ctrl = new AbortController();
-    setState("loading");
-    const t = setTimeout(() => {
-      catalogTracks({ query, genre, signal: ctrl.signal })
-        .then((list) => { setTracks(list); setState("done"); })
-        .catch((e) => { if (e.name !== "AbortError") setState("error"); });
-    }, query ? 350 : 0);
-    return () => { clearTimeout(t); ctrl.abort(); };
-  }, [genre, query]);
+  const { tracks, state, hasMore, loadMore } = useCatalog({ query, genre });
 
   const play = (t) => { feedback("tap"); player.toggle(t, tracks); };
 
@@ -66,6 +57,7 @@ export default function PopularMusic() {
           );
         })}
       </div>
+      <LoadMore hasMore={hasMore} loading={state === "loading"} error={state === "error"} onLoad={loadMore} />
     </section>
   );
 }

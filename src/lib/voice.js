@@ -115,16 +115,19 @@ function watchSpeaking(track, onChange) {
     analyser.fftSize = 512;
     ctx.createMediaStreamSource(new MediaStream([track])).connect(analyser);
     const data = new Uint8Array(analyser.frequencyBinCount);
+    let lastSample = 0;
     let hangover = 0;
     let speaking = false;
     const loop = { active: true };
     vadLoops.add(loop);
-    const tick = () => {
+    const tick = (frameTime = 0) => {
       if (!loop.active) return;
+      if (frameTime - lastSample < 80) { requestAnimationFrame(tick); return; }
+      lastSample = frameTime;
       analyser.getByteFrequencyData(data);
       let sum = 0;
       for (let i = 0; i < data.length; i++) sum += data[i];
-      if (sum / data.length > 16) hangover = 12; else if (hangover > 0) hangover--;
+      if (sum / data.length > 16) hangover = 3; else if (hangover > 0) hangover--;
       const now = hangover > 0;
       if (now !== speaking) { speaking = now; onChange(now); }
       requestAnimationFrame(tick);
@@ -279,7 +282,13 @@ function handlePresence(event) {
   notify();
 }
 
-async function handleSignal(event) {
+function handleSignal(event) {
+  const d = event.data;
+  if (event.type !== "create" || !d || !state.room || d.to_peer !== selfId || d.channel_id !== state.room.id) return;
+  const peer = ensurePeer(d.from_peer, null, d.user_email);
+  peer.signals = (peer.signals || Promise.resolve()).then(() => processSignal(event)).catch(e => console.warn("[voice] signal:", e));
+}
+async function processSignal(event) {
   const d = event.data;
   if (event.type !== "create" || !d || !state.room || d.to_peer !== selfId || d.channel_id !== state.room.id) return;
   Signal().delete(event.id || d.id).catch(() => {});

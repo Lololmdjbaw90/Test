@@ -274,13 +274,17 @@ final class GlassTabBar: UIView {
         }
     }
 
+    private var visibilityRevision = 0
+
     func setVisible(_ visible: Bool) {
+        visibilityRevision += 1
+        let revision = visibilityRevision
         if visible { isHidden = false }
         UIView.animate(withDuration: 0.25, delay: 0, options: [.beginFromCurrentState], animations: {
             self.alpha = visible ? 1 : 0
             self.transform = visible ? .identity : CGAffineTransform(translationX: 0, y: 24)
         }, completion: { _ in
-            if !visible { self.isHidden = true }
+            if !visible && self.visibilityRevision == revision { self.isHidden = true }
         })
     }
 }

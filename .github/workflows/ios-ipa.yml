@@ -63,11 +63,14 @@ jobs:
             -sdk iphoneos \
             -destination "generic/platform=iOS" \
             -derivedDataPath build \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             build
 
       - name: Package the .ipa
         run: |
+          test -f build/Build/Products/Release-iphoneos/App.app/public/index.html
+          test -f build/Build/Products/Release-iphoneos/App.app/capacitor.config.json
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/App.app Payload/
           zip -qry Sugerly-unsigned.ipa Payload

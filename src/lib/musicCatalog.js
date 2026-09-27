@@ -14,10 +14,25 @@ function jsonp(url, signal) {
   return new Promise((resolve, reject) => {
     const cb = `__sugerlyMusic${Date.now()}_${seq++}`;
     const script = document.createElement("script");
-    const cleanup = () => { script.remove(); setTimeout(() => { delete window[cb]; }, 0); };
-    window[cb] = (data) => { cleanup(); resolve(data); };
-    script.onerror = () => { cleanup(); reject(new Error("Couldn't reach the music catalog.")); };
-    signal?.addEventListener("abort", () => { window[cb] = () => cleanup(); reject(new DOMException("Aborted", "AbortError")); });
+    let settled = false;
+    let timer;
+    const finish = (error, data) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
+      script.remove();
+      // A removed script can still finish executing after cancellation.
+      window[cb] = () => {};
+      setTimeout(() => { delete window[cb]; }, 60000);
+      if (error) reject(error); else resolve(data);
+    };
+    const abort = () => finish(new DOMException("Aborted", "AbortError"));
+    if (signal?.aborted) { abort(); return; }
+    window[cb] = (data) => finish(null, data);
+    script.onerror = () => finish(new Error("Couldn't reach the music catalog."));
+    signal?.addEventListener("abort", abort, { once: true });
+    timer = setTimeout(() => finish(new Error("The music catalog timed out. Try again.")), 12000);
     script.src = `${url}${url.includes("?") ? "&" : "?"}output=jsonp&callback=${cb}`;
     document.head.appendChild(script);
   });
@@ -34,11 +49,14 @@ const toTrack = (t) => ({
   kind: "catalog",
 });
 
-export async function catalogTracks({ query = "", genre = 0, limit = 30, signal } = {}) {
+export async function catalogPage({ query = "", genre = 0, limit = 24, offset = 0, signal } = {}) {
   const url = query.trim()
-    ? `${API}/search?q=${encodeURIComponent(query.trim())}&limit=${limit}`
-    : `${API}/chart/${genre}/tracks?limit=${limit}`;
+    ? `${API}/search?q=${encodeURIComponent(query.trim())}&limit=${limit}&index=${offset}`
+    : `${API}/chart/${genre}/tracks?limit=${limit}&index=${offset}`;
   const json = await jsonp(url, signal);
   if (json?.error) throw new Error("The music catalog is busy — try again in a moment.");
-  return (json?.data || []).filter((t) => t?.preview).map(toTrack);
+  const raw = json?.data || [];
+  return { tracks: raw.filter((t) => t?.preview).map(toTrack), nextOffset: offset + raw.length, hasMore: !!json.next };
 }
+
+export async function catalogTracks(options) { return (await catalogPage(options)).tracks; }

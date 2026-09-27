@@ -12,6 +12,9 @@ name: Publish Firebase rules
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
+      - claude/roblox-chat-gui-modules-2o4brz
     paths:
       - "firestore.rules"
       - "storage.rules"

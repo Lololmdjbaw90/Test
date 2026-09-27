@@ -203,6 +203,34 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "Community",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "member_emails",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "created_date",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "Community",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "owner_email",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_date",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

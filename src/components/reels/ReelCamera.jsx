@@ -334,6 +334,13 @@ export default function ReelCamera({ onClose, onCaptured }) {
   };
 
   // ---------- library ----------
+  const pickFiles = async (files) => {
+    if (files.length <= 1) return pick(files[0]);
+    if (files.length > 20 || files.some(f => !f.type.startsWith("image/"))) { toast.error("Choose up to 20 photos, or one video."); return; }
+    if (files.some(f => f.size > MAX_UPLOAD_MB * 1024 * 1024)) { toast.error("One of these photos is too large."); return; }
+    const photos = files.map(file => ({ file, url: URL.createObjectURL(file) }));
+    onCaptured({ kind: "photo", ...photos[0], photos, width: 0, height: 0, duration: photos.length * 3, edits: { filter } });
+  };
   const pick = async (file) => {
     if (!file) return;
     const isVideo = file.type.startsWith("video/");
@@ -489,7 +496,7 @@ export default function ReelCamera({ onClose, onCaptured }) {
       </AnimatePresence>
 
       {screenFlash && !recording && <div className="fixed inset-0 z-[5] pointer-events-none enter-fade" style={{ background: "#fff8f2" }} />}
-      <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden" onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ""; }} />
+      <input ref={fileRef} type="file" multiple accept="image/*,video/*" className="hidden" onChange={(e) => { pickFiles(Array.from(e.target.files || [])).catch(() => toast.error("Could not open this media.")); e.target.value = ""; }} />
     </div>
   );
 }

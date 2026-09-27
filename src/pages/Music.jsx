@@ -6,7 +6,7 @@ import { AudioLines, ChevronRight, Disc3, Headphones, ImagePlus, Loader2, Music 
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { usePlayer, formatTime } from "@/lib/player";
+import { usePlayer, usePlayerProgress, formatTime } from "@/lib/player";
 import { toggleLike } from "@/lib/likes";
 import { checkText } from "@/lib/moderation";
 import { toast } from "@/lib/toast";
@@ -92,7 +92,8 @@ function UploadModal({ open, onClose }) {
   );
 }
 
-function NowPlaying({ track, playing, time, duration, onToggle }) {
+function NowPlaying({ track, playing, onToggle }) {
+  const { time, duration } = usePlayerProgress();
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="relative overflow-hidden rounded-[2rem] p-6 sm:p-8 mb-8 grain" style={{ background: "linear-gradient(135deg, rgb(var(--accent-rgb) / 0.9), rgb(var(--accent-2-rgb) / 0.85))", color: "#fff", boxShadow: "var(--shadow-accent)" }}>
       <div className="orb w-72 h-72 -right-16 -top-20" style={{ "--orb": "rgb(255 255 255 / 0.25)" }} />

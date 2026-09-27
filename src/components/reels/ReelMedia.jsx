@@ -1,9 +1,11 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { filterCss } from "@/lib/filters";
-import { useMediaSrc } from "@/lib/media";
+import { resolveMediaUrl, useMediaSrc } from "@/lib/media";
 import { clipsOf, locate, totalLength } from "@/lib/clips";
 import FilterLayers from "@/components/media/FilterLayers";
 import { StickerLayer } from "./Sticker";
+
+import { photoUrls, photoDuration, slideAt } from "@/lib/slideshow";
 
 export const PHOTO_SECONDS = 7;
 
@@ -29,7 +31,9 @@ function syncStickers(layer, t) {
 // Only reels next to the one on screen mount their media.
 const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, soundOn, speedBoost = 1, onProgress, onLoop, onBlocked, onBuffering }, ref) {
   const edits = reel.edits || {};
-  const src = useMediaSrc(near ? reel.media_url : "");
+  const photos = photoUrls(reel);
+  const [slide, setSlide] = useState(0);
+  const src = useMediaSrc(near ? (reel.kind === "photo" ? photos[slide] : reel.media_url) : "");
   const cover = useMediaSrc(reel.cover_url || (reel.kind === "photo" ? reel.media_url : ""));
   const music = useMediaSrc(near ? reel.music_url : "");
   const videoRef = useRef(null);
@@ -41,11 +45,19 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
   const elapsed = useRef(0);
   const clipIndex = useRef(0);
   const clips = useMemo(() => clipsOf(edits, duration), [edits, duration]);
-  const total = reel.kind === "video" ? totalLength(clips) : PHOTO_SECONDS;
+  const total = reel.kind === "video" ? totalLength(clips) : photoDuration(photos.length);
   const rate = (edits.speed || 1) * speedBoost;
   const videoSound = soundOn && !edits.muted;
   const cb = useRef({});
   cb.current = { onProgress, onLoop, onBuffering };
+
+  const nextPhoto = photos[(slide + 1) % photos.length];
+  useEffect(() => {
+    if (!near || reel.kind !== "photo" || photos.length < 2) return;
+    let alive = true;
+    resolveMediaUrl(nextPhoto).then(url => { if (alive && url) { const image = new Image(); image.src = url; image.decode().catch(() => {}); } });
+    return () => { alive = false; };
+  }, [near, reel.kind, nextPhoto, photos.length]);
 
   const seekOutput = (t) => {
     const v = videoRef.current;
@@ -65,7 +77,7 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
     // Seek to a fraction (0..1) of the reel.
     seek(fraction) {
       if (reel.kind === "video") { seekOutput(fraction * total); cb.current.onProgress?.(fraction); }
-      else { elapsed.current = fraction * PHOTO_SECONDS; cb.current.onProgress?.(fraction); }
+      else { elapsed.current = fraction * total; setSlide(slideAt(elapsed.current, photos.length)); cb.current.onProgress?.(fraction); }
     },
   }));
 
@@ -97,7 +109,7 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
 
   // Frame loop for videos: exact cuts, progress, sticker timing.
   useEffect(() => {
-    if (reel.kind !== "video" || !active) return undefined;
+    if (reel.kind !== "video" || !active || paused) return undefined;
     let raf;
     const tick = () => {
       const v = videoRef.current;
@@ -136,15 +148,16 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
     const tick = (now) => {
       elapsed.current += ((now - last) / 1000) * speedBoost;
       last = now;
-      if (elapsed.current >= PHOTO_SECONDS) { elapsed.current = 0; cb.current.onLoop?.(); setCycle((c) => c + 1); }
-      cb.current.onProgress?.(elapsed.current / PHOTO_SECONDS);
+      if (elapsed.current >= total) { elapsed.current = 0; cb.current.onLoop?.(); setCycle((c) => c + 1); }
+      setSlide(slideAt(elapsed.current, photos.length));
+      cb.current.onProgress?.(elapsed.current / total);
       syncStickers(layerRef.current, elapsed.current);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [reel.kind, active, paused, speedBoost]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (!active) { elapsed.current = 0; cb.current.onProgress?.(0); } }, [active]);
+  }, [reel.kind, active, paused, speedBoost, total, photos.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!active) { elapsed.current = 0; setSlide(0); cb.current.onProgress?.(0); } }, [active]);
 
   const css = filterCss(edits.filter);
   const photoSrc = src || cover;
@@ -180,7 +193,7 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
         </>
       ) : photoSrc ? (
         <img
-          key={`${reel.id}-${cycle}`}
+          key={`${reel.id}-${cycle}-${slide}`}
           src={photoSrc}
           alt={reel.caption || ""}
           draggable={false}
@@ -191,7 +204,7 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
       <FilterLayers filter={edits.filter} />
       {/* Remounts when the reel comes on screen, so text entrances play then. */}
       <StickerLayer key={active ? "on" : "off"} items={edits.text} layerRef={layerRef} />
-      {near && music && <audio ref={audioRef} src={music} loop preload="auto" />}
+      {near && music && <audio ref={audioRef} src={music} loop preload={active ? "auto" : "none"} />}
     </div>
   );
 });

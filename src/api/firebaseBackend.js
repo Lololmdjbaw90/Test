@@ -48,6 +48,9 @@ import {
   query,
   where,
   orderBy,
+  startAfter,
+  arrayUnion,
+  arrayRemove,
   limit as qLimit,
   onSnapshot,
   serverTimestamp,
@@ -237,6 +240,23 @@ export function createFirebaseClient() {
 
   function makeEntity(name) {
     return {
+      async page(queryObject = null, { sort = "-created_date", limit = 30, cursor = null } = {}) {
+        const size = Math.max(1, Math.min(100, limit));
+        const desc = sort.startsWith("-");
+        const field = desc ? sort.slice(1) : sort;
+        const constraints = [...buildConstraints(queryObject), orderBy(field, desc ? "desc" : "asc"), orderBy(documentId(), desc ? "desc" : "asc")];
+        if (cursor) constraints.push(startAfter(cursor.value, cursor.id));
+        constraints.push(qLimit(size + 1));
+        const snap = await getDocs(query(collection(db, name), ...constraints));
+        const rows = serializeQuerySnapshot(snap).slice(0, size);
+        const last = rows.at(-1);
+        return { rows, hasMore: snap.size > size, cursor: last ? { value: last[field], id: last.id } : cursor };
+      },
+      async changeMembership(id, email, joined) {
+        const me = await requireFirebaseUser();
+        if (name !== "Community" || normalizeEmail(me.email) !== email) throw new Error("permission_denied");
+        await updateDoc(doc(db, name, id), { member_emails: joined ? arrayUnion(email) : arrayRemove(email), updated_date: nowISO(), updated_at: serverTimestamp() });
+      },
       list(sort, limitAmount) { return runQuery(name, null, sort, limitAmount); },
       filter(queryObject, sort, limitAmount) { return runQuery(name, queryObject, sort, limitAmount); },
       async get(id) {

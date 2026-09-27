@@ -25,11 +25,18 @@ export function useAccent() {
 
 export function BrandLogo({ height = 40, className = "", style }) {
   const accent = useAccent();
-  const width = Math.round(height * LOGO_RATIO[accent]);
+  const [shown, setShown] = useState(accent);
+  useEffect(() => {
+    let active = true;
+    const img = new Image();
+    img.src = `/brand/sugerly-logo-${accent}-sm.webp`;
+    img.decode().then(() => { if (active) setShown(accent); }).catch(() => {});
+    return () => { active = false; };
+  }, [accent]);
+  const width = Math.round(height * 2.023);
   return (
     <img
-      src={`/brand/sugerly-logo-${accent}-sm.webp`}
-      srcSet={`/brand/sugerly-logo-${accent}-sm.webp 360w, /brand/sugerly-logo-${accent}.webp 720w`}
+      src={`/brand/sugerly-logo-${shown}-sm.webp`}
       sizes={`${width}px`}
       alt={APP_NAME}
       draggable={false}
@@ -40,7 +47,7 @@ export function BrandLogo({ height = 40, className = "", style }) {
       width={width}
       height={height}
       className={`select-none ${className}`}
-      style={{ height, width, ...style }}
+      style={{ height, width, objectFit: "contain", ...style }}
     />
   );
 }

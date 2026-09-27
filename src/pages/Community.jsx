@@ -4,6 +4,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUp, Bookmark, Download, Flame, Search, Shield, Sparkles, UserCheck, Users, X, Clock } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
+import { usePagedQuery } from "@/lib/usePagedQuery";
+import LoadMore from "@/components/common/LoadMore";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { toggleLike } from "@/lib/likes";
 import { toast } from "@/lib/toast";
@@ -60,7 +62,7 @@ export default function CommunityPage() {
   const [dismissed, setDismissed] = useState(() => new Set());
   const tag = params.get("tag");
 
-  const { data: posts, setData, loading } = useLiveQuery("CommunityPost", null, { sort: "-created_date", limit: 300 });
+  const { data: posts, setData, loading, loadMore, loadingMore, hasMore, error } = usePagedQuery("CommunityPost", null, { limit: 30 });
   const { data: allComments, loading: commentsLoading } = useLiveQuery("CommunityComment", null, { sort: "-created_date", limit: 600 });
   const { data: users } = useLiveQuery("User", null, { live: false });
   const { data: communities } = useLiveQuery("Community", null, { live: false });
@@ -272,6 +274,8 @@ export default function CommunityPage() {
                 <div ref={sentinelRef} className="space-y-5" aria-hidden="true">
                   <div className="card !rounded-[1.75rem] p-4 space-y-3"><div className="flex gap-3 items-center"><div className="skeleton w-10 h-10 !rounded-full" /><div className="skeleton h-4 w-32" /></div><div className="skeleton h-48" /></div>
                 </div>
+              ) : hasMore || error ? (
+                <LoadMore hasMore={hasMore} loading={loadingMore} error={error} onLoad={loadMore} />
               ) : (
               <div className="text-center py-8">
                 <p className="text-2xl mb-1">✨</p>

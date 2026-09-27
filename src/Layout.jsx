@@ -350,7 +350,7 @@ export default function Layout() {
         {!fullHeight && <TopBar onSearch={() => setPaletteOpen(true)} user={user} badges={badges} isDark={isDark} onToggleTheme={toggleTheme} />}
         <main ref={mainRef} id="main" className={`flex-1 min-h-0 relative ${fullHeight ? `overflow-hidden ${hideMobileNav ? "" : "pb-[calc(72px+env(safe-area-inset-bottom))] desk:pb-0"}` : "overflow-y-auto overflow-x-hidden scroll"}`}>
           {/* Enter-only transition keyed by route; no exit phase that could stall navigation. */}
-          <div key={location.pathname} className={`page-enter ${fullHeight ? "h-full" : "min-h-full"}`}>
+          <div key={location.pathname} className={`${fullHeight ? "h-full" : "min-h-full"}`}>
             <ErrorBoundary resetKey={location.pathname}>{outlet}</ErrorBoundary>
           </div>
         </main>

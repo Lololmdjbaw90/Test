@@ -60,5 +60,5 @@ export function useMediaSrc(url) {
     resolveMediaUrl(url).then((u) => { if (alive) setSrc(u); });
     return () => { alive = false; };
   }, [url]);
-  return src;
+  return needsResolving(url) ? src : url || "";
 }
