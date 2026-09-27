@@ -535,7 +535,7 @@ struct HomeView: View {
 
     private var artists: some View {
         VStack(alignment: .leading, spacing: 14) {
-            SectionHeader(icon: "crown.fill", title: "Top artists")
+            SectionHeader(icon: "crown.fill", title: "Top artists") { path.append(.topArtists) }
             VStack(spacing: 2) {
                 if topArtists.isEmpty {
                     Text("Post art to get on the board!").font(.jakarta(14)).foregroundStyle(Palette.muted).padding(20)

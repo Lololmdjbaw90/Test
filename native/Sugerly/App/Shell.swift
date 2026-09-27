@@ -12,6 +12,9 @@ enum Route: Hashable {
     case admin
     case servers
     case people
+    case commissions
+    case topArtists
+    case updates
     case server(Server)
     case channel(Server, ServerChannel)
     case voice(Server, ServerChannel)
@@ -38,6 +41,9 @@ struct RouteView: View {
         case .admin: AdminView()
         case .servers: ServerHubView(path: $path).navigationTitle("Servers").navigationBarTitleDisplayMode(.inline).sugarBackground()
         case .people: PeopleView(path: $path)
+        case .commissions: CommissionsView(path: $path)
+        case .topArtists: TopArtistsView(path: $path)
+        case .updates: UpdatesView()
         case .server(let server): ServerHubView(path: $path, initial: server).navigationTitle(server.name).navigationBarTitleDisplayMode(.inline).sugarBackground()
         case .channel(let server, let channel): ChannelChatView(server: server, channel: channel)
         case .voice(let server, let channel): VoiceRoomView(server: server, channel: channel)
@@ -533,6 +539,9 @@ struct MoreSheet: View {
                     tile("Music", "music.note", [0xFF7AA2, 0xD9577F]) { go(.music) }
                     tile("Servers", "person.3.fill", [0xFF9EC4, 0xE0508A]) { go(.servers) }
                     tile("People", "person.crop.circle.badge.plus", [0xFFD166, 0xF08A20]) { go(.people) }
+                    tile("Commissions", "storefront.fill", [0x5FD3B0, 0x16A37F]) { go(.commissions) }
+                    tile("Top artists", "crown.fill", [0xFFD166, 0xF0A020]) { go(.topArtists) }
+                    tile("What's new", "sparkles", [0xFF9EC4, 0xE0508A]) { go(.updates) }
                     tile("Alerts", "bell.fill", [0xB19CFF, 0x7C5CF0]) {
                         dismiss()
                         Task { @MainActor in
