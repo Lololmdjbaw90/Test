@@ -1,9 +1,10 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ImagePlus, Music, Server, Store, Upload } from "lucide-react";
+import { Clapperboard, ImagePlus, Music, Server, Store, Upload } from "lucide-react";
 
 export const CREATE_ACTIONS = [
+  { label: "Create a reel", desc: "Film, cut and post a short video", icon: Clapperboard, to: "/Reels?create=1" },
   { label: "Share artwork", desc: "Post to the community feed", icon: ImagePlus, to: "/Community?compose=1" },
   { label: "Share a track", desc: "Upload music for everyone", icon: Music, to: "/Music?upload=1" },
   { label: "Start a server", desc: "Channels, roles & voice", icon: Server, to: "/Communities?create=1" },

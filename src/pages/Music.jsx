@@ -1,3 +1,4 @@
+import AudiusSection from "@/components/music/AudiusSection";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
@@ -328,6 +329,7 @@ export default function MusicPage() {
             {current ? <NowPlaying key="now" track={player.track} playing={player.playing} time={player.time} duration={player.duration} onToggle={() => player.toggle()} />
               : !loading && forYou[0] ? <Hero key="hero" pick={forYou[0]} player={player} queue={forYouQueue} /> : null}
           </AnimatePresence>
+          <AudiusSection />
 
           {activity.length > 0 && <div className="xl:hidden"><p className="font-bold text-sm mb-2.5 flex items-center gap-1.5" style={{ color: "var(--text-secondary)" }}><AudioLines className="w-4 h-4" style={{ color: "var(--accent-rose)" }} /> Friend activity</p><FriendActivity people={activity} tracks={tracks} player={player} compact /></div>}
 
