@@ -206,15 +206,22 @@ struct HomeView: View {
     // MARK: quick links (like the website's sidebar)
 
     private var quickLinks: some View {
-        let items: [(String, String, [UInt32], Route?)] = [
-            ("Gallery", "photo.stack.fill", [0xFFAA80, 0xEE6E40], .gallery),
-            ("Music", "music.note", [0xFF7AA2, 0xD9577F], .music),
-            ("Servers", "person.3.fill", [0xB19CFF, 0x7C5CF0], .servers),
-            ("Alerts", "bell.fill", [0x7CBEFF, 0x2F80E0], .notifications),
+        let items: [(String, String, [UInt32])] = [
+            ("Music", "music.note", [0xFF7AA2, 0xD9577F]),
+            ("Servers", "person.3.fill", [0xB19CFF, 0x7C5CF0]),
+            ("People", "person.crop.circle.badge.plus", [0xFFAA80, 0xEE6E40]),
+            ("Alerts", "bell.fill", [0x7CBEFF, 0x2F80E0]),
         ]
         return HStack(spacing: 10) {
             ForEach(items, id: \.0) { item in
-                Button { if let r = item.3 { path.append(r) } } label: {
+                Button {
+                    switch item.0 {
+                    case "Music": path.append(.music)
+                    case "Servers": path.append(.servers)
+                    case "People": path.append(.people)
+                    default: withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { model.showNotifications = true }
+                    }
+                } label: {
                     VStack(spacing: 8) {
                         Image(systemName: item.1)
                             .font(.system(size: 19, weight: .bold))
@@ -395,7 +402,7 @@ struct HomeView: View {
             return a.likes.count > b.likes.count
         }.prefix(10)
         return VStack(alignment: .leading, spacing: 14) {
-            SectionHeader(icon: "star.fill", title: "Featured art") { path.append(.gallery) }
+            SectionHeader(icon: "star.fill", title: "Featured art") { model.tabRequest = .gallery }
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
                     if !loaded {

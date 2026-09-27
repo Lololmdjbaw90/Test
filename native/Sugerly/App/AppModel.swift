@@ -14,6 +14,10 @@ final class AppModel {
     var people: [String: UserProfile] = [:]
     // The little pop-up at the top ("Saved", "Posted!", errors).
     var toast: Toast?
+    // The notifications pop-up (opened from the bell).
+    var showNotifications = false
+    // Ask the shell to switch tabs (e.g. "See all" art → Gallery tab).
+    var tabRequest: AppTab?
 
     private var auth: AuthClient { AuthClient.shared }
 

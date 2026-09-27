@@ -78,6 +78,16 @@ final class ReelVideo {
     func pause() { player.pause() }
 }
 
+// Set up playback audio once, not on every swipe (it can take a moment).
+enum ReelAudio {
+    nonisolated(unsafe) private static var ready = false
+    static func prepare() {
+        guard !ready else { return }
+        ready = true
+        try? AVAudioSession.sharedInstance().setCategory(.playback)
+    }
+}
+
 struct ReelsView: View {
     let visible: Bool
     @Binding var path: [Route]
@@ -87,6 +97,7 @@ struct ReelsView: View {
     @State private var activeId: String?
     @State private var feed = "foryou"
     @State private var loading = true
+    @State private var lastLoad: Date?
 
     private var shown: [Reel] {
         let blocked = Set(model.me?.blocked ?? [])
@@ -117,10 +128,23 @@ struct ReelsView: View {
                     ScrollView(.vertical) {
                         LazyVStack(spacing: 0) {
                             ForEach(Array(list.enumerated()), id: \.element.id) { i, reel in
-                                ReelPage(reel: reel, active: visible && activeId == reel.id, near: abs(i - activeIndex) <= 1, path: $path)
-                                    .frame(width: geo.size.width, height: geo.size.height)
-                                    .clipped()
-                                    .id(reel.id)
+                                // On iPad (or any wide screen) the reel is a phone-shaped
+                                // column in the middle, on a blurred copy of its cover.
+                                let column = Swift.min(geo.size.width, geo.size.height * 0.6)
+                                ZStack {
+                                    if column < geo.size.width - 1 {
+                                        RemoteImage(url: reel.coverURL.isEmpty ? (reel.pictures.first ?? "") : reel.coverURL)
+                                            .blur(radius: 40)
+                                            .overlay(Color.black.opacity(0.45))
+                                    }
+                                    ReelPage(reel: reel, active: visible && activeId == reel.id, near: abs(i - activeIndex) <= 1, path: $path)
+                                        .frame(width: column, height: geo.size.height)
+                                        .clipShape(RoundedRectangle(cornerRadius: column < geo.size.width - 1 ? 28 : 0, style: .continuous))
+                                        .padding(.vertical, column < geo.size.width - 1 ? 0 : 0)
+                                }
+                                .frame(width: geo.size.width, height: geo.size.height)
+                                .clipped()
+                                .id(reel.id)
                             }
                         }
                         .scrollTargetLayout()
@@ -157,7 +181,11 @@ struct ReelsView: View {
             .padding(.top, 6)
         }
         .toolbar(.hidden, for: .navigationBar)
-        .task { await load() }
+        .task {
+            if let lastLoad, Date().timeIntervalSince(lastLoad) < 90 { return }
+            lastLoad = Date()
+            await load()
+        }
         .onChange(of: visible) { _, now in if now, activeId == nil { activeId = shown.first?.id } }
     }
 
@@ -410,7 +438,7 @@ struct ReelPage: View {
             if video == nil, let url = URL(string: reel.mediaURL) {
                 video = ReelVideo.get(reel.id, url: url, start: reel.trimStart)
             }
-            try? AVAudioSession.sharedInstance().setCategory(.playback)
+            ReelAudio.prepare()
             if !paused { video?.play() }
         }
         if !paused { startSound() }

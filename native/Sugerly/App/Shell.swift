@@ -9,7 +9,6 @@ enum Route: Hashable {
     case reel(Reel)
     case gallery
     case music
-    case notifications
     case admin
     case servers
     case people
@@ -18,7 +17,7 @@ enum Route: Hashable {
     case voice(Server, ServerChannel)
 }
 
-enum AppTab: Hashable { case home, community, reels, chat }
+enum AppTab: Hashable { case home, community, gallery, reels, chat }
 
 enum Composer: String, Identifiable { case post, artwork, reel, track; var id: String { rawValue } }
 
@@ -36,7 +35,6 @@ struct RouteView: View {
         case .reel(let reel): SingleReelView(reel: reel, path: $path)
         case .gallery: GalleryView(path: $path)
         case .music: MusicView(path: $path)
-        case .notifications: NotificationsView(path: $path)
         case .admin: AdminView()
         case .servers: ServersView(path: $path)
         case .people: PeopleView(path: $path)
@@ -90,6 +88,7 @@ struct MainShell: View {
     @State private var notes = NotificationsStore()
     @State private var homePath: [Route] = []
     @State private var communityPath: [Route] = []
+    @State private var galleryPath: [Route] = []
     @State private var reelsPath: [Route] = []
     @State private var chatPath: [Route] = []
     @State private var creating = false
@@ -102,11 +101,22 @@ struct MainShell: View {
         switch tab {
         case .home: return homePath
         case .community: return communityPath
+        case .gallery: return galleryPath
         case .reels: return reelsPath
         case .chat: return chatPath
         }
     }
     private var barHidden: Bool { typing || !currentPath.isEmpty }
+
+    private var currentPathBinding: Binding<[Route]> {
+        switch tab {
+        case .home: return $homePath
+        case .community: return $communityPath
+        case .gallery: return $galleryPath
+        case .reels: return $reelsPath
+        case .chat: return $chatPath
+        }
+    }
 
     var body: some View {
         TabView(selection: $tab) {
@@ -120,6 +130,12 @@ struct MainShell: View {
                 CommunityView(path: $communityPath, compose: { composer = .post }).sugarRoutes($communityPath)
             }
             .tag(AppTab.community)
+            .toolbar(.hidden, for: .tabBar)
+
+            NavigationStack(path: $galleryPath) {
+                GalleryView(path: $galleryPath, isRoot: true).sugarRoutes($galleryPath)
+            }
+            .tag(AppTab.gallery)
             .toolbar(.hidden, for: .tabBar)
 
             NavigationStack(path: $reelsPath) {
@@ -143,6 +159,20 @@ struct MainShell: View {
                 .padding(.bottom, 2)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+        }
+        .overlay {
+            if model.showNotifications {
+                NotificationsPopup(path: currentPathBinding) {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { model.showNotifications = false }
+                }
+                .transition(.opacity)
+                .zIndex(5)
+            }
+        }
+        .onChange(of: model.tabRequest) { _, next in
+            guard let next else { return }
+            tab = next
+            model.tabRequest = nil
         }
         .overlay(alignment: .top) {
             if let toast = model.toast {
@@ -199,7 +229,7 @@ struct MainShell: View {
     }
 }
 
-// MARK: - Floating tab bar (the one Liquid Glass piece)
+// MARK: - Floating tab bar: a soft pink candy pill plus a round + button
 
 struct SugarTabBar: View {
     @Binding var tab: AppTab
@@ -207,68 +237,89 @@ struct SugarTabBar: View {
     var dark: Bool
     var onCreate: () -> Void
     @Namespace private var lens
-    @Environment(\.colorScheme) private var scheme
+    @State private var plusSpin = false
 
     var body: some View {
-        HStack(spacing: 0) {
-            item(.home, "Home", "house", "house.fill")
-            item(.community, "Community", "person.2", "person.2.fill")
-            Button(action: onCreate) {
-                Image(systemName: "plus")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 56, height: 56)
-                    .background(Theme.gradient, in: Circle())
-                    .overlay(Circle().strokeBorder(.white.opacity(0.45), lineWidth: 1))
-                    .shadow(color: Theme.pink.opacity(0.55), radius: 14, y: 6)
+        HStack(spacing: 10) {
+            HStack(spacing: 0) {
+                item(.home, "Home", "house", "house.fill")
+                item(.community, "Social", "heart.text.square", "heart.text.square.fill")
+                item(.gallery, "Gallery", "paintpalette", "paintpalette.fill")
+                item(.reels, "Reels", "play.rectangle", "play.rectangle.fill")
+                item(.chat, "Chat", "bubble.left.and.bubble.right", "bubble.left.and.bubble.right.fill", badge: unread)
             }
-            .buttonStyle(BouncyStyle(scale: 0.88))
-            .padding(.horizontal, 6)
+            .padding(.horizontal, 5)
+            .frame(height: 64)
+            .background {
+                Capsule().fill(dark ? Color(hex: 0x1D1019).opacity(0.92) : Palette.surface.opacity(0.96))
+                    .overlay(Capsule().fill(LinearGradient(colors: [Theme.light.opacity(dark ? 0.12 : 0.16), .clear], startPoint: .top, endPoint: .bottom)))
+                    .overlay(Capsule().strokeBorder(dark ? Color.white.opacity(0.12) : Theme.light.opacity(0.55), lineWidth: 1.2))
+                    .shadow(color: Theme.main.opacity(dark ? 0.25 : 0.2), radius: 18, y: 8)
+            }
+            // Only the bar animates; the page switch itself is instant.
+            .animation(.spring(response: 0.38, dampingFraction: 0.72), value: tab)
+
+            Button {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.55)) { plusSpin.toggle() }
+                onCreate()
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 24, weight: .heavy))
+                    .foregroundStyle(.white)
+                    .rotationEffect(.degrees(plusSpin ? 90 : 0))
+                    .frame(width: 60, height: 60)
+                    .background(Theme.gradient, in: Circle())
+                    .overlay(Circle().fill(LinearGradient(colors: [.white.opacity(0.35), .clear], startPoint: .top, endPoint: .center)).padding(2))
+                    .overlay(Circle().strokeBorder(.white.opacity(0.6), lineWidth: 1.5))
+                    .shadow(color: Theme.main.opacity(0.5), radius: 14, y: 6)
+            }
+            .buttonStyle(BouncyStyle(scale: 0.85))
             .accessibilityLabel("Create")
-            item(.reels, "Reels", "play.rectangle", "play.rectangle.fill")
-            item(.chat, "Chat", "bubble.left.and.bubble.right", "bubble.left.and.bubble.right.fill", badge: unread)
         }
-        .padding(.horizontal, 6)
-        .frame(height: 68)
-        .glassPill(cornerRadius: 34)
-        .environment(\.colorScheme, dark ? .dark : scheme)
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 12)
     }
 
     private func item(_ t: AppTab, _ title: String, _ icon: String, _ filled: String, badge: Int = 0) -> some View {
         let active = tab == t
         return Button {
-            if tab != t { withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) { tab = t } }
+            guard tab != t else { return }
+            var tx = Transaction()
+            tx.disablesAnimations = true
+            withTransaction(tx) { tab = t }
         } label: {
             VStack(spacing: 3) {
                 Image(systemName: active ? filled : icon)
-                    .font(.system(size: 19, weight: .semibold))
-                    .symbolEffect(.bounce, value: active)
-                Text(title).font(.jakarta(10, .bold))
+                    .font(.system(size: 18, weight: .semibold))
+                    .symbolEffect(.bounce.up, value: active)
+                Text(title).font(.jakarta(9.5, .heavy)).lineLimit(1).minimumScaleFactor(0.7)
             }
-            .foregroundStyle(active ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(dark ? Color.white.opacity(0.7) : Palette.muted))
+            .foregroundStyle(active ? AnyShapeStyle(Color.white) : AnyShapeStyle(dark ? Color.white.opacity(0.7) : Palette.muted))
             .frame(maxWidth: .infinity)
-            .frame(height: 56)
+            .frame(height: 54)
             .background {
                 if active {
-                    Capsule().fill(dark ? Color.white.opacity(0.14) : Theme.pink.opacity(0.13))
+                    Capsule().fill(Theme.gradient)
+                        .overlay(Capsule().fill(LinearGradient(colors: [.white.opacity(0.3), .clear], startPoint: .top, endPoint: .center)).padding(1.5))
+                        .shadow(color: Theme.main.opacity(0.4), radius: 8, y: 3)
                         .matchedGeometryEffect(id: "lens", in: lens)
                 }
             }
-            .overlay(alignment: .top) {
+            .overlay(alignment: .topTrailing) {
                 if badge > 0 {
                     Text(badge > 9 ? "9+" : "\(badge)")
                         .font(.jakarta(10, .heavy))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 5)
                         .frame(minWidth: 18, minHeight: 18)
-                        .background(Theme.gradient, in: Capsule())
-                        .offset(x: 14, y: 2)
+                        .background(Palette.danger, in: Capsule())
+                        .overlay(Capsule().strokeBorder(.white, lineWidth: 1.5))
+                        .offset(x: -4, y: 2)
                         .transition(.scale.combined(with: .opacity))
                 }
             }
+            .contentShape(Capsule())
         }
-        .buttonStyle(BouncyStyle())
+        .buttonStyle(BouncyStyle(scale: 0.88))
         .sensoryFeedback(.selection, trigger: active)
         .accessibilityLabel(title)
     }
@@ -299,7 +350,7 @@ struct TopBar: View {
             }
             .buttonStyle(BouncyStyle())
             .accessibilityLabel("Search")
-            Button { path.append(.notifications) } label: {
+            Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { model.showNotifications = true } } label: {
                 Image(systemName: "bell.fill")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(Palette.text2)
@@ -439,10 +490,15 @@ struct MoreSheet: View {
 
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                     tile("Music", "music.note", [0xFF7AA2, 0xD9577F]) { go(.music) }
-                    tile("Gallery", "photo.stack.fill", [0xFFAA80, 0xEE6E40]) { go(.gallery) }
                     tile("Servers", "person.3.fill", [0xFF9EC4, 0xE0508A]) { go(.servers) }
                     tile("People", "person.crop.circle.badge.plus", [0xFFD166, 0xF08A20]) { go(.people) }
-                    tile("Alerts", "bell.fill", [0xB19CFF, 0x7C5CF0]) { go(.notifications) }
+                    tile("Alerts", "bell.fill", [0xB19CFF, 0x7C5CF0]) {
+                        dismiss()
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(300))
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { model.showNotifications = true }
+                        }
+                    }
                     tile("Settings", "gearshape.fill", [0x7CBEFF, 0x2F80E0]) { settings = true }
                     tile("Help", "questionmark.circle.fill", [0x5FD3B0, 0x16A37F]) { legal = .guidelines }
                     if model.me?.isAdmin == true {

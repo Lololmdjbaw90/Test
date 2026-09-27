@@ -1,8 +1,10 @@
 import SwiftUI
 import UIKit
 
-struct NotificationsView: View {
+// Notifications as a pop-up card under the bell (tap outside to close).
+struct NotificationsPopup: View {
     @Binding var path: [Route]
+    var close: () -> Void
     @Environment(AppModel.self) private var model
     @Environment(NotificationsStore.self) private var notes
     @Environment(PostsStore.self) private var posts
@@ -32,11 +34,25 @@ struct NotificationsView: View {
     }
 
     var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.opacity(0.18).ignoresSafeArea()
+                .onTapGesture(perform: close)
+            card
+                .frame(maxWidth: 420)
+                .padding(.horizontal, 12)
+                .padding(.top, 58)
+                .transition(.scale(scale: 0.6, anchor: .topTrailing).combined(with: .opacity))
+        }
+        .onAppear { appeared = true }
+        .onDisappear { notes.markAllRead() }
+    }
+
+    private var card: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Notifications").font(.display(36)).foregroundStyle(Palette.text)
+                        Text("Notifications").font(.display(28)).foregroundStyle(Palette.text)
                         Text(notes.unread > 0 ? "\(notes.unread) new" : "You're all caught up").font(.jakarta(13, .semibold)).foregroundStyle(notes.unread > 0 ? Theme.main : Palette.muted)
                     }
                     Spacer()
@@ -67,16 +83,15 @@ struct NotificationsView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 30)
-            .frame(maxWidth: 680)
-            .frame(maxWidth: .infinity)
+            .padding(14)
         }
-        .sugarBackground()
-        .navigationBarTitleDisplayMode(.inline)
+        .scrollIndicators(.hidden)
+        .frame(maxHeight: 560)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(Palette.bg, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 30, style: .continuous).strokeBorder(Theme.light.opacity(0.6), lineWidth: 1.2))
+        .shadow(color: Theme.main.opacity(0.25), radius: 30, y: 14)
         .refreshable { await notes.refresh(me: model.me?.email ?? "") }
-        .onAppear { appeared = true }
-        .onDisappear { notes.markAllRead() }
     }
 
     private func row(_ n: AppNotification) -> some View {
@@ -128,6 +143,14 @@ struct NotificationsView: View {
 
     // Links are website paths; open the matching screen.
     private func open(_ n: AppNotification) {
+        close()
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(200))
+            go(n)
+        }
+    }
+
+    private func go(_ n: AppNotification) {
         guard let comps = URLComponents(string: n.link) else { return }
         let value = { (name: String) in comps.queryItems?.first { $0.name == name }?.value ?? "" }
         switch comps.path.lowercased() {

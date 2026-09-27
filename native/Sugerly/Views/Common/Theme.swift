@@ -21,18 +21,19 @@ extension Color {
 }
 
 enum Palette {
-    static let bg = Color.dynamic(light: 0xFBF7F6, dark: 0x110A0F)
-    static let surface = Color.dynamic(light: 0xFFFFFF, dark: 0x1A1117)
-    static let surface2 = Color.dynamic(light: 0xF8F2F4, dark: 0x22171F)
-    static let border = Color.dynamic(light: 0xEFE4E9, dark: 0x2D1F28)
-    static let borderStrong = Color.dynamic(light: 0xE3D3DB, dark: 0x3B2934)
+    // Blush pink background, candy-floss borders.
+    static let bg = Color.dynamic(light: 0xFFF3F7, dark: 0x140A11)
+    static let surface = Color.dynamic(light: 0xFFFFFF, dark: 0x1D1019)
+    static let surface2 = Color.dynamic(light: 0xFFEAF1, dark: 0x271621)
+    static let border = Color.dynamic(light: 0xF8D9E4, dark: 0x351F2C)
+    static let borderStrong = Color.dynamic(light: 0xF0C3D3, dark: 0x45293A)
     static let text = Color.dynamic(light: 0x2A1620, dark: 0xF7EDF2)
     static let text2 = Color.dynamic(light: 0x6B5560, dark: 0xC2ADB8)
     static let muted = Color.dynamic(light: 0x9C8A93, dark: 0x86707C)
     static let danger = Color(hex: 0xE0526B)
     static let success = Color(hex: 0x17A673)
     static let warning = Color(hex: 0xF0A020)
-    static let shadow = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor.black.withAlphaComponent(0.35) : UIColor(hex: 0x2A1620, alpha: 0.07) })
+    static let shadow = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor.black.withAlphaComponent(0.35) : UIColor(hex: 0xC2476F, alpha: 0.10) })
 }
 
 // The five accent colours you can pick in Settings (the logo follows along).
@@ -129,22 +130,16 @@ struct SugarCard: ViewModifier {
 extension View {
     func sugarCard(radius: CGFloat = 24, padding: CGFloat = 0) -> some View { modifier(SugarCard(radius: radius, padding: padding)) }
 
-    // Frosted pill used by the tab bar and floating buttons (real Liquid Glass on iOS 26).
-    @ViewBuilder
+    // Frosted pink pill for floating bits (music player): soft blur with a
+    // blush tint and a candy border — cute rather than Apple's liquid glass.
     func glassPill(cornerRadius: CGFloat = 30) -> some View {
-        #if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
-            self.glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        } else {
-            self.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).strokeBorder(.white.opacity(0.5), lineWidth: 1))
-                .shadow(color: Palette.shadow, radius: 16, y: 8)
-        }
-        #else
-        self.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).strokeBorder(.white.opacity(0.5), lineWidth: 1))
-            .shadow(color: Palette.shadow, radius: 16, y: 8)
-        #endif
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        return self
+            .background(.ultraThinMaterial, in: shape)
+            .background(Palette.surface.opacity(0.75), in: shape)
+            .overlay(shape.fill(LinearGradient(colors: [Theme.light.opacity(0.16), .clear], startPoint: .top, endPoint: .bottom)).allowsHitTesting(false))
+            .overlay(shape.strokeBorder(Theme.light.opacity(0.55), lineWidth: 1.2))
+            .shadow(color: Theme.main.opacity(0.2), radius: 16, y: 8)
     }
 
     // Text filled with the accent gradient.
@@ -333,11 +328,13 @@ struct XPBar: View {
     }
 }
 
-// Tiny logo with a soft shine, like the website's top bar. The shine is
-// clock-driven (no repeating animation that could leak into layout) and
-// clipped to the logo's own shape.
+// Tiny logo with a soft shine, like the website's top bar. The shine sweeps
+// across every few seconds (a one-off animation, not a constant redraw) and
+// is clipped to the logo's own shape; the logo gives a little hop when tapped.
 struct BrandLogo: View {
     var height: CGFloat = 34
+    @State private var sweep: CGFloat = 0
+    @State private var hop = false
 
     private var logo: some View {
         Image(Theme.accent.logo).resizable().scaledToFit().frame(height: height)
@@ -346,22 +343,32 @@ struct BrandLogo: View {
     var body: some View {
         logo
             .overlay {
-                TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
-                    let cycle: Double = 3.4
-                    let t = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: cycle)
-                    let progress: Double = Swift.min(1.0, t / 1.2)
-                    GeometryReader { geo in
-                        let w: CGFloat = geo.size.width
-                        let band: CGFloat = Swift.max(height * 0.8, w * 0.22)
-                        let x: CGFloat = -band + CGFloat(progress) * (w + band * 2)
-                        LinearGradient(colors: [.clear, .white.opacity(0.8), .clear], startPoint: .leading, endPoint: .trailing)
-                            .frame(width: band, height: geo.size.height * 1.6)
-                            .rotationEffect(.degrees(18))
-                            .position(x: x, y: geo.size.height / 2)
-                    }
+                GeometryReader { geo in
+                    let w = geo.size.width
+                    let band = Swift.max(height * 0.8, w * 0.22)
+                    LinearGradient(colors: [.clear, .white.opacity(0.85), .clear], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: band, height: geo.size.height * 1.6)
+                        .rotationEffect(.degrees(18))
+                        .position(x: -band + sweep * (w + band * 2), y: geo.size.height / 2)
                 }
                 .mask(logo)
                 .allowsHitTesting(false)
+            }
+            .scaleEffect(hop ? 1.12 : 1)
+            .rotationEffect(.degrees(hop ? -4 : 0))
+            .onTapGesture {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.4)) { hop = true }
+                Task { try? await Task.sleep(for: .milliseconds(220)); withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) { hop = false } }
+            }
+            .task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(1.2))
+                    withAnimation(.easeInOut(duration: 1.1)) { sweep = 1 }
+                    try? await Task.sleep(for: .seconds(3.2))
+                    var t = Transaction()
+                    t.disablesAnimations = true
+                    withTransaction(t) { sweep = 0 }
+                }
             }
             .accessibilityLabel("Sugerly")
     }
