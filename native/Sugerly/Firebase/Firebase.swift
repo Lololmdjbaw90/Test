@@ -215,6 +215,28 @@ enum FS {
 
     static func nowISO() -> String { Dates.iso(Date()) }
 
+    // Compare-and-set prevents two devices from claiming the same UTC day.
+    static func claimDaily(_ uid: String) async throws -> Int {
+        let url = URL(string: "\(base)/User/\(path(uid))")!
+        for _ in 0..<3 {
+            let raw = try await HTTP.json(url, auth: try await bearer()) as? Doc ?? [:]
+            guard let profile = document(raw), let version = raw["updateTime"] as? String else { throw APIError(message: "Your profile couldn't be loaded.") }
+            let today = String(nowISO().prefix(10))
+            if profile.str("last_daily_claim") == today { return 0 }
+            let yesterday = String(Dates.iso(Date().addingTimeInterval(-86400)).prefix(10))
+            let streak = profile.str("last_daily_claim") == yesterday ? profile.int("daily_streak") + 1 : 1
+            let reward = 20 + min(streak, 7) * 5
+            let changes: Doc = ["last_daily_claim": today, "daily_streak": streak, "coins": profile.int("coins") + reward, "xp": profile.int("xp") + 10, "updated_date": nowISO()]
+            var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+            parts.queryItems = changes.keys.map { URLQueryItem(name: "updateMask.fieldPaths", value: $0) } + [URLQueryItem(name: "currentDocument.updateTime", value: version)]
+            do {
+                _ = try await HTTP.json(parts.url!, method: "PATCH", body: ["fields": changes.mapValues { encode($0) }], auth: try await bearer())
+                return reward
+            } catch let error as APIError where error.status == 409 || error.code == "FAILED_PRECONDITION" { continue }
+        }
+        throw APIError(message: "Your profile changed. Try claiming again.")
+    }
+
     // Collections whose sorted queries lack an index in this project (they
     // still work, just more slowly) — screens check in less often for them.
     nonisolated(unsafe) static var missingIndex: Set<String> = []

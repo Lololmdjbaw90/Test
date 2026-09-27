@@ -90,7 +90,7 @@ struct NativeReelCard: View {
         ZStack(alignment: .bottomLeading) {
             Color.black
             if reel.isVideo {
-                if let player { VideoPlayer(player: player) }
+                if let player { ReelPlayerSurface(player: player).modifier(ReelLook(filter: (reel.data["edits"] as? Doc ?? [:]).str("filter"), mirror: (reel.data["edits"] as? Doc ?? [:]).bool("mirror"))) }
                 else { RemoteImage(url: reel.data.str("cover_url"), contentMode: .fit) }
             } else {
                 TabView(selection: $photo) {
@@ -98,8 +98,10 @@ struct NativeReelCard: View {
                         Group { if abs(i - photo) <= 1 { RemoteImage(url: url, contentMode: .fit) } else { Color.black } }.tag(i)
                     }
                 }.tabViewStyle(.page(indexDisplayMode: reel.photos.count > 1 ? .always : .never))
+                    .modifier(ReelLook(filter: (reel.data["edits"] as? Doc ?? [:]).str("filter"), mirror: (reel.data["edits"] as? Doc ?? [:]).bool("mirror")))
             }
             LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .center, endPoint: .bottom).allowsHitTesting(false)
+            ReelTextOverlay(items: (reel.data["edits"] as? Doc ?? [:])["text"] as? [Doc] ?? [])
             HStack(alignment: .bottom, spacing: 18) {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("@\(reel.data.str("user_display_name"))").font(.headline)
@@ -165,6 +167,7 @@ struct NativeReelComposer: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var selections: [PhotosPickerItem] = []
+    @State private var draft = ReelDraft()
     @State private var caption = ""
     @State private var music: NativeTrack?
     @State private var choosingMusic = false
@@ -175,46 +178,50 @@ struct NativeReelComposer: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    SugerlyHeading(title: "Make it yours.", subtitle: "Choose one video or up to 20 photos to swipe through.")
+                    CandyHero(title: "Make a little magic.", subtitle: "Trim it. Color it. Say something. Make it yours.")
                     PhotosPicker(selection: $selections, maxSelectionCount: 20, matching: .any(of: [.images, .videos])) {
                         VStack(spacing: 14) { Image(systemName: "photo.stack.fill").font(.largeTitle); Text(selections.isEmpty ? "Choose photos or a video" : "\(selections.count) selected").font(.headline) }.frame(maxWidth: .infinity, minHeight: 170).background(Theme.soft, in: RoundedRectangle(cornerRadius: 28))
                     }.disabled(busy)
+                    NativeEditorPanel(selections: selections, draft: draft).disabled(busy)
                     TextField("Write a caption… no links", text: $caption, axis: .vertical).lineLimit(3...6).padding(16).background(Theme.card, in: RoundedRectangle(cornerRadius: 22)).disabled(busy)
                     Button { choosingMusic = true } label: { Label(music?.title ?? "Choose a soundtrack", systemImage: "music.note").frame(maxWidth: .infinity, alignment: .leading).padding(16).background(Theme.soft, in: Capsule()) }.disabled(busy)
                     if music != nil { Button("Remove music") { music = nil }.font(.caption).disabled(busy) }
                     if Moderation.hasLink(caption) { Text("Links aren't allowed in captions.").foregroundStyle(.red).font(.footnote) }
                     if let error { Text(error).foregroundStyle(.red).font(.footnote) }
-                    Button { Task { await publish() } } label: { HStack { if busy { ProgressView().tint(.white) }; Text(busy ? status : "Post reel") } }.buttonStyle(PrimaryButtonStyle()).disabled(busy || selections.isEmpty || Moderation.hasLink(caption) || caption.count > 300)
+                    Button { Task { await publish() } } label: { HStack { if busy { ProgressView().tint(.white) }; Text(busy ? status : "Post reel") } }.buttonStyle(PrimaryButtonStyle()).disabled(busy || draft.loading || draft.assets.isEmpty || Moderation.hasLink(caption) || caption.count > 300)
                 }.padding(20).frame(maxWidth: 600).frame(maxWidth: .infinity)
             }.background(Theme.background).navigationTitle("New reel").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(busy) } }
                 .sheet(isPresented: $choosingMusic) { NativeMusicView(onPick: { music = $0 }) }
+                .onChange(of: choosingMusic) { _, open in if open { draft.player?.pause(); draft.playing = false } }
+                .onDisappear { draft.cleanup() }
                 .interactiveDismissDisabled(busy)
         }
     }
     private func publish() async {
-        guard let me = model.me, !busy, !selections.isEmpty, !Moderation.hasLink(caption), caption.count <= 300 else { return }
-        let videos = selections.filter { $0.supportedContentTypes.contains { $0.conforms(to: .movie) } }
-        guard videos.isEmpty || selections.count == 1 else { error = "Choose one video, or photos only."; return }
+        guard let me = model.me, !busy, !draft.loading, !draft.assets.isEmpty, !Moderation.hasLink(caption), caption.count <= 300 else { return }
+        let videos = draft.assets.filter(\.video)
+        draft.player?.pause(); draft.playing = false
+        guard videos.isEmpty || draft.assets.count == 1 else { error = "Choose one video, or photos only."; return }
         busy = true; error = nil
         defer { busy = false }
         do {
             var urls: [String] = []
-            for (i, item) in selections.enumerated() {
-                status = "Uploading \(i + 1) of \(selections.count)…"
-                guard let data = try await item.loadTransferable(type: Data.self), data.count <= 100 * 1024 * 1024 else { throw APIError(message: "Each file must be under 100 MB.") }
+            for (i, item) in draft.assets.enumerated() {
+                status = "Uploading \(i + 1) of \(draft.assets.count)…"
+                let data = item.data
                 let url: String
                 if videos.isEmpty {
                     guard let photo = UIImage(data: data), let jpeg = photo.jpegData(compressionQuality: 0.85) else { throw APIError(message: "This photo couldn't be opened.") }
                     url = try await StorageClient.upload(jpeg, contentType: "image/jpeg", fileExtension: "jpg")
                 } else {
-                    let type = item.supportedContentTypes.first { $0.conforms(to: .movie) } ?? .mpeg4Movie
+                    let type = item.type
                     url = try await StorageClient.upload(data, contentType: type.preferredMIMEType ?? "video/mp4", fileExtension: type.preferredFilenameExtension ?? "mp4")
                 }
                 urls.append(url)
             }
             status = "Posting…"
-            let doc: Doc = ["kind": videos.isEmpty ? "photo" : "video", "media_url": urls[0], "media_urls": videos.isEmpty ? urls : [], "cover_url": videos.isEmpty ? urls[0] : "", "caption": caption.trimmingCharacters(in: .whitespacesAndNewlines), "user_email": me.email, "user_display_name": me.displayName, "user_profile_picture": me.picture, "created_by": me.email, "created_date": FS.nowISO(), "updated_date": FS.nowISO(), "likes": [String](), "views": 0, "edits": [String: String](), "music_url": music?.url ?? "", "music_title": music?.title ?? "", "music_artist": music?.artist ?? "", "music_source": music?.id.replacingOccurrences(of: "deezer_", with: "deezer:") ?? "", "comments_off": false]
+            let doc: Doc = ["kind": videos.isEmpty ? "photo" : "video", "media_url": urls[0], "media_urls": videos.isEmpty ? urls : [], "cover_url": videos.isEmpty ? urls[0] : "", "caption": caption.trimmingCharacters(in: .whitespacesAndNewlines), "user_email": me.email, "user_display_name": me.displayName, "user_profile_picture": me.picture, "created_by": me.email, "created_date": FS.nowISO(), "updated_date": FS.nowISO(), "likes": [String](), "views": 0, "edits": draft.edits, "duration": videos.isEmpty ? Double(draft.assets.count * 3) : (draft.end - draft.start) / draft.speed, "music_url": music?.url ?? "", "music_title": music?.title ?? "", "music_artist": music?.artist ?? "", "music_source": music?.id.replacingOccurrences(of: "deezer_", with: "deezer:") ?? "", "comments_off": false]
             let created = try await FS.create("Reel", doc)
             posted(NativeReel(data: created)); dismiss()
         } catch { self.error = error.localizedDescription }

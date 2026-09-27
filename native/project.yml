@@ -26,6 +26,10 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSRequiresIPhoneOS: true
+        UIAppFonts:
+          - Bubbly.ttf
+          - CuteHere.otf
+          - PlusJakartaSans.ttf
         CADisableMinimumFrameDurationOnPhone: true
         UILaunchScreen:
           UIImageName: Logo

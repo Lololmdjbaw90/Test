@@ -95,8 +95,15 @@ final class AppModel {
         [
             "id": u.id, "email": u.email, "display_name": u.displayName, "profile_picture": u.picture,
             "banner_url": u.banner, "bio": u.bio, "role": u.role, "following": u.following,
-            "saved_posts": u.savedPosts, "blocked": u.blocked, "xp": u.xp, "coins": u.coins, "last_seen": u.lastSeen,
+            "saved_posts": u.savedPosts, "blocked": u.blocked, "xp": u.xp, "coins": u.coins, "last_seen": u.lastSeen, "last_daily_claim": u.lastDaily, "daily_streak": u.dailyStreak,
         ]
+    }
+
+    func claimDaily() async throws -> Int {
+        guard let me else { return 0 }
+        let reward = try await FS.claimDaily(me.id)
+        try await loadProfile()
+        return reward
     }
 
     func signOut() {

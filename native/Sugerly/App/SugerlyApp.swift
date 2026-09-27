@@ -14,6 +14,9 @@ struct SugerlyApp: App {
             RootView()
                 .environment(model)
                 .tint(Theme.pink)
+                .font(.custom("PlusJakartaSans-Regular", size: 15, relativeTo: .body))
+                .preferredColorScheme(Appearance.shared.scheme)
+                .buttonStyle(CandyButtonStyle())
         }
     }
 }
@@ -62,27 +65,22 @@ struct MainTabView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
     @State private var tab = 0
+    @State private var visited: Set<Int> = [0]
+    @State private var keyboard = false
+    @State private var editing = false
     @State private var chats = ChatStore()
     @State private var music = NativeMusicPlayer()
 
     var body: some View {
-        TabView(selection: $tab) {
-            CommunityView()
-                .tabItem { Label("Community", systemImage: "person.2.fill") }
-                .tag(0)
-            ChatListView()
-                .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right.fill") }
-                .badge(chats.unread)
-                .tag(1)
-            ProfileView()
-                .tabItem { Label("Profile", systemImage: "person.crop.circle.fill") }
-                .tag(2)
-            NativeReelsView(isSelected: tab == 3).tabItem { Label("Reels", systemImage: "play.rectangle.fill") }.tag(3)
-            NativeMusicView().tabItem { Label("Music", systemImage: "music.note") }.tag(4)
+        ZStack {
+            CommunityView().opacity(tab == 0 ? 1 : 0).allowsHitTesting(tab == 0).accessibilityHidden(tab != 0)
+            if visited.contains(1) { ChatListView().opacity(tab == 1 ? 1 : 0).allowsHitTesting(tab == 1).accessibilityHidden(tab != 1) }
+            if visited.contains(2) { ProfileView().opacity(tab == 2 ? 1 : 0).allowsHitTesting(tab == 2).accessibilityHidden(tab != 2) }
+            if visited.contains(3) { NativeReelsView(isSelected: tab == 3).opacity(tab == 3 ? 1 : 0).allowsHitTesting(tab == 3).accessibilityHidden(tab != 3) }
+            if visited.contains(4) { NativeMusicView().opacity(tab == 4 ? 1 : 0).allowsHitTesting(tab == 4).accessibilityHidden(tab != 4) }
         }
-        .toolbar(.hidden, for: .tabBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: 8) {
+            if !keyboard && !editing { VStack(spacing: 8) {
                 if music.track != nil && tab != 3 { NativeMiniPlayer() }
                 HStack(spacing: 2) {
                     tabButton(0, "Community", "person.2.fill")
@@ -90,13 +88,19 @@ struct MainTabView: View {
                     tabButton(4, "Music", "music.note")
                     tabButton(1, "Chat", "bubble.left.and.bubble.right.fill")
                     tabButton(2, "Profile", "person.crop.circle.fill")
-                }.padding(6).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 28))
+                }.padding(6).background(Theme.card, in: RoundedRectangle(cornerRadius: 28))
                     .overlay(RoundedRectangle(cornerRadius: 28).stroke(Theme.border, lineWidth: 1))
                     .shadow(color: Theme.pink.opacity(0.12), radius: 12, y: 4)
-            }.frame(maxWidth: 560).padding(.horizontal, 12).padding(.bottom, 4)
+            }.frame(maxWidth: 560).padding(.horizontal, 12).padding(.bottom, 4) }
         }
         .environment(music)
-        .onChange(of: tab) { _, next in if next == 3 { music.pause() } }
+        .onChange(of: tab) { _, next in visited.insert(next); if next == 3 { music.pause() } }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboard = true }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboard = false }
+        .onReceive(NotificationCenter.default.publisher(for: UITextField.textDidBeginEditingNotification)) { _ in editing = true }
+        .onReceive(NotificationCenter.default.publisher(for: UITextField.textDidEndEditingNotification)) { _ in editing = false }
+        .onReceive(NotificationCenter.default.publisher(for: UITextView.textDidBeginEditingNotification)) { _ in editing = true }
+        .onReceive(NotificationCenter.default.publisher(for: UITextView.textDidEndEditingNotification)) { _ in editing = false }
         .sensoryFeedback(.selection, trigger: tab)
         .environment(chats)
         // New messages: every 6 s while you're in Chat, every 20 s elsewhere,
@@ -119,6 +123,6 @@ struct MainTabView: View {
             }.frame(maxWidth: .infinity, minHeight: 48)
                 .foregroundStyle(tab == value ? Theme.pink : Color.secondary)
                 .background(tab == value ? Theme.pink.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 22))
-        }.buttonStyle(.plain).accessibilityLabel(label).accessibilityAddTraits(tab == value ? [.isSelected] : [])
+        }.buttonStyle(CandyButtonStyle()).accessibilityLabel(label).accessibilityAddTraits(tab == value ? [.isSelected] : [])
     }
 }

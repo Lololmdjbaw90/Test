@@ -81,7 +81,8 @@ struct CommunityView: View {
         NavigationStack(path: $path) {
             ScrollView {
                 LazyVStack(spacing: 14) {
-                    SugerlyHeading(title: "Find your people.", subtitle: "Little moments, big inspiration. Share what you love.")
+                    CandyHero(title: "Find your people.", subtitle: "Little moments, big inspiration. Share what you love.")
+                    DailyRewardCard()
                     HStack(spacing: 8) {
                         ForEach(Feed.allCases, id: \.self) { item in
                             Button { feed = item } label: {
@@ -90,7 +91,7 @@ struct CommunityView: View {
                                     .foregroundStyle(feed == item ? .white : Theme.pink)
                                     .background { if feed == item { Theme.gradient } else { Theme.soft } }
                                     .clipShape(Capsule())
-                            }.buttonStyle(.plain)
+                            }.buttonStyle(CandyButtonStyle())
                         }
                         Spacer(minLength: 0)
                     }.padding(.bottom, 6)
@@ -183,7 +184,7 @@ struct PostCard: View {
                         }
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(CandyButtonStyle())
                 Spacer()
                 Menu {
                     if !post.text.isEmpty { Button { UIPasteboard.general.string = post.text } label: { Label("Copy text", systemImage: "doc.on.doc") } }
@@ -251,7 +252,7 @@ struct PostCard: View {
                 .accessibilityLabel(saved ? "Remove from saved" : "Save")
             }
             .font(.title3)
-            .buttonStyle(.plain)
+            .buttonStyle(CandyButtonStyle())
             .labelStyle(TightLabel())
         }
         .padding(14)
@@ -460,7 +461,7 @@ struct CommentRow: View {
                 if !comment.gifURL.isEmpty {
                     RemoteImage(url: comment.gifURL, contentMode: .fit).frame(maxWidth: 200, maxHeight: 160).clipShape(RoundedRectangle(cornerRadius: 12))
                 }
-                Button("Reply", action: onReply).font(.caption.weight(.semibold)).foregroundStyle(.secondary).buttonStyle(.plain)
+                Button("Reply", action: onReply).font(.caption.weight(.semibold)).foregroundStyle(.secondary).buttonStyle(CandyButtonStyle())
             }
             Spacer()
             Button(action: onLike) {
@@ -470,7 +471,7 @@ struct CommentRow: View {
                 }
                 .frame(width: 32)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(CandyButtonStyle())
             .sensoryFeedback(.impact(weight: .light), trigger: liked)
         }
         .contextMenu {

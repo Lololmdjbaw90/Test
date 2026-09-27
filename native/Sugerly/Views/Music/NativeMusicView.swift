@@ -81,7 +81,7 @@ struct NativeMusicView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
-                    SugerlyHeading(title: onPick == nil ? "Find your soundtrack." : "Set the mood.", subtitle: "Chart previews & sounds from your community.")
+                    CandyHero(title: onPick == nil ? "Find your soundtrack." : "Set the mood.", subtitle: "Chart previews & sounds from your community.")
                     HStack {
                         sourceButton("Top charts", selected: !community) { community = false }
                         sourceButton("Community", selected: community) { community = true }
@@ -95,7 +95,7 @@ struct NativeMusicView: View {
                     ForEach(tracks) { track in
                         Button {
                             if let onPick { onPick(track); dismiss() } else { music.toggle(track) }
-                        } label: { trackRow(track) }.buttonStyle(.plain)
+                        } label: { trackRow(track) }.buttonStyle(CandyButtonStyle())
                     }
                     if let error {
                         Text(error).font(.footnote).foregroundStyle(.secondary)
@@ -121,7 +121,7 @@ struct NativeMusicView: View {
         }
     }
     private func sourceButton(_ text: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Text(text).font(.subheadline.bold()).padding(.horizontal, 18).padding(.vertical, 11).foregroundStyle(selected ? .white : Theme.pink).background(selected ? Theme.pink : Theme.soft, in: Capsule()) }.buttonStyle(.plain)
+        Button(action: action) { Text(text).font(.subheadline.bold()).padding(.horizontal, 18).padding(.vertical, 11).foregroundStyle(selected ? .white : Theme.pink).background(selected ? Theme.pink : Theme.soft, in: Capsule()) }.buttonStyle(CandyButtonStyle())
     }
     private func trackRow(_ track: NativeTrack) -> some View {
         HStack(spacing: 12) {

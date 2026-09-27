@@ -2,20 +2,20 @@ import SwiftUI
 import UIKit
 
 enum Theme {
-    static let pink = Color(red: 217/255, green: 87/255, blue: 127/255)
-    static let rose = pink
+    static var pink: Color { Appearance.shared.color }
+    static var rose: Color { pink }
     static let lavender = Color(red: 0.72, green: 0.52, blue: 0.98)
     static let blush = Color(red: 238/255, green: 143/255, blue: 174/255)
-    static let gradient = LinearGradient(colors: [blush, pink], startPoint: .topLeading, endPoint: .bottomTrailing)
+    static var gradient: LinearGradient { LinearGradient(colors: [pink, Color(hex: "EF88BD")], startPoint: .topLeading, endPoint: .bottomTrailing) }
     static func adaptive(_ light: UInt32, _ dark: UInt32) -> Color {
         Color(UIColor { traits in
             let hex = traits.userInterfaceStyle == .dark ? dark : light
             return UIColor(red: CGFloat((hex >> 16) & 255)/255, green: CGFloat((hex >> 8) & 255)/255, blue: CGFloat(hex & 255)/255, alpha: 1)
         })
     }
-    static let background = adaptive(0xfbf7f6, 0x110a0f)
+    static let background = adaptive(0xffedf4, 0x1b101a)
     static let card = adaptive(0xffffff, 0x21171e)
-    static let soft = adaptive(0xf8f2f4, 0x30222c)
+    static var soft: Color { pink.opacity(0.12) }
     static let border = adaptive(0xefe4e9, 0x44323f)
 }
 
@@ -42,7 +42,7 @@ struct SugerlyHeading: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("YOUR LITTLE CORNER OF THE INTERNET").font(.system(size: 9, weight: .bold, design: .rounded)).tracking(1.3).foregroundStyle(Theme.pink)
-            Text(title).font(.system(size: 32, weight: .bold, design: .rounded))
+            Text(title).font(.custom("Bubbly-Regular", size: 34, relativeTo: .largeTitle))
             Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
         }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 12)
     }
@@ -111,6 +111,7 @@ struct RemoteImage: View {
 }
 
 struct PrimaryButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduce
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
@@ -118,9 +119,9 @@ struct PrimaryButtonStyle: ButtonStyle {
             .frame(maxWidth: .infinity, minHeight: 50)
             .background(Theme.gradient, in: Capsule())
             .shadow(color: Theme.pink.opacity(0.35), radius: 10, y: 5)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .scaleEffect(configuration.isPressed && !reduce && Appearance.shared.motion ? 0.97 : 1)
             .opacity(configuration.isPressed ? 0.9 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+            .animation(reduce || !Appearance.shared.motion ? nil : .spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 

@@ -54,6 +54,8 @@ struct UserProfile: Identifiable, Hashable {
     var xp: Int
     var coins: Int
     var lastSeen: String
+    var lastDaily: String
+    var dailyStreak: Int
 
     init(_ d: Doc) {
         id = d.str("id")
@@ -70,6 +72,8 @@ struct UserProfile: Identifiable, Hashable {
         xp = d.int("xp")
         coins = d.int("coins")
         lastSeen = d.str("last_seen")
+        lastDaily = d.str("last_daily_claim")
+        dailyStreak = d.int("daily_streak")
     }
 
     var isAdmin: Bool { role == "admin" || FirebaseConfig.siteOwners.contains(email) }
