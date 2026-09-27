@@ -160,7 +160,7 @@ struct ChatListView: View {
                 .padding(.bottom, 6)
 
                 if store.loading && store.conversations.isEmpty {
-                    ProgressView().frame(maxWidth: .infinity).padding(40)
+                    ForEach(0..<6, id: \.self) { _ in SkeletonRow() }
                 } else if let error = store.error, store.conversations.isEmpty {
                     EmptyCard(icon: "wifi.exclamationmark", title: "Couldn't load chats", text: error)
                 } else if shown.isEmpty {
@@ -296,7 +296,7 @@ struct ChatView: View {
                                showTime: previous == nil || gap(previous!, message))
                             .id(message.id)
                             .contextMenu {
-                                if !message.text.isEmpty { Button { UIPasteboard.general.string = message.text } label: { Label("Copy", systemImage: "doc.on.doc") } }
+                                if !message.text.isEmpty { Button { UIPasteboard.general.string = message.text; model.showToast("Copied", icon: "doc.on.doc.fill") } label: { Label("Copy", systemImage: "doc.on.doc") } }
                                 if message.authorEmail == me {
                                     Button(role: .destructive) { delete(message) } label: { Label("Delete", systemImage: "trash") }
                                 } else {

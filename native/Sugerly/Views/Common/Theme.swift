@@ -99,15 +99,30 @@ extension Font {
 
 // MARK: - Building blocks
 
+// White card with a soft pink-tinted edge, a light top highlight and a
+// layered shadow — the website's .card.
 struct SugarCard: ViewModifier {
     var radius: CGFloat = 24
     var padding: CGFloat = 0
+    @Environment(\.colorScheme) private var scheme
     func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         content
             .padding(padding)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
-            .shadow(color: Palette.shadow, radius: 12, y: 4)
+            .background {
+                shape.fill(Palette.surface)
+                    .overlay {
+                        shape.fill(LinearGradient(colors: [Theme.light.opacity(scheme == .dark ? 0.06 : 0.08), .clear], startPoint: .top, endPoint: .center))
+                    }
+            }
+            .overlay {
+                shape.strokeBorder(
+                    LinearGradient(colors: [Color.white.opacity(scheme == .dark ? 0.08 : 0.9), Palette.border], startPoint: .top, endPoint: .bottom),
+                    lineWidth: 1
+                )
+            }
+            .shadow(color: Palette.shadow, radius: 2, y: 1)
+            .shadow(color: Theme.main.opacity(scheme == .dark ? 0.0 : 0.06), radius: 18, y: 8)
     }
 }
 
@@ -142,15 +157,36 @@ struct GradientButtonStyle: ButtonStyle {
     var height: CGFloat = 48
     var fullWidth = true
     func makeBody(configuration: Configuration) -> some View {
+        GradientButtonBody(configuration: configuration, height: height, fullWidth: fullWidth)
+    }
+}
+
+// Candy button: accent gradient, glossy top edge, coloured glow, squish.
+private struct GradientButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    let height: CGFloat
+    let fullWidth: Bool
+    @Environment(\.isEnabled) private var enabled
+
+    var body: some View {
         configuration.label
             .font(.jakarta(15, .bold))
             .foregroundStyle(.white)
             .padding(.horizontal, 20)
             .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: height)
-            .background(Theme.gradient, in: Capsule())
-            .shadow(color: Theme.pink.opacity(0.3), radius: 12, y: 6)
-            .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+            .background {
+                Capsule().fill(Theme.gradient)
+                    .overlay {
+                        Capsule().fill(LinearGradient(colors: [.white.opacity(0.28), .clear], startPoint: .top, endPoint: .center))
+                            .padding(1.5)
+                    }
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.35), lineWidth: 1))
+            }
+            .shadow(color: Theme.main.opacity(configuration.isPressed ? 0.2 : 0.38), radius: configuration.isPressed ? 6 : 14, y: configuration.isPressed ? 3 : 7)
+            .saturation(enabled ? 1 : 0.2)
+            .opacity(enabled ? 1 : 0.6)
+            .scaleEffect(configuration.isPressed ? 0.95 : 1)
+            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: configuration.isPressed)
     }
 }
 
@@ -163,8 +199,10 @@ struct OutlineButtonStyle: ButtonStyle {
             .foregroundStyle(Theme.pink)
             .padding(.horizontal, 18)
             .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: height)
+            .background(configuration.isPressed ? Theme.soft : Color.clear, in: Capsule())
             .background(Palette.surface, in: Capsule())
-            .overlay(Capsule().strokeBorder(Theme.pink.opacity(0.25), lineWidth: 1.2))
+            .overlay(Capsule().strokeBorder(Theme.pink.opacity(0.3), lineWidth: 1.4))
+            .shadow(color: Palette.shadow, radius: 6, y: 2)
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
             .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
     }
@@ -188,13 +226,16 @@ struct Chip: View {
             .foregroundStyle(active ? .white : Palette.text2)
             .background {
                 if active {
-                    Capsule().fill(Theme.gradient).shadow(color: Theme.pink.opacity(0.3), radius: 8, y: 4)
+                    Capsule().fill(Theme.gradient)
+                        .overlay(Capsule().fill(LinearGradient(colors: [.white.opacity(0.25), .clear], startPoint: .top, endPoint: .center)).padding(1))
+                        .shadow(color: Theme.pink.opacity(0.35), radius: 8, y: 4)
                 } else {
                     Capsule().fill(Palette.surface).overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
                 }
             }
+            .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(BouncyStyle(scale: 0.92))
         .sensoryFeedback(.selection, trigger: active)
         .animation(.snappy(duration: 0.25), value: active)
     }
@@ -209,20 +250,23 @@ struct SectionHeader: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Theme.pink)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(.white)
                 .frame(width: 34, height: 34)
-                .background(Theme.soft, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .background(Theme.gradient, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .shadow(color: Theme.main.opacity(0.3), radius: 6, y: 3)
             Text(title).font(.display(22)).foregroundStyle(Palette.text)
             Spacer()
             if let action {
                 Button(action: action) {
-                    HStack(spacing: 3) { Text("See all"); Image(systemName: "arrow.right") }
-                        .font(.jakarta(13, .bold))
-                        .foregroundStyle(Theme.pink)
-                        .padding(.vertical, 8)
+                    HStack(spacing: 4) { Text("See all"); Image(systemName: "chevron.right").font(.system(size: 10, weight: .heavy)) }
+                        .font(.jakarta(12, .bold))
+                        .foregroundStyle(Theme.main)
+                        .padding(.horizontal, 12)
+                        .frame(height: 30)
+                        .background(Theme.soft, in: Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(BouncyStyle())
             }
         }
     }
@@ -342,5 +386,87 @@ struct ConfettiView: View {
         }
         .allowsHitTesting(false)
         .onAppear { fall = true }
+    }
+}
+
+// MARK: - Loading placeholders
+
+// A soft light sweeping across a placeholder, like the website's .skeleton.
+struct Shimmer: ViewModifier {
+    func body(content: Content) -> some View {
+        content.overlay {
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+                let t = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.4) / 1.4
+                GeometryReader { geo in
+                    LinearGradient(colors: [.clear, .white.opacity(0.45), .clear], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: geo.size.width * 0.6)
+                        .offset(x: -geo.size.width * 0.6 + CGFloat(t) * geo.size.width * 1.6)
+                }
+            }
+            .blendMode(.plusLighter)
+            .allowsHitTesting(false)
+        }
+        .clipped()
+    }
+}
+
+extension View {
+    func shimmer() -> some View { modifier(Shimmer()) }
+
+    // Sections float up one after another when a page opens.
+    func stagger(_ shown: Bool, _ index: Int) -> some View {
+        self
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown ? 0 : 22)
+            .animation(.spring(response: 0.55, dampingFraction: 0.85).delay(Double(min(index, 10)) * 0.05), value: shown)
+    }
+}
+
+struct SkeletonBlock: View {
+    var height: CGFloat
+    var radius: CGFloat = 18
+    var body: some View {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .fill(Palette.surface2)
+            .frame(height: height)
+            .shimmer()
+            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+    }
+}
+
+// A post-shaped placeholder card.
+struct SkeletonCard: View {
+    var media = true
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Circle().fill(Palette.surface2).frame(width: 40, height: 40)
+                VStack(alignment: .leading, spacing: 6) {
+                    Capsule().fill(Palette.surface2).frame(width: 120, height: 10)
+                    Capsule().fill(Palette.surface2).frame(width: 70, height: 8)
+                }
+            }
+            Capsule().fill(Palette.surface2).frame(height: 10)
+            Capsule().fill(Palette.surface2).frame(width: 200, height: 10)
+            if media { RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Palette.surface2).frame(height: 220) }
+        }
+        .shimmer()
+        .sugarCard(radius: 26, padding: 16)
+    }
+}
+
+// A chat-row placeholder.
+struct SkeletonRow: View {
+    var body: some View {
+        HStack(spacing: 14) {
+            Circle().fill(Palette.surface2).frame(width: 52, height: 52)
+            VStack(alignment: .leading, spacing: 8) {
+                Capsule().fill(Palette.surface2).frame(width: 140, height: 11)
+                Capsule().fill(Palette.surface2).frame(width: 200, height: 9)
+            }
+            Spacer()
+        }
+        .shimmer()
+        .sugarCard(radius: 22, padding: 12)
     }
 }

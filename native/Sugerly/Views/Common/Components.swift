@@ -3,43 +3,81 @@ import SwiftUI
 import UIKit
 
 
-// Round profile picture with the person's initial as a fallback.
+// Round profile picture with the person's initial as a fallback. Pictures
+// come from the shared image cache, so avatars never flash while scrolling.
 struct Avatar: View {
     var url: String
     var name: String
     var size: CGFloat = 40
     var online = false
+    var ring = false
+    @State private var image: UIImage?
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             Group {
-                if let link = URL(string: url), !url.isEmpty {
-                    AsyncImage(url: link, transaction: Transaction(animation: .easeOut(duration: 0.2))) { phase in
-                        if let image = phase.image { image.resizable().scaledToFill() } else { initial }
-                    }
+                if let shown = image ?? (url.isEmpty ? nil : MemoryImages.get(url)) {
+                    Image(uiImage: shown).resizable().scaledToFill()
                 } else {
                     initial
                 }
             }
             .frame(width: size, height: size)
             .clipShape(Circle())
+            .padding(ring ? max(2, size * 0.05) : 0)
+            .background {
+                if ring { Circle().fill(Theme.gradient) }
+            }
+            .overlay {
+                if ring { Circle().strokeBorder(Palette.surface, lineWidth: max(1.5, size * 0.035)).padding(max(2, size * 0.05) - max(1.5, size * 0.035)) }
+            }
 
             if online {
-                Circle().fill(.green)
-                    .frame(width: size * 0.28, height: size * 0.28)
-                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
+                Circle().fill(Palette.success)
+                    .frame(width: max(9, size * 0.27), height: max(9, size * 0.27))
+                    .overlay(Circle().strokeBorder(Palette.surface, lineWidth: max(2, size * 0.05)))
+                    .shadow(color: Palette.success.opacity(0.5), radius: 3)
             }
         }
         .accessibilityHidden(true)
+        .task(id: url) {
+            guard !url.isEmpty, image == nil || MemoryImages.get(url) == nil else { return }
+            if let loaded = await ImagePipeline.shared.load(url) { image = loaded }
+        }
     }
 
     private var initial: some View {
         ZStack {
-            Theme.gradient
+            LinearGradient(colors: [Theme.light, Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing)
             Text(String(name.first ?? "?").uppercased())
-                .font(.jakarta(size * 0.4, .bold))
+                .font(.display(size * 0.45))
                 .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
         }
+    }
+}
+
+// The pop-up shown at the top of the screen for a couple of seconds.
+struct ToastView: View {
+    let toast: Toast
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: toast.icon)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 30, height: 30)
+                .background(toast.error ? AnyShapeStyle(Palette.danger) : AnyShapeStyle(Theme.gradient), in: Circle())
+                .symbolEffect(.bounce, value: toast.id)
+            Text(toast.text).font(.jakarta(14, .bold)).foregroundStyle(Palette.text).lineLimit(2)
+        }
+        .padding(.leading, 8)
+        .padding(.trailing, 18)
+        .padding(.vertical, 8)
+        .background(Palette.surface, in: Capsule())
+        .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
+        .shadow(color: Theme.main.opacity(0.18), radius: 18, y: 8)
+        .padding(.horizontal, 20)
+        .sensoryFeedback(toast.error ? .error : .success, trigger: toast.id)
     }
 }
 
@@ -164,7 +202,7 @@ struct ArtImage: View {
                     }
                     .transition(.opacity)
                 } else {
-                    Rectangle().fill(Palette.surface2).overlay(ProgressView().tint(Theme.main))
+                    Rectangle().fill(Palette.surface2).shimmer()
                 }
             }
             .clipped()
@@ -240,6 +278,7 @@ struct ReportSheet: View {
         do {
             try await FS.create("Report", report)
             dismiss()
+            model.showToast("Thanks — our team will take a look", icon: "flag.fill")
         } catch {
             self.error = error.localizedDescription
         }

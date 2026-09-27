@@ -6,24 +6,65 @@ struct NotificationsView: View {
     @Environment(AppModel.self) private var model
     @Environment(NotificationsStore.self) private var notes
     @Environment(PostsStore.self) private var posts
+    @State private var filter = "all"
+    @State private var appeared = false
+
+    private let filters: [(String, String, String)] = [("all", "All", "sparkles"), ("like", "Likes", "heart.fill"), ("comment", "Comments", "bubble.left.fill"), ("follow", "Follows", "person.fill.badge.plus")]
+
+    private var shown: [AppNotification] {
+        switch filter {
+        case "like": return notes.items.filter { $0.type == "like" }
+        case "comment": return notes.items.filter { $0.type == "comment" || $0.type == "reply" }
+        case "follow": return notes.items.filter { $0.type == "follow" }
+        default: return notes.items
+        }
+    }
+
+    // Today / This week / Earlier, like the website.
+    private var groups: [(String, [AppNotification])] {
+        let now = Date()
+        var today: [AppNotification] = [], week: [AppNotification] = [], earlier: [AppNotification] = []
+        for n in shown {
+            let age = now.timeIntervalSince(Dates.parse(n.created) ?? now)
+            if age < 86_400 { today.append(n) } else if age < 7 * 86_400 { week.append(n) } else { earlier.append(n) }
+        }
+        return [("Today", today), ("This week", week), ("Earlier", earlier)].filter { !$0.1.isEmpty }
+    }
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text("Notifications").font(.display(36)).foregroundStyle(Palette.text)
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Notifications").font(.display(36)).foregroundStyle(Palette.text)
+                        Text(notes.unread > 0 ? "\(notes.unread) new" : "You're all caught up").font(.jakarta(13, .semibold)).foregroundStyle(notes.unread > 0 ? Theme.main : Palette.muted)
+                    }
                     Spacer()
                     if notes.unread > 0 {
-                        Button("Mark all read") { withAnimation { notes.markAllRead() } }
-                            .font(.jakarta(13, .bold)).foregroundStyle(Theme.pink)
+                        Button { withAnimation { notes.markAllRead() } } label: { Label("Read all", systemImage: "checkmark.circle.fill") }
+                            .buttonStyle(OutlineButtonStyle(height: 36))
                     }
                 }
-                if notes.items.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(filters, id: \.0) { f in
+                            Chip(title: f.1, icon: f.2, active: filter == f.0) { withAnimation(.snappy) { filter = f.0 } }
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                .padding(.bottom, 4)
+                if shown.isEmpty {
                     EmptyCard(icon: "bell.fill", title: "All caught up", text: "Likes, follows and comments show up here.")
                 }
-                ForEach(notes.items) { n in
-                    Button { open(n) } label: { row(n) }
-                        .buttonStyle(BouncyStyle(scale: 0.97))
+                ForEach(Array(groups.enumerated()), id: \.element.0) { gi, group in
+                    Text(group.0.uppercased()).font(.jakarta(11, .heavy)).tracking(1.2).foregroundStyle(Palette.muted)
+                        .padding(.top, 8).padding(.leading, 4)
+                    ForEach(Array(group.1.enumerated()), id: \.element.id) { i, n in
+                        Button { open(n) } label: { row(n) }
+                            .buttonStyle(BouncyStyle(scale: 0.97))
+                            .stagger(appeared, gi * 3 + i)
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -34,28 +75,45 @@ struct NotificationsView: View {
         .sugarBackground()
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await notes.refresh(me: model.me?.email ?? "") }
+        .onAppear { appeared = true }
         .onDisappear { notes.markAllRead() }
     }
 
     private func row(_ n: AppNotification) -> some View {
         HStack(spacing: 12) {
-            Avatar(url: model.person(n.fromEmail)?.picture ?? n.fromPicture, name: n.fromName, size: 48)
+            Avatar(url: model.person(n.fromEmail)?.picture ?? n.fromPicture, name: n.fromName, size: 50)
                 .overlay(alignment: .bottomTrailing) {
                     Image(systemName: icon(n.type)).font(.system(size: 10, weight: .black)).foregroundStyle(.white)
-                        .frame(width: 22, height: 22).background(Theme.gradient, in: Circle())
+                        .frame(width: 22, height: 22)
+                        .background(LinearGradient(colors: tint(n.type), startPoint: .topLeading, endPoint: .bottomTrailing), in: Circle())
                         .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
                         .offset(x: 3, y: 3)
                 }
             VStack(alignment: .leading, spacing: 3) {
-                Text(n.message).font(.jakarta(14, n.read ? .regular : .semibold)).foregroundStyle(Palette.text).multilineTextAlignment(.leading).lineLimit(3)
+                Text(n.message).font(.jakarta(14, n.read ? .medium : .bold)).foregroundStyle(Palette.text).multilineTextAlignment(.leading).lineLimit(3)
                 Text(Dates.ago(n.created)).font(.jakarta(12)).foregroundStyle(Palette.muted)
             }
             Spacer(minLength: 0)
-            if !n.read { Circle().fill(Theme.gradient).frame(width: 10, height: 10) }
+            if n.type == "follow" && !n.fromEmail.isEmpty {
+                FollowButton(email: n.fromEmail, compact: true)
+            } else if !n.read {
+                Circle().fill(Theme.gradient).frame(width: 10, height: 10).shadow(color: Theme.main.opacity(0.5), radius: 4)
+            }
         }
         .padding(12)
         .background(n.read ? Palette.surface : Theme.pink.opacity(0.07), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(n.read ? Palette.border : Theme.pink.opacity(0.25), lineWidth: 1))
+        .shadow(color: Palette.shadow, radius: 6, y: 2)
+    }
+
+    private func tint(_ type: String) -> [Color] {
+        switch type {
+        case "like": return [Color(hex: 0xFF7AA2), Color(hex: 0xE0406F)]
+        case "follow": return [Color(hex: 0xB19CFF), Color(hex: 0x7C5CF0)]
+        case "comment", "reply": return [Color(hex: 0x7CBEFF), Color(hex: 0x2F80E0)]
+        case "message": return [Color(hex: 0x5FD3B0), Color(hex: 0x16A37F)]
+        default: return [Theme.light, Theme.main]
+        }
     }
 
     private func icon(_ type: String) -> String {
@@ -175,7 +233,7 @@ struct AdminView: View {
 
     private var reportsList: some View {
         VStack(spacing: 12) {
-            if loading { ProgressView().padding(30) }
+            if loading { ForEach(0..<5, id: \.self) { _ in SkeletonRow() } }
             if !loading && reports.isEmpty { EmptyCard(icon: "checkmark.seal.fill", title: "No reports", text: "When people report posts or accounts, they show up here.") }
             ForEach(reports.indices, id: \.self) { i in
                 let r = reports[i]

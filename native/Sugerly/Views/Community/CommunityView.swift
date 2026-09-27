@@ -193,7 +193,7 @@ struct CommunityView: View {
                 }
 
                 if store.loading && store.posts.isEmpty {
-                    ProgressView().frame(maxWidth: .infinity).padding(40)
+                    ForEach(0..<3, id: \.self) { i in SkeletonCard(media: i != 1) }
                 } else if visible.isEmpty {
                     EmptyCard(icon: feed == .saved ? "bookmark.fill" : "sparkles",
                               title: feed == .saved ? "No saved posts" : feed == .following ? "Nothing from people you follow" : "Nothing here yet",
@@ -390,22 +390,33 @@ struct PostCard: View {
     private var header: some View {
         HStack(spacing: 10) {
             Button { path.append(.person(post.authorEmail)) } label: {
-                Avatar(url: author?.picture ?? post.authorPicture, name: author?.displayName ?? post.authorName, size: 46, online: author?.isOnline ?? false)
+                Avatar(url: author?.picture ?? post.authorPicture, name: author?.displayName ?? post.authorName, size: 46, online: author?.isOnline ?? false, ring: author?.isOnline ?? false)
             }
             .buttonStyle(BouncyStyle())
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(author?.displayName ?? post.authorName).font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
+                    Text(author?.displayName ?? post.authorName).font(.jakarta(15, .heavy)).foregroundStyle(Palette.text).lineLimit(1)
+                    if let author {
+                        let info = LevelInfo(xp: author.xp)
+                        Text("Lv.\(info.level)")
+                            .font(.jakarta(10, .heavy)).foregroundStyle(.white)
+                            .padding(.horizontal, 6).frame(height: 17)
+                            .background(info.color, in: Capsule())
+                    }
                     if post.authorEmail != me && !following {
-                        Text("·").foregroundStyle(Palette.muted)
-                        Button("Follow") { follow() }.font(.jakarta(14, .bold)).foregroundStyle(Theme.pink).buttonStyle(.plain)
+                        Button { follow() } label: {
+                            Text("Follow").font(.jakarta(12, .heavy)).foregroundStyle(Theme.main)
+                                .padding(.horizontal, 10).frame(height: 24)
+                                .background(Theme.soft, in: Capsule())
+                        }
+                        .buttonStyle(BouncyStyle())
                     }
                 }
                 Text(Dates.ago(post.created) + (post.title.isEmpty ? "" : " · \(post.title)")).font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(1)
             }
             Spacer()
             Menu {
-                if !post.text.isEmpty { Button { UIPasteboard.general.string = post.text } label: { Label("Copy text", systemImage: "doc.on.doc") } }
+                if !post.text.isEmpty { Button { UIPasteboard.general.string = post.text; model.showToast("Copied", icon: "doc.on.doc.fill") } label: { Label("Copy text", systemImage: "doc.on.doc") } }
                 if post.authorEmail != me {
                     Button { reporting = ReportSheet.Target(id: post.id, type: "post", ownerEmail: post.authorEmail, preview: post.title.isEmpty ? post.text : post.title, link: "/Community?post=\(post.id)") } label: { Label("Report", systemImage: "flag") }
                 }
@@ -442,29 +453,33 @@ struct PostCard: View {
                     Image(systemName: liked ? "heart.fill" : "heart")
                         .foregroundStyle(liked ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.text2))
                         .symbolEffect(.bounce, value: liked)
-                    Text("\(post.likes.count)").font(.jakarta(15, .bold)).foregroundStyle(liked ? Theme.pink : Palette.text2)
+                    Text("\(post.likes.count)").font(.jakarta(14, .heavy)).foregroundStyle(liked ? Theme.pink : Palette.text2)
+                        .contentTransition(.numericText())
                 }
+                .actionPill(active: liked)
             }
             .sensoryFeedback(.impact(weight: .light), trigger: liked)
             Button { open() } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "bubble.right").foregroundStyle(Palette.text2)
-                    Text("\(store.commentCounts[post.id] ?? 0)").font(.jakarta(15, .bold)).foregroundStyle(Palette.text2)
+                    Text("\(store.commentCounts[post.id] ?? 0)").font(.jakarta(14, .heavy)).foregroundStyle(Palette.text2)
                 }
+                .actionPill(active: false)
             }
             ShareLink(item: post.title.isEmpty ? post.text : post.title, subject: Text("Sugerly")) {
-                Image(systemName: "paperplane").foregroundStyle(Palette.text2)
+                Image(systemName: "paperplane").foregroundStyle(Palette.text2).actionPill(active: false)
             }
             Spacer()
             Button { toggleSave() } label: {
                 Image(systemName: saved ? "bookmark.fill" : "bookmark")
                     .foregroundStyle(saved ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.text2))
                     .symbolEffect(.bounce, value: saved)
+                    .actionPill(active: saved)
             }
             .sensoryFeedback(.impact(weight: .light), trigger: saved)
             .accessibilityLabel(saved ? "Remove from saved" : "Save")
         }
-        .font(.system(size: 21, weight: .semibold))
+        .font(.system(size: 18, weight: .semibold))
         .buttonStyle(BouncyStyle(scale: 0.85))
     }
 
@@ -490,6 +505,7 @@ struct PostCard: View {
         Task {
             try? await model.updateMe(["following": me.following + [post.authorEmail]])
             Notify.send(to: post.authorEmail, from: me, type: "follow", message: "\(me.displayName) started following you", link: "/Profile?email=\(me.email)")
+            model.showToast("Following \(author?.displayName ?? post.authorName)", icon: "heart.fill")
         }
     }
 
@@ -505,7 +521,9 @@ struct PostCard: View {
     private func toggleSave() {
         guard let me = model.me else { return }
         var next = me.savedPosts
-        if next.contains(post.id) { next.removeAll { $0 == post.id } } else { next.append(post.id) }
+        let saving = !next.contains(post.id)
+        if saving { next.append(post.id) } else { next.removeAll { $0 == post.id } }
+        model.showToast(saving ? "Saved" : "Removed from saved", icon: saving ? "bookmark.fill" : "bookmark")
         Task { try? await model.updateMe(["saved_posts": next]) }
     }
 }
@@ -805,6 +823,7 @@ struct NewPostView: View {
             try? await model.updateMe(["xp": me.xp + 20, "coins": me.coins + 5])
             await onPosted()
             dismiss()
+            model.showToast("Posted! +20 XP · +5 coins", icon: "sparkles")
         } catch {
             self.error = error.localizedDescription
         }
@@ -935,5 +954,17 @@ enum ImageTools {
         format.scale = 1
         let resized = UIGraphicsImageRenderer(size: target, format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: target)) }
         return resized.jpegData(compressionQuality: quality)
+    }
+}
+
+extension View {
+    // Soft rounded pill behind a post action (like, comment, share, save).
+    func actionPill(active: Bool) -> some View {
+        self
+            .padding(.horizontal, 12)
+            .frame(minWidth: 42, minHeight: 38)
+            .background(active ? Theme.soft : Palette.surface2, in: Capsule())
+            .overlay(Capsule().strokeBorder(active ? Theme.main.opacity(0.25) : Color.clear, lineWidth: 1))
+            .contentShape(Capsule())
     }
 }

@@ -125,7 +125,7 @@ struct ProfileContent: View {
             .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
             .padding(.horizontal, 12)
 
-            Avatar(url: person.picture, name: person.displayName, size: 108, online: person.isOnline && !isMe)
+            Avatar(url: person.picture, name: person.displayName, size: 104, online: person.isOnline && !isMe, ring: true)
                 .padding(4)
                 .background(Palette.bg, in: Circle())
                 .shadow(color: Theme.pink.opacity(0.3), radius: 16, y: 8)
@@ -139,7 +139,7 @@ struct ProfileContent: View {
         let info = LevelInfo(xp: person.xp)
         return VStack(alignment: .leading, spacing: 8) {
             Text(person.displayName).font(.display(34)).foregroundStyle(Palette.text)
-            HStack(spacing: 8) {
+            FlowLayout(spacing: 8) {
                 if person.isAdmin {
                     Label("Admin", systemImage: "shield.fill").font(.jakarta(12, .bold)).foregroundStyle(Theme.pink)
                         .padding(.horizontal, 10).padding(.vertical, 5)
@@ -150,6 +150,11 @@ struct ProfileContent: View {
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(info.color.opacity(0.12), in: Capsule())
                     .overlay(Capsule().strokeBorder(info.color.opacity(0.3), lineWidth: 1))
+                if person.dailyStreak > 1 {
+                    Label("\(person.dailyStreak)-day streak", systemImage: "flame.fill").font(.jakarta(12, .bold)).foregroundStyle(Color(hex: 0xF08A20))
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Color(hex: 0xF08A20).opacity(0.12), in: Capsule())
+                }
                 if let joined = Dates.parse(person.joined) {
                     Label("Joined \(joined.formatted(.dateTime.month(.abbreviated).year()))", systemImage: "calendar").font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)
                 }
@@ -202,13 +207,11 @@ struct ProfileContent: View {
     }
 
     private var tabs: some View {
-        HStack(spacing: 8) {
-            ForEach(Tab.allCases.filter { isMe || $0 != .saved }, id: \.self) { t in
-                Chip(title: t.rawValue, icon: t == .posts ? "square.grid.2x2" : t == .reels ? "play.rectangle" : "bookmark", active: tab == t) {
-                    withAnimation(.snappy) { tab = t }
-                }
-            }
+        let list = Tab.allCases.filter { isMe || $0 != .saved }
+        let options: [(String, String)] = list.map { t in
+            (t.rawValue, t == .posts ? "square.grid.2x2.fill" : t == .reels ? "play.rectangle.fill" : "bookmark.fill")
         }
+        return SectionSwitch(options: options, selection: Binding(get: { list.firstIndex(of: tab) ?? 0 }, set: { i in withAnimation(.snappy) { tab = list[i] } }))
     }
 
     @ViewBuilder
@@ -376,6 +379,7 @@ struct EditProfileView: View {
             }
             try await model.updateMe(fields)
             dismiss()
+            model.showToast("Profile updated", icon: "sparkles")
         } catch {
             self.error = error.localizedDescription
         }

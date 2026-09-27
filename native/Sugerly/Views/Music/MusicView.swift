@@ -142,7 +142,7 @@ struct MusicView: View {
                 }
             }
             VStack(spacing: 4) {
-                if chartsLoading && charts.isEmpty { ProgressView().frame(maxWidth: .infinity).padding(30) }
+                if chartsLoading && charts.isEmpty { ForEach(0..<5, id: \.self) { _ in SkeletonRow() } }
                 if chartsError && charts.isEmpty {
                     Text("Couldn't load the charts right now — try again in a moment.").font(.jakarta(14)).foregroundStyle(Palette.muted).padding(20)
                 }
@@ -307,6 +307,7 @@ struct NewTrackView: View {
             try await FS.create("MusicReview", doc)
             try? await model.updateMe(["xp": me.xp + 15])
             dismiss()
+            model.showToast("Track shared · +15 XP", icon: "music.note")
         } catch {
             self.error = error.localizedDescription
         }

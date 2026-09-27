@@ -164,15 +164,15 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
-                hero.homeEnter(appeared, 0)
-                quickLinks.homeEnter(appeared, 1)
-                featured.homeEnter(appeared, 2)
-                if !reels.isEmpty { reelStrip.homeEnter(appeared, 3) }
-                community.homeEnter(appeared, 4)
-                freshTracks.homeEnter(appeared, 5)
-                artists.homeEnter(appeared, 6)
-                friendsRow.homeEnter(appeared, 7)
-                yourServers.homeEnter(appeared, 8)
+                hero.stagger(appeared, 0)
+                quickLinks.stagger(appeared, 1)
+                featured.stagger(appeared, 2)
+                if !reels.isEmpty { reelStrip.stagger(appeared, 3) }
+                community.stagger(appeared, 4)
+                freshTracks.stagger(appeared, 5)
+                artists.stagger(appeared, 6)
+                friendsRow.stagger(appeared, 7)
+                yourServers.stagger(appeared, 8)
                 Label("Last activity \(Dates.ago(posts.posts.first?.created ?? ""))", systemImage: "sparkles")
                     .font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
                     .frame(maxWidth: .infinity)
@@ -271,11 +271,11 @@ struct HomeView: View {
     private var friendsRow: some View {
         let friends = mutualFriends.sorted { (model.person($0)?.isOnline == true ? 0 : 1) < (model.person($1)?.isOnline == true ? 0 : 1) }
         return VStack(alignment: .leading, spacing: 14) {
-            SectionHeader(icon: "person.2.fill", title: "Friends")
+            SectionHeader(icon: "person.2.fill", title: "Friends") { path.append(.people) }
             if friends.isEmpty {
                 VStack(spacing: 10) {
                     Text("Follow people back to become friends and see who's around.").font(.jakarta(14)).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
-                    Button { path.append(.gallery) } label: { Label("Find people", systemImage: "sparkles") }
+                    Button { path.append(.people) } label: { Label("Find people", systemImage: "sparkles") }
                         .buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
                 }
                 .frame(maxWidth: .infinity)
@@ -606,12 +606,3 @@ struct TrackRow: View {
     }
 }
 
-// Home sections slide up one after another, like the website's stagger.
-extension View {
-    func homeEnter(_ shown: Bool, _ index: Int) -> some View {
-        self
-            .opacity(shown ? 1 : 0)
-            .offset(y: shown ? 0 : 24)
-            .animation(.spring(response: 0.55, dampingFraction: 0.85).delay(Double(index) * 0.06), value: shown)
-    }
-}

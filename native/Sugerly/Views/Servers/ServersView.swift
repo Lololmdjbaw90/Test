@@ -218,7 +218,7 @@ struct ServersView: View {
             .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
 
             if loading && servers.isEmpty {
-                ProgressView().frame(maxWidth: .infinity).padding(40)
+                ForEach(0..<3, id: \.self) { _ in SkeletonBlock(height: 170, radius: 24) }
             } else if shown.isEmpty {
                 EmptyCard(icon: "person.3.fill", title: tab == 0 ? "No servers yet" : "Nothing found", text: tab == 0 ? "Join one from Discover or create your own." : "Try another name.")
                 if tab == 0 {
@@ -253,6 +253,7 @@ struct ServersView: View {
         defer { busy = nil }
         do {
             try await Servers.join(server, me: meProfile)
+            model.showToast("Welcome to \(server.name)!", icon: "party.popper.fill")
             var joined = server
             joined.members.append(meProfile.email)
             if let i = servers.firstIndex(where: { $0.id == server.id }) { servers[i] = joined }
@@ -344,7 +345,7 @@ struct ServerView: View {
                     .background(Theme.soft, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
                 if loading && channels.isEmpty {
-                    ProgressView().frame(maxWidth: .infinity).padding(30)
+                    ForEach(0..<4, id: \.self) { _ in SkeletonBlock(height: 52, radius: 16) }
                 }
                 let text = channels.filter { !$0.isVoice }
                 let voice = channels.filter(\.isVoice)
@@ -528,7 +529,7 @@ struct ChannelChatView: View {
                             .id(message.id)
                             .contextMenu {
                                 Button { replyTo = message; focused = true } label: { Label("Reply", systemImage: "arrowshape.turn.up.left") }
-                                if !message.text.isEmpty { Button { UIPasteboard.general.string = message.text } label: { Label("Copy", systemImage: "doc.on.doc") } }
+                                if !message.text.isEmpty { Button { UIPasteboard.general.string = message.text; model.showToast("Copied", icon: "doc.on.doc.fill") } label: { Label("Copy", systemImage: "doc.on.doc") } }
                                 if message.authorEmail == me || model.me?.isAdmin == true {
                                     Button(role: .destructive) { delete(message) } label: { Label("Delete", systemImage: "trash") }
                                 }

@@ -12,6 +12,7 @@ enum Route: Hashable {
     case notifications
     case admin
     case servers
+    case people
     case server(Server)
     case channel(Server, ServerChannel)
     case voice(Server, ServerChannel)
@@ -38,6 +39,7 @@ struct RouteView: View {
         case .notifications: NotificationsView(path: $path)
         case .admin: AdminView()
         case .servers: ServersView(path: $path)
+        case .people: PeopleView(path: $path)
         case .server(let server): ServerView(server: server, path: $path)
         case .channel(let server, let channel): ChannelChatView(server: server, channel: channel)
         case .voice(let server, let channel): VoiceChannelView(server: server, channel: channel)
@@ -55,9 +57,11 @@ extension View {
         background {
             ZStack {
                 Palette.bg
-                Circle().fill(Theme.light.opacity(0.28)).frame(width: 340).blur(radius: 90).offset(x: 150, y: -300)
-                Circle().fill(Theme.lavender.opacity(0.16)).frame(width: 300).blur(radius: 90).offset(x: -170, y: 260)
+                Circle().fill(Theme.light.opacity(0.32)).frame(width: 360).blur(radius: 95).offset(x: 150, y: -300)
+                Circle().fill(Theme.lavender.opacity(0.18)).frame(width: 320).blur(radius: 95).offset(x: -170, y: 260)
+                Circle().fill(Color(hex: 0xFFD6A5).opacity(0.14)).frame(width: 240).blur(radius: 80).offset(x: 140, y: 120)
             }
+            .drawingGroup()
             .ignoresSafeArea()
         }
     }
@@ -138,6 +142,15 @@ struct MainShell: View {
                 }
                 .padding(.bottom, 2)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .overlay(alignment: .top) {
+            if let toast = model.toast {
+                ToastView(toast: toast)
+                    .padding(.top, 6)
+                    .transition(.move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.9)))
+                    .onTapGesture { withAnimation { model.toast = nil } }
+                    .zIndex(10)
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: barHidden)
@@ -269,11 +282,23 @@ struct TopBar: View {
     @Environment(AppModel.self) private var model
     @Environment(NotificationsStore.self) private var notes
     @State private var more = false
+    @State private var searching = false
 
     var body: some View {
         HStack(spacing: 10) {
             BrandLogo(height: 34)
             Spacer()
+            Button { searching = true } label: {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(Palette.text2)
+                    .frame(width: 42, height: 42)
+                    .background(Palette.surface, in: Circle())
+                    .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
+                    .shadow(color: Palette.shadow, radius: 6, y: 2)
+            }
+            .buttonStyle(BouncyStyle())
+            .accessibilityLabel("Search")
             Button { path.append(.notifications) } label: {
                 Image(systemName: "bell.fill")
                     .font(.system(size: 17, weight: .semibold))
@@ -281,6 +306,8 @@ struct TopBar: View {
                     .frame(width: 42, height: 42)
                     .background(Palette.surface, in: Circle())
                     .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
+                    .shadow(color: Palette.shadow, radius: 6, y: 2)
+                    .symbolEffect(.bounce, value: notes.unread)
                     .overlay(alignment: .topTrailing) {
                         if notes.unread > 0 {
                             Text(notes.unread > 9 ? "9+" : "\(notes.unread)")
@@ -294,8 +321,7 @@ struct TopBar: View {
             .buttonStyle(BouncyStyle())
             .accessibilityLabel("Notifications")
             Button { more = true } label: {
-                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 42)
-                    .overlay(Circle().strokeBorder(Theme.gradient, lineWidth: 2))
+                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 38, ring: true)
                     .shadow(color: Theme.pink.opacity(0.3), radius: 6, y: 3)
             }
             .buttonStyle(BouncyStyle())
@@ -304,9 +330,15 @@ struct TopBar: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background {
-            Palette.bg.opacity(0.94)
-                .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1) }
+            Rectangle().fill(.ultraThinMaterial)
+                .overlay(Palette.bg.opacity(0.7))
+                .overlay(alignment: .bottom) { Rectangle().fill(Palette.border.opacity(0.7)).frame(height: 0.5) }
                 .ignoresSafeArea(edges: .top)
+        }
+        .sheet(isPresented: $searching) {
+            SearchView { route in path.append(route) }
+                .presentationDetents([.large])
+                .presentationCornerRadius(34)
         }
         .sheet(isPresented: $more) {
             MoreSheet(path: $path).presentationDetents([.medium, .large]).presentationCornerRadius(34)
@@ -396,6 +428,7 @@ struct MoreSheet: View {
                     tile("Music", "music.note", [0xFF7AA2, 0xD9577F]) { go(.music) }
                     tile("Gallery", "photo.stack.fill", [0xFFAA80, 0xEE6E40]) { go(.gallery) }
                     tile("Servers", "person.3.fill", [0xFF9EC4, 0xE0508A]) { go(.servers) }
+                    tile("People", "person.crop.circle.badge.plus", [0xFFD166, 0xF08A20]) { go(.people) }
                     tile("Alerts", "bell.fill", [0xB19CFF, 0x7C5CF0]) { go(.notifications) }
                     tile("Settings", "gearshape.fill", [0x7CBEFF, 0x2F80E0]) { settings = true }
                     tile("Help", "questionmark.circle.fill", [0x5FD3B0, 0x16A37F]) { legal = .guidelines }

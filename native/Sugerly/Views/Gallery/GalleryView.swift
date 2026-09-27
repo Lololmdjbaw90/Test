@@ -46,7 +46,10 @@ struct GalleryView: View {
                     .padding(.vertical, 2)
                 }
                 if loading && artworks.isEmpty {
-                    ProgressView().frame(maxWidth: .infinity).padding(40)
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(spacing: 12) { SkeletonBlock(height: 240, radius: 22); SkeletonBlock(height: 180, radius: 22) }
+                        VStack(spacing: 12) { SkeletonBlock(height: 180, radius: 22); SkeletonBlock(height: 240, radius: 22) }
+                    }
                 } else if shown.isEmpty {
                     EmptyCard(icon: "paintpalette.fill", title: sort == .saved ? "Nothing saved yet" : "No artworks here", text: sort == .saved ? "Tap the bookmark on any artwork to keep it." : "Add the first one!")
                 }
@@ -200,7 +203,9 @@ struct ArtworkDetailView: View {
     private func toggleSave() {
         guard let meProfile = model.me else { return }
         var next = meProfile.savedArtworks
-        if next.contains(artwork.id) { next.removeAll { $0 == artwork.id } } else { next.append(artwork.id) }
+        let saving = !next.contains(artwork.id)
+        if saving { next.append(artwork.id) } else { next.removeAll { $0 == artwork.id } }
+        model.showToast(saving ? "Saved to your collection" : "Removed from saved", icon: saving ? "bookmark.fill" : "bookmark")
         Task { try? await model.updateMe(["saved_artworks": next]) }
     }
 }
@@ -282,6 +287,7 @@ struct NewArtworkView: View {
             try await FS.create("Artwork", doc)
             try? await model.updateMe(["xp": me.xp + 25, "coins": me.coins + 5])
             dismiss()
+            model.showToast("Added to the gallery · +25 XP", icon: "paintpalette.fill")
         } catch {
             self.error = error.localizedDescription
         }

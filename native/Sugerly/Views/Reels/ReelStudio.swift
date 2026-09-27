@@ -886,6 +886,7 @@ struct ReelStudioView: View {
             try? await model.updateMe(["xp": me.xp + 30, "coins": me.coins + 5])
             teardown()
             dismiss()
+            model.showToast("Your reel is live! +30 XP", icon: "play.rectangle.fill")
         } catch {
             self.error = error.localizedDescription
         }

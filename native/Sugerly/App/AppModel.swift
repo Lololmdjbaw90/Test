@@ -12,8 +12,19 @@ final class AppModel {
     var me: UserProfile?
     // Everyone on Sugerly, by email (names and pictures for chats and posts).
     var people: [String: UserProfile] = [:]
+    // The little pop-up at the top ("Saved", "Posted!", errors).
+    var toast: Toast?
 
     private var auth: AuthClient { AuthClient.shared }
+
+    func showToast(_ text: String, icon: String = "checkmark.circle.fill", error: Bool = false) {
+        let next = Toast(text: text, icon: error ? "exclamationmark.circle.fill" : icon, error: error)
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) { toast = next }
+        Task {
+            try? await Task.sleep(for: .seconds(2.4))
+            if toast?.id == next.id { withAnimation(.easeOut(duration: 0.25)) { toast = nil } }
+        }
+    }
 
     func start() async {
         guard auth.hasSession else { phase = .signedOut; return }
@@ -124,4 +135,11 @@ final class AppModel {
         self.me = nil
         phase = .signedOut
     }
+}
+
+struct Toast: Identifiable, Equatable {
+    let id = UUID()
+    var text: String
+    var icon: String
+    var error: Bool
 }
