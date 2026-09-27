@@ -55,4 +55,17 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_PREVIEWS: YES
         CODE_SIGN_STYLE: Automatic
-    scheme: {}
+    scheme:
+      testTargets:
+        - SugerlyUITests
+
+  SugerlyUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies:
+      - target: Sugerly
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.mimilocks.sugerly.uitests

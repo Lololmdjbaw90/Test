@@ -132,7 +132,7 @@ struct ProfileContent: View {
 
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(alignment: .firstTextBaseline) {
-                        Text(person.displayName).font(.system(.title2, design: .rounded, weight: .bold))
+                        Text(person.displayName).font(.custom("CuteHereRegular", size: 29))
                         if person.isAdmin {
                             Image(systemName: "checkmark.seal.fill").foregroundStyle(Theme.pink).accessibilityLabel("Admin")
                         }
@@ -155,16 +155,16 @@ struct ProfileContent: View {
                     HStack(spacing: 10) {
                         if isMe {
                             Button { onEdit?() } label: { Text("Edit profile").frame(maxWidth: .infinity) }
-                                .buttonStyle(.bordered)
+                                .buttonStyle(PrimaryButtonStyle())
                         } else {
                             Button { toggleFollow() } label: {
                                 Text(following ? "Following" : "Follow").frame(maxWidth: .infinity)
                             }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(PrimaryButtonStyle())
                             .tint(following ? Color(.systemGray3) : Theme.pink)
                             .sensoryFeedback(.success, trigger: following)
                             Button { openChat() } label: { Text("Message").frame(maxWidth: .infinity) }
-                                .buttonStyle(.bordered)
+                                .buttonStyle(PrimaryButtonStyle())
                         }
                     }
                     .controlSize(.large)
@@ -323,4 +323,3 @@ struct EditProfileView: View {
         }
     }
 }
-

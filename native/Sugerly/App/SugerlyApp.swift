@@ -91,7 +91,7 @@ struct MainTabView: View {
                 }.padding(6).background(Theme.card, in: RoundedRectangle(cornerRadius: 28))
                     .overlay(RoundedRectangle(cornerRadius: 28).stroke(Theme.border, lineWidth: 1))
                     .shadow(color: Theme.pink.opacity(0.12), radius: 12, y: 4)
-            }.frame(maxWidth: 560).padding(.horizontal, 12).padding(.bottom, 4) }
+            }.frame(maxWidth: 560).padding(.horizontal, 12).padding(.bottom, 4).accessibilityIdentifier("sugerly.navigation") }
         }
         .environment(music)
         .onChange(of: tab) { _, next in visited.insert(next); if next == 3 { music.pause() } }

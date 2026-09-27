@@ -212,7 +212,7 @@ struct NativeReelComposer: View {
                 let data = item.data
                 let url: String
                 if videos.isEmpty {
-                    guard let photo = UIImage(data: data), let jpeg = photo.jpegData(compressionQuality: 0.85) else { throw APIError(message: "This photo couldn't be opened.") }
+                    guard let photo = UIImage(data: data), let jpeg = ImageTools.jpeg(photo, maxSide: 2048, quality: 0.85) else { throw APIError(message: "This photo couldn't be opened.") }
                     url = try await StorageClient.upload(jpeg, contentType: "image/jpeg", fileExtension: "jpg")
                 } else {
                     let type = item.type

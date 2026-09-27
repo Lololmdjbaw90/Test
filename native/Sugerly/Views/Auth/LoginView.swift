@@ -27,17 +27,17 @@ struct LoginView: View {
 
                 VStack(spacing: 6) {
                     Text(register ? "Join Sugerly" : "Welcome back")
-                        .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                        .font(.custom("Bubbly-Regular", size: 38))
                         .contentTransition(.opacity)
                     Text(register ? "A cozy home for artists." : "Log in to pick up where you left off.")
                         .foregroundStyle(.secondary)
                 }
 
-                Picker("", selection: $register.animation(.snappy)) {
-                    Text("Log in").tag(false)
-                    Text("Sign up").tag(true)
+                HStack(spacing: 8) {
+                    ForEach([false, true], id: \.self) { signup in
+                        Button { register = signup } label: { Text(signup ? "Sign up" : "Log in").font(.custom("CuteHereRegular", size: 22)).frame(maxWidth: .infinity).padding(13).foregroundStyle(register == signup ? .white : Theme.pink).background(register == signup ? Theme.pink : Theme.soft, in: Capsule()) }
+                    }
                 }
-                .pickerStyle(.segmented)
 
                 VStack(spacing: 12) {
                     if register {

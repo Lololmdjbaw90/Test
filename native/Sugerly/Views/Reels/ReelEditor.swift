@@ -85,7 +85,8 @@ struct EditorAsset: Identifiable {
                 total += data.count
                 guard total <= 200 * 1024 * 1024 else { throw APIError(message: "Choose fewer files: keep this reel under 200 MB.") }
                 let videoType = item.supportedContentTypes.first { $0.conforms(to: .movie) }
-                let image = videoType == nil ? UIImage(data: data) : nil
+                let image: UIImage?
+                if videoType == nil, let original = UIImage(data: data), let thumbnail = ImageTools.jpeg(original, maxSide: 1080) { image = UIImage(data: thumbnail) } else { image = nil }
                 guard videoType != nil || image != nil else { throw APIError(message: "This photo couldn't be opened.") }
                 next.append(EditorAsset(data: data, image: image, type: videoType ?? .jpeg))
             }

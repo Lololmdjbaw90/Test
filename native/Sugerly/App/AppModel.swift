@@ -15,6 +15,9 @@ final class AppModel {
     private var auth: AuthClient { AuthClient.shared }
 
     func start() async {
+#if DEBUG
+        if DesignPreview.active { DesignPreview.verifyFonts(); me = UserProfile(DesignPreview.profile); phase = .signedIn; return }
+#endif
         guard auth.hasSession else { phase = .signedOut; return }
         do {
             try await loadProfile()

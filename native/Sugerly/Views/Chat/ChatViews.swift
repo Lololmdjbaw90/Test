@@ -100,31 +100,19 @@ struct ChatListView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            List(shown) { c in
-                NavigationLink(value: Route.chat(c)) {
-                    ConversationRow(conversation: c)
-                }
-                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-            }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-            .background(Theme.background)
-            .overlay {
-                if store.loading && store.conversations.isEmpty {
-                    ProgressView()
-                } else if let error = store.error, store.conversations.isEmpty {
-                    ContentUnavailableView("Couldn't load chats", systemImage: "wifi.exclamationmark", description: Text(error))
-                } else if shown.isEmpty && !store.loading {
-                    ContentUnavailableView {
-                        Label(search.isEmpty ? "No messages yet" : "No chats found", systemImage: "bubble.left.and.bubble.right")
-                    } description: {
-                        Text(search.isEmpty ? "Start a chat with someone on Sugerly." : "Try another name.")
-                    } actions: {
-                        if search.isEmpty { Button("New message") { starting = true }.buttonStyle(.borderedProminent) }
+            ScrollView {
+                LazyVStack(spacing: 14) {
+                    CandyHero(title: "Say a little hello.", subtitle: "Your people, your conversations, your cozy corner.")
+                    HStack { Image(systemName: "magnifyingglass").foregroundStyle(Theme.pink); TextField("Search chats", text: $search) }
+                        .padding(16).background(Theme.card, in: Capsule())
+                    ForEach(shown) { c in
+                        NavigationLink(value: Route.chat(c)) { ConversationRow(conversation: c).padding(16).background(Theme.card, in: RoundedRectangle(cornerRadius: 24)).overlay(RoundedRectangle(cornerRadius: 24).stroke(Theme.pink.opacity(0.15), lineWidth: 1)) }.buttonStyle(CandyButtonStyle())
                     }
-                }
-            }
-            .searchable(text: $search, prompt: "Search chats")
+                    if store.loading && store.conversations.isEmpty { ProgressView().padding() }
+                    else if let error = store.error, store.conversations.isEmpty { Text(error).font(.footnote).foregroundStyle(.secondary) }
+                    else if shown.isEmpty { CandyCard(title: "A conversation starts here", icon: "bubble.left.and.bubble.right.fill") { Text(search.isEmpty ? "Send someone a little hello." : "Try another name.").font(.subheadline); Button("New message") { starting = true }.buttonStyle(PrimaryButtonStyle()) } }
+                }.padding(18).frame(maxWidth: 680).frame(maxWidth: .infinity)
+            }.background(Theme.background)
             .refreshable { await store.refresh(me: model.me?.email ?? "") }
             .navigationTitle("Chat")
             .navigationBarTitleDisplayMode(.inline)

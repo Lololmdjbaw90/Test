@@ -63,3 +63,37 @@ jobs:
           name: Sugerly-native-ipa
           path: native/Sugerly-native-unsigned.ipa
           retention-days: 30
+
+  ui-smoke:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate simulator project
+        working-directory: native
+        run: |
+          XC=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -vi beta | sort -V | tail -1)
+          if [ -n "$XC" ]; then sudo xcode-select -s "$XC"; fi
+          brew install xcodegen
+          xcodegen generate
+      - name: Test native navigation and settings on iPhone
+        working-directory: native
+        run: |
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(v["udid"] for rows in d["devices"].values() for v in rows if "iPhone" in v["name"]))')
+          xcrun simctl boot "$DEVICE" || true
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcodebuild test -project Sugerly.xcodeproj -scheme Sugerly -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -parallel-testing-enabled NO -resultBundlePath UITestResults.xcresult CODE_SIGNING_ALLOWED=NO > ui-test.log 2>&1
+      - name: Export screenshots and diagnostics
+        if: always()
+        working-directory: native
+        run: |
+          grep -E 'error:|Test Case|Executed|failed|passed' ui-test.log | tail -80 || true
+          if [ -d UITestResults.xcresult ]; then xcrun xcresulttool export attachments --path UITestResults.xcresult --output-path Screenshots; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Sugerly-ui-checks
+          path: |
+            native/Screenshots
+            native/ui-test.log
+          retention-days: 14

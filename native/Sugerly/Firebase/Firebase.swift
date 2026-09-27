@@ -335,6 +335,9 @@ enum FS {
     }
 
     static func query(_ collection: String, _ filters: [Filter] = [], orderBy: String? = nil, descending: Bool = true, limit: Int? = nil) async throws -> [Doc] {
+#if DEBUG
+        if DesignPreview.active { return DesignPreview.documents(collection) }
+#endif
         do {
             return try await runQuery(collection, filters, orderBy: orderBy, descending: descending, limit: limit)
         } catch let error as APIError where error.code == "FAILED_PRECONDITION" {
