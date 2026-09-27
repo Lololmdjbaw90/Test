@@ -477,3 +477,26 @@ struct SkeletonRow: View {
         .sugarCard(radius: 22, padding: 12)
     }
 }
+
+// Little sparkles that twinkle in turn (for greetings and empty states).
+struct Twinkle: View {
+    var size: CGFloat = 16
+    var body: some View {
+        ZStack {
+            sparkle(size, x: 0, y: 0, delay: 0)
+            sparkle(size * 0.6, x: size * 0.9, y: size * 0.7, delay: 0.4)
+            sparkle(size * 0.45, x: -size * 0.6, y: size * 0.9, delay: 0.8)
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func sparkle(_ s: CGFloat, x: CGFloat, y: CGFloat, delay: Double) -> some View {
+        Image(systemName: "sparkle")
+            .font(.system(size: s, weight: .bold))
+            .foregroundStyle(Theme.gradient)
+            .offset(x: x, y: y)
+            .phaseAnimator([0.35, 1.0]) { view, phase in
+                view.scaleEffect(phase).opacity(phase)
+            } animation: { _ in .easeInOut(duration: 0.9).delay(delay) }
+    }
+}
