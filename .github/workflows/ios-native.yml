@@ -31,6 +31,7 @@ jobs:
 
       - name: Build (unsigned)
         working-directory: native
+        timeout-minutes: 25
         run: |
           set -o pipefail
           xcodebuild \
@@ -47,7 +48,7 @@ jobs:
       - name: Show compile errors
         if: failure()
         working-directory: native
-        run: grep -E "error:" build.log | head -80 || true
+        run: grep -E "error:|reasonable time" build.log | head -80 || true
 
       - name: Package the .ipa
         working-directory: native
