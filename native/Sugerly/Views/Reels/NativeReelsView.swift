@@ -126,7 +126,8 @@ struct NativeReelCard: View {
                     let edits = reel.data["edits"] as? Doc ?? [:]
                     let start = edits["trim_start"] as? Double ?? 0
                     if let end = edits["trim_end"] as? Double, end > start { p.currentItem?.forwardPlaybackEndTime = CMTime(seconds: end, preferredTimescale: 600) }
-                    p.seek(to: CMTime(seconds: start, preferredTimescale: 600))
+                    await p.seek(to: CMTime(seconds: start, preferredTimescale: 600))
+                    guard !Task.isCancelled, active else { p.pause(); return }
                     p.playImmediately(atRate: Float(edits["speed"] as? Double ?? 1))
                 }
                 var musicURL = reel.data.str("music_url")
