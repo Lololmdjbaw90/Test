@@ -1,4 +1,5 @@
 import PopularMusic from "@/components/music/PopularMusic";
+import LoadMore from "@/components/common/LoadMore";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
@@ -289,6 +290,12 @@ export default function MusicPage() {
   const forYouQueue = queueOf(forYou.map((x) => x.track));
   const current = player.track && tracks.find((t) => t.id === player.track.id);
   const highlight = params.get("track");
+  // "All tracks" shows 20 at a time and adds more as you scroll.
+  const TRACKS_PAGE = 20;
+  const [shown, setShown] = useState(TRACKS_PAGE);
+  useEffect(() => { setShown(TRACKS_PAGE); }, [search, genre, mood]);
+  const highlightAt = highlight ? filtered.findIndex((t) => t.id === highlight) : -1;
+  const visibleTracks = filtered.slice(0, Math.max(shown, highlightAt + 1));
   const browsing = !!search.trim() || genre !== "All" || !!mood;
 
   useEffect(() => {
@@ -424,7 +431,7 @@ export default function MusicPage() {
                   <EmptyState icon={MusicIcon} title="No tracks match" text="Try another genre or mood." />
                 ) : (
                   <div className="card !rounded-3xl p-2 sm:p-3">
-                    {filtered.map((t, i) => {
+                    {visibleTracks.map((t, i) => {
                       const isCurrent = player.isCurrent(t.id);
                       const playing = player.isPlaying(t.id);
                       const canDelete = user && (user.email === t.user_email || user.role === "admin");
@@ -458,6 +465,7 @@ export default function MusicPage() {
                         </motion.div>
                       );
                     })}
+                    <LoadMore onMore={() => setShown((n) => n + TRACKS_PAGE)} hasMore={visibleTracks.length < filtered.length} label="More tracks" />
                   </div>
                 )}
               </section>

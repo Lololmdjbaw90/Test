@@ -35,13 +35,23 @@ const toTrack = (t) => ({
   kind: "catalog",
 });
 
-export async function catalogTracks({ query = "", genre = 0, limit = 30, signal } = {}) {
+// One page of the charts (or of a search). `index` is where the page starts.
+export async function catalogPage({ query = "", genre = 0, index = 0, limit = 30, signal } = {}) {
   const url = query.trim()
-    ? `${API}/search?q=${encodeURIComponent(query.trim())}&limit=${limit}`
-    : `${API}/chart/${genre}/tracks?limit=${limit}`;
+    ? `${API}/search?q=${encodeURIComponent(query.trim())}&index=${index}&limit=${limit}`
+    : `${API}/chart/${genre}/tracks?index=${index}&limit=${limit}`;
   const json = await jsonp(url, signal);
   if (json?.error) throw new Error("The music catalog is busy — try again in a moment.");
-  return (json?.data || []).filter((t) => t?.preview).map(toTrack);
+  const raw = json?.data || [];
+  const total = Number(json?.total) || 0;
+  return {
+    tracks: raw.filter((t) => t?.preview).map(toTrack),
+    hasMore: raw.length > 0 && (json?.next ? true : total ? index + raw.length < total : raw.length >= limit),
+  };
+}
+
+export async function catalogTracks(opts = {}) {
+  return (await catalogPage(opts)).tracks;
 }
 
 // Deezer preview links expire after a while, so reels keep the track id and
