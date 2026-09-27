@@ -615,7 +615,7 @@ function seedIfEmpty() {
       notif(E.luna, "comment", "Luna commented on your post", true, 200, "/Community"),
     ]);
 
-    saveCollection("SiteConfig", [{ ...base(E.you, 100), key: "global", announcement: "Welcome to the new Sugerly ✨ Press Ctrl+K to search anything.", announcement_active: true, announcement_color: "#d4708a", primary_color: "" }]);
+    saveCollection("SiteConfig", [{ ...base(E.you, 100), key: "global", announcement: "Welcome to the new Sugerly ✨ Reels, video cuts and AI captions are here.", announcement_active: true, announcement_color: "#d4708a", primary_color: "" }]);
 
     writeRaw(`${PREFIX}:__seeded`, "2");
   } catch (e) {

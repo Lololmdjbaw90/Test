@@ -294,14 +294,14 @@ export default function ReelsPage() {
         )}
       </div>
 
-      <BottomSheet open={!!commentsFor} onClose={() => setCommentsFor(null)} title={commentsFor ? `${commentCounts[commentsFor.id] || 0} comment${commentCounts[commentsFor.id] === 1 ? "" : "s"}` : ""} label="Comments">
+      <BottomSheet anchorRef={scroller} open={!!commentsFor} onClose={() => setCommentsFor(null)} title={commentsFor ? `${commentCounts[commentsFor.id] || 0} comment${commentCounts[commentsFor.id] === 1 ? "" : "s"}` : ""} label="Comments">
         {commentsFor && (
           <div onSubmitCapture={() => recordReelSignal(commentsFor, { commented: true })}>
-            <CommentSection entity="CommunityComment" field="post_id" targetId={`reel_${commentsFor.id}`} ownerEmail={commentsFor.user_email} link={`/Reels?r=${commentsFor.id}`} />
+            <CommentSection entity="CommunityComment" field="post_id" targetId={`reel_${commentsFor.id}`} ownerEmail={commentsFor.user_email} link={`/Reels?r=${commentsFor.id}`} showTitle={false} />
           </div>
         )}
       </BottomSheet>
-      <ShareSheet reel={shareFor} me={me} friendEmails={friendEmails} usersByEmail={usersByEmail} onClose={() => setShareFor(null)} onShared={() => shareFor && recordReelSignal(shareFor, { shared: true })} />
+      <ShareSheet anchorRef={scroller} reel={shareFor} me={me} friendEmails={friendEmails} usersByEmail={usersByEmail} onClose={() => setShareFor(null)} onShared={() => shareFor && recordReelSignal(shareFor, { shared: true })} />
 
       {creating && <ReelStudio onClose={closeStudio} />}
     </div>

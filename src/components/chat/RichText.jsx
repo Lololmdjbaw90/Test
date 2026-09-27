@@ -25,7 +25,7 @@ export default function RichText({ text, className = "", onTag }) {
     last = match.index + match[0].length;
   }
   if (last < text.length) parts.push(text.slice(last));
-  return <span className={`whitespace-pre-wrap break-words ${className}`}>{parts}</span>;
+  return <span className={`select-text whitespace-pre-wrap break-words ${className}`}>{parts}</span>;
 }
 
 export function mentionedNames(text) {

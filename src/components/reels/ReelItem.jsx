@@ -16,7 +16,7 @@ const BURST = Array.from({ length: 8 }, (_, i) => { const a = (i / 8) * Math.PI 
 function RailButton({ icon: Icon, label, count, active, activeColor = "#ff4d7d", onClick, fill, pop, burst, delay = 0 }) {
   return (
     <button onClick={(e) => { e.stopPropagation(); onClick?.(e); }} className="rise-in flex flex-col items-center gap-1 text-white select-none" style={{ "--d": `${delay}ms` }} aria-label={label} aria-pressed={active}>
-      <span className="relative w-12 h-12 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-[0.85]" style={{ background: "rgb(255 255 255 / 0.13)" }}>
+      <span className="relative w-12 h-12 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-[0.85] liquid-glass on-dark">
         <span key={`pop${pop}`} className={pop ? "heart-pop inline-flex" : "inline-flex"}>
           <Icon className="w-[26px] h-[26px]" style={active ? { color: activeColor, fill: fill ? activeColor : "none" } : undefined} strokeWidth={2.2} />
         </span>

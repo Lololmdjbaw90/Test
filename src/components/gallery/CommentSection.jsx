@@ -41,7 +41,7 @@ export async function sendComment({ entity = "Comment", field = "artwork_id", ta
 }
 
 // Live comment thread. `entity` is "Comment" (artworks) or "CommunityComment" (posts).
-export default function CommentSection({ entity = "Comment", field = "artwork_id", targetId, ownerEmail, link, compact = false }) {
+export default function CommentSection({ entity = "Comment", field = "artwork_id", targetId, ownerEmail, link, compact = false, showTitle = true }) {
   const { user } = useAuth();
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -63,7 +63,7 @@ export default function CommentSection({ entity = "Comment", field = "artwork_id
 
   return (
     <div className="space-y-3">
-      <p className="eyebrow flex items-center gap-1.5"><MessageCircle className="w-3.5 h-3.5" /> Comments · {comments.length}</p>
+      {showTitle && <p className="eyebrow flex items-center gap-1.5"><MessageCircle className="w-3.5 h-3.5" /> Comments · {comments.length}</p>}
       {loading ? (
         <div className="space-y-2">{[0, 1].map((i) => <div key={i} className="skeleton h-12" />)}</div>
       ) : (

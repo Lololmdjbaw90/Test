@@ -1,19 +1,32 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useDragControls } from "framer-motion";
 import { X } from "lucide-react";
 
 // TikTok-style sheet: slides up from the bottom, drag the handle (or the
-// header) down to close, tap outside to close.
-export default function BottomSheet({ open, onClose, title, children, height = "72dvh", dark = false, label }) {
+// header) down to close, tap outside to close. With `anchorRef` it lines up
+// with that element (e.g. the reel column next to the iPad sidebar).
+export default function BottomSheet({ open, onClose, title, children, height = "72dvh", dark = false, label, anchorRef }) {
   const drag = useDragControls();
+  const [box, setBox] = useState(null);
+  useLayoutEffect(() => {
+    if (!open || !anchorRef?.current) { setBox(null); return undefined; }
+    const measure = () => {
+      const r = anchorRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const width = Math.min(r.width, 512);
+      setBox({ left: r.left + (r.width - width) / 2, width });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [open, anchorRef]);
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
-  const bg = dark ? "#161014" : "var(--surface)";
   const fg = dark ? "#fff" : "var(--text-primary)";
   return createPortal(
     <AnimatePresence>
@@ -21,8 +34,8 @@ export default function BottomSheet({ open, onClose, title, children, height = "
         <div className="fixed inset-0 z-[130]" role="dialog" aria-modal="true" aria-label={label || title}>
           <motion.div className="absolute inset-0" style={{ background: "rgb(0 0 0 / 0.45)" }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
           <motion.div
-            className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-lg flex flex-col rounded-t-[1.6rem] overflow-hidden"
-            style={{ height, maxHeight: "88dvh", background: bg, color: fg, boxShadow: "0 -10px 40px rgb(0 0 0 / 0.25)", paddingBottom: "env(safe-area-inset-bottom)" }}
+            className={`absolute bottom-0 flex flex-col rounded-t-[1.9rem] overflow-hidden liquid-sheet ${box ? "" : "inset-x-0 mx-auto w-full max-w-lg"}`}
+            style={{ height, maxHeight: "88dvh", color: fg, paddingBottom: "env(safe-area-inset-bottom)", ...(box ? { left: box.left, width: box.width } : {}) }}
             initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 32, stiffness: 340 }}
             drag="y" dragControls={drag} dragListener={false}

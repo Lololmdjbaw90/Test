@@ -59,7 +59,9 @@ function OfflineBar() {
 }
 
 function AnnouncementBar({ config }) {
-  const text = config?.announcement_active ? String(config.announcement || "").trim() : "";
+  let text = config?.announcement_active ? String(config.announcement || "").trim() : "";
+  // "Press Ctrl+K…" makes no sense on a phone or tablet.
+  if (typeof window !== "undefined" && window.matchMedia?.("(hover: none), (pointer: coarse)").matches) text = text.replace(/\s*(press|use|hit)?\s*(ctrl|cmd|⌘)\s*\+?\s*k\b[^.!]*[.!]?/gi, "").trim();
   const key = `mimilocks:__dismissed:${text}`;
   const [dismissed, setDismissed] = useState(() => { try { return !!localStorage.getItem(key); } catch { return false; } });
   useEffect(() => { try { setDismissed(!!localStorage.getItem(key)); } catch { /* ignore */ } }, [key]);
@@ -172,12 +174,12 @@ function MobileNav({ badges, isAdmin, isDark, onToggleTheme }) {
         <CreateMenu isAdmin={isAdmin} onDone={() => setSheet(null)} className="pb-4" />
       </Popover>
       <MoreSheet open={sheet === "more"} onClose={() => setSheet(null)} anchorRef={moreRef} badges={badges} isDark={isDark} onToggleTheme={onToggleTheme} />
-      <nav className="mobile-tabbar md:hidden fixed bottom-0 inset-x-0 z-[65] glass safe-bottom" data-dark={location.pathname.toLowerCase() === "/reels"} style={{ borderTop: "1px solid var(--border-c)" }} aria-label="Main">
-        <div className="flex items-center justify-around h-[68px] px-2">
+      <nav className={`mobile-tabbar md:hidden fixed inset-x-3 z-[65] liquid-glass rounded-[30px] ${location.pathname.toLowerCase() === "/reels" ? "on-dark" : ""}`} data-dark={location.pathname.toLowerCase() === "/reels"} style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 6px)" }} aria-label="Main">
+        <div className="flex items-center justify-around h-[62px] px-1">
           {MOBILE_NAV.map((item) => {
             if (item.label === "create") {
               return (
-                <motion.button key="create" ref={createRef} whileTap={{ scale: 0.9 }} onClick={() => { feedback("tap"); setSheet((v) => (v === "create" ? null : "create")); }} className="w-14 h-14 -mt-6 rounded-2xl flex items-center justify-center text-white" style={{ background: "var(--accent-grad)", boxShadow: "var(--shadow-accent)" }} aria-label="Create" aria-expanded={sheet === "create"}>
+                <motion.button key="create" ref={createRef} whileTap={{ scale: 0.88 }} onClick={() => { feedback("tap"); setSheet((v) => (v === "create" ? null : "create")); }} className="w-12 h-12 rounded-full flex items-center justify-center text-white" style={{ background: "var(--accent-grad)", boxShadow: "inset 0 1px 1px rgb(255 255 255 / 0.5), var(--shadow-accent)" }} aria-label="Create" aria-expanded={sheet === "create"}>
                   <motion.span animate={{ rotate: sheet === "create" ? 45 : 0 }} className="inline-flex"><Plus className="w-6 h-6" /></motion.span>
                 </motion.button>
               );
@@ -188,7 +190,7 @@ function MobileNav({ badges, isAdmin, isDark, onToggleTheme }) {
             const badge = isMore ? (badges.friends || 0) : item.badge ? badges[item.badge] : 0;
             const inner = (
               <>
-                {active && <span className="absolute inset-1 rounded-2xl enter-fade" style={{ background: "var(--pink-soft)" }} />}
+                {active && <motion.span layoutId="tab-lens" className="absolute inset-x-0.5 inset-y-1 rounded-[22px] glass-lens" transition={{ type: "spring", stiffness: 500, damping: 34 }} />}
                 <span className="relative">
                   <Icon className="w-5 h-5" />
                   {badge > 0 && <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold text-white flex items-center justify-center" style={{ background: "var(--accent-rose)" }}>{badge > 9 ? "9+" : badge}</span>}
@@ -196,7 +198,7 @@ function MobileNav({ badges, isAdmin, isDark, onToggleTheme }) {
                 <span className="relative text-[10px] font-bold">{item.label}</span>
               </>
             );
-            const cls = "relative flex flex-col items-center justify-center gap-1 w-16 h-14 rounded-2xl";
+            const cls = "relative flex flex-col items-center justify-center gap-0.5 w-[62px] h-[54px] rounded-[22px] active:scale-90 transition-transform";
             const style = { color: active ? "var(--accent-rose)" : "var(--text-muted)" };
             // Tapping the tab you're already on scrolls back to the top, like native apps.
             const onTabClick = (e) => {

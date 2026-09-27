@@ -42,8 +42,13 @@ const HAPTIC_OF = {
 };
 
 // haptic("light" | "medium" | "heavy" | "selection" | "success" | "warning" | "error")
+let lastHaptic = 0;
 export function haptic(kind = "light") {
   if (!getFeedbackPrefs().haptics) return;
+  // One tap = one haptic (a button's own feedback wins over the generic tap).
+  const now = performance.now();
+  if (now - lastHaptic < 90) return;
+  lastHaptic = now;
   try {
     if (native()) {
       if (kind === "success" || kind === "warning" || kind === "error") {

@@ -7,11 +7,20 @@ export const isNative = () => Capacitor.isNativePlatform();
 
 // Haptics live in feedback.js (they follow the Settings → Sounds & haptics
 // switch); re-exported here for existing imports.
-export { haptic } from "./feedback";
+import { haptic } from "./feedback";
+export { haptic };
 
 export async function initNative() {
   if (!isNative()) return;
   document.documentElement.classList.add("native-app");
+
+  // Every tap on a control gets a light haptic, like a native app. Buttons
+  // with their own feedback (likes, sends…) fire first and win.
+  document.addEventListener("click", (e) => {
+    const el = e.target.closest?.('button, a[href], [role="tab"], [role="switch"], [role="option"], [role="menuitem"], input[type="checkbox"], input[type="radio"], summary');
+    if (!el || el.disabled || el.getAttribute("aria-disabled") === "true") return;
+    haptic(el.matches('[role="tab"], [role="switch"], [role="option"], input[type="checkbox"], input[type="radio"]') ? "selection" : "light");
+  });
   const [{ StatusBar, Style }, { Keyboard }] = await Promise.all([import("@capacitor/status-bar"), import("@capacitor/keyboard")]);
 
   // Status bar text follows the app theme (light text on dark, dark on light).

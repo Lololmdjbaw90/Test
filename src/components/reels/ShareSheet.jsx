@@ -11,7 +11,7 @@ import BottomSheet from "@/components/common/BottomSheet";
 
 // TikTok-style share: tap friends and group chats to send the reel straight
 // into the chat, or copy the link / use the phone's share menu.
-export default function ShareSheet({ reel, me, friendEmails = [], usersByEmail = {}, onClose, onShared }) {
+export default function ShareSheet({ reel, anchorRef, me, friendEmails = [], usersByEmail = {}, onClose, onShared }) {
   const [picked, setPicked] = useState([]);
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
@@ -80,7 +80,7 @@ export default function ShareSheet({ reel, me, friendEmails = [], usersByEmail =
   };
 
   return (
-    <BottomSheet open={!!reel} onClose={onClose} title="Send to" height="auto" label="Share reel">
+    <BottomSheet anchorRef={anchorRef} open={!!reel} onClose={onClose} title="Send to" height="auto" label="Share reel">
       {targets.length ? (
         <div className="grid grid-cols-4 gap-x-2 gap-y-4 pt-1 max-h-[45dvh] overflow-y-auto no-scrollbar">
           {targets.map((t, i) => {

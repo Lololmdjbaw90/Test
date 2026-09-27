@@ -269,7 +269,7 @@ export default function Home() {
           </motion.section>
         </div>
 
-        <motion.p variants={fadeUp} className="text-center text-xs mt-14 flex items-center justify-center gap-1.5" style={{ color: "var(--text-muted)" }}>
+        <motion.p variants={fadeUp} className="desktop-only text-center text-xs mt-14 flex items-center justify-center gap-1.5" style={{ color: "var(--text-muted)" }}>
           <Sparkles className="w-3.5 h-3.5" /> Tip: press <span className="kbd">Ctrl</span><span className="kbd">K</span> to search anything · last activity {timeAgo(posts[0]?.created_date)}
         </motion.p>
       </motion.div>
