@@ -2,7 +2,6 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="preload" as="image" href="/brand/sugerly-logo-rose-sm.webp" type="image/webp" />
     <link rel="preload" as="image" href="/brand/sugerly-mark.webp" type="image/webp" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="Sugerly — a cozy home for artists: gallery, community feed, music, servers and messages." />
@@ -26,6 +25,10 @@
           var dark = t.theme === "dark" || (t.theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
           if (dark) document.documentElement.classList.add("dark");
           if (t.accent) document.documentElement.setAttribute("data-accent", t.accent);
+          var logo = /^(rose|lavender|mint|peach|sky)$/.test(t.accent || "") ? t.accent : "rose";
+          window.__sugerlyLogo = "/brand/sugerly-logo-" + logo + "-sm.webp";
+          var pre = document.createElement("link"); pre.rel = "preload"; pre.as = "image"; pre.href = window.__sugerlyLogo;
+          document.head.appendChild(pre);
         } catch (e) {}
       })();
     </script>
@@ -37,8 +40,7 @@
     </style>
   </head>
   <body>
-    <div id="app-loading"><img src="/brand/sugerly-logo-rose-sm.webp" alt="Sugerly" /></div>
-    <script>(function(){var a=document.documentElement.getAttribute("data-accent");if(/^(lavender|mint|peach|sky)$/.test(a||"")){var i=document.querySelector("#app-loading img");if(i)i.src="/brand/sugerly-logo-"+a+"-sm.webp";}})();</script>
+    <div id="app-loading"><script>document.write('<img src="' + (window.__sugerlyLogo || "/brand/sugerly-logo-rose-sm.webp") + '" alt="Sugerly" />');</script></div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

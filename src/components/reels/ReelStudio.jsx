@@ -14,7 +14,7 @@ import AICaptionHelper from "@/components/ai/AICaptionHelper";
 import { withHashtags } from "@/lib/ai";
 import ReelCamera, { MAX_SECONDS } from "./ReelCamera";
 import ReelEditor from "./ReelEditor";
-import { PHOTO_SECONDS, TextStickers } from "./ReelMedia";
+import { TextStickers, photoLength } from "./ReelMedia";
 
 // A frame of the video as a JPEG (for the cover and the filter thumbnails).
 function grabFrame(url, time, { filter = "none", mirror = false, width = 720 } = {}) {
@@ -37,7 +37,7 @@ function grabFrame(url, time, { filter = "none", mirror = false, width = 720 } =
 }
 
 // Seconds of finished reel (after cuts and speed).
-const reelLength = (media, edits) => (media.kind === "video" ? totalLength(clipsOf(edits, media.duration)) / (edits.speed || 1) : PHOTO_SECONDS);
+const reelLength = (media, edits) => (media.kind === "video" ? totalLength(clipsOf(edits, media.duration)) / (edits.speed || 1) : photoLength(media.files?.length || 1));
 
 function PostStep({ media, edits, music, coverTime, coverUrl, onBack, onPosted }) {
   const { user } = useAuth();
@@ -51,13 +51,19 @@ function PostStep({ media, edits, music, coverTime, coverUrl, onBack, onPosted }
     if (busy) return;
     try {
       const upload = async (file) => (await base44.integrations.Core.UploadFile({ file })).file_url;
+      let mediaUrls = [];
       let mediaUrl, cover, finalEdits = { trim_start: 0, trim_end: 0, filter: "none", speed: 1, muted: false, text: [], mirror: false, ...edits };
       if (media.kind === "photo") {
         setBusy("Applying your filter…");
         // The filter is drawn into the photo; text stays live so it can animate.
-        const baked = await bakePhoto(media.file, { filter: edits.filter, max: 1440 });
-        setBusy("Uploading…");
-        mediaUrl = await upload(baked);
+        const pics = media.files?.length > 1 ? media.files : [media.file];
+        const urls = [];
+        for (let i = 0; i < pics.length; i++) {
+          setBusy(pics.length > 1 ? `Uploading ${i + 1} of ${pics.length}…` : "Uploading…");
+          urls.push(await upload(await bakePhoto(pics[i], { filter: edits.filter, max: 1440 })));
+        }
+        mediaUrl = urls[0];
+        mediaUrls = urls.length > 1 ? urls : [];
         cover = mediaUrl;
         finalEdits = { ...finalEdits, filter: "none" };
         delete finalEdits.clips;
@@ -75,7 +81,7 @@ function PostStep({ media, edits, music, coverTime, coverUrl, onBack, onPosted }
       const created = await base44.entities.Reel.create({
         user_email: user.email, user_display_name: displayName(user), user_profile_picture: user.profile_picture || "",
         kind: media.kind, media_url: mediaUrl, cover_url: cover, caption: caption.trim(), tags,
-        music_url: music?.url || "", music_title: music?.title || "", music_artist: music?.artist || "",
+        music_url: music?.url || "", music_title: music?.title || "", music_artist: music?.artist || "", music_source: music?.source || "", media_urls: mediaUrls,
         edits: finalEdits, likes: [], views: 0, duration: Math.round(span * 10) / 10, comments_off: !allowComments,
       });
       toast.success("Your reel is live ✨");
@@ -118,6 +124,7 @@ function PostStep({ media, edits, music, coverTime, coverUrl, onBack, onPosted }
           {music && <li>♪ {music.title} · {music.artist}</li>}
           {media.kind === "video" && <li>✂️ {clips.length > 1 ? `${clips.length} clips · ` : ""}{reelLength(media, edits).toFixed(1)}s{edits.speed && edits.speed !== 1 ? ` at ${edits.speed}x` : ""}{edits.muted ? " · original sound off" : ""}</li>}
           {(edits.text || []).length > 0 && <li>🔤 {edits.text.length} text{edits.text.length === 1 ? "" : "s"}</li>}
+          {media.files?.length > 1 && <li>🖼️ Slideshow of {media.files.length} pictures</li>}
           <li>👀 Everyone on Sugerly can watch it in Reels</li>
         </ul>
         <button type="button" role="switch" aria-checked={allowComments} onClick={() => { feedback("toggle"); setAllowComments((v) => !v); }} className="mt-4 w-full flex items-center gap-3 p-3 rounded-2xl text-left" style={{ background: "rgb(255 255 255 / 0.08)" }}>

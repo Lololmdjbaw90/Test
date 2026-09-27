@@ -13,10 +13,34 @@ const currentAccent = () => {
 };
 
 // Follows the accent live (the theme code sets data-accent on <html>).
+// Switches only once the new logo is decoded, so it never blinks or flickers.
+const decoded = new Set();
+function whenReady(accent) {
+  const url = `/brand/sugerly-logo-${accent}-sm.webp`;
+  if (decoded.has(url)) return Promise.resolve();
+  const img = new Image();
+  img.src = url;
+  return (img.decode ? img.decode() : Promise.resolve()).catch(() => {}).then(() => { decoded.add(url); });
+}
+let warmed = false;
+function warmLogos() {
+  if (warmed) return;
+  warmed = true;
+  const run = () => Object.keys(LOGO_RATIO).forEach((a) => whenReady(a));
+  (window.requestIdleCallback || ((f) => setTimeout(f, 1500)))(run);
+}
+
 export function useAccent() {
   const [accent, setAccent] = useState(currentAccent);
   useEffect(() => {
-    const mo = new MutationObserver(() => setAccent(currentAccent()));
+    warmLogos();
+    let latest = currentAccent();
+    const mo = new MutationObserver(() => {
+      const next = currentAccent();
+      if (next === latest) return;
+      latest = next;
+      whenReady(next).then(() => { if (latest === next) setAccent(next); });
+    });
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-accent"] });
     return () => mo.disconnect();
   }, []);

@@ -4,8 +4,12 @@ import { useMediaSrc } from "@/lib/media";
 import { clipsOf, locate, totalLength } from "@/lib/clips";
 import FilterLayers from "@/components/media/FilterLayers";
 import { StickerLayer } from "./Sticker";
+import { freshPreview } from "@/lib/musicCatalog";
 
 export const PHOTO_SECONDS = 7;
+export const SLIDE_SECONDS = 3;
+// Length of a photo reel: one picture, or a slideshow of several.
+export const photoLength = (count) => (count > 1 ? count * SLIDE_SECONDS : PHOTO_SECONDS);
 
 // Older imports keep working.
 export function TextStickers({ items = [] }) { return <StickerLayer items={items} />; }
@@ -31,7 +35,18 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
   const edits = reel.edits || {};
   const src = useMediaSrc(near ? reel.media_url : "");
   const cover = useMediaSrc(reel.cover_url || (reel.kind === "photo" ? reel.media_url : ""));
-  const music = useMediaSrc(near ? reel.music_url : "");
+  const [musicUrl, setMusicUrl] = useState(reel.music_url || "");
+  useEffect(() => {
+    const id = String(reel.music_source || "").startsWith("deezer:") ? reel.music_source.slice(7) : "";
+    if (!id || !near) return undefined;
+    let alive = true;
+    freshPreview(id).then((u) => { if (alive && u) setMusicUrl(u); });
+    return () => { alive = false; };
+  }, [reel.music_source, near]);
+  const music = useMediaSrc(near ? musicUrl : "");
+  const slides = reel.kind === "photo" && (reel.media_urls || []).length > 1 ? reel.media_urls : null;
+  const photoTotal = photoLength(slides?.length || 1);
+  const [slide, setSlide] = useState(0);
   const videoRef = useRef(null);
   const audioRef = useRef(null);
   const layerRef = useRef(null);
@@ -41,7 +56,7 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
   const elapsed = useRef(0);
   const clipIndex = useRef(0);
   const clips = useMemo(() => clipsOf(edits, duration), [edits, duration]);
-  const total = reel.kind === "video" ? totalLength(clips) : PHOTO_SECONDS;
+  const total = reel.kind === "video" ? totalLength(clips) : photoTotal;
   const rate = (edits.speed || 1) * speedBoost;
   const videoSound = soundOn && !edits.muted;
   const cb = useRef({});
@@ -65,7 +80,7 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
     // Seek to a fraction (0..1) of the reel.
     seek(fraction) {
       if (reel.kind === "video") { seekOutput(fraction * total); cb.current.onProgress?.(fraction); }
-      else { elapsed.current = fraction * PHOTO_SECONDS; cb.current.onProgress?.(fraction); }
+      else { elapsed.current = fraction * photoTotal; cb.current.onProgress?.(fraction); }
     },
   }));
 
@@ -136,14 +151,15 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
     const tick = (now) => {
       elapsed.current += ((now - last) / 1000) * speedBoost;
       last = now;
-      if (elapsed.current >= PHOTO_SECONDS) { elapsed.current = 0; cb.current.onLoop?.(); setCycle((c) => c + 1); }
-      cb.current.onProgress?.(elapsed.current / PHOTO_SECONDS);
+      if (elapsed.current >= photoTotal) { elapsed.current = 0; cb.current.onLoop?.(); setCycle((c) => c + 1); }
+      if (slides) { const i = Math.min(slides.length - 1, Math.floor(elapsed.current / SLIDE_SECONDS)); setSlide((s) => (s === i ? s : i)); }
+      cb.current.onProgress?.(elapsed.current / photoTotal);
       syncStickers(layerRef.current, elapsed.current);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [reel.kind, active, paused, speedBoost]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [reel.kind, active, paused, speedBoost, photoTotal]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!active) { elapsed.current = 0; cb.current.onProgress?.(0); } }, [active]);
 
   const css = filterCss(edits.filter);
@@ -178,6 +194,15 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
             />
           )}
         </>
+      ) : slides ? (
+        <img
+          key={`${reel.id}-${cycle}-${slide}`}
+          src={slides[slide]}
+          alt={reel.caption || ""}
+          draggable={false}
+          className={`absolute inset-0 w-full h-full object-cover enter-fade ${active ? "reel-kenburns" : ""}`}
+          style={{ filter: css, animationPlayState: paused ? "paused" : "running", animationDuration: `${SLIDE_SECONDS}s` }}
+        />
       ) : photoSrc ? (
         <img
           key={`${reel.id}-${cycle}`}

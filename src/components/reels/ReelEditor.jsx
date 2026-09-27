@@ -12,7 +12,8 @@ import RangeSlider from "@/components/media/RangeSlider";
 import ClipTimeline from "./ClipTimeline";
 import { STICKER_ANIMS, STICKER_COLORS, STICKER_FONTS, STICKER_STYLES, StickerView, normalizeSticker } from "./Sticker";
 import { MAX_SECONDS } from "./ReelCamera";
-import { PHOTO_SECONDS } from "./ReelMedia";
+import { SLIDE_SECONDS, photoLength } from "./ReelMedia";
+import { catalogTracks } from "@/lib/musicCatalog";
 
 const SPEEDS = [0.5, 1, 1.5, 2];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -78,8 +79,17 @@ export default function ReelEditor({ media, initial, onChange, onBack, onNext })
   const { state, set, undo, redo, canUndo, canRedo } = useHistory(initial);
   const { edits, music, coverTime } = state;
   const clips = useMemo(() => (isVideo ? clipsOf(edits, media.duration) : []), [isVideo, edits, media.duration]);
-  const total = isVideo ? totalLength(clips) : PHOTO_SECONDS;
+  const slides = media.urls?.length > 1 ? media.urls : null;
+  const total = isVideo ? totalLength(clips) : photoLength(slides?.length || 1);
   const [tool, setTool] = useState(isVideo ? "cuts" : "filters");
+  const [chartQuery, setChartQuery] = useState("");
+  const [charts, setCharts] = useState([]);
+  useEffect(() => {
+    if (tool !== "sound") return undefined;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => catalogTracks({ query: chartQuery, limit: 25, signal: ctrl.signal }).then(setCharts).catch(() => {}), chartQuery ? 350 : 0);
+    return () => { clearTimeout(t); ctrl.abort(); };
+  }, [tool, chartQuery]);
   const [playing, setPlaying] = useState(true);
   const [time, setTime] = useState(0);
   const [selectedClip, setSelectedClip] = useState(0);
@@ -146,7 +156,7 @@ export default function ReelEditor({ media, initial, onChange, onBack, onNext })
         for (let k = 0; k < clipIndex.current; k++) out += clips[k].end - clips[k].start;
         timeRef.current = out + Math.max(0, v.currentTime - clips[clipIndex.current].start);
       } else if (!isVideo && playing) {
-        timeRef.current = (timeRef.current + (now - last) / 1000) % PHOTO_SECONDS;
+        timeRef.current = (timeRef.current + (now - last) / 1000) % total;
       }
       last = now;
       if (now - lastUi > 70) { lastUi = now; setTime(timeRef.current); }
@@ -317,7 +327,7 @@ export default function ReelEditor({ media, initial, onChange, onBack, onNext })
             <video ref={videoRef} src={media.url} playsInline autoPlay muted={!!edits.muted}
               className="absolute inset-0 w-full h-full object-cover pointer-events-none" style={{ filter: filterCss(edits.filter), transform: edits.mirror ? "scaleX(-1)" : undefined }} />
           ) : (
-            <img src={media.url} alt="" draggable={false} className="absolute inset-0 w-full h-full object-cover pointer-events-none" style={{ filter: filterCss(edits.filter) }} />
+            <img key={slides ? Math.floor(time / SLIDE_SECONDS) : 0} src={slides ? slides[Math.min(slides.length - 1, Math.floor(time / SLIDE_SECONDS))] : media.url} alt="" draggable={false} className="absolute inset-0 w-full h-full object-cover pointer-events-none enter-fade" style={{ filter: filterCss(edits.filter) }} />
           )}
           <FilterLayers filter={edits.filter} />
           {/* centre guides */}
@@ -439,13 +449,16 @@ export default function ReelEditor({ media, initial, onChange, onBack, onNext })
                     <span className="text-xs font-bold opacity-70">{edits.muted ? "Off" : "On"}</span>
                   </button>
                 )}
-                <div className="max-h-40 overflow-y-auto no-scrollbar space-y-1">
+                <div className="max-h-56 overflow-y-auto no-scrollbar space-y-1">
                   <button onClick={() => set((s) => ({ ...s, music: null }))} className="w-full flex items-center gap-3 p-2 rounded-xl text-left" style={{ background: !music ? "rgb(255 255 255 / 0.14)" : "transparent" }}>
                     <span className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: "rgb(255 255 255 / 0.1)" }}><VolumeX className="w-4 h-4" /></span>
                     <span className="flex-1 text-sm font-bold">No music</span>
                     {!music && <Check className="w-5 h-5" style={{ color: "#ff4d7d" }} />}
                   </button>
                   {tracks.map((t) => <MusicRow key={t.id} track={t} selected={music?.url === t.music_url} onPick={() => { feedback("tap"); set((s) => ({ ...s, music: { url: t.music_url, title: t.title, artist: t.user_display_name } })); setPlaying(true); }} />)}
+                  <p className="text-[11px] font-bold uppercase tracking-wide opacity-60 pt-2 px-1">Top charts</p>
+                  <input value={chartQuery} onChange={(e) => setChartQuery(e.target.value)} placeholder="Search songs or artists" className="w-full rounded-xl px-3 py-2 text-[16px] outline-none" style={{ background: "rgb(255 255 255 / 0.1)", color: "#fff" }} aria-label="Search songs" />
+                  {charts.map((t) => <MusicRow key={t.id} track={{ title: t.title, user_display_name: t.artist, cover_url: t.cover }} selected={music?.url === t.src} onPick={() => { feedback("tap"); set((s) => ({ ...s, music: { url: t.src, title: t.title, artist: t.artist, source: `deezer:${t.deezerId}` } })); setPlaying(true); }} />)}
                 </div>
               </div>
             )}

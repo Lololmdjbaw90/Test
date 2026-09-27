@@ -334,8 +334,17 @@ export default function ReelCamera({ onClose, onCaptured }) {
   };
 
   // ---------- library ----------
-  const pick = async (file) => {
+  const pick = async (list) => {
+    const files = [...(list || [])];
+    const file = files[0];
     if (!file) return;
+    // Several pictures at once make a slideshow reel.
+    const pics = files.filter((f) => f.type.startsWith("image/")).slice(0, 10);
+    if (pics.length > 1) {
+      const urls = pics.map((f) => URL.createObjectURL(f));
+      onCaptured({ kind: "photo", file: pics[0], url: urls[0], files: pics, urls, width: 0, height: 0, duration: 0, edits: { filter } });
+      return;
+    }
     const isVideo = file.type.startsWith("video/");
     if (!isVideo && !file.type.startsWith("image/")) { toast.error("Pick a photo or a video."); return; }
     if (file.size > MAX_UPLOAD_MB * 1024 * 1024) { toast.error(`That file is over ${MAX_UPLOAD_MB} MB — try a shorter clip.`); return; }
@@ -489,7 +498,7 @@ export default function ReelCamera({ onClose, onCaptured }) {
       </AnimatePresence>
 
       {screenFlash && !recording && <div className="fixed inset-0 z-[5] pointer-events-none enter-fade" style={{ background: "#fff8f2" }} />}
-      <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden" onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ""; }} />
+      <input ref={fileRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={(e) => { pick(e.target.files); e.target.value = ""; }} />
     </div>
   );
 }

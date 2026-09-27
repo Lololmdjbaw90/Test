@@ -25,6 +25,7 @@ function jsonp(url, signal) {
 
 const toTrack = (t) => ({
   id: `deezer_${t.id}`,
+  deezerId: t.id,
   title: t.title_short || t.title,
   artist: t.artist?.name || "",
   src: t.preview,
@@ -41,4 +42,12 @@ export async function catalogTracks({ query = "", genre = 0, limit = 30, signal 
   const json = await jsonp(url, signal);
   if (json?.error) throw new Error("The music catalog is busy — try again in a moment.");
   return (json?.data || []).filter((t) => t?.preview).map(toTrack);
+}
+
+// Deezer preview links expire after a while, so reels keep the track id and
+// get a fresh link when they play.
+const fresh = new Map();
+export function freshPreview(id) {
+  if (!fresh.has(id)) fresh.set(id, jsonp(`${API}/track/${id}`).then((t) => t?.preview || "").catch(() => { fresh.delete(id); return ""; }));
+  return fresh.get(id);
 }
