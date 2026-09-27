@@ -49,8 +49,8 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
   const [slide, setSlide] = useState(0);
   const slideRef = useRef(0);
   const trackRef = useRef(null);
-  // Slideshows scroll sideways like TikTok photo posts: they move on by
-  // themselves, and you can swipe through them.
+  // Slideshows scroll sideways like TikTok photo posts using
+  // manual swipes, without automatic movement.
   const goToSlide = (i) => {
     slideRef.current = i;
     setSlide(i);
@@ -63,7 +63,9 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
     if (i === slideRef.current) return;
     slideRef.current = i;
     setSlide(i);
-    elapsed.current = i * SLIDE_SECONDS; // a swipe moves the timer along
+    elapsed.current = i * SLIDE_SECONDS;
+    cb.current.onProgress?.((i + 1) / slides.length);
+    syncStickers(layerRef.current, elapsed.current);
   };
   const videoRef = useRef(null);
   const audioRef = useRef(null);
@@ -163,7 +165,7 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
 
   // Photos: a timer drives the progress bar, stickers and the loop.
   useEffect(() => {
-    if (reel.kind !== "photo" || !active || paused) return undefined;
+    if (reel.kind !== "photo" || slides || !active || paused) return undefined;
     let last = performance.now();
     let raf;
     const tick = (now) => {
@@ -232,7 +234,7 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
           src={photoSrc}
           alt={reel.caption || ""}
           draggable={false}
-          className={`absolute inset-0 w-full h-full object-cover ${active ? "reel-kenburns" : ""}`}
+          className="absolute inset-0 w-full h-full object-cover"
           style={{ filter: css, animationPlayState: paused ? "paused" : "running", animationDuration: `${PHOTO_SECONDS}s` }}
         />
       ) : null}

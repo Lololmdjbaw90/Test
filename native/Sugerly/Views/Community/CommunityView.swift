@@ -81,11 +81,19 @@ struct CommunityView: View {
         NavigationStack(path: $path) {
             ScrollView {
                 LazyVStack(spacing: 14) {
-                    Picker("Feed", selection: $feed.animation(.snappy)) {
-                        ForEach(Feed.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.bottom, 4)
+                    SugerlyHeading(title: "Find your people.", subtitle: "Little moments, big inspiration. Share what you love.")
+                    HStack(spacing: 8) {
+                        ForEach(Feed.allCases, id: \.self) { item in
+                            Button { feed = item } label: {
+                                Text(item.rawValue).font(.system(size: 13, weight: .bold, design: .rounded))
+                                    .padding(.horizontal, 18).padding(.vertical, 11)
+                                    .foregroundStyle(feed == item ? .white : Theme.pink)
+                                    .background { if feed == item { Theme.gradient } else { Theme.soft } }
+                                    .clipShape(Capsule())
+                            }.buttonStyle(.plain)
+                        }
+                        Spacer(minLength: 0)
+                    }.padding(.bottom, 6)
 
                     ForEach(visible) { post in
                         PostCard(post: post, store: store, path: $path, reporting: $reporting)
@@ -112,7 +120,9 @@ struct CommunityView: View {
             }
             .refreshable { await store.load() }
             .navigationTitle("Community")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) { NativeWordmark() }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { composing = true } label: { Image(systemName: "square.and.pencil") }
                         .accessibilityLabel("New post")
@@ -245,7 +255,9 @@ struct PostCard: View {
             .labelStyle(TightLabel())
         }
         .padding(14)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 28).stroke(Theme.border, lineWidth: 1))
+        .shadow(color: Theme.pink.opacity(0.06), radius: 12, y: 5)
         .confirmationDialog("Delete this post?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 Task {

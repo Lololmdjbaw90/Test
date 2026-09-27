@@ -106,7 +106,9 @@ struct ChatListView: View {
                 }
                 .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
             }
-            .listStyle(.plain)
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(Theme.background)
             .overlay {
                 if store.loading && store.conversations.isEmpty {
                     ProgressView()
@@ -125,7 +127,9 @@ struct ChatListView: View {
             .searchable(text: $search, prompt: "Search chats")
             .refreshable { await store.refresh(me: model.me?.email ?? "") }
             .navigationTitle("Chat")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) { NativeWordmark() }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { starting = true } label: { Image(systemName: "square.and.pencil") }.accessibilityLabel("New message")
                 }

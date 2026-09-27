@@ -36,19 +36,27 @@ service cloud.firestore {
     }
     function managesCommunity(communityId) { return isAdmin() || ownsCommunity(communityId); }
 
+    function noLinks(text) {
+      return text is string && !text.matches('(?is).*([a-z][a-z0-9+.-]*://|mailto:|www\\.|[a-z0-9][a-z0-9.-]*\\.[a-z]{2,63}\\b|\\b[0-9]{1,3}(\\.[0-9]{1,3}){3}\\b).*');
+    }
+    function linkFieldUnchangedOrValid(field) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([field])
+        || noLinks(request.resource.data.get(field, ''));
+    }
+
     match /User/{uid} {
       allow read: if signedIn();
-      allow create: if isSelf(uid)
+      allow create: if noLinks(request.resource.data.get('bio', '')) && (isSelf(uid)
         && request.resource.data.email == ownEmail()
-        && (request.resource.data.role == 'user' || isSiteOwner());
+        && (request.resource.data.role == 'user' || isSiteOwner()));
       // Owners can change anything, including who is an admin. Other admins
       // can edit people but not roles, and can't touch an owner's profile.
-      allow update: if isSiteOwner()
+      allow update: if linkFieldUnchangedOrValid('bio') && (isSiteOwner()
         || (isAdmin() && !(resource.data.email in siteOwners())
             && request.resource.data.get('role', 'user') == resource.data.get('role', 'user'))
         || (isSelf(uid)
             && request.resource.data.email == resource.data.email
-            && request.resource.data.role == resource.data.role);
+            && request.resource.data.role == resource.data.role));
       // Admins, or the person themselves when they delete their account.
       allow delete: if isSiteOwner() || isSelf(uid) || (isAdmin() && !(resource.data.email in siteOwners()));
     }
@@ -89,9 +97,9 @@ service cloud.firestore {
     // view counter by exactly one; authors and admins edit or delete.
     match /Reel/{id} {
       allow read: if signedIn();
-      allow create: if signedIn() && request.resource.data.user_email == ownEmail();
-      allow update: if isAdmin() || ownsResource() || onlyChanged(['likes', 'updated_date', 'updated_at'])
-        || (signedIn() && onlyChanged(['views', 'updated_date', 'updated_at']) && request.resource.data.views == resource.data.get('views', 0) + 1);
+      allow create: if noLinks(request.resource.data.get('caption', '')) && (signedIn() && request.resource.data.user_email == ownEmail());
+      allow update: if linkFieldUnchangedOrValid('caption') && (isAdmin() || ownsResource() || onlyChanged(['likes', 'updated_date', 'updated_at'])
+        || (signedIn() && onlyChanged(['views', 'updated_date', 'updated_at']) && request.resource.data.views == resource.data.get('views', 0) + 1));
       allow delete: if isAdmin() || ownsResource();
     }
 

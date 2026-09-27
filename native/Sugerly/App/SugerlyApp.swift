@@ -66,6 +66,7 @@ struct MainTabView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var tab = 0
     @State private var chats = ChatStore()
+    @State private var music = NativeMusicPlayer()
 
     var body: some View {
         TabView(selection: $tab) {
@@ -79,7 +80,26 @@ struct MainTabView: View {
             ProfileView()
                 .tabItem { Label("Profile", systemImage: "person.crop.circle.fill") }
                 .tag(2)
+            NativeReelsView(isSelected: tab == 3).tabItem { Label("Reels", systemImage: "play.rectangle.fill") }.tag(3)
+            NativeMusicView().tabItem { Label("Music", systemImage: "music.note") }.tag(4)
         }
+        .toolbar(.hidden, for: .tabBar)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 8) {
+                if music.track != nil && tab != 3 { NativeMiniPlayer() }
+                HStack(spacing: 2) {
+                    tabButton(0, "Community", "person.2.fill")
+                    tabButton(3, "Reels", "play.rectangle.fill")
+                    tabButton(4, "Music", "music.note")
+                    tabButton(1, "Chat", "bubble.left.and.bubble.right.fill")
+                    tabButton(2, "Profile", "person.crop.circle.fill")
+                }.padding(6).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 28))
+                    .overlay(RoundedRectangle(cornerRadius: 28).stroke(Theme.border, lineWidth: 1))
+                    .shadow(color: Theme.pink.opacity(0.12), radius: 12, y: 4)
+            }.frame(maxWidth: 560).padding(.horizontal, 12).padding(.bottom, 4)
+        }
+        .environment(music)
+        .onChange(of: tab) { _, next in if next == 3 { music.pause() } }
         .sensoryFeedback(.selection, trigger: tab)
         .environment(chats)
         // New messages: every 6 s while you're in Chat, every 20 s elsewhere,
@@ -93,5 +113,15 @@ struct MainTabView: View {
                 try? await Task.sleep(for: .seconds(base * slow))
             }
         }
+    }
+    private func tabButton(_ value: Int, _ label: String, _ symbol: String) -> some View {
+        Button { tab = value } label: {
+            VStack(spacing: 4) {
+                Image(systemName: symbol).font(.system(size: 20, weight: .semibold))
+                Text(label).font(.system(size: 9, weight: .bold, design: .rounded))
+            }.frame(maxWidth: .infinity, minHeight: 48)
+                .foregroundStyle(tab == value ? Theme.pink : Color.secondary)
+                .background(tab == value ? Theme.pink.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 22))
+        }.buttonStyle(.plain).accessibilityLabel(label).accessibilityAddTraits(tab == value ? [.isSelected] : [])
     }
 }

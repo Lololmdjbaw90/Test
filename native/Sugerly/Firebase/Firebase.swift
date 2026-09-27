@@ -337,6 +337,21 @@ enum FS {
         }
     }
 
+    // Stable, bounded pages. The document-ID tie-breaker prevents lost items
+    // when several posts share a creation timestamp. Never fall back to a scan.
+    static func page(_ collection: String, after cursor: Doc? = nil, size: Int = 30, equalTo: (String, String)? = nil) async throws -> (rows: [Doc], more: Bool) {
+        let count = min(100, max(1, size))
+        var query: Doc = ["from": [["collectionId": collection]], "limit": count + 1,
+            "orderBy": [["field": ["fieldPath": "created_date"], "direction": "DESCENDING"], ["field": ["fieldPath": "__name__"], "direction": "DESCENDING"]]]
+        if let (field, value) = equalTo { query["where"] = ["fieldFilter": ["field": ["fieldPath": field], "op": "EQUAL", "value": encode(value)]] }
+        if let cursor {
+            query["startAt"] = ["before": false, "values": [encode(cursor.str("created_date")), ["referenceValue": "\(base.replacingOccurrences(of: "https://firestore.googleapis.com/v1/", with: ""))/\(collection)/\(cursor.str("id"))"]]]
+        }
+        let json = try await HTTP.json(URL(string: "\(base):runQuery")!, method: "POST", body: ["structuredQuery": query], auth: try await bearer()) as? [Doc] ?? []
+        let rows = json.compactMap { ($0["document"] as? Doc).flatMap(document) }
+        return (Array(rows.prefix(count)), rows.count > count)
+    }
+
     private static func runQuery(_ collection: String, _ filters: [Filter], orderBy: String?, descending: Bool, limit: Int?) async throws -> [Doc] {
         var structured: [String: Any] = ["from": [["collectionId": collection]]]
         let clauses: [[String: Any]] = filters.map { filter in

@@ -2,12 +2,50 @@ import SwiftUI
 import UIKit
 
 enum Theme {
-    static let pink = Color(red: 1.0, green: 0.30, blue: 0.49)
-    static let rose = Color(red: 0.93, green: 0.36, blue: 0.56)
+    static let pink = Color(red: 217/255, green: 87/255, blue: 127/255)
+    static let rose = pink
     static let lavender = Color(red: 0.72, green: 0.52, blue: 0.98)
-    static let gradient = LinearGradient(colors: [Color(red: 1.0, green: 0.45, blue: 0.62), Color(red: 0.93, green: 0.30, blue: 0.52)], startPoint: .topLeading, endPoint: .bottomTrailing)
-    static let background = Color(.systemGroupedBackground)
-    static let card = Color(.secondarySystemGroupedBackground)
+    static let blush = Color(red: 238/255, green: 143/255, blue: 174/255)
+    static let gradient = LinearGradient(colors: [blush, pink], startPoint: .topLeading, endPoint: .bottomTrailing)
+    static func adaptive(_ light: UInt32, _ dark: UInt32) -> Color {
+        Color(UIColor { traits in
+            let hex = traits.userInterfaceStyle == .dark ? dark : light
+            return UIColor(red: CGFloat((hex >> 16) & 255)/255, green: CGFloat((hex >> 8) & 255)/255, blue: CGFloat(hex & 255)/255, alpha: 1)
+        })
+    }
+    static let background = adaptive(0xfbf7f6, 0x110a0f)
+    static let card = adaptive(0xffffff, 0x21171e)
+    static let soft = adaptive(0xf8f2f4, 0x30222c)
+    static let border = adaptive(0xefe4e9, 0x44323f)
+}
+
+struct NativeWordmark: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shone = false
+    var body: some View {
+        Image("Logo").resizable().scaledToFit().frame(width: 104, height: 44)
+            .overlay {
+                if !reduceMotion {
+                    LinearGradient(colors: [.clear, .white.opacity(0.65), .clear], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: 30).rotationEffect(.degrees(18)).offset(x: shone ? 140 : -140)
+                        .mask(Image("Logo").resizable().scaledToFit())
+                }
+            }
+            .accessibilityLabel("Sugerly")
+            .onAppear { if !shone { withAnimation(.easeOut(duration: 1.2).delay(0.4)) { shone = true } } }
+    }
+}
+
+struct SugerlyHeading: View {
+    let title: String
+    let subtitle: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("YOUR LITTLE CORNER OF THE INTERNET").font(.system(size: 9, weight: .bold, design: .rounded)).tracking(1.3).foregroundStyle(Theme.pink)
+            Text(title).font(.system(size: 32, weight: .bold, design: .rounded))
+            Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 12)
+    }
 }
 
 // Round profile picture with the person's initial as a fallback.
@@ -156,7 +194,7 @@ struct ReportSheet: View {
 // Links aren't allowed in bios and captions (spam and scams).
 enum Moderation {
     static func hasLink(_ text: String) -> Bool {
-        let pattern = #"(https?://|www\.)\S+|\b[a-z0-9-]+\.(com|net|org|io|co|gg|ly|me|app|xyz|link|shop|site)\b"#
+        let pattern = #"([a-z][a-z0-9+.-]*://|mailto:|www\.|[a-z0-9][a-z0-9.-]*\.[a-z]{2,63}\b|\b[0-9]{1,3}(\.[0-9]{1,3}){3}\b)"#
         return text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
     }
 }
