@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { motion } from "framer-motion";
+import { motion, useDragControls } from "framer-motion";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 import { AlertTriangle, X } from "lucide-react";
 
 const SIZES = { sm: "max-w-sm", md: "max-w-md", lg: "max-w-lg", xl: "max-w-2xl", "2xl": "max-w-4xl" };
@@ -38,14 +39,29 @@ export default function Modal({ open, onClose, title, subtitle, children, footer
   if (open) last.current = { title, subtitle, children, footer };
   ({ title, subtitle, children, footer } = last.current);
 
-  const mounted = useDelayedUnmount(open);
+  // Phones: a real iOS sheet — slides up from the bottom, springs into place,
+  // slides back down to close and can be swiped down. Wider screens: a
+  // centered card that scales in.
+  const sheet = useMediaQuery("(max-width: 639px)");
+  const drag = useDragControls();
+  const offscreen = typeof window !== "undefined" ? window.innerHeight : 900;
+  const mounted = useDelayedUnmount(open, 320);
   if (!mounted) return null;
+  const panelMotion = sheet
+    ? {
+      initial: { y: offscreen },
+      animate: open ? { y: 0, transition: { type: "spring", stiffness: 380, damping: 40, mass: 0.9 } } : { y: offscreen, transition: { duration: 0.3, ease: [0.32, 0.72, 0, 1] } },
+    }
+    : {
+      initial: { opacity: 0, scale: 0.94, y: 12 },
+      animate: open ? { opacity: 1, scale: 1, y: 0, transition: { type: "spring", stiffness: 420, damping: 34 } } : { opacity: 0, scale: 0.96, y: 8, transition: { duration: 0.18, ease: [0.4, 0, 1, 1] } },
+    };
   return createPortal(
     <motion.div
       className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center sm:p-4"
       initial={{ opacity: 0 }}
       animate={{ opacity: open ? 1 : 0 }}
-      transition={{ duration: 0.18 }}
+      transition={{ duration: open ? 0.25 : 0.3, ease: "easeOut" }}
       style={{ pointerEvents: open ? "auto" : "none" }}
     >
       {/* Blurring the whole screen is costly on phones and tablets: dim only there. */}
@@ -55,12 +71,22 @@ export default function Modal({ open, onClose, title, subtitle, children, footer
         role="dialog"
         aria-modal="true"
         aria-label={typeof title === "string" ? title : undefined}
-        initial={{ opacity: 0, y: 40, scale: 0.97 }}
-        animate={open ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 30, scale: 0.97, transition: { duration: 0.15 } }}
-        transition={{ type: "spring", stiffness: 380, damping: 32 }}
-        className={`relative w-full ${SIZES[size] || size} max-h-[calc(var(--app-h)*0.92-env(safe-area-inset-top))] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-t-[1.75rem] sm:rounded-[1.75rem] pb-[env(safe-area-inset-bottom)] sm:pb-0 ${className}`}
+        {...panelMotion}
+        drag={sheet ? "y" : false}
+        dragListener={false}
+        dragControls={drag}
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={{ top: 0, bottom: 0.8 }}
+        onDragEnd={(_, info) => { if (info.offset.y > 110 || info.velocity.y > 650) onClose?.(); }}
+        className={`relative w-full will-change-transform ${SIZES[size] || size} max-h-[calc(var(--app-h)*0.92-env(safe-area-inset-top))] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-t-[1.75rem] sm:rounded-[1.75rem] pb-[env(safe-area-inset-bottom)] sm:pb-0 ${className}`}
         style={{ background: "var(--surface)", border: "1px solid var(--border-c)", boxShadow: "var(--shadow-lg)" }}
       >
+        {/* Swipe down from the top of the sheet to close it. */}
+        {sheet && (
+          <div className="absolute top-0 left-0 right-14 h-8 z-20 touch-none" onPointerDown={(e) => drag.start(e)} aria-hidden="true">
+            {!hideHeader && <span className="absolute top-2 left-1/2 w-10 h-1 rounded-full" style={{ translate: "calc(-50% + 1.75rem) 0", background: "var(--border-c)" }} />}
+          </div>
+        )}
         {!hideHeader && (title || subtitle) && (
           <div className="flex items-start gap-3 px-5 sm:px-6 pt-5 pb-3 flex-shrink-0">
             <div className="flex-1 min-w-0">

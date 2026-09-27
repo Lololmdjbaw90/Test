@@ -85,4 +85,17 @@ export async function initNative() {
     root.classList.remove("keyboard-open");
   }).catch?.(() => {});
   Keyboard.addListener("keyboardDidHide", () => { if (window.scrollY) window.scrollTo(0, 0); }).catch?.(() => {});
+  // Safety net: if iOS never says the keyboard went away (floating/split iPad
+  // keyboard, hardware keyboard…), don't leave the screen shrunk — once no
+  // text field is focused, give the space back.
+  document.addEventListener("focusout", () => {
+    setTimeout(() => {
+      const a = document.activeElement;
+      const typing = a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.tagName === "SELECT" || a.isContentEditable);
+      if (!typing && root.classList.contains("keyboard-open")) {
+        root.style.setProperty("--kb", "0px");
+        root.classList.remove("keyboard-open");
+      }
+    }, 450);
+  });
 }
