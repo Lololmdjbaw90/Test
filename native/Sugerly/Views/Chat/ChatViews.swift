@@ -222,7 +222,7 @@ struct ConversationRow: View {
                     .frame(width: 56, height: 56)
                     .background(LinearGradient(colors: [Theme.lavender, Theme.pink], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             } else {
-                Avatar(url: conversation.picture(model), name: conversation.title(model), size: 56, online: other?.isOnline ?? false)
+                Avatar(url: conversation.picture(model), name: conversation.title(model), size: 56, online: other?.isOnline ?? false, ring: unread)
             }
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
@@ -246,6 +246,7 @@ struct ConversationRow: View {
         .padding(12)
         .background(unread ? Theme.pink.opacity(0.06) : Palette.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(unread ? Theme.pink.opacity(0.25) : Palette.border, lineWidth: 1))
+        .shadow(color: unread ? Theme.main.opacity(0.12) : Palette.shadow, radius: unread ? 12 : 6, y: 3)
     }
 
     private func preview(_ me: String) -> String {
@@ -293,9 +294,17 @@ struct ChatView: View {
                         Bubble(message: message,
                                mine: message.authorEmail == me,
                                showName: conversation.isGroup && message.authorEmail != me && previous?.authorEmail != message.authorEmail,
-                               showTime: previous == nil || gap(previous!, message))
+                               showTime: previous == nil || gap(previous!, message),
+                               me: me,
+                               onReact: { react(message, $0) })
                             .id(message.id)
                             .contextMenu {
+                                ControlGroup {
+                                    ForEach(["❤️", "😂", "😮", "😢", "👍"], id: \.self) { e in
+                                        Button(e) { react(message, e) }
+                                    }
+                                }
+                                .controlGroupStyle(.compactMenu)
                                 if !message.text.isEmpty { Button { UIPasteboard.general.string = message.text; model.showToast("Copied", icon: "doc.on.doc.fill") } label: { Label("Copy", systemImage: "doc.on.doc") } }
                                 if message.authorEmail == me {
                                     Button(role: .destructive) { delete(message) } label: { Label("Delete", systemImage: "trash") }
@@ -375,6 +384,18 @@ struct ChatView: View {
     private func gap(_ a: Message, _ b: Message) -> Bool {
         guard let x = Dates.parse(a.created), let y = Dates.parse(b.created) else { return false }
         return y.timeIntervalSince(x) > 15 * 60
+    }
+
+    // Tap an emoji to add or take back your reaction (same shape as the website).
+    private func react(_ message: Message, _ emoji: String) {
+        guard !message.pending, let i = messages.firstIndex(where: { $0.id == message.id }) else { return }
+        var reactions = messages[i].reactions
+        var people = reactions[emoji] ?? []
+        if people.contains(me) { people.removeAll { $0 == me } } else { people.append(me) }
+        reactions[emoji] = people.isEmpty ? nil : people
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { messages[i].reactions = reactions }
+        let payload: [String: Any] = reactions.mapValues { $0 as Any }
+        Task { try? await FS.update("DirectMessage", message.id, ["reactions": payload, "updated_date": FS.nowISO()]) }
     }
 
     // New messages every 2 seconds while the chat is open (4 if this
@@ -482,6 +503,8 @@ struct Bubble: View {
     let mine: Bool
     let showName: Bool
     let showTime: Bool
+    var me = ""
+    var onReact: (String) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: mine ? .trailing : .leading, spacing: 3) {
@@ -499,9 +522,10 @@ struct Bubble: View {
                 if mine { Spacer(minLength: 56) }
                 VStack(alignment: .leading, spacing: 6) {
                     if !message.imageURL.isEmpty {
-                        Rectangle().fill(Palette.surface2).frame(width: 230, height: 230)
-                            .overlay { RemoteImage(url: message.imageURL) }
+                        ArtImage(url: message.imageURL, tallest: 0.6, widest: 1.6)
+                            .frame(width: 240)
                             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                            .shadow(color: Palette.shadow, radius: 8, y: 3)
                     }
                     if !message.text.isEmpty {
                         Text(message.text)
@@ -511,8 +535,9 @@ struct Bubble: View {
                             .padding(.vertical, 10)
                             .background {
                                 if mine {
-                                    UnevenRoundedRectangle(topLeadingRadius: 22, bottomLeadingRadius: 22, bottomTrailingRadius: 6, topTrailingRadius: 22, style: .continuous)
-                                        .fill(Theme.gradient)
+                                    let shape = UnevenRoundedRectangle(topLeadingRadius: 22, bottomLeadingRadius: 22, bottomTrailingRadius: 6, topTrailingRadius: 22, style: .continuous)
+                                    shape.fill(Theme.gradient)
+                                        .overlay(shape.fill(LinearGradient(colors: [.white.opacity(0.22), .clear], startPoint: .top, endPoint: .center)))
                                         .shadow(color: Theme.pink.opacity(0.3), radius: 8, y: 4)
                                 } else {
                                     UnevenRoundedRectangle(topLeadingRadius: 22, bottomLeadingRadius: 6, bottomTrailingRadius: 22, topTrailingRadius: 22, style: .continuous)
@@ -524,6 +549,27 @@ struct Bubble: View {
                 }
                 .opacity(message.pending ? 0.6 : 1)
                 if !mine { Spacer(minLength: 56) }
+            }
+            if !message.reactions.isEmpty {
+                HStack(spacing: 4) {
+                    ForEach(message.reactions.keys.sorted(), id: \.self) { emoji in
+                        let people = message.reactions[emoji] ?? []
+                        let mineToo = people.contains(me)
+                        Button { onReact(emoji) } label: {
+                            HStack(spacing: 3) {
+                                Text(emoji).font(.system(size: 13))
+                                if people.count > 1 { Text("\(people.count)").font(.jakarta(11, .heavy)).foregroundStyle(mineToo ? Theme.main : Palette.text2) }
+                            }
+                            .padding(.horizontal, 8).frame(height: 26)
+                            .background(mineToo ? Theme.soft : Palette.surface, in: Capsule())
+                            .overlay(Capsule().strokeBorder(mineToo ? Theme.main.opacity(0.4) : Palette.border, lineWidth: 1))
+                        }
+                        .buttonStyle(BouncyStyle(scale: 0.85))
+                        .transition(.scale.combined(with: .opacity))
+                    }
+                }
+                .padding(.horizontal, 6)
+                .offset(y: -6)
             }
         }
     }

@@ -160,10 +160,17 @@ struct Message: Identifiable, Hashable {
     var readBy: [String]
     var created: String
     var edited: Bool
+    var reactions: [String: [String]] = [:]
     var pending = false
 
     init(_ d: Doc) {
         id = d.str("id")
+        var parsed: [String: [String]] = [:]
+        for (emoji, value) in (d["reactions"] as? [String: Any] ?? [:]) {
+            let people = (value as? [Any] ?? []).compactMap { $0 as? String }
+            if !people.isEmpty { parsed[emoji] = people }
+        }
+        reactions = parsed
         conversationId = d.str("conversation_id")
         isGroup = d.str("conversation_type") == "group"
         groupName = d.str("group_name")

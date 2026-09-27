@@ -407,19 +407,32 @@ struct MoreSheet: View {
         ScrollView {
             VStack(spacing: 16) {
                 if let me = model.me {
+                    let info = LevelInfo(xp: me.xp)
                     Button { go(.person(me.email)) } label: {
-                        HStack(spacing: 14) {
-                            Avatar(url: me.picture, name: me.displayName, size: 60)
-                                .overlay(Circle().strokeBorder(Theme.gradient, lineWidth: 2.5))
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(me.displayName).font(.display(24)).foregroundStyle(Palette.text)
-                                let info = LevelInfo(xp: me.xp)
-                                Text("Lv. \(info.level) · \(info.title) · \(me.coins) coins").font(.jakarta(13, .semibold)).foregroundStyle(info.color)
+                        VStack(alignment: .leading, spacing: 14) {
+                            HStack(spacing: 14) {
+                                Avatar(url: me.picture, name: me.displayName, size: 62, ring: true)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(me.displayName).font(.display(26)).foregroundStyle(Palette.text).lineLimit(1)
+                                    Text("Lv. \(info.level) · \(info.title)").font(.jakarta(13, .bold)).foregroundStyle(info.color)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right").font(.system(size: 13, weight: .heavy)).foregroundStyle(Palette.muted)
                             }
-                            Spacer()
-                            Image(systemName: "chevron.right").foregroundStyle(Palette.muted)
+                            HStack(spacing: 8) {
+                                miniStat("\(me.coins)", "Coins", "circle.hexagongrid.fill", Color(hex: 0xF0A020))
+                                miniStat("\(me.dailyStreak)", "Streak", "flame.fill", Color(hex: 0xF08A20))
+                                miniStat("\(me.following.count)", "Following", "heart.fill", Theme.main)
+                            }
+                            XPBar(info: info)
                         }
-                        .sugarCard(radius: 26, padding: 16)
+                        .padding(16)
+                        .background {
+                            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                                .fill(LinearGradient(colors: [Theme.light.opacity(0.35), Theme.main.opacity(0.1), Palette.surface], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(.white.opacity(0.6), lineWidth: 1))
+                                .shadow(color: Theme.main.opacity(0.15), radius: 18, y: 8)
+                        }
                     }
                     .buttonStyle(BouncyStyle(scale: 0.97))
                 }
@@ -461,6 +474,20 @@ struct MoreSheet: View {
             try? await Task.sleep(for: .milliseconds(300))
             path.append(route)
         }
+    }
+
+    private func miniStat(_ value: String, _ label: String, _ icon: String, _ color: Color) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon).font(.system(size: 12, weight: .bold)).foregroundStyle(color)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(value).font(.jakarta(14, .heavy)).foregroundStyle(Palette.text)
+                Text(label).font(.jakarta(10, .semibold)).foregroundStyle(Palette.muted)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .background(Palette.surface.opacity(0.85), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private func tile(_ title: String, _ icon: String, _ colors: [UInt32], action: @escaping () -> Void) -> some View {
