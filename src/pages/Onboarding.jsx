@@ -1,3 +1,4 @@
+import { hasLink } from "@/lib/moderation";
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
@@ -40,6 +41,7 @@ export default function OnboardingPage() {
   const toggleInterest = (i) => setForm((f) => ({ ...f, interests: f.interests.includes(i) ? f.interests.filter((x) => x !== i) : [...f.interests, i] }));
 
   const finish = async () => {
+    if (hasLink(form.bio)) { toast.error("Links aren't allowed in your bio"); return; }
     setSaving(true);
     try {
       let profile_picture = user?.profile_picture || "";

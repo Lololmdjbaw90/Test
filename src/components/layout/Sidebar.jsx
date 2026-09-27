@@ -16,7 +16,7 @@ export function Logo({ collapsed, bar }) {
   return (
     <Link to="/" className="flex items-center group" aria-label="Sugerly home">
       {bar ? (
-        <BrandLogo height={40} />
+        <BrandLogo height={40} shine />
       ) : collapsed ? (
         <BrandMark size={44} className="transition-transform duration-300 can-hover:group-hover:-rotate-6" />
       ) : (

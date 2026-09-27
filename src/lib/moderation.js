@@ -18,3 +18,7 @@ export async function checkText(text, { user, where } = {}) {
   } catch { /* fail open: moderation is best-effort */ }
   return { safe: true, reason: "" };
 }
+
+// Links aren't allowed in reel captions or bios (spam and scam protection).
+const LINK = /(https?:\/\/|www\.|\b[a-z0-9-]{2,}\.(com|net|org|io|gg|co|me|ly|xyz|app|dev|tv|link|site|shop|info|biz|ru|to|cc|us|uk|it|de|fr|es)\b|discord\.gg|t\.me\/)/i;
+export const hasLink = (text) => LINK.test(String(text || ""));

@@ -47,10 +47,10 @@ export function useAccent() {
   return accent;
 }
 
-export function BrandLogo({ height = 40, className = "", style }) {
+export function BrandLogo({ height = 40, className = "", style, shine = false }) {
   const accent = useAccent();
   const width = Math.round(height * LOGO_RATIO[accent]);
-  return (
+  const img = (
     <img
       src={`/brand/sugerly-logo-${accent}-sm.webp`}
       srcSet={`/brand/sugerly-logo-${accent}-sm.webp 360w, /brand/sugerly-logo-${accent}.webp 720w`}
@@ -63,9 +63,18 @@ export function BrandLogo({ height = 40, className = "", style }) {
       fetchpriority="high"
       width={width}
       height={height}
-      className={`select-none ${className}`}
-      style={{ height, width, ...style }}
+      className={`select-none ${shine ? "" : className}`}
+      style={{ height, width, ...(shine ? {} : style) }}
     />
+  );
+  if (!shine) return img;
+  // A soft shine that sweeps across now and then, and a tiny twinkle.
+  return (
+    <span className={`logo-shine ${className}`} style={{ width, height, "--logo": `url(/brand/sugerly-logo-${accent}-sm.webp)`, ...style }}>
+      {img}
+      <span className="logo-shine-sweep" aria-hidden="true" />
+      <span className="logo-sparkle" aria-hidden="true" />
+    </span>
   );
 }
 

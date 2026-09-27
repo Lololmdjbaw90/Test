@@ -1,3 +1,4 @@
+import { hasLink } from "@/lib/moderation";
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -75,6 +76,7 @@ export default function SettingsPage() {
 
   const save = async () => {
     if (!form.display_name.trim()) { toast.error("Display name can't be empty"); return; }
+    if (hasLink(form.bio)) { toast.error("Links aren't allowed in your bio"); return; }
     setSaving(true);
     try {
       let profile_picture = picPreview ? user.profile_picture || "" : "";

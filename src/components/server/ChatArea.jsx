@@ -18,6 +18,10 @@ import { useBlocked } from "@/lib/safety";
 
 const compact = (s) => String(s || "").replace(/\s+/g, "").toLowerCase();
 
+// Only messages that arrive while you're here animate in.
+const loadedAt = Date.now();
+const isFreshMsg = (m) => new Date(m?.created_date || 0).getTime() > loadedAt - 1500;
+
 function MessageItem({ msg, grouped, me, roleColor, mentionsMe, canPin, canDelete, canReact = true, onReply, onEdit, onDelete, onPin, onReact, onJumpTo, onOpenProfile, tapped, onTap }) {
   const [picker, setPicker] = useState(false);
   const own = msg.user_email === me.email;
@@ -32,7 +36,7 @@ function MessageItem({ msg, grouped, me, roleColor, mentionsMe, canPin, canDelet
   return (
     <motion.div
       id={`msg-${msg.id}`}
-      initial={{ opacity: 0, y: 8 }}
+      initial={isFreshMsg(msg) ? { opacity: 0, y: 8 } : false}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", stiffness: 420, damping: 34 }}
       className={`group relative flex gap-3 px-4 sm:px-6 ${grouped ? "py-0.5" : "pt-3 pb-0.5"} transition-colors hover:bg-[var(--surface-2)]`}

@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, ImagePlus, Loader2, Lock, Pencil, Reply, Send, X } from "lucide-react";
 import EmojiPicker from "./EmojiPicker";
 import GifPicker from "@/components/common/GifPicker";
+import BottomSheet from "@/components/common/BottomSheet";
 import { feedback } from "@/lib/feedback";
 
 // Shared message input: autosizing textarea, emoji picker, image attachment,
@@ -113,13 +114,10 @@ export default function ChatComposer({ placeholder, onSend, editing, onCancelEdi
           </motion.div>
         )}
       </AnimatePresence>
-      <AnimatePresence>
-        {gifOpen && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} transition={{ duration: 0.18 }} className="mb-2">
-            <GifPicker onPick={sendGif} onClose={() => setGifOpen(false)} />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* A sheet over the whole screen, so the chat box can't cut it off. */}
+      <BottomSheet open={gifOpen} onClose={() => setGifOpen(false)} title="GIFs" height="auto" label="Choose a GIF">
+        <GifPicker onPick={sendGif} onClose={() => setGifOpen(false)} className="!bg-transparent !border-0 !shadow-none" />
+      </BottomSheet>
       <div className="flex items-end gap-1.5 rounded-[1.4rem] p-1.5 transition-shadow focus-within:shadow-[0_0_0_4px_rgb(var(--accent-rgb)/0.12)]" style={{ background: "var(--surface-2)", border: "1px solid var(--border-c)" }}>
         {!editing && (
           <>

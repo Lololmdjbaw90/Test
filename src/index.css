@@ -152,6 +152,15 @@
   @media (hover: none), (pointer: coarse) {
     .glass { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--surface-glass-solid); }
   }
+  /* Phones and tablets draw bars, buttons and sheets as frosted glass
+     without live blur, which kept the screen redrawing while scrolling. */
+  @media (hover: none), (pointer: coarse) {
+    .glass-bar { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: var(--surface-glass-solid) !important; }
+    .liquid-glass { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: linear-gradient(160deg, rgb(255 255 255 / 0.97), rgb(255 255 255 / 0.9)); }
+    .dark .liquid-glass, .liquid-glass.on-dark { background: linear-gradient(160deg, rgb(62 46 58 / 0.96), rgb(24 16 22 / 0.95)); }
+    .liquid-sheet { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgb(255 255 255 / 0.98); }
+    .dark .liquid-sheet { background: rgb(30 21 27 / 0.98); }
+  }
   .glass-bar {
     background: var(--surface-glass);
     backdrop-filter: blur(18px) saturate(180%);
@@ -560,6 +569,13 @@ button, [role="button"], [role="tab"] { -webkit-user-select: none; user-select: 
 .native-app input, .native-app textarea, .native-app [contenteditable], .native-app .select-text { -webkit-user-select: text; user-select: text; }
 .native-app img, .native-app a { -webkit-user-drag: none; -webkit-touch-callout: none; }
 @media (min-width: 420px) { .show-from-420 { display: flex; } }
+/* The logo in the top bar: a soft shine sweeps across now and then. */
+.logo-shine { position: relative; display: inline-block; flex-shrink: 0; }
+.logo-shine-sweep { position: absolute; inset: 0; overflow: hidden; pointer-events: none; -webkit-mask: var(--logo) center / 100% 100% no-repeat; mask: var(--logo) center / 100% 100% no-repeat; }
+.logo-shine-sweep::before { content: ""; position: absolute; top: -10%; bottom: -10%; left: -50%; width: 40%; background: linear-gradient(100deg, transparent 0%, rgb(255 255 255 / 0.9) 50%, transparent 100%); transform: translate3d(0, 0, 0) skewX(-18deg); animation: logo-sweep 6s ease-in-out infinite; }
+@keyframes logo-sweep { 0%, 70% { transform: translate3d(0, 0, 0) skewX(-18deg); } 100% { transform: translate3d(420%, 0, 0) skewX(-18deg); } }
+.logo-sparkle { position: absolute; right: -3px; top: 1px; width: 10px; height: 10px; pointer-events: none; background: #fff; clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); filter: drop-shadow(0 0 3px rgb(var(--accent-rgb) / 0.9)); animation: logo-twinkle 3s ease-in-out infinite; }
+@keyframes logo-twinkle { 0%, 100% { transform: scale(0.4) rotate(0deg); opacity: 0.2; } 50% { transform: scale(1) rotate(45deg); opacity: 1; } }
 /* The native iOS tab bar replaces the web one (kept invisible so menus can
    still anchor to its buttons). */
 .native-tabbar-on .mobile-tabbar { visibility: hidden !important; pointer-events: none !important; }

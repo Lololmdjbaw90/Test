@@ -47,6 +47,24 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
   const slides = reel.kind === "photo" && (reel.media_urls || []).length > 1 ? reel.media_urls : null;
   const photoTotal = photoLength(slides?.length || 1);
   const [slide, setSlide] = useState(0);
+  const slideRef = useRef(0);
+  const trackRef = useRef(null);
+  // Slideshows scroll sideways like TikTok photo posts: they move on by
+  // themselves, and you can swipe through them.
+  const goToSlide = (i) => {
+    slideRef.current = i;
+    setSlide(i);
+    const el = trackRef.current;
+    if (el) el.scrollTo({ left: i * el.clientWidth, behavior: i === 0 ? "auto" : "smooth" });
+  };
+  const onSlideScroll = (e) => {
+    const el = e.currentTarget;
+    const i = Math.round(el.scrollLeft / Math.max(1, el.clientWidth));
+    if (i === slideRef.current) return;
+    slideRef.current = i;
+    setSlide(i);
+    elapsed.current = i * SLIDE_SECONDS; // a swipe moves the timer along
+  };
   const videoRef = useRef(null);
   const audioRef = useRef(null);
   const layerRef = useRef(null);
@@ -151,8 +169,11 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
     const tick = (now) => {
       elapsed.current += ((now - last) / 1000) * speedBoost;
       last = now;
-      if (elapsed.current >= photoTotal) { elapsed.current = 0; cb.current.onLoop?.(); setCycle((c) => c + 1); }
-      if (slides) { const i = Math.min(slides.length - 1, Math.floor(elapsed.current / SLIDE_SECONDS)); setSlide((s) => (s === i ? s : i)); }
+      if (elapsed.current >= photoTotal) { elapsed.current = 0; cb.current.onLoop?.(); if (slides) goToSlide(0); else setCycle((c) => c + 1); }
+      if (slides) {
+        const i = Math.min(slides.length - 1, Math.floor(elapsed.current / SLIDE_SECONDS));
+        if (i !== slideRef.current) goToSlide(i);
+      }
       cb.current.onProgress?.(elapsed.current / photoTotal);
       syncStickers(layerRef.current, elapsed.current);
       raf = requestAnimationFrame(tick);
@@ -160,7 +181,7 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [reel.kind, active, paused, speedBoost, photoTotal]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (!active) { elapsed.current = 0; cb.current.onProgress?.(0); } }, [active]);
+  useEffect(() => { if (!active) { elapsed.current = 0; cb.current.onProgress?.(0); if (slides) goToSlide(0); } }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const css = filterCss(edits.filter);
   const photoSrc = src || cover;
@@ -195,14 +216,16 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
           )}
         </>
       ) : slides ? (
-        <img
-          key={`${reel.id}-${cycle}-${slide}`}
-          src={slides[slide]}
-          alt={reel.caption || ""}
-          draggable={false}
-          className={`absolute inset-0 w-full h-full object-cover enter-fade ${active ? "reel-kenburns" : ""}`}
-          style={{ filter: css, animationPlayState: paused ? "paused" : "running", animationDuration: `${SLIDE_SECONDS}s` }}
-        />
+        <>
+          <div ref={trackRef} onScroll={onSlideScroll} className="absolute inset-0 flex overflow-x-auto overflow-y-hidden snap-x snap-mandatory no-scrollbar" style={{ touchAction: "pan-x pan-y", overscrollBehaviorX: "contain" }}>
+            {slides.map((u, i) => (
+              <img key={i} src={u} alt={i === 0 ? reel.caption || "" : ""} draggable={false} loading={i < 2 ? "eager" : "lazy"} className="w-full h-full flex-shrink-0 object-cover snap-center snap-always" style={{ filter: css }} />
+            ))}
+          </div>
+          <div className="absolute inset-x-0 top-[calc(env(safe-area-inset-top)+3.9rem)] flex justify-center gap-1.5 pointer-events-none">
+            {slides.map((_, i) => <span key={i} className="h-1.5 rounded-full transition-all duration-300" style={{ width: i === slide ? 16 : 6, background: i === slide ? "#fff" : "rgb(255 255 255 / 0.5)" }} />)}
+          </div>
+        </>
       ) : photoSrc ? (
         <img
           key={`${reel.id}-${cycle}`}

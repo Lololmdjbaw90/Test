@@ -49,11 +49,16 @@ function SharedReel({ reel, own }) {
   );
 }
 
+// Messages already there when a chat opens appear at once; only new ones
+// animate in (dozens of springs at once made opening a chat stutter).
+const openedAt = Date.now();
+const isFresh = (m) => new Date(m?.created_date || 0).getTime() > openedAt - 1500;
+
 function Bubble({ msg, own, showAvatar, showName, isGroup, seen, onEdit, onDelete, onReact, me, tapped, onTap }) {
   const [react, setReact] = useState(false);
   const reactions = Object.entries(msg.reactions || {}).filter(([, users]) => users?.length);
   return (
-    <motion.div initial={{ opacity: 0, y: 10, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: "spring", stiffness: 420, damping: 32 }} className={`group flex gap-2 ${own ? "flex-row-reverse" : ""} ${showAvatar ? "mt-3" : "mt-0.5"}`} onMouseLeave={() => setReact(false)} onClick={(e) => { if (window.matchMedia("(hover: none)").matches && !e.target.closest("button,a,input,textarea")) onTap?.(msg.id); }}>
+    <motion.div initial={isFresh(msg) ? { opacity: 0, y: 10, scale: 0.98 } : false} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: "spring", stiffness: 420, damping: 32 }} className={`group flex gap-2 ${own ? "flex-row-reverse" : ""} ${showAvatar ? "mt-3" : "mt-0.5"}`} onMouseLeave={() => setReact(false)} onClick={(e) => { if (window.matchMedia("(hover: none)").matches && !e.target.closest("button,a,input,textarea")) onTap?.(msg.id); }}>
       <div className="w-8 flex-shrink-0">{!own && showAvatar && <Avatar src={msg.user_profile_picture} name={msg.user_display_name} size={32} />}</div>
       <div className={`max-w-[78%] sm:max-w-[65%] flex flex-col ${own ? "items-end" : "items-start"}`}>
         {showName && isGroup && !own && <span className="text-[11px] font-bold mb-1 ml-3" style={{ color: "var(--text-secondary)" }}>{msg.user_display_name}</span>}

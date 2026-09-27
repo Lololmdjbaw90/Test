@@ -5,6 +5,7 @@ import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { applyFilterToCanvas, bakePhoto, filterCss } from "@/lib/filters";
 import { hashtags } from "@/lib/ranking";
+import { hasLink } from "@/lib/moderation";
 import { feedback } from "@/lib/feedback";
 import { toast } from "@/lib/toast";
 import { displayName } from "@/lib/format";
@@ -49,6 +50,7 @@ function PostStep({ media, edits, music, coverTime, coverUrl, onBack, onPosted }
 
   const post = async () => {
     if (busy) return;
+    if (hasLink(caption)) { toast.error("Links aren't allowed in captions"); return; }
     try {
       const upload = async (file) => (await base44.integrations.Core.UploadFile({ file })).file_url;
       let mediaUrls = [];
