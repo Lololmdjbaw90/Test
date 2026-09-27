@@ -1,5 +1,12 @@
 # Put Sugerly on the App Store (from Windows)
 
+> **No money? Release it free as a web app first.** Do step 3 below
+> (Netlify, free). Then share the link: on iPhone, people open it in
+> Safari → Share → **Add to Home Screen**, and Sugerly installs with its
+> own icon, full screen, like an app. The App Store itself always needs
+> Apple's $99/year membership. You can add that later and everything
+> below still works.
+
 You don't need a Mac. GitHub's Macs build, sign and upload the app. You
 only use a web browser, plus your iPhone for testing.
 
@@ -24,11 +31,10 @@ On GitHub, open **Pull requests → #1 → Merge pull request**.
 This puts the final code and the "Upload to App Store" button on your
 main branch.
 
-## 3. Put the Privacy Policy and Help pages online (free)
+## 3. Put Sugerly online (free)
 
-Apple needs two web links. The site built from this repo shows **only**
-Help & FAQ, Terms, Privacy and Guidelines. Sugerly itself stays an
-iPhone/iPad app.
+This gives you the free web app, plus the two links Apple needs (Privacy
+Policy and Support).
 
 1. Go to <https://app.netlify.com> and sign up with GitHub.
 2. Click **Add new site → Import an existing project → GitHub**, then pick
@@ -40,6 +46,7 @@ iPhone/iPad app.
 
 Your links are:
 
+- The app (share this one): `https://sugerly.netlify.app`
 - Privacy Policy: `https://sugerly.netlify.app/Legal/privacy`
 - Support: `https://sugerly.netlify.app/Help`
 
