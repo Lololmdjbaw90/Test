@@ -1,15 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { ExternalLink, Loader2, Pause, Play, Search } from "lucide-react";
-import { AUDIUS_GENRES, audiusTracks } from "@/lib/audius";
+import { MUSIC_GENRES, catalogTracks } from "@/lib/musicCatalog";
 import { usePlayer } from "@/lib/player";
 import { feedback } from "@/lib/feedback";
 
-const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
-
-// "Discover" on the Music tab: trending songs on Audius by genre, and search.
-export default function AudiusSection() {
+// "Top charts" on the Music tab: popular songs by genre, and search.
+export default function PopularMusic() {
   const player = usePlayer();
-  const [genre, setGenre] = useState("All");
+  const [genre, setGenre] = useState(0);
   const [query, setQuery] = useState("");
   const [tracks, setTracks] = useState([]);
   const [state, setState] = useState("loading");
@@ -18,7 +16,7 @@ export default function AudiusSection() {
     const ctrl = new AbortController();
     setState("loading");
     const t = setTimeout(() => {
-      audiusTracks({ query, genre, signal: ctrl.signal })
+      catalogTracks({ query, genre, signal: ctrl.signal })
         .then((list) => { setTracks(list); setState("done"); })
         .catch((e) => { if (e.name !== "AbortError") setState("error"); });
     }, query ? 350 : 0);
@@ -31,23 +29,23 @@ export default function AudiusSection() {
     <section className="mb-10" aria-label="Discover music">
       <div className="flex items-end justify-between gap-3 mb-3">
         <div>
-          <h2 className="font-display text-2xl" style={{ color: "var(--text-primary)" }}>Discover</h2>
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>Trending songs from independent artists on <a href="https://audius.co" target="_blank" rel="noreferrer" className="font-semibold underline">Audius</a></p>
+          <h2 className="font-display text-2xl" style={{ color: "var(--text-primary)" }}>Top charts</h2>
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>Today's most popular songs · 30-second previews from <a href="https://www.deezer.com" target="_blank" rel="noreferrer" className="font-semibold underline">Deezer</a></p>
         </div>
         <label className="flex items-center gap-2 h-10 px-3 rounded-full w-44 sm:w-60" style={{ background: "var(--surface-2)", border: "1px solid var(--border-c)" }}>
           <Search className="w-4 h-4 flex-shrink-0" style={{ color: "var(--text-muted)" }} />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search songs" className="flex-1 min-w-0 bg-transparent outline-none text-[16px] sm:text-sm" style={{ color: "var(--text-primary)" }} aria-label="Search Audius" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Songs or artists" className="flex-1 min-w-0 bg-transparent outline-none text-[16px] sm:text-sm" style={{ color: "var(--text-primary)" }} aria-label="Search music" />
         </label>
       </div>
       {!query && (
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-3 -mx-1 px-1">
-          {AUDIUS_GENRES.map((g) => (
-            <button key={g} onClick={() => { feedback("tab"); setGenre(g); }} className="flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors" style={{ background: genre === g ? "var(--accent-grad)" : "var(--surface-2)", color: genre === g ? "#fff" : "var(--text-secondary)" }} aria-pressed={genre === g}>{g}</button>
+          {MUSIC_GENRES.map((g) => (
+            <button key={g.id} onClick={() => { feedback("tab"); setGenre(g.id); }} className="flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors" style={{ background: genre === g.id ? "var(--accent-grad)" : "var(--surface-2)", color: genre === g.id ? "#fff" : "var(--text-secondary)" }} aria-pressed={genre === g.id}>{g.label}</button>
           ))}
         </div>
       )}
       {state === "loading" && !tracks.length && <div className="py-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin" style={{ color: "var(--text-muted)" }} /></div>}
-      {state === "error" && <p className="text-sm py-6 text-center" style={{ color: "var(--text-muted)" }}>Couldn't reach Audius right now — try again in a moment.</p>}
+      {state === "error" && <p className="text-sm py-6 text-center" style={{ color: "var(--text-muted)" }}>Couldn't load the charts right now — try again in a moment.</p>}
       {state === "done" && !tracks.length && <p className="text-sm py-6 text-center" style={{ color: "var(--text-muted)" }}>No songs found.</p>}
       <div className="grid sm:grid-cols-2 gap-2">
         {tracks.map((t, i) => {
@@ -61,9 +59,9 @@ export default function AudiusSection() {
               </button>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{t.title}</p>
-                <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>{t.artist}{t.genre ? ` · ${t.genre}` : ""}{t.duration ? ` · ${mmss(t.duration)}` : ""}</p>
+                <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}><span className="font-bold tabular-nums">{i + 1}</span> · {t.artist}</p>
               </div>
-              <a href={t.link} target="_blank" rel="noreferrer" className="icon-btn w-8 h-8 flex-shrink-0" aria-label={`Open ${t.title} on Audius`}><ExternalLink className="w-3.5 h-3.5" /></a>
+              <a href={t.link} target="_blank" rel="noreferrer" className="icon-btn w-8 h-8 flex-shrink-0" aria-label={`Open ${t.title} on Deezer`}><ExternalLink className="w-3.5 h-3.5" /></a>
             </div>
           );
         })}

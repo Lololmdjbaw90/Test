@@ -7,7 +7,7 @@ import voice, { playTone } from "@/lib/voice";
 import { RING_MS, callTitle, declineCall, joinCall } from "@/lib/calls";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { toast } from "@/lib/toast";
-import { useIsMobile } from "@/lib/useMediaQuery";
+import { useIsMobile, useMediaQuery } from "@/lib/useMediaQuery";
 import { useDelayedUnmount } from "@/components/common/Modal";
 import Avatar from "@/components/common/Avatar";
 import CallStage from "@/components/voice/CallStage";
@@ -65,6 +65,7 @@ function IncomingCall({ call, me, onAccept, onDecline }) {
 // The call window: full screen on phones, a floating window (or full screen) on desktop.
 function CallWindow({ vs, call, me, now }) {
   const isMobile = useIsMobile();
+  const touch = useMediaQuery("(hover: none), (pointer: coarse)");
   const [full, setFull] = useState(false);
   const open = vs.room?.type === "call" && vs.expanded && (vs.connected || vs.connecting);
   const mounted = useDelayedUnmount(open, 240);
@@ -85,7 +86,7 @@ function CallWindow({ vs, call, me, now }) {
     ? { title: c ? callTitle(c, me) : room.name, status: !c || c.caller_email === me.email ? (c?.video ? "Video calling…" : "Calling…") : "Connecting…", people: invitees.length ? invitees : [{ email: room.id, name: room.name, picture: "" }] }
     : null;
   const status = view.vs.connecting ? "Connecting…" : calling ? calling.status : `${elapsed} · ${view.vs.participants.length} in call`;
-  const fullScreen = isMobile || full;
+  const fullScreen = isMobile || touch || full;
   const minimize = () => voice.setExpanded(false);
 
   return createPortal(
@@ -96,6 +97,7 @@ function CallWindow({ vs, call, me, now }) {
       transition={{ type: "spring", stiffness: 360, damping: 32 }}
       style={{ pointerEvents: open ? "auto" : "none", boxShadow: fullScreen ? undefined : "0 30px 80px rgb(0 0 0 / 0.45)" }}
       role="dialog"
+      aria-modal={open && fullScreen ? "true" : undefined}
       aria-label={`Call with ${room.name}`}
     >
       <div className="call-stage h-full flex flex-col">

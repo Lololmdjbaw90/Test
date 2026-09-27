@@ -15,7 +15,7 @@ export default function MiniPlayer({ raised }) {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 40, scale: 0.95 }}
           transition={{ type: "spring", stiffness: 360, damping: 30 }}
-          className={`fixed z-[60] left-3 right-3 desk:left-auto desk:right-5 desk:w-[360px] ${raised ? "bottom-[calc(84px+env(safe-area-inset-bottom))]" : "bottom-[calc(0.75rem+env(safe-area-inset-bottom))]"} md:bottom-5 glass rounded-3xl overflow-hidden`}
+          className={`fixed z-[60] left-3 right-3 mx-auto max-w-[560px] desk:mx-0 desk:left-auto desk:right-5 desk:w-[360px] ${raised ? "bottom-[calc(80px+env(safe-area-inset-bottom))]" : "bottom-[calc(0.75rem+env(safe-area-inset-bottom))]"} desk:bottom-5 glass rounded-3xl overflow-hidden`}
           style={{ border: "1px solid var(--border-c)", boxShadow: "var(--shadow-lg)" }}
           role="region"
           aria-label="Music player"
@@ -26,7 +26,7 @@ export default function MiniPlayer({ raised }) {
               className="anim-spin w-12 h-12 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center text-white"
               style={{ background: "var(--accent-grad)", boxShadow: "0 0 0 3px var(--surface), 0 0 0 4px var(--border-c)" }}
             >
-              {p.track.cover ? <img loading="lazy" decoding="async" src={p.track.cover} alt="" className="w-full h-full object-cover" /> : <Music2 className="w-5 h-5" />}
+              {p.track.cover ? <img key={p.track.cover} src={p.track.cover} alt="" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = "none"; }} /> : <Music2 className="w-5 h-5" />}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{p.track.title}</p>

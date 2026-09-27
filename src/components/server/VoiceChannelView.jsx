@@ -1,4 +1,7 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { ChevronDown } from "lucide-react";
+import { useMediaQuery } from "@/lib/useMediaQuery";
 import { motion } from "framer-motion";
 import { Loader2, MicOff, PhoneCall, Video, Volume2 } from "lucide-react";
 import voice, { VOICE_STALE_MS } from "@/lib/voice";
@@ -14,6 +17,11 @@ export default function VoiceChannelView({ channel, me, access = { connect: true
   const vs = useVoice();
   const now = useNow(10000);
   const [busy, setBusy] = useState(false);
+  // Phones and tablets: the call opens full screen (room for video and the
+  // controls, and the tab bar steps aside); minimize to see the channel.
+  const touch = useMediaQuery("(hover: none), (pointer: coarse), (max-width: 767px)");
+  const [minimized, setMinimized] = useState(false);
+  useEffect(() => { if (joinedHere) setMinimized(false); }, [joinedHere]);
   const joinedHere = vs.room?.id === channel.id && (vs.connected || vs.connecting);
   const { data: presence } = useLiveQuery("VoicePresence", { channel_id: channel.id });
   const inRoom = presence.filter((p) => now - (p.last_active || 0) < VOICE_STALE_MS);
@@ -31,7 +39,23 @@ export default function VoiceChannelView({ channel, me, access = { connect: true
     setBusy(false);
   };
 
-  if (joinedHere) return <CallStage vs={vs} className="flex-1" />;
+  if (joinedHere && !touch) return <CallStage vs={vs} className="flex-1" />;
+  if (joinedHere && !minimized) {
+    return createPortal(
+      <div className="fixed inset-0 z-[100] flex flex-col call-stage" role="dialog" aria-modal="true" aria-label={`Voice channel ${channel.name}`} style={{ background: "#0f0b0e", paddingTop: "env(safe-area-inset-top)" }}>
+        <div className="flex items-center gap-2 px-3 py-2 text-white">
+          <button onClick={() => setMinimized(true)} className="call-btn !w-10 !h-10 !bg-transparent" aria-label="Minimize call"><ChevronDown className="w-5 h-5" /></button>
+          <div className="flex-1 min-w-0 text-center">
+            <p className="font-bold truncate">{channel.name}</p>
+            <p className="text-xs opacity-70">{vs.connecting ? "Connecting…" : `${vs.participants?.length || 1} in voice`}</p>
+          </div>
+          <span className="w-10" />
+        </div>
+        <CallStage vs={vs} className="flex-1 min-h-0" />
+      </div>,
+      document.body,
+    );
+  }
 
   const elsewhere = vs.connected && vs.room && vs.room.id !== channel.id;
   return (
@@ -61,6 +85,9 @@ export default function VoiceChannelView({ channel, me, access = { connect: true
           </div>
         )}
 
+        {joinedHere ? (
+          <button onClick={() => setMinimized(false)} className="call-btn call-btn-accept !w-auto !h-12 px-6 gap-2 font-bold"><PhoneCall className="w-4 h-4" /> Back to call</button>
+        ) : (
         <div className="flex flex-wrap justify-center gap-3">
           <button onClick={() => join(false)} disabled={busy || vs.connecting || !access.connect} className="call-btn call-btn-accept !w-auto !h-12 px-6 gap-2 font-bold">
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <PhoneCall className="w-4 h-4" />} {elsewhere ? "Switch here" : "Join voice"}
@@ -71,6 +98,7 @@ export default function VoiceChannelView({ channel, me, access = { connect: true
             </button>
           )}
         </div>
+        )}
         {elsewhere && <p className="text-xs opacity-60">You're currently in <strong>{vs.room.name}</strong>.</p>}
         {!access.connect && <p className="text-xs font-semibold opacity-80">You don't have permission to join this channel.</p>}
         {access.connect && !access.speak && <p className="text-xs opacity-70">You'll join muted — your roles don't allow speaking here.</p>}
