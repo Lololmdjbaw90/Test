@@ -394,16 +394,7 @@ struct HomeView: View {
             XPBar(info: info)
         }
         .padding(22)
-        .background {
-            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .fill(LinearGradient(colors: [Theme.light.opacity(0.38), Theme.main.opacity(0.14), Palette.surface], startPoint: .topLeading, endPoint: .bottomTrailing))
-                .overlay(alignment: .topTrailing) {
-                    Circle().fill(Theme.light.opacity(0.5)).frame(width: 220).blur(radius: 60).offset(x: 60, y: -80)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 32, style: .continuous).strokeBorder(.white.opacity(0.6), lineWidth: 1))
-                .shadow(color: Theme.pink.opacity(0.18), radius: 24, y: 12)
-        }
+        .sugarCard(radius: 32)
     }
 
     private func stat(_ value: String, _ label: String, _ sub: String, _ color: Color) -> some View {
@@ -414,7 +405,7 @@ struct HomeView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
-        .background(Palette.surface.opacity(0.85), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
     }
 

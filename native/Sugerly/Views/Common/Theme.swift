@@ -110,12 +110,7 @@ struct SugarCard: ViewModifier {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         content
             .padding(padding)
-            .background {
-                shape.fill(Palette.surface)
-                    .overlay {
-                        shape.fill(LinearGradient(colors: [Theme.light.opacity(scheme == .dark ? 0.06 : 0.08), .clear], startPoint: .top, endPoint: .center))
-                    }
-            }
+            .background { shape.fill(Palette.surface) }
             .overlay {
                 shape.strokeBorder(
                     LinearGradient(colors: [Color.white.opacity(scheme == .dark ? 0.08 : 0.9), Palette.border], startPoint: .top, endPoint: .bottom),
@@ -135,9 +130,7 @@ extension View {
     func glassPill(cornerRadius: CGFloat = 30) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         return self
-            .background(.ultraThinMaterial, in: shape)
-            .background(Palette.surface.opacity(0.75), in: shape)
-            .overlay(shape.fill(LinearGradient(colors: [Theme.light.opacity(0.16), .clear], startPoint: .top, endPoint: .bottom)).allowsHitTesting(false))
+            .background(Palette.surface, in: shape)
             .overlay(shape.strokeBorder(Theme.light.opacity(0.55), lineWidth: 1.2))
             .shadow(color: Theme.main.opacity(0.2), radius: 16, y: 8)
     }

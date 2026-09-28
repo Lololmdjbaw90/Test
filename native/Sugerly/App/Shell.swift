@@ -336,7 +336,7 @@ struct SugarTabBar: View {
         .padding(.horizontal, 6)
         .frame(height: 70)
         .background {
-            Capsule().fill(dark ? Color(hex: 0x2A2226).opacity(0.94) : Palette.surface.opacity(0.97))
+            Capsule().fill(dark ? Color(hex: 0x2A2226) : Palette.surface)
                 .overlay(Capsule().strokeBorder(dark ? Color.white.opacity(0.1) : Palette.border, lineWidth: 1))
                 .shadow(color: dark ? .black.opacity(0.4) : Theme.main.opacity(0.14), radius: 18, y: 8)
         }
@@ -475,8 +475,7 @@ struct TopBar: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background {
-            Rectangle().fill(.ultraThinMaterial)
-                .overlay(Palette.bg.opacity(0.7))
+            Rectangle().fill(Palette.bg)
                 .overlay(alignment: .bottom) { Rectangle().fill(Palette.border.opacity(0.7)).frame(height: 0.5) }
                 .ignoresSafeArea(edges: .top)
         }
@@ -573,12 +572,7 @@ struct MoreSheet: View {
                             XPBar(info: info)
                         }
                         .padding(16)
-                        .background {
-                            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                                .fill(LinearGradient(colors: [Theme.light.opacity(0.35), Theme.main.opacity(0.1), Palette.surface], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(.white.opacity(0.6), lineWidth: 1))
-                                .shadow(color: Theme.main.opacity(0.15), radius: 18, y: 8)
-                        }
+                        .sugarCard(radius: 28)
                     }
                     .buttonStyle(BouncyStyle(scale: 0.97))
                 }
@@ -643,7 +637,7 @@ struct MoreSheet: View {
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
         .frame(maxWidth: .infinity)
-        .background(Palette.surface.opacity(0.85), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private func tile(_ title: String, _ icon: String, _ colors: [UInt32], action: @escaping () -> Void) -> some View {
