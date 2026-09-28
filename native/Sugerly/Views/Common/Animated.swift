@@ -17,18 +17,19 @@ enum AnimatedImages {
         return lower.contains(".gif") || lower.contains(".webp") || lower.contains("giphy.com") || lower.contains("tenor.com") || lower.contains("image%2fgif") || lower.contains("-anim")
     }
 
-    static func cached(_ url: String, maxPixel: CGFloat) -> UIImage? {
-        cache.object(forKey: "\(url)#\(Int(maxPixel))" as NSString)
+    static func cached(_ url: String, maxPixel: CGFloat, maxFrames: Int = 90) -> UIImage? {
+        cache.object(forKey: "\(url)#\(Int(maxPixel))#\(maxFrames)" as NSString)
     }
 
-    static func load(_ url: String, maxPixel: CGFloat = 480) async -> UIImage? {
-        let key = "\(url)#\(Int(maxPixel))" as NSString
+    // maxFrames keeps grids of many GIFs light (thumbnails skip frames).
+    static func load(_ url: String, maxPixel: CGFloat = 480, maxFrames: Int = 90) async -> UIImage? {
+        let key = "\(url)#\(Int(maxPixel))#\(maxFrames)" as NSString
         if let hit = cache.object(forKey: key) { return hit }
         guard let link = URL(string: url) else { return nil }
         var request = URLRequest(url: link)
         request.cachePolicy = .returnCacheDataElseLoad
         guard let (data, _) = try? await URLSession.shared.data(for: request) else { return nil }
-        let image = await Task.detached(priority: .userInitiated) { decode(data, maxPixel: maxPixel) }.value
+        let image = await Task.detached(priority: .userInitiated) { decode(data, maxPixel: maxPixel, maxFrames: maxFrames) }.value
         if let image {
             let frames = CGFloat(image.images?.count ?? 1)
             cache.setObject(image, forKey: key, cost: Int(image.size.width * image.size.height * 4 * frames))
@@ -36,7 +37,7 @@ enum AnimatedImages {
         return image
     }
 
-    nonisolated static func decode(_ data: Data, maxPixel: CGFloat) -> UIImage? {
+    nonisolated static func decode(_ data: Data, maxPixel: CGFloat, maxFrames: Int = 90) -> UIImage? {
         guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary) else { return UIImage(data: data) }
         let count = CGImageSourceGetCount(source)
         let options: [CFString: Any] = [
@@ -50,7 +51,7 @@ enum AnimatedImages {
             return UIImage(cgImage: cg)
         }
         // Long animations keep every n-th frame so memory stays small.
-        let step = max(1, count / 90)
+        let step = max(1, Int((Double(count) / Double(max(1, maxFrames))).rounded(.up)))
         var frames: [UIImage] = []
         var total: Double = 0
         var i = 0

@@ -75,6 +75,7 @@ struct ProfileContent: View {
     @State private var tab: Tab = .posts
     @State private var editing = false
     @State private var settings = false
+    @State private var shop = false
 
     private var following: Bool { model.me?.following.contains(person.email) ?? false }
     private var followers: Int { model.people.values.filter { $0.following.contains(person.email) }.count }
@@ -100,46 +101,75 @@ struct ProfileContent: View {
             .frame(maxWidth: 720)
             .frame(maxWidth: .infinity)
         }
+        .background(alignment: .top) {
+            if let accent {
+                LinearGradient(colors: [accent.opacity(0.22), .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(height: 420).ignoresSafeArea().allowsHitTesting(false)
+            }
+        }
         .sugarBackground()
         .refreshable { await load() }
         .task(id: person.email) { await load() }
         .sheet(isPresented: $editing) { EditProfileView() }
         .sheet(isPresented: $settings) { SettingsView() }
+        .sheet(isPresented: $shop) { NitroShopView() }
     }
 
     private var banner: some View {
         ZStack(alignment: .bottomLeading) {
-            Group {
+            ZStack {
                 if person.banner.isEmpty {
-                    ZStack {
-                        Theme.gradient
-                        Circle().fill(.white.opacity(0.25)).frame(width: 180).blur(radius: 40).offset(x: 120, y: -40)
-                        Circle().fill(Theme.lavender.opacity(0.5)).frame(width: 160).blur(radius: 50).offset(x: -120, y: 40)
-                    }
+                    bannerGradient
+                    Circle().fill(.white.opacity(0.25)).frame(width: 180).blur(radius: 40).offset(x: 120, y: -40)
+                    Circle().fill(Theme.lavender.opacity(0.5)).frame(width: 160).blur(radius: 50).offset(x: -120, y: 40)
                 } else {
                     RemoteImage(url: person.banner)
                 }
+                if person.isNitro && !person.profileEffect.isEmpty { ProfileEffectLayer(effect: person.profileEffect) }
             }
             .frame(height: 170)
             .frame(maxWidth: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
             .padding(.horizontal, 12)
 
-            Avatar(url: person.picture, name: person.displayName, size: 104, online: person.isOnline && !isMe, ring: true)
+            Avatar(url: person.picture, name: person.displayName, size: 104, online: person.isOnline && !isMe, ring: true, nitro: person.isNitro)
                 .padding(4)
                 .background(Palette.bg, in: Circle())
-                .shadow(color: Theme.pink.opacity(0.3), radius: 16, y: 8)
+                .shadow(color: (accent ?? Theme.pink).opacity(0.3), radius: 16, y: 8)
                 .offset(x: 26, y: 58)
         }
         .padding(.top, 8)
         .padding(.bottom, 54)
     }
 
+    private var accent: Color? { ProfileColors.color(person.profileColor) }
+
+    @ViewBuilder private var bannerGradient: some View {
+        if let c = ProfileColors.color(person.bannerColor) {
+            LinearGradient(colors: [c, accent ?? Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing)
+        } else if person.isNitro {
+            LinearGradient(colors: [Color(hex: 0x8B5CF6), Color(hex: 0xC084FC), Color(hex: 0xEE8FAE), Color(hex: 0x7CBEFF)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        } else {
+            Theme.gradient
+        }
+    }
+
     private var identity: some View {
         let info = LevelInfo(xp: person.xp)
         return VStack(alignment: .leading, spacing: 8) {
-            Text(person.displayName).font(.display(34)).foregroundStyle(Palette.text)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                NameText(name: person.displayName, style: person.nameStyle, size: 34, display: true, nitro: person.isNitro)
+                if !person.pronouns.isEmpty { Text(person.pronouns).font(.jakarta(14, .semibold)).foregroundStyle(Palette.muted) }
+            }
+            if !person.status.isEmpty {
+                Label(person.status, systemImage: "bubble.left.fill")
+                    .font(.jakarta(13, .semibold)).foregroundStyle(Palette.text2)
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background(Palette.surface, in: Capsule())
+                    .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
+            }
             FlowLayout(spacing: 8) {
+                if person.isNitro { NitroBadge() }
                 if person.isAdmin {
                     Label("Admin", systemImage: "shield.fill").font(.jakarta(12, .bold)).foregroundStyle(Theme.pink)
                         .padding(.horizontal, 10).padding(.vertical, 5)
@@ -159,6 +189,21 @@ struct ProfileContent: View {
                     Label("Joined \(joined.formatted(.dateTime.month(.abbreviated).year()))", systemImage: "calendar").font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)
                 }
             }
+            if !person.interests.isEmpty {
+                FlowLayout(spacing: 6) {
+                    ForEach(person.interests, id: \.self) { tag in
+                        Text(tag).font(.jakarta(12, .bold)).foregroundStyle(accent ?? Theme.main)
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background((accent ?? Theme.main).opacity(0.1), in: Capsule())
+                    }
+                }
+            }
+            if !person.website.isEmpty, let url = URL(string: person.website.hasPrefix("http") ? person.website : "https://\(person.website)") {
+                Link(destination: url) {
+                    Label(person.website.replacingOccurrences(of: "https://", with: "").replacingOccurrences(of: "http://", with: ""), systemImage: "link")
+                        .font(.jakarta(13, .bold)).foregroundStyle(accent ?? Theme.main).lineLimit(1)
+                }
+            }
         }
     }
 
@@ -167,6 +212,9 @@ struct ProfileContent: View {
             if isMe {
                 Button { editing = true } label: { Label("Edit profile", systemImage: "pencil") }
                     .buttonStyle(OutlineButtonStyle(fullWidth: true))
+                Button { shop = true } label: { Image(systemName: "sparkles").font(.system(size: 17, weight: .bold)) }
+                    .buttonStyle(OutlineButtonStyle())
+                    .accessibilityLabel("MimiNitro")
                 Button { settings = true } label: { Image(systemName: "gearshape.fill").font(.system(size: 17, weight: .bold)) }
                     .buttonStyle(OutlineButtonStyle())
             } else {
@@ -298,85 +346,350 @@ struct ProfileContent: View {
 
 // MARK: - Edit profile
 
+// A new picture waiting to be uploaded: a photo, a GIF file or a GIF link.
+enum PendingPicture: Equatable {
+    case image(UIImage)
+    case gif(Data, UIImage)
+    case link(String)
+
+    static func == (a: PendingPicture, b: PendingPicture) -> Bool {
+        switch (a, b) {
+        case let (.image(x), .image(y)): return x === y
+        case let (.gif(x, _), .gif(y, _)): return x == y
+        case let (.link(x), .link(y)): return x == y
+        default: return false
+        }
+    }
+}
+
+struct CropJob: Identifiable {
+    let id = UUID()
+    let image: UIImage
+    let gif: Data?
+    let avatar: Bool
+}
+
 struct EditProfileView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
+    @State private var pronouns = ""
+    @State private var status = ""
     @State private var bio = ""
-    @State private var avatarItem: PhotosPickerItem?
-    @State private var avatar: UIImage?
-    @State private var bannerItem: PhotosPickerItem?
-    @State private var banner: UIImage?
+    @State private var website = ""
+    @State private var interests = ""
+    @State private var nameStyle = "default"
+    @State private var bannerColor = ""
+    @State private var profileColor = ""
+    @State private var effect = ""
+    @State private var avatar: PendingPicture?
+    @State private var banner: PendingPicture?
+    @State private var removeBanner = false
+    @State private var pickerItem: PhotosPickerItem?
+    @State private var pickingFor: Bool?          // true = avatar, false = banner
+    @State private var showPicker = false
+    @State private var gifFor: Bool?
+    @State private var cropping: CropJob?
+    @State private var shop = false
     @State private var saving = false
     @State private var error: String?
 
+    private var nitro: Bool { model.me?.isNitro ?? false }
+
     var body: some View {
         ComposerScaffold(title: "Edit profile", actionTitle: "Save", busy: saving, canPost: true, onClose: { dismiss() }, onPost: { Task { await save() } }) {
-            PhotosPicker(selection: $bannerItem, matching: .images) {
-                ZStack {
-                    if let banner { Image(uiImage: banner).resizable().scaledToFill() }
-                    else if let url = model.me?.banner, !url.isEmpty { RemoteImage(url: url) }
-                    else { Theme.gradient }
-                    Label("Change banner", systemImage: "photo").font(.jakarta(13, .bold)).foregroundStyle(.white)
-                        .padding(.horizontal, 12).padding(.vertical, 7).background(.black.opacity(0.35), in: Capsule())
-                }
-                .frame(height: 130).frame(maxWidth: .infinity)
-                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-            }
-            .buttonStyle(BouncyStyle(scale: 0.98))
+            pictures
+            nitroCard
 
-            HStack {
-                Spacer()
-                PhotosPicker(selection: $avatarItem, matching: .images) {
-                    ZStack(alignment: .bottomTrailing) {
-                        if let avatar {
-                            Image(uiImage: avatar).resizable().scaledToFill().frame(width: 104, height: 104).clipShape(Circle())
-                        } else {
-                            Avatar(url: model.me?.picture ?? "", name: name, size: 104)
-                        }
-                        Image(systemName: "camera.fill").font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
-                            .frame(width: 34, height: 34).background(Theme.gradient, in: Circle())
-                            .overlay(Circle().strokeBorder(Palette.bg, lineWidth: 3))
-                    }
-                }
-                .buttonStyle(BouncyStyle())
-                Spacer()
+            field("Display name") { SugarField(placeholder: "Your name", text: $name) }
+            HStack(alignment: .top, spacing: 10) {
+                field("Pronouns") { SugarField(placeholder: "she/her", text: $pronouns) }
+                field("Status") { SugarField(placeholder: "Drawing cats today", text: $status) }
             }
-            .padding(.top, -50)
+            field("Bio") { SugarField(placeholder: "A few words about you and your art", text: $bio, lines: 3...6) }
+            field("Interests") { SugarField(placeholder: "anime, watercolor, cats", text: $interests) }
+            field("Website") { SugarField(placeholder: "yoursite.com", text: $website) }
 
-            Text("Display name").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
-            SugarField(placeholder: "Your name", text: $name)
-            Text("Bio").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
-            SugarField(placeholder: "A few words about you and your art", text: $bio, lines: 3...6)
-            Text("Links aren't allowed in bios.").font(.jakarta(12)).foregroundStyle(Palette.muted)
+            styleSection
+            colorSection("Banner colour", selection: $bannerColor)
+            colorSection("Profile colour", selection: $profileColor)
+            effectSection
+
             if let error { Text(error).font(.jakarta(13, .semibold)).foregroundStyle(Palette.danger) }
         }
-        .onAppear {
-            name = model.me?.displayName ?? ""
-            bio = model.me?.bio ?? ""
+        .onAppear(perform: fill)
+        .photosPicker(isPresented: $showPicker, selection: $pickerItem, matching: .images)
+        .onChange(of: pickerItem) { _, item in
+            guard let item, let forAvatar = pickingFor else { return }
+            pickerItem = nil
+            Task { await picked(item, avatar: forAvatar) }
         }
-        .onChange(of: avatarItem) { _, item in
-            Task { if let data = try? await item?.loadTransferable(type: Data.self), let image = UIImage(data: data) { withAnimation { avatar = image } } }
+        .sheet(item: Binding(get: { gifFor.map { GifTarget(avatar: $0) } }, set: { gifFor = $0?.avatar })) { target in
+            GifPickerSheet { url in
+                withAnimation(.snappy) {
+                    if target.avatar { avatar = .link(url) } else { banner = .link(url); removeBanner = false }
+                }
+            }
         }
-        .onChange(of: bannerItem) { _, item in
-            Task { if let data = try? await item?.loadTransferable(type: Data.self), let image = UIImage(data: data) { withAnimation { banner = image } } }
+        .fullScreenCover(item: $cropping) { job in
+            ImageCropper(image: job.image, circle: job.avatar, aspect: job.avatar ? 1 : 3, onDone: { rect in
+                cropping = nil
+                Task { await applyCrop(job, rect) }
+            }, onCancel: { cropping = nil })
+        }
+        .sheet(isPresented: $shop) { NitroShopView() }
+    }
+
+    struct GifTarget: Identifiable { let avatar: Bool; var id: Bool { avatar } }
+
+    private func field<C: View>(_ title: String, @ViewBuilder content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: Pictures
+
+    private var pictures: some View {
+        VStack(spacing: 0) {
+            Menu {
+                Button { pickingFor = false; showPicker = true } label: { Label("Choose a photo", systemImage: "photo") }
+                Button { nitroOnly { gifFor = false } } label: { Label(nitro ? "Choose a GIF" : "Choose a GIF (Nitro)", systemImage: "photo.stack") }
+                if hasBanner { Button(role: .destructive) { withAnimation { banner = nil; removeBanner = true } } label: { Label("Remove banner", systemImage: "trash") } }
+            } label: {
+                ZStack {
+                    bannerPreview
+                    if nitro && !effect.isEmpty { ProfileEffectLayer(effect: effect) }
+                    Label("Change banner", systemImage: "camera.fill").font(.jakarta(13, .bold)).foregroundStyle(.white)
+                        .padding(.horizontal, 12).padding(.vertical, 7).background(.black.opacity(0.35), in: Capsule())
+                }
+                .frame(height: 140).frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            }
+
+            Menu {
+                Button { pickingFor = true; showPicker = true } label: { Label("Choose a photo", systemImage: "photo") }
+                Button { nitroOnly { gifFor = true } } label: { Label(nitro ? "Choose a GIF" : "Choose a GIF (Nitro)", systemImage: "photo.stack") }
+            } label: {
+                ZStack(alignment: .bottomTrailing) {
+                    avatarPreview
+                    Image(systemName: "camera.fill").font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
+                        .frame(width: 34, height: 34).background(Theme.gradient, in: Circle())
+                        .overlay(Circle().strokeBorder(Palette.bg, lineWidth: 3))
+                }
+            }
+            .padding(.top, -52)
+        }
+    }
+
+    private var hasBanner: Bool { banner != nil || (!removeBanner && !(model.me?.banner ?? "").isEmpty) }
+
+    @ViewBuilder private var bannerPreview: some View {
+        switch banner {
+        case .image(let img)?: Image(uiImage: img).resizable().scaledToFill()
+        case .gif(_, let img)?: LoadedImage(image: img)
+        case .link(let url)?: RemoteImage(url: url)
+        case nil:
+            if !removeBanner, let url = model.me?.banner, !url.isEmpty { RemoteImage(url: url) } else { bannerGradient }
+        }
+    }
+
+    private var bannerGradient: some View {
+        let c = ProfileColors.color(bannerColor)
+        return Group {
+            if let c { LinearGradient(colors: [c, Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing) }
+            else if nitro { NitroStyle.gradient }
+            else { Theme.gradient }
+        }
+    }
+
+    @ViewBuilder private var avatarPreview: some View {
+        Group {
+            switch avatar {
+            case .image(let img)?: Image(uiImage: img).resizable().scaledToFill().frame(width: 104, height: 104).clipShape(Circle())
+            case .gif(_, let img)?: LoadedImage(image: img).frame(width: 104, height: 104).clipShape(Circle())
+            case .link(let url)?: Avatar(url: url, name: name, size: 104)
+            case nil: Avatar(url: model.me?.picture ?? "", name: name, size: 104)
+            }
+        }
+        .padding(nitro ? 5 : 4)
+        .background { if nitro { NitroRing() } else { Circle().fill(Palette.bg) } }
+    }
+
+    private func nitroOnly(_ action: () -> Void) {
+        if nitro { action() } else { shop = true }
+    }
+
+    private func picked(_ item: PhotosPickerItem, avatar forAvatar: Bool) async {
+        guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+        let isGIF = data.prefix(4) == Data("GIF8".utf8)
+        if isGIF && !nitro { model.showToast("GIF pictures are a Nitro perk — using the first frame", icon: "sparkles") }
+        let still = isGIF ? AnimatedImages.decode(data, maxPixel: 1400, maxFrames: 1)?.images?.first ?? UIImage(data: data) : UIImage(data: data)
+        guard let still else { return }
+        cropping = CropJob(image: still, gif: isGIF && nitro ? data : nil, avatar: forAvatar)
+    }
+
+    private func applyCrop(_ job: CropJob, _ rect: CGRect) async {
+        let side: CGFloat = job.avatar ? 600 : 1500
+        if let gif = job.gif {
+            let gifSide: CGFloat = job.avatar ? 320 : 720
+            if let data = await Task.detached(priority: .userInitiated, operation: { Cropping.cropGIF(gif, rect, maxSide: gifSide) }).value,
+               let preview = AnimatedImages.decode(data, maxPixel: gifSide) {
+                withAnimation(.snappy) { if job.avatar { avatar = .gif(data, preview) } else { banner = .gif(data, preview); removeBanner = false } }
+                return
+            }
+        }
+        let image = job.image
+        let cropped = await Task.detached(priority: .userInitiated) { Cropping.crop(image, rect, maxSide: side) }.value
+        withAnimation(.snappy) { if job.avatar { avatar = .image(cropped) } else { banner = .image(cropped); removeBanner = false } }
+    }
+
+    // MARK: Nitro + style
+
+    private var nitroCard: some View {
+        Button { shop = true } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "sparkles").font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
+                    .frame(width: 42, height: 42).background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(nitro ? "MimiNitro is on" : "Get MimiNitro").font(.jakarta(15, .heavy)).foregroundStyle(.white)
+                    Text(nitro ? "GIF pictures, premium styles and effects unlocked" : "GIF profile picture, GIF banner, effects and more").font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.9)).lineLimit(2)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundStyle(.white.opacity(0.8))
+            }
+            .padding(14)
+            .background(NitroStyle.gradient, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        }
+        .buttonStyle(BouncyStyle(scale: 0.97))
+    }
+
+    private var styleSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Name style").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(NameStyles.all) { style in
+                        let locked = style.premium && !nitro
+                        Button {
+                            if locked { shop = true } else { withAnimation(.snappy) { nameStyle = style.id } }
+                        } label: {
+                            VStack(spacing: 6) {
+                                NameText(name: name.isEmpty ? "Name" : name, style: style.id, size: 18, display: true, nitro: true)
+                                    .lineLimit(1)
+                                    .frame(maxWidth: 130)
+                                    .padding(.vertical, 12).padding(.horizontal, 14)
+                                    .background(style.id == "neon" ? Color(hex: 0x2A1830) : Palette.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                HStack(spacing: 4) {
+                                    if style.premium { Image(systemName: locked ? "lock.fill" : "sparkles").font(.system(size: 9, weight: .bold)) }
+                                    Text(style.label).font(.jakarta(11, .bold))
+                                }
+                                .foregroundStyle(style.premium ? Color(hex: 0xA67CF7) : Palette.muted)
+                            }
+                            .padding(6)
+                            .background(nameStyle == style.id ? Theme.soft : Color.clear, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(nameStyle == style.id ? Theme.main.opacity(0.5) : Palette.border, lineWidth: 1.2))
+                            .opacity(locked ? 0.6 : 1)
+                        }
+                        .buttonStyle(BouncyStyle(scale: 0.95))
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        }
+    }
+
+    private func colorSection(_ title: String, selection: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    Button { withAnimation(.snappy) { selection.wrappedValue = "" } } label: {
+                        Image(systemName: "circle.slash").font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.muted)
+                            .frame(width: 38, height: 38).background(Palette.surface2, in: Circle())
+                            .overlay(Circle().strokeBorder(selection.wrappedValue.isEmpty ? Theme.main : Palette.border, lineWidth: 2))
+                    }
+                    ForEach(ProfileColors.swatches.indices, id: \.self) { i in
+                        let swatch = ProfileColors.swatches[i]
+                        let on = selection.wrappedValue.lowercased() == swatch.0
+                        Button { withAnimation(.snappy) { selection.wrappedValue = swatch.0 } } label: {
+                            Circle().fill(Color(hex: swatch.1)).frame(width: 38, height: 38)
+                                .overlay { if on { Image(systemName: "checkmark").font(.system(size: 14, weight: .heavy)).foregroundStyle(.white) } }
+                                .overlay(Circle().strokeBorder(.white, lineWidth: on ? 3 : 0))
+                                .shadow(color: Color(hex: swatch.1).opacity(on ? 0.5 : 0.2), radius: on ? 6 : 3, y: 2)
+                                .scaleEffect(on ? 1.08 : 1)
+                        }
+                        .buttonStyle(BouncyStyle())
+                    }
+                }
+                .padding(4)
+            }
+        }
+    }
+
+    private var effectSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("Profile effect").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+                if !nitro { NitroBadge(compact: true) }
+            }
+            FlowLayout(spacing: 8) {
+                ForEach(ProfileEffect.all) { item in
+                    Chip(title: item.label, icon: item.icon, active: effect == item.id) {
+                        if nitro || item.id.isEmpty { withAnimation(.snappy) { effect = item.id } } else { shop = true }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: Load + save
+
+    private func fill() {
+        guard let me = model.me else { return }
+        name = me.displayName
+        pronouns = me.pronouns
+        status = me.status
+        bio = me.bio
+        website = me.website
+        interests = me.interests.joined(separator: ", ")
+        nameStyle = me.nameStyle.isEmpty ? "default" : me.nameStyle
+        bannerColor = me.bannerColor
+        profileColor = me.profileColor
+        effect = me.profileEffect
+    }
+
+    private func upload(_ picture: PendingPicture, maxSide: CGFloat) async throws -> String {
+        switch picture {
+        case .link(let url): return url
+        case .gif(let data, _): return try await StorageClient.upload(data, contentType: "image/gif", fileExtension: "gif")
+        case .image(let img):
+            guard let data = ImageTools.jpeg(img, maxSide: maxSide) else { throw APIError(message: "Couldn't read that picture.") }
+            return try await StorageClient.upload(data, contentType: "image/jpeg", fileExtension: "jpg")
         }
     }
 
     private func save() async {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { error = "Pick a display name."; return }
-        guard !Moderation.hasLink(bio) else { error = "Links aren't allowed in bios."; return }
+        guard !Moderation.hasLink(bio), !Moderation.hasLink(status) else { error = "Links aren't allowed in your bio or status — use the Website box."; return }
         saving = true
         defer { saving = false }
+        let tags = interests.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         do {
-            var fields: Doc = ["display_name": trimmed, "full_name": trimmed, "bio": bio.trimmingCharacters(in: .whitespacesAndNewlines)]
-            if let avatar, let data = ImageTools.jpeg(avatar, maxSide: 800) {
-                fields["profile_picture"] = try await StorageClient.upload(data, contentType: "image/jpeg", fileExtension: "jpg")
-            }
-            if let banner, let data = ImageTools.jpeg(banner, maxSide: 1800) {
-                fields["banner_url"] = try await StorageClient.upload(data, contentType: "image/jpeg", fileExtension: "jpg")
-            }
+            var fields: Doc = [
+                "display_name": trimmed, "full_name": trimmed,
+                "bio": bio.trimmingCharacters(in: .whitespacesAndNewlines),
+                "pronouns": String(pronouns.trimmingCharacters(in: .whitespaces).prefix(24)),
+                "custom_status": String(status.trimmingCharacters(in: .whitespacesAndNewlines).prefix(80)),
+                "website": website.trimmingCharacters(in: .whitespacesAndNewlines),
+                "interests": Array(tags.prefix(12)),
+                "name_style": nameStyle, "banner_color": bannerColor, "profile_color": profileColor, "profile_effect": effect,
+            ]
+            if let avatar { fields["profile_picture"] = try await upload(avatar, maxSide: 800) }
+            if let banner { fields["banner_url"] = try await upload(banner, maxSide: 1800) } else if removeBanner { fields["banner_url"] = "" }
             try await model.updateMe(fields)
             dismiss()
             model.showToast("Profile updated", icon: "sparkles")

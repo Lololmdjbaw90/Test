@@ -187,6 +187,7 @@ final class SiteTheme {
     var announcementActive = false
     var announcementColor: UInt32 = 0xD9577F
     var defaultAccent = "rose"
+    var giphyKey = ""
 
     func load() async {
         guard let docs = try? await FS.query("SiteConfig", [.equals("key", "global")], limit: 1), let doc = docs.first else { return }
@@ -197,6 +198,7 @@ final class SiteTheme {
         announcementActive = doc.bool("announcement_active")
         announcementColor = Self.hex(doc.str("announcement_color")) ?? 0xD9577F
         defaultAccent = doc.str("default_accent").isEmpty ? "rose" : doc.str("default_accent")
+        giphyKey = doc.str("giphy_key")
     }
 
     static func hex(_ s: String) -> UInt32? {

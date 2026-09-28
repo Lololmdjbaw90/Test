@@ -260,7 +260,7 @@ struct ConversationRow: View {
 
     private func preview(_ me: String) -> String {
         guard let last = conversation.last else { return "Say hi" }
-        let body = last.text.isEmpty ? (last.imageURL.isEmpty ? "Message" : "Sent a photo") : last.text
+        let body = last.text.isEmpty ? (last.imageURL.isEmpty ? "Message" : Media.label(last.imageURL)) : last.text
         if last.authorEmail == me { return "You: \(body)" }
         return conversation.isGroup ? "\(last.authorName): \(body)" : body
     }
@@ -275,6 +275,7 @@ struct ChatView: View {
     @State private var messages: [Message] = []
     @State private var draft = ""
     @State private var photo: PhotosPickerItem?
+    @State private var gifs = false
     @State private var sending = false
     @State private var loaded = false
     @State private var reporting: ReportSheet.Target?
@@ -351,6 +352,7 @@ struct ChatView: View {
             }
         }
         .sheet(item: $reporting) { target in ReportSheet(target: target) }
+        .sheet(isPresented: $gifs) { GifPickerSheet { url in Task { await sendMedia(url) } } }
         .task { await poll() }
         .onChange(of: photo) { _, item in
             guard let item else { return }
@@ -369,6 +371,7 @@ struct ChatView: View {
                 }
                 .buttonStyle(BouncyStyle())
                 .accessibilityLabel("Send a photo")
+                GifButton { gifs = true }
                 TextField("Message \(conversation.title(model))", text: $draft, axis: .vertical)
                     .font(.jakarta(15))
                     .lineLimit(1...6)
@@ -491,13 +494,22 @@ struct ChatView: View {
         guard let raw = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: raw), let jpeg = ImageTools.jpeg(image, maxSide: 1600) else { return }
         do {
             let url = try await StorageClient.upload(jpeg, contentType: "image/jpeg", fileExtension: "jpg")
+            await sendMedia(url)
+        } catch {
+            failed = "Couldn't send the photo — \(error.localizedDescription)"
+        }
+    }
+
+    // A photo, GIF or sticker that's already online.
+    private func sendMedia(_ url: String) async {
+        do {
             guard let data = payload(text: "", imageURL: url) else { return }
             let doc = try await FS.create("DirectMessage", data)
             let created = Message(doc)
             withAnimation(.snappy) { messages.append(created) }
             chats.upsert(created, me: me)
         } catch {
-            failed = "Couldn't send the photo — \(error.localizedDescription)"
+            failed = "Couldn't send — \(error.localizedDescription)"
         }
     }
 
@@ -531,10 +543,7 @@ struct Bubble: View {
                 if mine { Spacer(minLength: 56) }
                 VStack(alignment: .leading, spacing: 6) {
                     if !message.imageURL.isEmpty {
-                        ArtImage(url: message.imageURL, tallest: 0.6, widest: 1.6)
-                            .frame(width: 240)
-                            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                            .shadow(color: Palette.shadow, radius: 8, y: 3)
+                        MessageMedia(url: message.imageURL)
                     }
                     if !message.text.isEmpty {
                         Text(message.text)

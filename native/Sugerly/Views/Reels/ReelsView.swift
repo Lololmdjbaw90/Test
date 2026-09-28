@@ -463,8 +463,8 @@ struct ReelPage: View {
     private var actions: some View {
         VStack(spacing: 14) {
             Button { path.append(.person(reel.authorEmail)) } label: {
-                Avatar(url: author?.picture ?? reel.authorPicture, name: reel.authorName, size: 54)
-                    .overlay(Circle().strokeBorder(.white, lineWidth: 2.5))
+                Avatar(url: author?.picture ?? reel.authorPicture, name: reel.authorName, size: 54, nitro: author?.isNitro ?? false)
+                    .overlay(Circle().strokeBorder(.white, lineWidth: (author?.isNitro ?? false) ? 0 : 2.5))
                     .overlay(alignment: .bottom) {
                         if !following && reel.authorEmail != me {
                             Image(systemName: "plus").font(.system(size: 12, weight: .black)).foregroundStyle(.white)

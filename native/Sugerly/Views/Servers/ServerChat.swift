@@ -14,6 +14,7 @@ struct ChannelChatView: View {
     @State private var replyTo: ChannelMessage?
     @State private var editing: ChannelMessage?
     @State private var photo: PhotosPickerItem?
+    @State private var gifs = false
     @State private var loaded = false
     @State private var failed: String?
     @State private var reporting: ReportSheet.Target?
@@ -89,6 +90,7 @@ struct ChannelChatView: View {
             }
         }
         .sheet(item: $reporting) { target in ReportSheet(target: target) }
+        .sheet(isPresented: $gifs) { GifPickerSheet { url in Task { await sendMedia(url) } } }
         .sheet(isPresented: $pinsShown) {
             PinsSheet(messages: messages.filter(\.pinned), store: store).presentationDetents([.medium, .large]).presentationCornerRadius(32)
         }
@@ -156,6 +158,7 @@ struct ChannelChatView: View {
                         }
                         .buttonStyle(BouncyStyle())
                     }
+                    GifButton { gifs = true }
                     TextField("Message #\(channel.name)", text: $draft, axis: .vertical)
                         .font(.jakarta(15))
                         .focused($focused)
@@ -291,6 +294,17 @@ struct ChannelChatView: View {
         }
     }
 
+    private func sendMedia(_ url: String) async {
+        guard let meProfile = model.me else { return }
+        do {
+            let doc = try await FS.create("ChannelMessage", Servers.message(channel: channel.id, server: server.id, me: meProfile, text: "", imageURL: url, reply: replyTo))
+            replyTo = nil
+            withAnimation(.snappy) { messages.append(ChannelMessage(doc)) }
+        } catch {
+            failed = "Couldn't send — \(error.localizedDescription)"
+        }
+    }
+
     private func react(_ message: ChannelMessage, _ emoji: String) {
         guard !message.pending, access.can(.add_reactions), let i = messages.firstIndex(where: { $0.id == message.id }) else { return }
         var reactions = messages[i].reactions
@@ -374,9 +388,7 @@ struct ChannelMessageRow: View {
                             .textSelection(.enabled)
                     }
                     if !message.imageURL.isEmpty {
-                        ArtImage(url: message.imageURL, tallest: 0.6, widest: 1.8)
-                            .frame(maxWidth: 260)
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        MessageMedia(url: message.imageURL, width: 260, widest: 1.8)
                     }
                     if !message.reactions.isEmpty {
                         HStack(spacing: 4) {

@@ -499,6 +499,7 @@ struct MoreSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var settings = false
+    @State private var shop = false
     @State private var legal: LegalDoc?
 
     var body: some View {
@@ -509,9 +510,9 @@ struct MoreSheet: View {
                     Button { go(.person(me.email)) } label: {
                         VStack(alignment: .leading, spacing: 14) {
                             HStack(spacing: 14) {
-                                Avatar(url: me.picture, name: me.displayName, size: 62, ring: true)
+                                Avatar(url: me.picture, name: me.displayName, size: 62, ring: true, nitro: me.isNitro)
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(me.displayName).font(.display(26)).foregroundStyle(Palette.text).lineLimit(1)
+                                    NameText(name: me.displayName, style: me.nameStyle, size: 26, display: true, nitro: me.isNitro).lineLimit(1)
                                     Text("Lv. \(info.level) · \(info.title)").font(.jakarta(13, .bold)).foregroundStyle(info.color)
                                 }
                                 Spacer()
@@ -536,6 +537,7 @@ struct MoreSheet: View {
                 }
 
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                    tile("Nitro", "sparkles", [0xC084FC, 0x8B5CF6]) { shop = true }
                     tile("Music", "music.note", [0xFF7AA2, 0xD9577F]) { go(.music) }
                     tile("Servers", "person.3.fill", [0xFF9EC4, 0xE0508A]) { go(.servers) }
                     tile("People", "person.crop.circle.badge.plus", [0xFFD166, 0xF08A20]) { go(.people) }
@@ -571,6 +573,7 @@ struct MoreSheet: View {
         }
         .sugarBackground()
         .sheet(isPresented: $settings) { SettingsView() }
+        .sheet(isPresented: $shop) { NitroShopView() }
         .sheet(item: $legal) { doc in LegalView(doc: doc) }
     }
 

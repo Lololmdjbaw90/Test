@@ -522,12 +522,13 @@ struct PostCard: View {
     private var header: some View {
         HStack(spacing: 10) {
             Button { path.append(.person(post.authorEmail)) } label: {
-                Avatar(url: author?.picture ?? post.authorPicture, name: author?.displayName ?? post.authorName, size: 46, online: author?.isOnline ?? false, ring: author?.isOnline ?? false)
+                Avatar(url: author?.picture ?? post.authorPicture, name: author?.displayName ?? post.authorName, size: 46, online: author?.isOnline ?? false, ring: author?.isOnline ?? false, nitro: author?.isNitro ?? false)
             }
             .buttonStyle(BouncyStyle())
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(author?.displayName ?? post.authorName).font(.jakarta(15, .heavy)).foregroundStyle(Palette.text).lineLimit(1)
+                    NameText(name: author?.displayName ?? post.authorName, style: author?.nameStyle ?? "", size: 15, nitro: author?.isNitro ?? false).lineLimit(1)
+                    if author?.isNitro == true { NitroBadge(compact: true) }
                     if let author {
                         let info = LevelInfo(xp: author.xp)
                         Text("Lv.\(info.level)")
@@ -696,6 +697,7 @@ struct CommentsScreen<Header: View>: View {
     @State private var replyTo: Comment?
     @State private var sending = false
     @State private var reporting: ReportSheet.Target?
+    @State private var gifs = false
     @FocusState private var typing: Bool
 
     struct Thread: Identifiable {
@@ -736,6 +738,7 @@ struct CommentsScreen<Header: View>: View {
         .sugarBackground()
         .safeAreaInset(edge: .bottom, spacing: 0) { if !disabled { composer } }
         .sheet(item: $reporting) { target in ReportSheet(target: target) }
+        .sheet(isPresented: $gifs) { GifPickerSheet { url in Task { await post(text: "", gif: url) } } }
         .task { await load() }
         .refreshable { await load() }
     }
@@ -751,7 +754,7 @@ struct CommentsScreen<Header: View>: View {
                 .padding(.horizontal, 6)
             }
             HStack(alignment: .bottom, spacing: 10) {
-                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 36)
+                GifButton { gifs = true }
                 TextField("Add a comment…", text: $draft, axis: .vertical)
                     .font(.jakarta(15))
                     .lineLimit(1...5)
@@ -784,14 +787,18 @@ struct CommentsScreen<Header: View>: View {
     }
 
     private func send() async {
-        guard let me = model.me else { return }
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
+        await post(text: text, gif: "")
+    }
+
+    private func post(text: String, gif: String) async {
+        guard let me = model.me else { return }
         sending = true
         defer { sending = false }
         let now = FS.nowISO()
         let data: Doc = [
-            field: targetId, "content": text, "gif_url": "",
+            field: targetId, "content": text, "gif_url": gif,
             "parent_id": replyTo.map { $0.parentId.isEmpty ? $0.id : $0.parentId } ?? "",
             "reply_to_email": replyTo?.authorEmail ?? "", "reply_to_name": replyTo?.authorName ?? "",
             "user_email": me.email, "user_display_name": me.displayName, "user_full_name": me.displayName,
@@ -802,10 +809,11 @@ struct CommentsScreen<Header: View>: View {
             let created = try await FS.create(collection, data)
             withAnimation(.snappy) {
                 comments.append(Comment(created))
-                draft = ""
+                if !text.isEmpty { draft = "" }
             }
             let target = replyTo?.authorEmail ?? ownerEmail
-            Notify.send(to: target, from: me, type: "comment", message: "\(me.displayName) \(replyTo == nil ? "commented" : "replied"): \"\(text.prefix(60))\"", link: link)
+            let said = text.isEmpty ? Media.label(gif).replacingOccurrences(of: "Sent", with: "sent") : "\"\(text.prefix(60))\""
+            Notify.send(to: target, from: me, type: "comment", message: "\(me.displayName) \(replyTo == nil ? "commented" : "replied"): \(said)", link: link)
             replyTo = nil
         } catch {}
     }
@@ -859,10 +867,10 @@ struct CommentRow: View {
         let me = model.me?.email ?? ""
         let liked = comment.likes.contains(me)
         HStack(alignment: .top, spacing: 10) {
-            Avatar(url: model.person(comment.authorEmail)?.picture ?? comment.authorPicture, name: comment.authorName, size: 36)
+            Avatar(url: model.person(comment.authorEmail)?.picture ?? comment.authorPicture, name: comment.authorName, size: 36, nitro: model.person(comment.authorEmail)?.isNitro ?? false)
             VStack(alignment: .leading, spacing: 5) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(comment.authorName).font(.jakarta(13, .bold)).foregroundStyle(Palette.text)
+                    NameText(name: comment.authorName, style: model.person(comment.authorEmail)?.nameStyle ?? "", size: 13, nitro: model.person(comment.authorEmail)?.isNitro ?? false)
                     if !comment.text.isEmpty { Text(comment.text).font(.jakarta(15)).foregroundStyle(Palette.text) }
                     if !comment.gifURL.isEmpty {
                         RemoteImage(url: comment.gifURL, contentMode: .fit).frame(maxWidth: 200, maxHeight: 160).clipShape(RoundedRectangle(cornerRadius: 12))
@@ -912,11 +920,13 @@ struct NewPostView: View {
     @State private var text = ""
     @State private var item: PhotosPickerItem?
     @State private var image: UIImage?
+    @State private var gif = ""
+    @State private var gifs = false
     @State private var posting = false
     @State private var error: String?
 
     var body: some View {
-        ComposerScaffold(title: "New post", actionTitle: "Post", busy: posting, canPost: image != nil || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, onClose: { dismiss() }, onPost: { Task { await post() } }) {
+        ComposerScaffold(title: "New post", actionTitle: "Post", busy: posting, canPost: image != nil || !gif.isEmpty || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, onClose: { dismiss() }, onPost: { Task { await post() } }) {
             HStack(spacing: 12) {
                 Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 46)
                 VStack(alignment: .leading) {
@@ -926,9 +936,25 @@ struct NewPostView: View {
             }
             SugarField(placeholder: "Title (optional)", text: $title)
             SugarField(placeholder: "What's on your mind? Add #tags!", text: $text, lines: 4...12)
-            PhotoPickerCard(item: $item, image: $image)
+            if gif.isEmpty {
+                PhotoPickerCard(item: $item, image: $image)
+                Button { gifs = true } label: { Label("Add a GIF or sticker", systemImage: "photo.stack.fill") }
+                    .buttonStyle(OutlineButtonStyle(fullWidth: true))
+            } else {
+                AnimatedThumb(url: gif, fill: false, maxPixel: 600, maxFrames: 90)
+                    .frame(height: 260).frame(maxWidth: .infinity)
+                    .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .overlay(alignment: .topTrailing) {
+                        Button { withAnimation(.snappy) { gif = "" } } label: {
+                            Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
+                                .frame(width: 32, height: 32).background(.black.opacity(0.45), in: Circle())
+                        }
+                        .padding(10)
+                    }
+            }
             if let error { Text(error).font(.jakarta(13, .semibold)).foregroundStyle(Palette.danger) }
         }
+        .sheet(isPresented: $gifs) { GifPickerSheet { url in withAnimation(.snappy) { gif = url; image = nil; item = nil } } }
     }
 
     private func post() async {
@@ -936,8 +962,8 @@ struct NewPostView: View {
         posting = true
         defer { posting = false }
         do {
-            var imageURL = ""
-            if let image, let data = ImageTools.jpeg(image) {
+            var imageURL = gif
+            if gif.isEmpty, let image, let data = ImageTools.jpeg(image) {
                 imageURL = try await StorageClient.upload(data, contentType: "image/jpeg", fileExtension: "jpg")
             }
             let now = FS.nowISO()
