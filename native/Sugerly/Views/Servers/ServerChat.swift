@@ -288,9 +288,14 @@ struct ChannelChatView: View {
         failed = nil
         draft = ""
         if let editing {
-            self.editing = nil
-            if let i = messages.firstIndex(where: { $0.id == editing.id }) { messages[i].text = text; messages[i].edited = true }
-            Task { try? await FS.update("ChannelMessage", editing.id, ["content": text, "is_edited": true, "updated_date": FS.nowISO()]) }
+            do {
+                try await FS.update("ChannelMessage", editing.id, ["content": text, "is_edited": true, "updated_date": FS.nowISO()])
+                self.editing = nil
+                if let i = messages.firstIndex(where: { $0.id == editing.id }) { messages[i].text = text; messages[i].edited = true }
+            } catch {
+                if draft.isEmpty { draft = text }
+                failed = error.localizedDescription
+            }
             return
         }
         let data = Servers.message(channel: channel.id, server: server.id, me: meProfile, text: text, imageURL: "", reply: replyTo)
@@ -307,7 +312,7 @@ struct ChannelChatView: View {
             mentions(text, me: meProfile)
         } catch {
             withAnimation { messages.removeAll { $0.id == pending.id } }
-            draft = text
+            if draft.isEmpty { draft = text }
             failed = "Couldn't send — \(error.localizedDescription)"
         }
     }

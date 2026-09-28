@@ -555,6 +555,7 @@ struct ChatView: View {
             chats.upsert(created, me: me)
         } catch {
             withAnimation { messages.removeAll { $0.id == pending.id } }
+            if draft.isEmpty, !data.str("content").isEmpty { draft = data.str("content") }
             failed = "Couldn't send — \(error.localizedDescription)"
         }
     }

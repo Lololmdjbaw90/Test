@@ -19,3 +19,7 @@ export async function guardTextWrite(collection,data,{user='anonymous',create=fa
     accepted=true;
   } finally {limiter.finish(user,collection,fingerprint,policy.cooldowns[bucket] || 0,accepted,bucket);}
 }
+
+export function recordPreflightViolation(user, verdict) {
+ if (user?.id && !verdict.safe && ['hate','threat','sexual','harassment','scam'].includes(verdict.category)) limiter.strike(user.id);
+}

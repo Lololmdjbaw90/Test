@@ -1,6 +1,6 @@
 import ScrollDepthBackground from "@/components/common/ScrollDepthBackground";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, Navigate, useLocation, useNavigate, useNavigationType, useOutlet } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate, useOutlet } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, HelpCircle, LogOut, MessageCircle, Megaphone, Moon, Plus, Search, Settings, Sun, X } from "lucide-react";
 import Sidebar, { Logo } from "@/components/layout/Sidebar";
@@ -261,24 +261,9 @@ function MobileNav({ badges, isAdmin, isDark, onToggleTheme }) {
   );
 }
 
-// App shell: sidebar, top bar, animated page outlet, mobile nav and global widgets.
-// Main tabs: switching between them crossfades (like an iOS tab bar); going
-// anywhere else slides in like a pushed screen, and Back slides the other way.
-const TAB_ROOTS = new Set(["/", "/home", "/community", "/reels", "/directmessages", "/music", "/gallery", "/communities", "/profile", "/settings"]);
-function usePageMotion(location) {
-  const type = useNavigationType();
-  const prev = useRef(location);
-  const id = `${location.key}|${location.pathname}|${location.search}`;
-  const motionFor = useRef({ key: id, cls: "page-enter" });
-  if (motionFor.current.key !== id) {
-    const from = prev.current;
-    const tabSwitch = TAB_ROOTS.has(from.pathname.toLowerCase()) && TAB_ROOTS.has(location.pathname.toLowerCase()) && !location.search && !from.search;
-    const cls = tabSwitch ? "page-tab" : type === "POP" ? "page-pop" : type === "PUSH" ? "page-push" : "page-tab";
-    motionFor.current = { key: id, cls };
-    prev.current = location;
-  }
-  return motionFor.current.cls;
-}
+// App shell: sidebar, top bar, instant page outlet, mobile nav and global widgets.
+// Page changes intentionally have no enter/exit movement.
+
 
 export default function Layout() {
   const location = useLocation();

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private struct AmbientPausedKey: EnvironmentKey { static let defaultValue = false }
 extension EnvironmentValues {
@@ -10,9 +11,10 @@ struct ScrollDepth: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduce
     @Environment(\.ambientPaused) private var paused
     @AppStorage("sugerly.background.still") private var still = false
+    @AppStorage(AppBackground.storageKey) private var choice = AppBackground.dots.rawValue
     @State private var step = 0
     func body(content: Content) -> some View {
-        if #available(iOS 18.0, *) {
+        if #available(iOS 18.0, *), choice != AppBackground.off.rawValue {
             content.onScrollGeometryChange(for: Int.self) { geometry in
                 Int(min(1600, max(-1600, geometry.contentOffset.y)) / 12)
             } action: { _, next in if !reduce && !still && !paused { step = next } }

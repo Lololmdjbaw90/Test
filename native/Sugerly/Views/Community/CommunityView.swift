@@ -963,7 +963,7 @@ struct CommentsScreen<Header: View>: View {
             let said = text.isEmpty ? Media.label(gif).replacingOccurrences(of: "Sent", with: "sent") : "\"\(text.prefix(60))\""
             Notify.send(to: target, from: me, type: "comment", message: "\(me.displayName) \(replyTo == nil ? "commented" : "replied"): \(said)", link: link)
             replyTo = nil
-        } catch {}
+        } catch { model.showToast(error.localizedDescription, icon: "exclamationmark.bubble.fill", error: true) }
     }
 
     private func like(_ c: Comment) {
