@@ -245,6 +245,9 @@ function makeEntity(name) {
     async get(id) {
       return loadCollection(name).find((r) => r.id === id) || null;
     },
+    async count(query) {
+      return loadCollection(name).filter((r) => matchesQuery(r, query)).length;
+    },
     async create(data) {
       const me = requireAuthSync();
       if (!canCreate(me, name, data)) throw new Error("permission_denied");

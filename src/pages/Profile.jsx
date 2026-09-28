@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Ban, Bookmark, Clapperboard, Calendar, Check, Clock, Flag, Grid3X3, Heart, Loader2, MessageCircle, MessageSquare, MoreHorizontal, Pencil, Shield, Sparkles, UserCheck, UserPlus, Users } from "lucide-react";
@@ -6,7 +6,7 @@ import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { useFriendships } from "@/lib/social";
-import { toggleLike } from "@/lib/likes";
+import { isLiked, likeCount, toggleLike, useLikes } from "@/lib/likes";
 import { toast } from "@/lib/toast";
 import { compactNumber, displayName, isNitro, isOnline, profileLink, timeAgo } from "@/lib/format";
 import { Page, EmptyState, CenterSpinner } from "@/components/common/Page";
@@ -65,14 +65,37 @@ export default function ProfilePage() {
 
   const { data: userRows, loading } = useLiveQuery("User", { email }, { enabled: !!email });
   const profile = isOwn ? { ...(userRows[0] || {}), ...me } : userRows[0];
-  const { data: posts, setData: setPosts } = useLiveQuery("CommunityPost", { user_email: email }, { sort: "-created_date", enabled: !!email });
-  const { data: followers } = useLiveQuery("User", { following: { $contains: email } }, { enabled: !!email });
-  const { data: artworks } = useLiveQuery("Artwork", null, { sort: "-created_date", enabled: isOwn && tab === "saved", live: false });
-  const { data: recentPosts, setData: setRecentPosts } = useLiveQuery("CommunityPost", null, { sort: "-created_date", limit: 300, enabled: isOwn && tab === "saved", live: false });
+  const { data: posts, setData: setPosts } = useLiveQuery("CommunityPost", { user_email: email }, { sort: "-created_date", limit: 120, enabled: !!email });
+  useLikes("CommunityPost", posts, me);
+  // Followers are counted by the database (never downloaded).
+  const [followerCount, setFollowerCount] = useState(0);
+  useEffect(() => {
+    if (!email) return;
+    let live = true;
+    base44.entities.User.count({ following: { $contains: email } }).then((n) => live && setFollowerCount(n)).catch(() => {});
+    return () => { live = false; };
+  }, [email, me?.following]);
+  // Saved things are loaded by id, 30 at a time.
+  const [artworks, setArtworks] = useState([]);
+  const [recentPosts, setRecentPosts] = useState([]);
+  const savedKey = `${(me?.saved_artworks || []).join(",")}|${(me?.saved_posts || []).join(",")}`;
+  useEffect(() => {
+    if (!isOwn || tab !== "saved") return;
+    let live = true;
+    const byIds = async (entity, ids) => {
+      const out = [];
+      for (let i = 0; i < ids.length; i += 30) out.push(...await base44.entities[entity].filter({ id: { $in: ids.slice(i, i + 30) } }).catch(() => []));
+      return out;
+    };
+    byIds("Artwork", (me?.saved_artworks || []).slice(-300)).then((rows) => live && setArtworks(rows));
+    byIds("CommunityPost", (me?.saved_posts || []).slice(-300)).then((rows) => live && setRecentPosts(rows));
+    return () => { live = false; };
+  }, [isOwn, tab, savedKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useLikes("CommunityPost", recentPosts, me);
   const { friendships } = useFriendships(me?.email);
   const friendship = friendships.find((f) => (f.requester_email === email && f.receiver_email === me?.email) || (f.receiver_email === email && f.requester_email === me?.email));
 
-  const totalLikes = useMemo(() => posts.reduce((s, p) => s + (p.likes?.length || 0), 0), [posts]);
+  const totalLikes = useMemo(() => posts.reduce((s, p) => s + likeCount(p), 0), [posts]);
   const following = (me?.following || []).includes(email);
   const savedArt = artworks.filter((a) => (me?.saved_artworks || []).includes(a.id));
   // Posts bookmarked in the Community feed live here too.
@@ -190,7 +213,7 @@ export default function ProfilePage() {
           <div className="card-sm grid grid-cols-4 md:flex divide-x py-3 min-w-0" style={{ borderColor: "var(--border-c)" }}>
             <Stat value={posts.length} label="Posts" delay={0.1} />
             <Stat value={totalLikes} label="Likes" delay={0.15} />
-            <Stat value={followers.length} label="Followers" delay={0.2} />
+            <Stat value={followerCount} label="Followers" delay={0.2} />
             <Stat value={(profile.following || []).length} label="Following" delay={0.25} />
           </div>
         </div>
@@ -220,7 +243,7 @@ export default function ProfilePage() {
               <div className="columns-1 sm:columns-2 lg:columns-3 gap-5">
                 {posts.map((p, i) => (
                   <div key={p.id} className="break-inside-avoid mb-5">
-                    <PostCard post={p} index={i} onOpen={() => setOpenPost(p.id)} liked={!!me && (p.likes || []).includes(me.email)} likeCount={p.likes?.length || 0} onLike={() => toggleLike({ entity: "CommunityPost", record: p, user: me, setData: setPosts, message: "liked your post", link: `/Community?post=${p.id}` })} />
+                    <PostCard post={p} index={i} onOpen={() => setOpenPost(p.id)} liked={isLiked(p, me, "CommunityPost")} likeCount={likeCount(p)} onLike={() => toggleLike({ entity: "CommunityPost", record: p, user: me, setData: setPosts, message: "liked your post", link: `/Community?post=${p.id}` })} />
                   </div>
                 ))}
               </div>
@@ -236,7 +259,7 @@ export default function ProfilePage() {
                   <p className="eyebrow mb-3">Posts · {savedPosts.length}</p>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                     {savedPosts.map((p, i) => (
-                      <PostCard key={p.id} post={p} index={i} onOpen={() => navigate(`/Community?post=${p.id}`)} liked={!!me && (p.likes || []).includes(me.email)} likeCount={p.likes?.length || 0} onLike={() => toggleLike({ entity: "CommunityPost", record: p, user: me, setData: setRecentPosts, message: "liked your post", link: `/Community?post=${p.id}` })} />
+                      <PostCard key={p.id} post={p} index={i} onOpen={() => navigate(`/Community?post=${p.id}`)} liked={isLiked(p, me, "CommunityPost")} likeCount={likeCount(p)} onLike={() => toggleLike({ entity: "CommunityPost", record: p, user: me, setData: setRecentPosts, message: "liked your post", link: `/Community?post=${p.id}` })} />
                     ))}
                   </div>
                 </div>
@@ -264,7 +287,7 @@ export default function ProfilePage() {
         </>}
       </div>
 
-      <PostViewer post={openPost} onClose={() => setOpenPost(null)} liked={!!openPost && !!me && (openPost.likes || []).includes(me.email)} likeCount={openPost?.likes?.length || 0} onLike={() => openPost && toggleLike({ entity: "CommunityPost", record: openPost, user: me, setData: setPosts, message: "liked your post", link: `/Community?post=${openPost.id}` })} onDelete={() => openPost && removePost(openPost)} />
+      <PostViewer post={openPost} onClose={() => setOpenPost(null)} liked={!!openPost && isLiked(openPost, me, "CommunityPost")} likeCount={likeCount(openPost)} onLike={() => openPost && toggleLike({ entity: "CommunityPost", record: openPost, user: me, setData: setPosts, message: "liked your post", link: `/Community?post=${openPost.id}` })} onDelete={() => openPost && removePost(openPost)} />
     </Page>
   );
 }

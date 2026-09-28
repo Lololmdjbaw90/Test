@@ -44,10 +44,31 @@ function Splash() {
   );
 }
 
+// Banned by an admin (for good, or until banned_until): same as the app.
+const isBanned = (u) => !!u?.banned && (!u.banned_until || new Date(u.banned_until).getTime() > Date.now());
+
+function Banned({ user, onLogout }) {
+  const until = user.banned_until ? new Date(user.banned_until) : null;
+  return (
+    <div className="fixed inset-0 flex items-center justify-center p-4 app-shell">
+      <div className="card max-w-sm w-full p-6 text-center space-y-3">
+        <BrandLogo height={48} className="mx-auto" />
+        <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Your account is banned</h1>
+        <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+          {until ? `You can come back on ${until.toLocaleString()}.` : "An admin banned this account."}
+          {user.ban_reason ? ` Reason: ${user.ban_reason}` : ""}
+        </p>
+        <button className="btn w-full justify-center" onClick={onLogout}>Log out</button>
+      </div>
+    </div>
+  );
+}
+
 function RequireAuth({ children }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user, logout } = useAuth();
   const location = useLocation();
   if (!isAuthenticated) return <Navigate to={`/Login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />;
+  if (isBanned(user)) return <Banned user={user} onLogout={logout} />;
   return children;
 }
 

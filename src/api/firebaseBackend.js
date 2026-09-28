@@ -43,6 +43,7 @@ import {
   setDoc,
   getDoc,
   getDocs,
+  getCountFromServer,
   updateDoc,
   deleteDoc,
   query,
@@ -204,6 +205,8 @@ export function createFirebaseClient() {
       if (isOperator(value)) {
         if ("$contains" in value) constraints.push(where(path, "array-contains", value.$contains));
         if ("$in" in value) constraints.push(where(path, "in", value.$in.length ? value.$in : ["__none__"]));
+        if ("$lt" in value) constraints.push(where(path, "<", value.$lt));
+        if ("$gt" in value) constraints.push(where(path, ">", value.$gt));
       } else {
         constraints.push(where(path, "==", value));
       }
@@ -220,6 +223,9 @@ export function createFirebaseClient() {
     return query(collection(db, name), ...constraints);
   }
   const hasFilters = (queryObject) => Object.keys(queryObject || {}).length > 0;
+  // When a sorted query lacks its index we sort here instead, but never
+  // download a whole collection for it (it could hold millions of rows).
+  const fallbackCap = (limitAmount) => Math.min(5000, Math.max((limitAmount || 100) * 20, 1000));
 
   async function runQuery(name, queryObject, sort, limitAmount) {
     if (hasFilters(queryObject) && sort) {
@@ -229,7 +235,7 @@ export function createFirebaseClient() {
         if (!isIndexError(e)) throw e;
         warnMissingIndex(name, e);
       }
-      const all = serializeQuerySnapshot(await getDocs(buildQuery(name, queryObject, null, null)));
+      const all = serializeQuerySnapshot(await getDocs(buildQuery(name, queryObject, null, fallbackCap(limitAmount))));
       return sortAndLimit(all, sort, limitAmount);
     }
     return serializeQuerySnapshot(await getDocs(buildQuery(name, queryObject, sort, limitAmount)));
@@ -242,6 +248,11 @@ export function createFirebaseClient() {
       async get(id) {
         if (!id) return null;
         return serializeDoc(await getDoc(doc(db, name, id)));
+      },
+      // How many match, counted by the database (nothing is downloaded).
+      async count(queryObject) {
+        const snap = await getCountFromServer(buildQuery(name, queryObject, null, null));
+        return snap.data().count;
       },
       async create(data) {
         const me = await requireFirebaseUser();
@@ -283,7 +294,7 @@ export function createFirebaseClient() {
         const listen = (useSort) => {
           const cache = new Map();
           let first = true;
-          const q = useSort ? buildQuery(name, queryObject, sort, limit) : buildQuery(name, queryObject, null, null);
+          const q = useSort ? buildQuery(name, queryObject, sort, limit) : buildQuery(name, queryObject, null, fallbackCap(limit));
           unsub = onSnapshot(q, (snap) => {
             const changes = [];
             snap.docChanges().forEach((change) => {
@@ -315,7 +326,7 @@ export function createFirebaseClient() {
         let cancelled = false;
         const listen = (useSort) => {
           let first = true;
-          const q = useSort ? buildQuery(name, queryObject, sort, limit) : buildQuery(name, queryObject, null, null);
+          const q = useSort ? buildQuery(name, queryObject, sort, limit) : buildQuery(name, queryObject, null, fallbackCap(limit));
           unsub = onSnapshot(q, (snap) => {
             const initial = first;
             first = false;

@@ -1,0 +1,45 @@
+# Server-side ranking and like counts (scripts/rank.mjs), without Cloud
+# Functions, so the free Firebase plan is enough. Uses the same
+# FIREBASE_SERVICE_ACCOUNT secret as the rules workflow.
+#
+# GitHub only runs the hourly schedule from the default branch (main); on
+# other branches it runs when this job or the script changes, or by hand.
+name: Rank reels and count likes
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+  push:
+    paths:
+      - "scripts/rank.mjs"
+      - ".github/workflows/rank.yml"
+
+concurrency:
+  group: rank
+  cancel-in-progress: false
+
+jobs:
+  rank:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - name: Needs the FIREBASE_SERVICE_ACCOUNT secret
+        if: env.FIREBASE_SERVICE_ACCOUNT == ''
+        run: echo "::warning title=Ranking skipped::Add the FIREBASE_SERVICE_ACCOUNT secret (see .github/workflows/firebase-rules.yml)."
+
+      - uses: actions/checkout@v4
+        if: env.FIREBASE_SERVICE_ACCOUNT != ''
+
+      - uses: actions/setup-node@v4
+        if: env.FIREBASE_SERVICE_ACCOUNT != ''
+        with:
+          node-version: 22
+
+      - name: Rank and count
+        if: env.FIREBASE_SERVICE_ACCOUNT != ''
+        run: |
+          npm install --no-save --no-package-lock firebase-admin@13
+          node scripts/rank.mjs

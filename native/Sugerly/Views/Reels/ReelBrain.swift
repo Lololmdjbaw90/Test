@@ -132,10 +132,15 @@ actor ReelBrain {
 
     private func score(_ r: Reel, now: Date, me: String, following: Set<String>) -> Double {
         let hours = max(0, now.timeIntervalSince(Dates.parse(r.created) ?? now) / 3600)
-        let likes = Double(r.likes.count)
+        let likes = Double(r.likeTotal)
         let views = Double(r.views)
         var s = log1p(likes * 4 + views) * 0.55
         s += (likes + 1) / (views + 4) * 2.5
+        // What everyone else thought, scored on the server with comments too
+        // (its score minus its newness part, which is added below).
+        if let rank = r.rankScore, let made = Dates.parse(r.created) {
+            s += max(0, rank - (made.timeIntervalSince1970 - 1.7e9) / 45_000) * 0.45
+        }
         s += 4 / pow(hours + 2, 0.4)
         // Brand-new reels get a push so they reach people quickly.
         if hours < 6 { s += 2.5 * (1 - hours / 6) }

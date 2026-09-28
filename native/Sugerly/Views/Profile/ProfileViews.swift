@@ -89,7 +89,7 @@ struct ProfileContent: View {
     private var following: Bool { model.me?.following.contains(person.email) ?? false }
     // Counted by the database, so it's right however many people there are.
     @State private var followers = 0
-    private var totalLikes: Int { posts.reduce(0) { $0 + $1.likes.count } }
+    private var totalLikes: Int { posts.reduce(0) { $0 + $1.likeTotal } }
     private let columns = [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)]
 
     var body: some View {

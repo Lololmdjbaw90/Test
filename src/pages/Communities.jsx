@@ -5,6 +5,7 @@ import { ArrowRight, Check, Compass, Crown, ImagePlus, Loader2, LogIn, Plus, Ser
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import { usePeople } from "@/lib/people";
 import { SERVER_TEMPLATES, createServer, joinServer } from "@/lib/servers";
 import { toast } from "@/lib/toast";
 import { splitFriendships, useFriendships } from "@/lib/social";
@@ -90,8 +91,8 @@ export default function CommunitiesPage() {
   const [tab, setTab] = useState("discover");
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(null);
-  const { data: servers, loading } = useLiveQuery("Community", null, { sort: "-created_date" });
-  const { data: users } = useLiveQuery("User", null, { live: false });
+  const { data: servers, loading } = useLiveQuery("Community", null, { sort: "-created_date", limit: 300 });
+  const users = usePeople(useMemo(() => servers.map((s) => s.owner_email), [servers]));
   const usersByEmail = useMemo(() => Object.fromEntries(users.map((u) => [u.email, u])), [users]);
   const { friendships } = useFriendships(user?.email);
   const { friendEmails } = splitFriendships(friendships, user?.email);

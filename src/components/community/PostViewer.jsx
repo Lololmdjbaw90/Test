@@ -11,6 +11,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { toast } from "@/lib/toast";
 import { feedback } from "@/lib/feedback";
 import { displayName, profileLink, siteUrl, timeAgo } from "@/lib/format";
+import { likeCount as countLikes } from "@/lib/likeCount";
 
 // Caption with tappable #hashtags.
 function Caption({ text, onTag }) {
@@ -33,7 +34,7 @@ function Thumb({ post, onOpen, className = "" }) {
       ) : (
         <span className="absolute inset-0 p-3 flex items-center justify-center text-center text-[13px] font-semibold leading-snug" style={{ background: "var(--accent-grad)", color: "#fff" }}><span className="line-clamp-4">{post.title || post.description}</span></span>
       )}
-      {(post.likes || []).length > 0 && <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold text-white flex items-center gap-1" style={{ background: "rgb(0 0 0 / 0.45)" }}><Heart className="w-3 h-3 fill-current" />{post.likes.length}</span>}
+      {countLikes(post) > 0 && <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold text-white flex items-center gap-1" style={{ background: "rgb(0 0 0 / 0.45)" }}><Heart className="w-3 h-3 fill-current" />{countLikes(post)}</span>}
     </button>
   );
 }

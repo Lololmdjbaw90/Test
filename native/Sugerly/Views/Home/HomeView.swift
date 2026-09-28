@@ -417,7 +417,7 @@ struct HomeView: View {
     private var featured: some View {
         let list = artworks.sorted { a, b in
             if a.featured != b.featured { return a.featured }
-            return a.likes.count > b.likes.count
+            return a.likeTotal > b.likeTotal
         }.prefix(10)
         return VStack(alignment: .leading, spacing: 14) {
             SectionHeader(icon: "star.fill", title: "Featured art") { model.tabRequest = .gallery }
@@ -437,7 +437,7 @@ struct HomeView: View {
                                     Text(art.title).font(.display(20)).foregroundStyle(.white).lineLimit(1)
                                     HStack(spacing: 6) {
                                         Image(systemName: "heart.fill")
-                                        Text("\(art.likes.count)")
+                                        Text("\(art.likeTotal)")
                                         if !art.medium.isEmpty { Text("· \(art.medium.capitalized)") }
                                     }
                                     .font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.9))
@@ -497,7 +497,7 @@ struct HomeView: View {
                                 Text(post.authorName).font(.jakarta(13, .semibold)).foregroundStyle(Palette.text).lineLimit(1)
                                 Spacer(minLength: 0)
                                 Image(systemName: "heart.fill").font(.system(size: 11)).foregroundStyle(Theme.pink)
-                                Text("\(post.likes.count)").font(.jakarta(12, .bold)).foregroundStyle(Theme.pink)
+                                Text("\(post.likeTotal)").font(.jakarta(12, .bold)).foregroundStyle(Theme.pink)
                             }
                             .padding(10)
                         }
@@ -527,8 +527,8 @@ struct HomeView: View {
 
     private var topArtists: [(String, Int)] {
         var score: [String: Int] = [:]
-        for a in artworks { score[a.authorEmail, default: 0] += a.likes.count }
-        for p in posts.posts { score[p.authorEmail, default: 0] += p.likes.count }
+        for a in artworks { score[a.authorEmail, default: 0] += a.likeTotal }
+        for p in posts.posts { score[p.authorEmail, default: 0] += p.likeTotal }
         return score.filter { $0.value > 0 && model.person($0.key) != nil }.sorted { $0.value > $1.value }.prefix(5).map { ($0.key, $0.value) }
     }
 
@@ -572,7 +572,7 @@ struct HomeView: View {
 
     static func pickScore(_ p: Post) -> Int {
         let bonus: Int = p.imageURL.isEmpty ? 0 : 3
-        return bonus + p.likes.count
+        return bonus + p.likeTotal
     }
 
     static func compact(_ n: Int) -> String {

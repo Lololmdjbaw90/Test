@@ -5,10 +5,9 @@ import { Bookmark, Download, Grid2X2, Plus } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import { isLiked, likeCount, toggleLike, useLikes } from "@/lib/likes";
 import { toast } from "@/lib/toast";
-import { displayName } from "@/lib/format";
 import { exportToCsv } from "@/utils/exportCsv";
-import { notify } from "@/utils/notifications";
 import { Page, PageHeader, EmptyState } from "@/components/common/Page";
 import { ChipRow, SearchInput, Segmented } from "@/components/common/Controls";
 import { useConfirm } from "@/components/common/Modal";
@@ -37,7 +36,10 @@ export default function Gallery() {
   const [sort, setSort] = useState("new");
   const [search, setSearch] = useState("");
   const [savedOnly, setSavedOnly] = useState(false);
-  const { data: artworks, setData, loading } = useLiveQuery("Artwork", null, { sort: "-created_date" });
+  // Newest first, a page at a time (the wall grows as you ask for more).
+  const [shown, setShown] = useState(120);
+  const { data: artworks, setData, loading } = useLiveQuery("Artwork", null, { sort: "-created_date", limit: shown });
+  useLikes("Artwork", artworks, user);
   const saved = user?.saved_artworks || [];
 
   const filtered = useMemo(() => {
@@ -46,7 +48,7 @@ export default function Gallery() {
       (medium === "all" || (a.medium || "other") === medium) &&
       (!savedOnly || saved.includes(a.id)) &&
       (!q || [a.title, a.description, a.user_display_name, a.medium].some((f) => String(f || "").toLowerCase().includes(q))));
-    if (sort === "liked") list = [...list].sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0));
+    if (sort === "liked") list = [...list].sort((a, b) => likeCount(b) - likeCount(a));
     if (sort === "featured") list = [...list].sort((a, b) => Number(!!b.featured) - Number(!!a.featured));
     return list;
   }, [artworks, medium, search, sort, savedOnly, saved]);
@@ -58,21 +60,7 @@ export default function Gallery() {
     setParams((p) => { const n = new URLSearchParams(p); if (id) n.set("art", id); else n.delete("art"); return n; }, { replace: !!openId });
   }, [setParams, openId]);
 
-  const like = async (art) => {
-    if (!user) return;
-    const likes = art.likes || [];
-    const liked = likes.includes(user.email);
-    const next = liked ? likes.filter((e) => e !== user.email) : [...likes, user.email];
-    setData((list) => list.map((a) => (a.id === art.id ? { ...a, likes: next } : a)));
-    try {
-      await base44.entities.Artwork.update(art.id, { likes: next });
-      const owner = art.user_email || art.created_by;
-      if (!liked && owner && owner !== user.email) await notify({ to_email: owner, from_email: user.email, from_display_name: displayName(user), from_profile_picture: user.profile_picture, type: "like", message: `${displayName(user)} liked "${art.title}"`, link: `/Gallery?art=${art.id}`, entity_id: art.id });
-    } catch (e) {
-      setData((list) => list.map((a) => (a.id === art.id ? { ...a, likes } : a)));
-      toast.error(e?.message || "Could not like artwork.");
-    }
-  };
+  const like = (art) => toggleLike({ entity: "Artwork", record: art, user, setData, message: `liked "${art.title}"`, link: `/Gallery?art=${art.id}` });
 
   const toggleSave = async (art) => {
     feedback("save");
@@ -105,7 +93,7 @@ export default function Gallery() {
         icon={Grid2X2}
         actions={<>
           <PingInbox />
-          <button onClick={() => exportToCsv(filtered.map((a) => ({ title: a.title, artist: a.user_display_name || "", medium: a.medium, year: a.year, likes: a.likes?.length || 0 })), "gallery")} className="icon-btn icon-btn-bordered" title="Export CSV" aria-label="Export CSV"><Download className="w-4 h-4" /></button>
+          <button onClick={() => exportToCsv(filtered.map((a) => ({ title: a.title, artist: a.user_display_name || "", medium: a.medium, year: a.year, likes: likeCount(a) })), "gallery")} className="icon-btn icon-btn-bordered" title="Export CSV" aria-label="Export CSV"><Download className="w-4 h-4" /></button>
           {isAdmin && <Link to="/Upload" className="btn"><Plus className="w-4 h-4" /> Add artwork</Link>}
         </>}
       >
@@ -132,8 +120,8 @@ export default function Gallery() {
                   artwork={a}
                   index={i}
                   onOpen={() => setOpen(a.id)}
-                  liked={!!user && (a.likes || []).includes(user.email)}
-                  likeCount={a.likes?.length || 0}
+                  liked={isLiked(a, user, "Artwork")}
+                  likeCount={likeCount(a)}
                   onLike={() => like(a)}
                   saved={saved.includes(a.id)}
                   onSave={() => toggleSave(a)}
@@ -143,6 +131,11 @@ export default function Gallery() {
           </AnimatePresence>
         </div>
       )}
+      {!loading && artworks.length >= shown && (
+        <div className="flex justify-center mt-6">
+          <button className="btn-ghost" onClick={() => setShown((n) => n + 120)}>Load more</button>
+        </div>
+      )}
 
       <ArtworkViewer
         artwork={open}
@@ -150,8 +143,8 @@ export default function Gallery() {
         position={openIndex >= 0 ? { index: openIndex + 1, total: filtered.length } : null}
         onPrev={openIndex > 0 ? () => setOpen(filtered[openIndex - 1].id) : null}
         onNext={openIndex >= 0 && openIndex < filtered.length - 1 ? () => setOpen(filtered[openIndex + 1].id) : null}
-        liked={!!open && !!user && (open.likes || []).includes(user.email)}
-        likeCount={open?.likes?.length || 0}
+        liked={!!open && isLiked(open, user, "Artwork")}
+        likeCount={likeCount(open)}
         onLike={() => open && like(open)}
         saved={!!open && saved.includes(open.id)}
         onSave={() => open && toggleSave(open)}

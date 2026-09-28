@@ -7,8 +7,9 @@ import { AudioLines, ChevronRight, Disc3, Headphones, ImagePlus, Loader2, Music 
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import { usePeople } from "@/lib/people";
 import { usePlayer, formatTime } from "@/lib/player";
-import { toggleLike } from "@/lib/likes";
+import { isLiked, likeCount, toggleLike, useLikes } from "@/lib/likes";
 import { checkText } from "@/lib/moderation";
 import { toast } from "@/lib/toast";
 import { compactNumber, displayName, isOnline, profileLink, timeAgo } from "@/lib/format";
@@ -43,7 +44,7 @@ function UploadModal({ open, onClose }) {
       if (!mod.safe) { toast.error("Upload blocked", { description: mod.reason }); setSubmitting(false); return; }
       const music_url = (await base44.integrations.Core.UploadFile({ file })).file_url;
       const cover_url = cover ? (await base44.integrations.Core.UploadFile({ file: cover })).file_url : "";
-      await base44.entities.MusicReview.create({ ...form, title, music_url, cover_url, identified_song: "", user_email: user.email, user_display_name: displayName(user), user_profile_picture: user.profile_picture || "", likes: [] });
+      await base44.entities.MusicReview.create({ ...form, title, music_url, cover_url, identified_song: "", user_email: user.email, user_display_name: displayName(user), user_profile_picture: user.profile_picture || "", likes: [], like_count: 0 });
       await updateMe({ xp: (user.xp || 0) + 15 }).catch(() => {});
       toast.success("Track shared!", { description: "+15 XP" });
       setFile(null); setCover(null); setCoverPreview(null); setForm({ title: "", genre: "Lo-fi", mood: "Chill", ai_review: "" });
@@ -256,7 +257,8 @@ export default function MusicPage() {
   const blocked = useBlocked();
   const { data: allTracks, setData, loading } = useLiveQuery("MusicReview", null, { sort: "-created_date", limit: 300 });
   const tracks = useMemo(() => allTracks.filter((t) => !blocked.has(t.user_email)), [allTracks, blocked]);
-  const { data: users } = useLiveQuery("User", null, { live: false });
+  useLikes("MusicReview", allTracks, user);
+  const users = usePeople(useMemo(() => allTracks.map((t) => t.user_email), [allTracks]));
   const { friendships } = useFriendships(user?.email);
   const { friendEmails } = splitFriendships(friendships, user?.email);
   const highlightRef = useRef(null);
@@ -270,7 +272,7 @@ export default function MusicPage() {
   const fromCircle = useMemo(() => tracks.filter((t) => circle.has(t.user_email) && t.music_url), [tracks, circle]);
   const artists = useMemo(() => {
     const m = new Map();
-    tracks.forEach((t) => { const a = m.get(t.user_email) || { email: t.user_email, name: t.user_display_name, picture: t.user_profile_picture, tracks: 0, likes: 0 }; a.tracks += 1; a.likes += (t.likes || []).length + (t.plays || 0) / 10; m.set(t.user_email, a); });
+    tracks.forEach((t) => { const a = m.get(t.user_email) || { email: t.user_email, name: t.user_display_name, picture: t.user_profile_picture, tracks: 0, likes: 0 }; a.tracks += 1; a.likes += likeCount(t) + (t.plays || 0) / 10; m.set(t.user_email, a); });
     return [...m.values()].sort((a, b) => b.likes - a.likes).slice(0, 10);
   }, [tracks]);
   const activity = useMemo(() => users
@@ -370,7 +372,7 @@ export default function MusicPage() {
                                 <span className="block text-sm font-bold truncate" style={{ color: player.isCurrent(t.id) ? "var(--accent-rose)" : "var(--text-primary)" }}>{t.title}</span>
                                 <span className="block text-xs truncate" style={{ color: "var(--text-muted)" }}>{t.user_display_name}{t.plays ? ` · ${plural(t.plays, "play")}` : ""}</span>
                               </span>
-                              <span onClick={(e) => e.stopPropagation()}><LikeButton variant="plain" liked={!!user && (t.likes || []).includes(user.email)} count={t.likes?.length || 0} onToggle={() => like(t)} /></span>
+                              <span onClick={(e) => e.stopPropagation()}><LikeButton variant="plain" liked={isLiked(t, user, "MusicReview")} count={likeCount(t)} onToggle={() => like(t)} /></span>
                             </div>
                           );
                         })}
@@ -460,7 +462,7 @@ export default function MusicPage() {
                             {t.genre && <button onClick={() => setGenre(t.genre)} className="badge-pink">{t.genre}</button>}
                             {t.mood && <button onClick={() => setMood(t.mood)} className="badge-pink" style={{ color: "var(--text-secondary)", background: "var(--surface-2)", borderColor: "var(--border-c)" }}>{t.mood}</button>}
                           </div>
-                          <LikeButton variant="plain" liked={!!user && (t.likes || []).includes(user.email)} count={t.likes?.length || 0} onToggle={() => like(t)} />
+                          <LikeButton variant="plain" liked={isLiked(t, user, "MusicReview")} count={likeCount(t)} onToggle={() => like(t)} />
                           {canDelete && <button onClick={() => remove(t)} className="icon-btn w-8 h-8 can-hover:opacity-0 group-hover:opacity-100 focus:opacity-100" aria-label="Delete track"><Trash2 className="w-4 h-4" style={{ color: "var(--danger)" }} /></button>}
                         </motion.div>
                       );

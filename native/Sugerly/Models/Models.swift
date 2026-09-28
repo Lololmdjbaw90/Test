@@ -10,6 +10,12 @@ extension Dictionary where Key == String, Value == Any {
         return 0
     }
     func bool(_ key: String) -> Bool { self[key] as? Bool ?? false }
+    // A number that may not be there yet (nil, not 0).
+    func optInt(_ key: String) -> Int? {
+        if let v = self[key] as? Int { return v }
+        if let v = self[key] as? Double { return Int(v) }
+        return nil
+    }
 }
 
 enum Dates {
@@ -211,6 +217,7 @@ struct Post: Identifiable, Hashable {
     var authorName: String
     var authorPicture: String
     var likes: [String]
+    var likeCount: Int?
     var created: String
 
     init(_ d: Doc) {
@@ -222,6 +229,7 @@ struct Post: Identifiable, Hashable {
         authorName = d.str("user_display_name")
         authorPicture = d.str("user_profile_picture")
         likes = d.strs("likes")
+        likeCount = d.optInt("like_count")
         created = d.str("created_date")
     }
 }
@@ -373,6 +381,7 @@ struct Artwork: Identifiable, Hashable {
     var authorName: String
     var authorPicture: String
     var likes: [String]
+    var likeCount: Int?
     var featured: Bool
     var created: String
 
@@ -386,6 +395,7 @@ struct Artwork: Identifiable, Hashable {
         authorName = d.str("user_display_name")
         authorPicture = d.str("user_profile_picture")
         likes = d.strs("likes")
+        likeCount = d.optInt("like_count")
         featured = d.bool("is_featured") || d.bool("featured")
         created = d.str("created_date")
     }
@@ -448,8 +458,12 @@ struct Reel: Identifiable, Hashable {
     var authorName: String
     var authorPicture: String
     var likes: [String]
+    var likeCount: Int?
     var views: Int
     var commentsOff: Bool
+    // Scored on the server (scripts/rank.mjs): how good plus how new.
+    var rankScore: Double?
+    var commentCount: Int?
     var trimStart: Double
     var created: String
     var duration: Double = 0
@@ -475,7 +489,10 @@ struct Reel: Identifiable, Hashable {
         authorName = d.str("user_display_name")
         authorPicture = d.str("user_profile_picture")
         likes = d.strs("likes")
+        likeCount = d.optInt("like_count")
         views = d.int("views")
+        rankScore = ReelText.num(d["rank_score"])
+        commentCount = d.optInt("comment_count")
         commentsOff = d.bool("comments_off")
         duration = ReelText.num(d["duration"]) ?? 0
         let edits = d["edits"] as? [String: Any] ?? [:]

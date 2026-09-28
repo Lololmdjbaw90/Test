@@ -10,6 +10,7 @@ import { sendComment } from "@/components/gallery/CommentSection";
 import { toast } from "@/lib/toast";
 import { displayName, isOnline, profileLink, siteUrl, timeAgo } from "@/lib/format";
 import { feedback } from "@/lib/feedback";
+import { likeCount as countLikes } from "@/lib/likeCount";
 
 const REASON_ICON = { heart: Heart, friend: Users, sparkles: Sparkles, flame: Flame, sprout: Sprout };
 const TEXT_BACKGROUNDS = [
@@ -47,7 +48,7 @@ export default function FeedPost({ post, reason, me, author, comments = [], like
   const tapTimer = useRef(null);
   const name = author ? displayName(author) : post.user_display_name;
   const isMine = post.user_email === me?.email;
-  const likeCount = (post.likes || []).length;
+  const likeCount = countLikes(post);
   const text = post.description || "";
   const long = text.length > 260;
   const textOnly = !post.image_url;

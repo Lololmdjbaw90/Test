@@ -5,6 +5,7 @@ import { ArrowLeft, Check, Crown, Info, Loader2, LogOut, MessageSquare, Phone, P
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import { usePeople } from "@/lib/people";
 import { useFriendships, splitFriendships, dmConversationId } from "@/lib/social";
 import { toast } from "@/lib/toast";
 import { displayName, isOnline, profileLink, timeAgo } from "@/lib/format";
@@ -132,11 +133,20 @@ export default function DirectMessagesPage() {
   const [search, setSearch] = useState("");
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
-  const { data: users } = useLiveQuery("User", null, { sort: "-last_seen" });
+  // Recently active people (live, for online dots) plus everyone you chat with.
+  const { data: activeUsers } = useLiveQuery("User", null, { sort: "-last_seen", limit: 300 });
   const { data: groups } = useLiveQuery("GroupChat", { member_emails: { $contains: me.email } }, { sort: "-created_date" });
   const { data: recent, loading } = useLiveQuery("DirectMessage", { member_emails: { $contains: me.email } }, { sort: "-created_date", limit: 300 });
   const { friendships } = useFriendships(me.email);
   const { friendEmails } = splitFriendships(friendships, me.email);
+  const chatPeople = usePeople(useMemo(() => [
+    ...recent.flatMap((m) => m.member_emails || []), ...groups.flatMap((g) => g.member_emails || []), ...friendEmails,
+  ], [recent, groups, friendEmails]), { recentLimit: 50 });
+  const users = useMemo(() => {
+    const byEmail = new Map(chatPeople.map((u) => [u.email, u]));
+    activeUsers.forEach((u) => byEmail.set(u.email, u));
+    return [...byEmail.values()];
+  }, [chatPeople, activeUsers]);
   const usersByEmail = useMemo(() => Object.fromEntries(users.map((u) => [u.email, u])), [users]);
   const friends = useMemo(() => friendEmails.map((e) => usersByEmail[e]).filter(Boolean), [friendEmails, usersByEmail]);
 

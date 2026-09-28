@@ -72,3 +72,34 @@ export function useLiveQuery(entityName, query = null, { sort = null, limit = nu
 
   return { data, setData, loading, error, reload: load };
 }
+
+// Older pages behind a newest-first live list (long chats): `older` holds
+// what loadOlder() fetched, newest first, `more` whether there may be more.
+//
+//   const { older, more, loadOlder } = useOlderPages("DirectMessage", q, raw, { pageSize: 100, liveLimit: 200 });
+export function useOlderPages(entityName, query, rows, { pageSize = 100, liveLimit = 0 } = {}) {
+  const [older, setOlder] = useState([]);
+  const [more, setMore] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const key = JSON.stringify([entityName, query]);
+  useEffect(() => { setOlder([]); setMore(true); }, [key]);
+  const loadOlder = useCallback(async () => {
+    const oldest = [...rows, ...older].map((r) => r.created_date).filter(Boolean).sort()[0];
+    if (!oldest || busy) return;
+    setBusy(true);
+    try {
+      const page = await base44.entities[entityName].filter({ ...query, created_date: { $lt: oldest } }, "-created_date", pageSize);
+      setOlder((o) => {
+        const have = new Set([...rows, ...o].map((r) => r.id));
+        return [...o, ...page.filter((r) => !have.has(r.id))];
+      });
+      setMore(page.length >= pageSize);
+    } catch (e) {
+      console.warn(`[useOlderPages] ${entityName}:`, e?.message || e);
+    } finally {
+      setBusy(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, rows, older, busy, pageSize]);
+  return { older, more: more && rows.length >= liveLimit, loadOlder, busy };
+}

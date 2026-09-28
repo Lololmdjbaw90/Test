@@ -19,6 +19,7 @@
 // A final diversity pass stops one person from filling the whole feed.
 // -----------------------------------------------------------------------------
 
+import { likeCount } from "@/lib/likeCount";
 const HOUR = 3600000;
 const SEEN_KEY = "mimilocks:__seen_posts";
 const PLAYS_KEY = "mimilocks:__plays";
@@ -125,7 +126,7 @@ export function rankFeed(posts, { taste, comments = [], users = {}, now = Date.n
     const likes = post.likes || [];
     const cs = commentsByPost.get(post.id) || [];
     const recent = cs.filter((c) => hoursSince(c.created_date, now) < 24).length;
-    const engagement = log1(likes.length + 2 * cs.length + 3 * recent);
+    const engagement = log1(likeCount(post) + 2 * cs.length + 3 * recent);
     const affinity = taste ? affinityOf(taste, post.user_email) : 0;
     const friendLikes = likes.filter((e) => circle.has(e) && e !== post.user_email);
     const social = cap(friendLikes.length * 0.6, 2.4);
@@ -140,7 +141,7 @@ export function rankFeed(posts, { taste, comments = [], users = {}, now = Date.n
       interest = cap(log1(interest), 2);
     }
     const quality = (post.image_url ? 0.35 : 0) + (String(post.description || "").length > 60 ? 0.1 : 0);
-    const newCreator = age < 6 && likes.length === 0 && !circle.has(post.user_email) ? 0.5 : 0;
+    const newCreator = age < 6 && likeCount(post) === 0 && !circle.has(post.user_email) ? 0.5 : 0;
     const base = Math.max(0.1, 1 + engagement * 1.15 + affinity + social + interest + quality + newCreator);
     const decay = 1 / Math.pow(1 + age / 20, 1.35);
     let score = base * decay;
@@ -186,7 +187,7 @@ export function trendingTags(posts, { now = Date.now(), limit = 8, days = 14 } =
   posts.forEach((p) => {
     const age = hoursSince(p.created_date, now);
     if (age > days * 24) return;
-    const w = (1 + log1(arr(p.likes).length)) / (1 + age / 36);
+    const w = (1 + log1(likeCount(p))) / (1 + age / 36);
     new Set(hashtags(postText(p))).forEach((t) => {
       const cur = tags.get(t) || { tag: t, score: 0, posts: 0 };
       cur.score += w;
@@ -208,7 +209,7 @@ export function suggestPeople(users, { me, taste, posts = [], limit = 6, now = D
   const likesReceived = new Map();
   const lastPost = new Map();
   posts.forEach((p) => {
-    likesReceived.set(p.user_email, (likesReceived.get(p.user_email) || 0) + arr(p.likes).length);
+    likesReceived.set(p.user_email, (likesReceived.get(p.user_email) || 0) + likeCount(p));
     const t = new Date(p.created_date).getTime();
     if (t > (lastPost.get(p.user_email) || 0)) lastPost.set(p.user_email, t);
   });
@@ -275,7 +276,7 @@ export function rankTracks(tracks, { taste, users = {}, now = Date.now() } = {})
     .map((t) => {
       const age = hoursSince(t.created_date, now);
       const likes = t.likes || [];
-      const popularity = log1(likes.length * 2 + (t.plays || 0));
+      const popularity = log1(likeCount(t) * 2 + (t.plays || 0));
       const genre = taste ? cap(log1(taste.genres.get(t.genre) || 0), 2.5) : 0;
       const mood = taste ? cap(log1(taste.moods.get(t.mood) || 0), 1.5) : 0;
       const affinity = taste ? affinityOf(taste, t.user_email) : 0;
@@ -301,7 +302,7 @@ export function rankTracks(tracks, { taste, users = {}, now = Date.now() } = {})
 export function trendingTracks(tracks, { now = Date.now() } = {}) {
   return tracks
     .filter((t) => t.music_url)
-    .map((t) => ({ track: t, score: (log1(arr(t.likes).length * 2 + (t.plays || 0)) + 0.2) / (1 + hoursSince(t.created_date, now) / 72) }))
+    .map((t) => ({ track: t, score: (log1(likeCount(t) * 2 + (t.plays || 0)) + 0.2) / (1 + hoursSince(t.created_date, now) / 72) }))
     .sort((a, b) => b.score - a.score)
     .map((x) => x.track);
 }

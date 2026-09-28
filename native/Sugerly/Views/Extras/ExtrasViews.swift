@@ -438,8 +438,8 @@ struct TopArtistsView: View {
         let since = range == 0 ? "" : Dates.iso(Date().addingTimeInterval(range == 1 ? -7 * 86_400 : -30 * 86_400))
         var likes: [String: Int] = [:]
         var works: [String: Int] = [:]
-        for a in artworks where a.created > since { likes[a.authorEmail, default: 0] += a.likes.count; works[a.authorEmail, default: 0] += 1 }
-        for p in posts.posts where p.created > since { likes[p.authorEmail, default: 0] += p.likes.count; works[p.authorEmail, default: 0] += 1 }
+        for a in artworks where a.created > since { likes[a.authorEmail, default: 0] += a.likeTotal; works[a.authorEmail, default: 0] += 1 }
+        for p in posts.posts where p.created > since { likes[p.authorEmail, default: 0] += p.likeTotal; works[p.authorEmail, default: 0] += 1 }
         return likes.keys.filter { model.person($0) != nil }
             .map { RankEntry(email: $0, likes: likes[$0] ?? 0, works: works[$0] ?? 0) }
             .sorted { $0.likes != $1.likes ? $0.likes > $1.likes : $0.works > $1.works }
@@ -716,6 +716,8 @@ enum AppReleases {
             "Pull down on the first reel to refresh the feed, like TikTok. GIFs show up in comments again.",
             "Built for huge amounts: chats keep every old conversation, scroll up to load older messages (DMs and servers), comments load in pages, and For You also digs up older reels.",
             "Everything else loads in pages too (Community, Gallery, profiles, notifications). Search, follower counts, likes and views now run on the server.",
+            "Likes have no limit anymore: each like is its own record with a count kept by the database, on the app and the website.",
+            "For You now also mixes in reels ranked on the server by likes, views and comments for their age.",
         ]),
         AppRelease(id: "ios-1.7", icon: "person.2.wave.2.fill", title: "More social & smoother", date: "2026-09-28T11:00:00Z", items: [
             "Home has stories, today's art prompt, Happening now, people you might like and trending tags.",

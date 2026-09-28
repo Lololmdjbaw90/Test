@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowDown, Hash, Menu, Pencil, Pin, PinOff, Reply, Search, SmilePlus, Sparkles, Trash2, Users, X } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { useLiveQuery } from "@/lib/useLiveQuery";
+import { useLiveQuery, useOlderPages } from "@/lib/useLiveQuery";
 import { checkText } from "@/lib/moderation";
 import { toast } from "@/lib/toast";
 import { clockTime, dayLabel, displayName, profileLink, timeAgo } from "@/lib/format";
@@ -106,9 +106,18 @@ export default function ChatArea({ channel, community, me, roles, members, actor
   const [showSearch, setShowSearch] = useState(false);
   const [showPinned, setShowPinned] = useState(false);
   const [query, setQuery] = useState("");
-  const { data: raw, loading } = useLiveQuery("ChannelMessage", { channel_id: channel.id }, { sort: "-created_date", limit: 150 });
+  const channelQuery = useMemo(() => ({ channel_id: channel.id }), [channel.id]);
+  const { data: raw, loading } = useLiveQuery("ChannelMessage", channelQuery, { sort: "-created_date", limit: 150 });
+  // Very long or old channels: earlier messages load a page at a time.
+  const { older, more, loadOlder, busy: loadingOlder } = useOlderPages("ChannelMessage", channelQuery, raw, { pageSize: 100, liveLimit: 150 });
   const blocked = useBlocked();
-  const messages = useMemo(() => [...raw].reverse().filter((m) => !blocked.has(m.user_email)), [raw, blocked]);
+  const messages = useMemo(() => [...raw, ...older].reverse().filter((m) => !blocked.has(m.user_email)), [raw, older, blocked]);
+  const earlier = async () => {
+    const el = scrollRef.current;
+    const height = el?.scrollHeight || 0;
+    await loadOlder();
+    requestAnimationFrame(() => { if (el) el.scrollTop += el.scrollHeight - height; });
+  };
 
   const myRoles = roles.filter((r) => myRoleIds.includes(r.id));
   const canPost = !!access?.post;
@@ -235,7 +244,12 @@ export default function ChatArea({ channel, community, me, roles, members, actor
             <div className="space-y-5 p-6">{[0, 1, 2, 3].map((i) => <div key={i} className="flex gap-3"><div className="skeleton w-10 h-10 !rounded-full" /><div className="flex-1 space-y-2"><div className="skeleton h-3 w-32" /><div className="skeleton h-3" style={{ width: `${40 + i * 12}%` }} /></div></div>)}</div>
           ) : (
             <>
-              {!query && (
+              {!query && more && (
+                <div className="flex justify-center pt-4">
+                  <button className="btn-ghost text-xs" onClick={earlier} disabled={loadingOlder}>{loadingOlder ? "Loading…" : "Load earlier messages"}</button>
+                </div>
+              )}
+              {!query && !more && (
                 <div className="px-4 sm:px-6 pt-10 pb-4">
                   <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-16 h-16 rounded-3xl flex items-center justify-center mb-4 text-white" style={{ background: "var(--accent-grad)", boxShadow: "var(--shadow-accent)" }}><Hash className="w-8 h-8" /></motion.div>
                   <h2 className="font-display text-3xl font-semibold" style={{ color: "var(--text-primary)" }}>Welcome to #{channel.name}</h2>

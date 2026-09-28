@@ -9,6 +9,7 @@ import { recordReelSignal } from "@/lib/reelRank";
 import { feedback } from "@/lib/feedback";
 import { useMediaSrc } from "@/lib/media";
 import { displayName, profileLink, timeAgo } from "@/lib/format";
+import { likeCount } from "@/lib/likeCount";
 
 const compact = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : String(n || 0));
 const BURST = Array.from({ length: 8 }, (_, i) => { const a = (i / 8) * Math.PI * 2; return { "--bx": `${Math.cos(a) * 30}px`, "--by": `${Math.sin(a) * 30}px` }; });
@@ -70,7 +71,7 @@ function ReelItem({ reel, reason, active, near, me, author, following, liked, sa
   const lastTap = useRef(0);
   const tapTimer = useRef(null);
   const watch = useRef({ start: 0, ms: 0, loops: 0, counted: false });
-  const likes = (reel.likes || []).length;
+  const likes = likeCount(reel);
   const name = author ? displayName(author) : reel.user_display_name;
   const picture = author?.profile_picture ?? reel.user_profile_picture;
 

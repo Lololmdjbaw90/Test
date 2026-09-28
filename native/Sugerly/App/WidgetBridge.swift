@@ -82,7 +82,7 @@ enum WidgetBridge {
     private static func loadFeatured(_ base: Snapshot) async {
         guard let docs = try? await FS.query("Artwork", orderBy: "created_date", limit: 30) else { return }
         let arts = docs.map(Artwork.init).filter { !$0.imageURL.isEmpty }
-        guard let pick = arts.max(by: { $0.likes.count < $1.likes.count }),
+        guard let pick = arts.max(by: { $0.likeTotal < $1.likeTotal }),
               let image = await ImagePipeline.shared.load(pick.imageURL) else { return }
         saveImage(image, name: "featured.jpg")
         var snap = last ?? base

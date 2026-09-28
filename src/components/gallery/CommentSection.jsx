@@ -14,6 +14,7 @@ import GifPicker from "@/components/common/GifPicker";
 import RichText from "@/components/chat/RichText";
 import { useBlocked } from "@/lib/safety";
 import { feedback } from "@/lib/feedback";
+import { likeInList } from "@/lib/likes";
 
 const QUICK = ["❤️", "😂", "😍", "🔥", "👏", "😮", "🥺"];
 
@@ -133,7 +134,7 @@ export default function CommentSection({ entity = "Comment", field = "artwork_id
     const next = on ? [...cur, user.email] : cur.filter((e) => e !== user.email);
     feedback(on ? "like" : "unlike");
     setLikeOverride((m) => ({ ...m, [c.id]: next }));
-    try { await base44.entities[entity].update(c.id, { likes: next }); } catch (e) {
+    try { await likeInList(entity, c, user.email, on); } catch (e) {
       setLikeOverride((m) => { const n = { ...m }; delete n[c.id]; return n; });
       toast.error(e?.message || "Could not like that comment.");
     }

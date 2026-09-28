@@ -3,12 +3,14 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Crown, Heart, Image as ImageIcon, Trophy } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import { usePeople } from "@/lib/people";
 import { useAuth } from "@/lib/AuthContext";
 import { displayName, profileLink } from "@/lib/format";
 import { Page, PageHeader, EmptyState } from "@/components/common/Page";
 import { Segmented } from "@/components/common/Controls";
 import Avatar from "@/components/common/Avatar";
 import { getLevelInfo } from "@/components/profile/LevelBadge";
+import { likeCount } from "@/lib/likeCount";
 
 const MEDALS = [
   { color: "#f0a020", bg: "linear-gradient(180deg,#ffe29a,#f0a020)", ring: "conic-gradient(from 210deg,#ffe7a3,#f0a020,#ffd36b,#d98a0f,#ffe7a3)", height: 150 },
@@ -74,7 +76,7 @@ export default function TopArtistsPage() {
   const [range, setRange] = useState("all");
   const { data: posts, loading } = useLiveQuery("CommunityPost", null, { sort: "-created_date", limit: 500 });
   const { data: artworks } = useLiveQuery("Artwork", null, { sort: "-created_date", limit: 500 });
-  const { data: users } = useLiveQuery("User", null, { live: false });
+  const users = usePeople(useMemo(() => [...posts, ...artworks].map((p) => p.user_email), [posts, artworks]), { recentLimit: 50 });
 
   const ranked = useMemo(() => {
     const since = range === "week" ? Date.now() - 7 * 86400000 : range === "month" ? Date.now() - 30 * 86400000 : 0;
@@ -85,8 +87,8 @@ export default function TopArtistsPage() {
       stats[email].likes += likes;
       if (isArt) stats[email].art += 1; else stats[email].posts += 1;
     };
-    posts.filter((p) => new Date(p.created_date).getTime() >= since).forEach((p) => add(p.user_email, p.likes?.length || 0, false));
-    artworks.filter((a) => new Date(a.created_date).getTime() >= since).forEach((a) => add(a.user_email, a.likes?.length || 0, true));
+    posts.filter((p) => new Date(p.created_date).getTime() >= since).forEach((p) => add(p.user_email, likeCount(p), false));
+    artworks.filter((a) => new Date(a.created_date).getTime() >= since).forEach((a) => add(a.user_email, likeCount(a), true));
     return users.filter((u) => stats[u.email]).map((u) => ({ ...u, ...stats[u.email] })).sort((a, b) => b.likes - a.likes || b.posts + b.art - (a.posts + a.art)).slice(0, 25);
   }, [posts, artworks, users, range]);
   const myRank = ranked.findIndex((a) => a.email === user?.email);

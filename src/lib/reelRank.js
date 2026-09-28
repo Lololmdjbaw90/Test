@@ -23,6 +23,7 @@
 //  to back, and ~1 in 6 slots goes to "exploration": a reel from a creator you
 //  haven't met yet, so the feed never gets stuck in a bubble.
 // -----------------------------------------------------------------------------
+import { likeCount } from "@/lib/likeCount";
 const KEY = "mimilocks:__reel_signals";
 const HOUR = 3600000;
 const MAX_ITEMS = 600;
@@ -92,14 +93,19 @@ export function scoreReel(reel, taste, { signals = reelSignals(), commentCount =
   const s = signals[reel.id];
   const creator = taste.creators.get(reel.user_email) || 0;
   const tagScore = (reel.tags || []).reduce((sum, g) => sum + (taste.tags.get(g) || 0), 0);
-  const likes = (reel.likes || []).length;
+  const likes = likeCount(reel);
   const views = Math.max(reel.views || 0, likes);
   const likeRate = (likes + 1) / (views + 8);               // Bayesian-smoothed
-  const popularity = Math.log1p(likes * 2 + views * 0.05 + commentCount * 3);
-  const ageH = Math.max(0, (now - new Date(reel.created_date).getTime()) / HOUR);
+  const comments = Math.max(commentCount, reel.comment_count || 0);
+  const popularity = Math.log1p(likes * 2 + views * 0.05 + comments * 3);
+  const created = new Date(reel.created_date).getTime();
+  const ageH = Math.max(0, (now - created) / HOUR);
   const fresh = 1 / (1 + ageH / 60);
+  // What everyone else thought, scored on the server (scripts/rank.mjs), with
+  // its newness part taken out (freshness is counted just above).
+  const server = typeof reel.rank_score === "number" && created ? Math.max(0, reel.rank_score - (created / 1000 - 1.7e9) / 45000) : 0;
 
-  let score = 1.6 * squash(creator / 3) + 1.2 * squash(tagScore / 3) + 2.2 * likeRate + 0.35 * popularity + 0.9 * fresh;
+  let score = 1.6 * squash(creator / 3) + 1.2 * squash(tagScore / 3) + 2.2 * likeRate + 0.35 * popularity + 0.9 * fresh + 0.3 * server;
   if (s) {
     if (s.hidden) score -= 10;
     else if (s.skip && !s.done) score -= 2.5;

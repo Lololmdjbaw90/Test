@@ -5,6 +5,7 @@ import { ArrowLeft, Hash, Loader2, Menu, Server, Users } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import { usePeople } from "@/lib/people";
 import { ensureMembership, joinServer, leaveServer } from "@/lib/servers";
 import { toast } from "@/lib/toast";
 import { displayName } from "@/lib/format";
@@ -44,7 +45,7 @@ export default function CommunityChatPage() {
   const { data: channels } = useLiveQuery("ServerChannel", { community_id: communityId }, { sort: "position", enabled });
   const { data: roles, loading: rolesLoading } = useLiveQuery("ServerRole", { community_id: communityId }, { sort: "position", enabled });
   const { data: memberRows, loading: membersLoading } = useLiveQuery("ServerMember", { community_id: communityId }, { enabled });
-  const { data: users } = useLiveQuery("User", null, { live: false, enabled });
+  const users = usePeople(useMemo(() => [...(community?.member_emails || []), ...memberRows.map((m) => m.user_email)], [community, memberRows]), { recentLimit: 50 });
   const usersByEmail = useMemo(() => Object.fromEntries(users.map((u) => [u.email, u])), [users]);
 
   // Everyone in member_emails appears in the list, even before their ServerMember row exists.

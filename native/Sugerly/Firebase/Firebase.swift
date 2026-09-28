@@ -216,6 +216,7 @@ enum FS {
         static func before(_ field: String, _ value: String) -> Filter { Filter(field: field, op: "LESS_THAN", value: value) }
         static func atLeast(_ field: String, _ value: String) -> Filter { Filter(field: field, op: "GREATER_THAN_OR_EQUAL", value: value) }
         static func isIn(_ field: String, _ values: [String]) -> Filter { Filter(field: field, op: "IN", value: values) }
+        static func below(_ field: String, _ value: Double) -> Filter { Filter(field: field, op: "LESS_THAN", value: value) }
     }
 
     // Atomic changes done by the database itself, so millions of people can
@@ -332,26 +333,62 @@ enum FS {
     }
 
     static func change(_ collection: String, _ id: String, _ changes: [Change], set: Doc = [:]) async throws {
-        let name = "projects/\(FirebaseConfig.projectId)/databases/(default)/documents/\(collection)/\(id)"
-        let transforms: [[String: Any]] = changes.map { change in
-            switch change {
-            case .add(let field, let value):
-                return ["fieldPath": field, "appendMissingElements": ["values": [encode(value)]] as [String: Any]]
-            case .remove(let field, let value):
-                return ["fieldPath": field, "removeAllFromArray": ["values": [encode(value)]] as [String: Any]]
-            case .increment(let field, let by):
-                return ["fieldPath": field, "increment": encode(by)]
+        try await commit([.change(collection, id, changes, set: set)])
+    }
+
+    // Several writes that all happen, or none do (e.g. a Like record plus the
+    // post's like_count).
+    enum Write {
+        case create(String, String, Doc)                    // must not exist yet
+        case delete(String, String)                         // must exist
+        case change(String, String, [Change], set: Doc)     // must exist
+    }
+
+    static func name(_ collection: String, _ id: String) -> String {
+        "projects/\(FirebaseConfig.projectId)/databases/(default)/documents/\(collection)/\(id)"
+    }
+
+    static func commit(_ writes: [Write]) async throws {
+        let body: [[String: Any]] = writes.map { write in
+            switch write {
+            case .create(let collection, let id, let data):
+                let doc: [String: Any] = ["name": name(collection, id), "fields": data.mapValues { encode($0) }]
+                return ["update": doc, "currentDocument": ["exists": false]]
+            case .delete(let collection, let id):
+                return ["delete": name(collection, id), "currentDocument": ["exists": true]]
+            case .change(let collection, let id, let changes, let set):
+                let transforms: [[String: Any]] = changes.map { change in
+                    switch change {
+                    case .add(let field, let value):
+                        return ["fieldPath": field, "appendMissingElements": ["values": [encode(value)]] as [String: Any]]
+                    case .remove(let field, let value):
+                        return ["fieldPath": field, "removeAllFromArray": ["values": [encode(value)]] as [String: Any]]
+                    case .increment(let field, let by):
+                        return ["fieldPath": field, "increment": encode(by)]
+                    }
+                }
+                let doc: [String: Any] = ["name": name(collection, id), "fields": set.mapValues { encode($0) }]
+                return [
+                    "update": doc,
+                    "updateMask": ["fieldPaths": Array(set.keys)],
+                    "updateTransforms": transforms,
+                    "currentDocument": ["exists": true],
+                ]
             }
         }
-        let update: [String: Any] = ["name": name, "fields": set.mapValues { encode($0) }]
-        let write: [String: Any] = [
-            "update": update,
-            "updateMask": ["fieldPaths": Array(set.keys)],
-            "updateTransforms": transforms,
-            "currentDocument": ["exists": true],
-        ]
-        let url = URL(string: "https://firestore.googleapis.com/v1/projects/\(FirebaseConfig.projectId)/databases/(default)/documents:commit")!
-        _ = try await HTTP.json(url, method: "POST", body: ["writes": [write]], auth: try await bearer())
+        _ = try await HTTP.json(URL(string: "\(base):commit")!, method: "POST", body: ["writes": body], auth: try await bearer())
+    }
+
+    // Many documents by id in one request; ids that don't exist are left out.
+    static func getMany(_ collection: String, _ ids: [String]) async throws -> [String: Doc] {
+        guard !ids.isEmpty else { return [:] }
+        let body: [String: Any] = ["documents": ids.map { name(collection, $0) }]
+        let json = try await HTTP.json(URL(string: "\(base):batchGet")!, method: "POST", body: body, auth: try await bearer())
+        var out: [String: Doc] = [:]
+        for row in json as? [[String: Any]] ?? [] {
+            if let found = row["found"] as? [String: Any], let doc = document(found) { out[doc.str("id")] = doc }
+        }
+        return out
     }
 
     // How many documents match, counted by the database (nothing is
@@ -403,6 +440,13 @@ enum FS {
             let cap = min(5000, max((limit ?? 100) * 20, 1000))
             var docs = try await runQuery(collection, simple, orderBy: nil, descending: descending, limit: cap)
             for range in ranges {
+                if let edge = range.value as? Double {
+                    docs = docs.filter { doc in
+                        guard let v = ReelText.num(doc[range.field]) else { return false }
+                        return range.op == "LESS_THAN" ? v < edge : v > edge
+                    }
+                    continue
+                }
                 let edge = range.value as? String ?? ""
                 docs = docs.filter { range.op == "LESS_THAN" ? $0.str(range.field) < edge : $0.str(range.field) > edge }
             }

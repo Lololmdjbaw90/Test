@@ -302,7 +302,7 @@ struct NewTrackView: View {
                 "title": title.trimmingCharacters(in: .whitespaces), "genre": genre, "mood": mood, "description": description,
                 "music_url": musicURL, "cover_url": coverURL, "identified_song": "", "ai_review": "",
                 "user_email": me.email, "user_display_name": me.displayName, "user_profile_picture": me.picture,
-                "likes": [String](), "created_by": me.email, "created_date": now, "updated_date": now,
+                "likes": [String](), "like_count": 0, "created_by": me.email, "created_date": now, "updated_date": now,
             ]
             try await FS.create("MusicReview", doc)
             try? await model.updateMe(["xp": me.xp + 15])

@@ -5,6 +5,7 @@
 //   { channel_id: "abc" }                      equality
 //   { member_emails: { $contains: "a@b.c" } }  array contains value
 //   { status: { $in: ["open", "paused"] } }    value is one of
+//   { created_date: { $lt: "2025-01-01" } }    before / after ($lt, $gt)
 //
 // Sort strings are a field name, prefixed with "-" for descending.
 
@@ -22,6 +23,8 @@ export function matchesQuery(record, query) {
     if (isOperator(cond)) {
       if ("$contains" in cond && !(Array.isArray(value) && value.includes(cond.$contains))) return false;
       if ("$in" in cond && !(Array.isArray(cond.$in) && cond.$in.includes(value))) return false;
+      if ("$lt" in cond && !(value != null && value < cond.$lt)) return false;
+      if ("$gt" in cond && !(value != null && value > cond.$gt)) return false;
       return true;
     }
     if (Array.isArray(cond)) return JSON.stringify(cond) === JSON.stringify(value);

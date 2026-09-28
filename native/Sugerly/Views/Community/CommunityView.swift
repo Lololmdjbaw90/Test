@@ -41,6 +41,7 @@ final class PostsStore {
             }
             latestComment = latest
             error = nil
+            await LikeBook.shared.prime(page)
             await countComments(page)
         } catch {
             if posts.isEmpty { self.error = error.localizedDescription }
@@ -56,6 +57,7 @@ final class PostsStore {
         let known = Set(posts.map(\.id))
         let page = docs.map(Post.init).filter { !known.contains($0.id) }
         posts += page
+        await LikeBook.shared.prime(page)
         await countComments(page)
     }
 
@@ -85,15 +87,15 @@ final class PostsStore {
     func toggleLike(_ post: Post, me: UserProfile?) {
         guard let me else { return }
         var next = post
-        let liking = !next.likes.contains(me.email)
-        if liking { next.likes.append(me.email) } else { next.likes.removeAll { $0 == me.email } }
+        let liking = !LikeBook.shared.isLiked(post, me: me.email)
+        next.setLiked(liking, me: me.email)
         replace(next)
         Task {
             do {
-                try await FS.change("CommunityPost", post.id, [liking ? .add("likes", me.email) : .remove("likes", me.email)], set: ["updated_date": FS.nowISO()])
+                try await LikeBook.shared.write(post, liking: liking, me: me.email, owner: post.authorEmail)
                 if liking { Notify.send(to: post.authorEmail, from: me, type: "like", message: "\(me.displayName) liked your post\(post.title.isEmpty ? "" : " \"\(post.title)\"")", link: "/Community?post=\(post.id)") }
             } catch {
-                self.replace(post)
+                if let i = self.posts.firstIndex(where: { $0.id == post.id }) { self.posts[i].restoreLikes(from: post) }
             }
         }
     }
@@ -184,7 +186,7 @@ struct CommunityView: View {
         case .top:
             let weekAgo = Dates.iso(Date().addingTimeInterval(-7 * 86400))
             let counts = store.commentCounts
-            func points(_ p: Post) -> Int { p.likes.count + (counts[p.id] ?? 0) * 2 }
+            func points(_ p: Post) -> Int { p.likeTotal + (counts[p.id] ?? 0) * 2 }
             return all.filter { $0.created > weekAgo }.sorted { points($0) > points($1) }
         case .saved:
             let saved = Set(me.savedPosts)
@@ -195,7 +197,7 @@ struct CommunityView: View {
     // Recent, liked and from people you follow floats up.
     private func score(_ p: Post, _ following: Set<String>) -> Double {
         let hours = max(0, Date().timeIntervalSince(Dates.parse(p.created) ?? Date()) / 3600)
-        let engagement = Double(p.likes.count) + Double(store.commentCounts[p.id] ?? 0) * 2 + 1
+        let engagement = Double(p.likeTotal) + Double(store.commentCounts[p.id] ?? 0) * 2 + 1
         let boost = following.contains(p.authorEmail) ? 1.6 : 1
         return engagement * boost / pow(hours + 2, 1.15)
     }
@@ -221,7 +223,7 @@ struct CommunityView: View {
     private var topCreators: [(String, Int)] {
         let weekAgo = Dates.iso(Date().addingTimeInterval(-7 * 86400))
         var likes: [String: Int] = [:]
-        for p in store.posts where p.created > weekAgo { likes[p.authorEmail, default: 0] += p.likes.count }
+        for p in store.posts where p.created > weekAgo { likes[p.authorEmail, default: 0] += p.likeTotal }
         return likes.filter { $0.value > 0 && model.person($0.key) != nil }
             .sorted { $0.value > $1.value }.prefix(8).map { ($0.key, $0.value) }
     }
@@ -536,7 +538,7 @@ struct PostCard: View {
     @State private var sendSheet = false
 
     private var me: String { model.me?.email ?? "" }
-    private var liked: Bool { post.likes.contains(me) }
+    private var liked: Bool { LikeBook.shared.isLiked(post, me: me) }
     private var saved: Bool { model.me?.savedPosts.contains(post.id) ?? false }
     private var author: UserProfile? { model.person(post.authorEmail) }
     private var following: Bool { model.me?.following.contains(post.authorEmail) ?? false }
@@ -690,7 +692,7 @@ struct PostCard: View {
                     Image(systemName: liked ? "heart.fill" : "heart")
                         .foregroundStyle(liked ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.text2))
                         .symbolEffect(.bounce, value: liked)
-                    Text("\(post.likes.count)").font(.jakarta(17, .semibold)).foregroundStyle(liked ? Theme.pink : Palette.text2)
+                    Text("\(post.likeTotal)").font(.jakarta(17, .semibold)).foregroundStyle(liked ? Theme.pink : Palette.text2)
                         .contentTransition(.numericText())
                 }
             }
@@ -730,7 +732,7 @@ struct PostCard: View {
                 }
             }
             if let first = likers.first {
-                (Text("Liked by ") + Text(first.displayName).bold() + Text(post.likes.count > 1 ? " and \(post.likes.count - 1) other\(post.likes.count == 2 ? "" : "s")" : ""))
+                (Text("Liked by ") + Text(first.displayName).bold() + Text(post.likeTotal > 1 ? " and \(post.likeTotal - 1) other\(post.likeTotal == 2 ? "" : "s")" : ""))
                     .font(.jakarta(13)).foregroundStyle(Palette.text2).lineLimit(1)
             }
         }
@@ -1151,7 +1153,7 @@ struct NewPostView: View {
             let data: Doc = [
                 "title": title.trimmingCharacters(in: .whitespaces), "description": text.trimmingCharacters(in: .whitespacesAndNewlines),
                 "image_url": imageURL, "user_email": me.email, "user_display_name": me.displayName,
-                "user_profile_picture": me.picture, "likes": [String](), "created_by": me.email,
+                "user_profile_picture": me.picture, "likes": [String](), "like_count": 0, "created_by": me.email,
                 "created_date": now, "updated_date": now,
             ]
             try await FS.create("CommunityPost", data)

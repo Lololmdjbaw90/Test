@@ -4,9 +4,10 @@ import { Camera, ChevronDown, ChevronUp, Clapperboard, Loader2, X } from "lucide
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import { usePeople } from "@/lib/people";
 import { useFriendships, splitFriendships, toggleFollow } from "@/lib/social";
 import { rankReels, recordReelSignal } from "@/lib/reelRank";
-import { toggleLike } from "@/lib/likes";
+import { addOne, isLiked, toggleLike, useLikes } from "@/lib/likes";
 import { useBlocked, openReport } from "@/lib/safety";
 import { toast } from "@/lib/toast";
 import { feedback } from "@/lib/feedback";
@@ -48,8 +49,18 @@ export default function ReelsPage() {
   const startId = params.get("r");
   const creating = params.get("create") === "1";
 
-  const { data: reels, setData, loading } = useLiveQuery("Reel", null, { sort: "-created_date", limit: 250 });
-  const { data: users } = useLiveQuery("User", null, { live: false });
+  const { data: newest, setData: setNewest, loading: loadingNewest } = useLiveQuery("Reel", null, { sort: "-created_date", limit: 250 });
+  // Plus the best reels right now, scored on the server (scripts/rank.mjs),
+  // so good older reels still reach everyone.
+  const { data: best, setData: setBest, loading: loadingBest } = useLiveQuery("Reel", null, { sort: "-rank_score", limit: 100, live: false });
+  const loading = loadingNewest || loadingBest;
+  const reels = useMemo(() => {
+    const have = new Set(newest.map((r) => r.id));
+    return [...newest, ...best.filter((r) => !have.has(r.id))];
+  }, [newest, best]);
+  const setData = useCallback((fn) => { setNewest(fn); setBest(fn); }, [setNewest, setBest]);
+  useLikes("Reel", reels, me);
+  const users = usePeople(useMemo(() => reels.map((r) => r.user_email), [reels]));
   const usersByEmail = useMemo(() => Object.fromEntries(users.map((u) => [u.email, u])), [users]);
   const { friendships } = useFriendships(me?.email);
   const { friendEmails } = useMemo(() => splitFriendships(friendships, me?.email), [friendships, me?.email]);
@@ -178,7 +189,7 @@ export default function ReelsPage() {
     try { sessionStorage.setItem("sugerly:reel-sound", on ? "1" : "0"); } catch { /* private mode */ }
   };
   const like = (reel) => {
-    const was = (reel.likes || []).includes(me?.email);
+    const was = isLiked(reel, me, "Reel");
     recordReelSignal(reel, { liked: !was });
     toggleLike({ entity: "Reel", record: reel, user: me, setData, message: "liked your reel", link: `/Reels?r=${reel.id}` });
   };
@@ -216,7 +227,7 @@ export default function ReelsPage() {
     if (seen.has(reel.id)) return;
     seen.add(reel.id);
     rememberViewed(me.email, seen);
-    base44.entities.Reel.update(reel.id, { views: (reel.views || 0) + 1 }).catch(() => {});
+    addOne("Reel", reel, "views").catch(() => {});
   };
   const setTag = (t) => setParams((p) => { const n = new URLSearchParams(p); if (t) n.set("tag", t); else n.delete("tag"); n.delete("r"); return n; });
   const closeStudio = (newId) => {
@@ -285,7 +296,7 @@ export default function ReelsPage() {
                       me={me}
                       author={usersByEmail[reel.user_email]}
                       following={following.has(reel.user_email)}
-                      liked={!!me && (reel.likes || []).includes(me.email)}
+                      liked={isLiked(reel, me, "Reel")}
                       saved={savedSet.has(reel.id)}
                       commentCount={commentCounts[reel.id] || 0}
                       soundOn={soundOn}

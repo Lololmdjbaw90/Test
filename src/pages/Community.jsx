@@ -5,7 +5,8 @@ import { ArrowUp, Bookmark, Download, Flame, Search, Sparkles, UserCheck, Users,
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { toggleLike } from "@/lib/likes";
+import { usePeople } from "@/lib/people";
+import { isLiked, likeCount, toggleLike, useLikes } from "@/lib/likes";
 import { toast } from "@/lib/toast";
 import { displayName, profileLink } from "@/lib/format";
 import { splitFriendships, toggleFollow, useFriendships } from "@/lib/social";
@@ -61,11 +62,15 @@ export default function CommunityPage() {
   const tag = params.get("tag");
 
   const { data: posts, setData, loading } = useLiveQuery("CommunityPost", null, { sort: "-created_date", limit: 300 });
+  useLikes("CommunityPost", posts, me);
   const { data: allComments, loading: commentsLoading } = useLiveQuery("CommunityComment", null, { sort: "-created_date", limit: 600 });
-  const { data: users } = useLiveQuery("User", null, { live: false });
-  const { data: communities } = useLiveQuery("Community", null, { live: false });
+  const { data: communities } = useLiveQuery("Community", null, { sort: "-created_date", limit: 100, live: false });
   const { friendships } = useFriendships(me?.email);
   const { friendEmails } = splitFriendships(friendships, me?.email);
+  const users = usePeople(useMemo(() => [
+    ...posts.map((p) => p.user_email), ...allComments.map((c) => c.user_email),
+    ...posts.flatMap((p) => (p.likes || []).slice(-6)), ...friendEmails,
+  ], [posts, allComments, friendEmails]));
 
   const usersByEmail = useMemo(() => Object.fromEntries(users.map((u) => [u.email, u])), [users]);
   const blocked = useBlocked();
@@ -93,7 +98,7 @@ export default function CommunityPage() {
     if (tab === "saved") list = list.filter((p) => saved.has(p.id));
     if (tab === "top") {
       const weekAgo = Date.now() - 7 * 86400000;
-      list = list.filter((p) => new Date(p.created_date).getTime() > weekAgo).sort((a, b) => ((b.likes?.length || 0) + (commentsByPost[b.id]?.length || 0) * 2) - ((a.likes?.length || 0) + (commentsByPost[a.id]?.length || 0) * 2));
+      list = list.filter((p) => new Date(p.created_date).getTime() > weekAgo).sort((a, b) => (likeCount(b) + (commentsByPost[b.id]?.length || 0) * 2) - (likeCount(a) + (commentsByPost[a.id]?.length || 0) * 2));
     }
     return list.map((post) => ({ post, reason: null }));
   }, [filtered, tab, taste, comments, usersByEmail, circle, saved, commentsByPost, me?.email, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -205,7 +210,7 @@ export default function CommunityPage() {
               <h1 className="font-display text-3xl sm:text-4xl font-semibold leading-tight" style={{ color: "var(--text-primary)" }}>Community</h1>
             </div>
             <button onClick={() => setSearchOpen((v) => !v)} className="icon-btn icon-btn-bordered" aria-label="Search posts" aria-expanded={searchOpen}><Search className="w-[18px] h-[18px]" /></button>
-            {isAdmin && <button onClick={() => exportToCsv(feed.map(({ post: p }) => ({ title: p.title || "", user: p.user_display_name, likes: p.likes?.length || 0, date: p.created_date })), "community")} className="icon-btn icon-btn-bordered" title="Export CSV" aria-label="Export CSV"><Download className="w-4 h-4" /></button>}
+            {isAdmin && <button onClick={() => exportToCsv(feed.map(({ post: p }) => ({ title: p.title || "", user: p.user_display_name, likes: likeCount(p), date: p.created_date })), "community")} className="icon-btn icon-btn-bordered" title="Export CSV" aria-label="Export CSV"><Download className="w-4 h-4" /></button>}
           </header>
           <AnimatePresence initial={false}>
             {searchOpen && (
@@ -258,7 +263,7 @@ export default function CommunityPage() {
                     likers={likersOf(post)}
                     following={followingSet.has(post.user_email)}
                     onFollow={follow}
-                    liked={!!me && (post.likes || []).includes(me.email)}
+                    liked={isLiked(post, me, "CommunityPost")}
                     onLike={() => like(post)}
                     saved={saved.has(post.id)}
                     onSave={() => save(post)}
@@ -305,8 +310,8 @@ export default function CommunityPage() {
       <PostViewer
         post={open}
         onClose={() => setOpen(null)}
-        liked={!!open && !!me && (open.likes || []).includes(me.email)}
-        likeCount={open?.likes?.length || 0}
+        liked={!!open && isLiked(open, me, "CommunityPost")}
+        likeCount={likeCount(open)}
         onLike={() => open && like(open)}
         onDelete={() => open && remove(open)}
         position={openIndex >= 0 ? { index: openIndex + 1, total: feed.length } : null}

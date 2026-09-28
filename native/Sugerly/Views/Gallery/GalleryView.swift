@@ -32,7 +32,7 @@ struct GalleryView: View {
         }
         switch sort {
         case .newest: return list
-        case .liked: return list.sorted { $0.likes.count > $1.likes.count }
+        case .liked: return list.sorted { $0.likeTotal > $1.likeTotal }
         case .featured: return list.filter(\.featured)
         case .saved:
             let saved = Set(model.me?.savedArtworks ?? [])
@@ -44,7 +44,7 @@ struct GalleryView: View {
     private var spotlight: (email: String, likes: Int, art: [Artwork])? {
         let weekAgo = Dates.iso(Date().addingTimeInterval(-7 * 86_400))
         var score: [String: Int] = [:]
-        for a in artworks where a.created > weekAgo { score[a.authorEmail, default: 0] += a.likes.count + 1 }
+        for a in artworks where a.created > weekAgo { score[a.authorEmail, default: 0] += a.likeTotal + 1 }
         guard let best = score.max(by: { $0.value < $1.value }), best.value > 0 else { return nil }
         return (best.key, best.value, artworks.filter { $0.authorEmail == best.key }.prefix(3).map { $0 })
     }
@@ -221,7 +221,7 @@ struct GalleryView: View {
     private func column(_ list: [Artwork], offset: Int) -> some View {
         LazyVStack(spacing: 12) {
             ForEach(Array(list.enumerated()), id: \.element.id) { i, art in
-                GalleryCard(artwork: art, liked: art.likes.contains(model.me?.email ?? ""), onOpen: { path.append(.artwork(art)) }, onLike: { toggleLike(art) })
+                GalleryCard(artwork: art, liked: LikeBook.shared.isLiked(art, me: model.me?.email ?? ""), onOpen: { path.append(.artwork(art)) }, onLike: { toggleLike(art) })
                     .stagger(appeared, 5 + i * 2 + offset)
                     .onAppear { if i >= list.count - 3 { Task { await loadMore() } } }
             }
@@ -230,17 +230,15 @@ struct GalleryView: View {
 
     private func toggleLike(_ art: Artwork) {
         guard let me = model.me, let i = artworks.firstIndex(where: { $0.id == art.id }) else { return }
-        let before = artworks[i].likes
-        let liking = !before.contains(me.email)
-        artworks[i].likes = liking ? before + [me.email] : before.filter { $0 != me.email }
-        let next = artworks[i].likes
+        let before = artworks[i]
+        let liking = !LikeBook.shared.isLiked(before, me: me.email)
+        artworks[i].setLiked(liking, me: me.email)
         Task {
             do {
-                _ = next
-                try await FS.change("Artwork", art.id, [liking ? .add("likes", me.email) : .remove("likes", me.email)], set: ["updated_date": FS.nowISO()])
+                try await LikeBook.shared.write(before, liking: liking, me: me.email, owner: art.authorEmail)
                 if liking { Notify.send(to: art.authorEmail, from: me, type: "like", message: "\(me.displayName) loved your artwork", link: "/Gallery?art=\(art.id)") }
             } catch {
-                if let j = artworks.firstIndex(where: { $0.id == art.id }) { artworks[j].likes = before }
+                if let j = artworks.firstIndex(where: { $0.id == art.id }) { artworks[j].restoreLikes(from: before) }
             }
         }
     }
@@ -254,6 +252,7 @@ struct GalleryView: View {
         let older = artworks.filter { !cutoff.isEmpty && $0.created < cutoff }
         if artworks.isEmpty { hasMore = docs.count >= 60 }
         artworks = page + older
+        await LikeBook.shared.prime(page)
     }
 
     private func loadMore() async {
@@ -263,7 +262,9 @@ struct GalleryView: View {
         guard let docs = try? await FS.query("Artwork", [.before("created_date", oldest)], orderBy: "created_date", limit: 60) else { return }
         hasMore = docs.count >= 60
         let known = Set(artworks.map(\.id))
-        artworks += docs.map(Artwork.init).filter { !known.contains($0.id) }
+        let page = docs.map(Artwork.init).filter { !known.contains($0.id) }
+        artworks += page
+        await LikeBook.shared.prime(page)
     }
 }
 
@@ -317,7 +318,7 @@ struct GalleryCard: View {
                     Avatar(url: model.person(artwork.authorEmail)?.picture ?? artwork.authorPicture, name: artwork.authorName, size: 20)
                     Text(artwork.authorName).font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted).lineLimit(1)
                     Spacer(minLength: 0)
-                    Text("\(artwork.likes.count)").font(.jakarta(11, .heavy)).foregroundStyle(Theme.pink)
+                    Text("\(artwork.likeTotal)").font(.jakarta(11, .heavy)).foregroundStyle(Theme.pink)
                         .contentTransition(.numericText())
                 }
             }
@@ -339,7 +340,7 @@ struct ArtworkDetailView: View {
     @State private var reporting: ReportSheet.Target?
 
     private var me: String { model.me?.email ?? "" }
-    private var liked: Bool { artwork.likes.contains(me) }
+    private var liked: Bool { LikeBook.shared.isLiked(artwork, me: me) }
     private var saved: Bool { model.me?.savedArtworks.contains(artwork.id) ?? false }
 
     var body: some View {
@@ -373,7 +374,7 @@ struct ArtworkDetailView: View {
                 }
                 HStack(spacing: 12) {
                     Button { toggleLike() } label: {
-                        Label("\(artwork.likes.count)", systemImage: liked ? "heart.fill" : "heart")
+                        Label("\(artwork.likeTotal)", systemImage: liked ? "heart.fill" : "heart")
                             .symbolEffect(.bounce, value: liked)
                     }
                     .buttonStyle(GradientButtonStyle(height: 44, fullWidth: false))
@@ -408,14 +409,14 @@ struct ArtworkDetailView: View {
 
     private func toggleLike() {
         guard let meProfile = model.me else { return }
-        let before = artwork.likes
-        let liking = !before.contains(me)
-        artwork.likes = liking ? before + [me] : before.filter { $0 != me }
+        let before = artwork
+        let liking = !LikeBook.shared.isLiked(before, me: me)
+        artwork.setLiked(liking, me: me)
         Task {
             do {
-                try await FS.change("Artwork", artwork.id, [liking ? .add("likes", me) : .remove("likes", me)], set: ["updated_date": FS.nowISO()])
+                try await LikeBook.shared.write(before, liking: liking, me: me, owner: before.authorEmail)
                 if liking { Notify.send(to: artwork.authorEmail, from: meProfile, type: "like", message: "\(meProfile.displayName) liked your artwork \"\(artwork.title)\"", link: "/Gallery?art=\(artwork.id)") }
-            } catch { artwork.likes = before }
+            } catch { artwork.restoreLikes(from: before) }
         }
     }
 
@@ -501,7 +502,7 @@ struct NewArtworkView: View {
                 "title": title.trimmingCharacters(in: .whitespaces), "description": text, "image_url": url, "medium": medium,
                 "year": "\(Calendar.current.component(.year, from: Date()))", "is_featured": false,
                 "user_email": me.email, "user_display_name": me.displayName, "user_profile_picture": me.picture,
-                "likes": [String](), "created_by": me.email, "created_date": now, "updated_date": now,
+                "likes": [String](), "like_count": 0, "created_by": me.email, "created_date": now, "updated_date": now,
             ]
             try await FS.create("Artwork", doc)
             try? await model.updateMe(["xp": me.xp + 25, "coins": me.coins + 5])

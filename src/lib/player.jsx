@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { resolveAudioUrl } from "@/lib/demoAudio";
 import { base44 } from "@/api/base44Client";
 import { recordPlay } from "@/lib/ranking";
+import { addOne } from "@/lib/likes";
 
 // Listening history feeds music recommendations; shared tracks ({ kind: "track" })
 // also get a public play count, bumped once per track per session.
@@ -13,7 +14,7 @@ function onTrackStart(t) {
   if (t.kind !== "track" || countedPlays.has(t.id)) return;
   countedPlays.add(t.id);
   base44.entities.MusicReview.get(t.id)
-    .then((row) => row && base44.entities.MusicReview.update(t.id, { plays: (row.plays || 0) + 1 }))
+    .then((row) => row && addOne("MusicReview", row, "plays"))
     .catch(() => {});
 }
 

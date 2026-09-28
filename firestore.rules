@@ -28,13 +28,72 @@ service cloud.firestore {
         request.resource.data.requester_email == ownEmail()
       );
     }
+    // Every key the write adds, removes or changes must be in `fields`.
     function onlyChanged(fields) {
-      return request.resource.data.diff(resource.data).changedKeys().hasOnly(fields);
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
     }
     function ownsCommunity(communityId) {
       return signedIn() && get(/databases/$(database)/documents/Community/$(communityId)).data.owner_email == ownEmail();
     }
     function managesCommunity(communityId) { return isAdmin() || ownsCommunity(communityId); }
+
+    // ---- Likes -----------------------------------------------------------
+    // One Like record per person per thing (id "<Collection>_<id>_<uid>") and
+    // a like_count on the thing, which can only move by exactly one together
+    // with that person's Like record being added or removed. The thing's
+    // `likes` list is only a small sample of likers (faces, "liked by").
+    function likeCollections() { return ['Artwork', 'CommunityPost', 'Reel', 'MusicReview']; }
+    function thingPath(coll, id) { return /databases/$(database)/documents/$(coll)/$(id); }
+    function likePath(coll, id) { return /databases/$(database)/documents/Like/$(coll + '_' + id + '_' + request.auth.uid); }
+    // Numbers only the ranking job (or an admin) sets.
+    function serverFields() { return ['like_count', 'rank_score', 'rank_updated', 'comment_count']; }
+    function touches(fields) { return request.resource.data.diff(resource.data).affectedKeys().hasAny(fields); }
+    function ownerEdit() { return ownsResource() && !touches(serverFields()); }
+    // You can only add or take out yourself.
+    function onlySelfInLikes() {
+      let before = resource.data.get('likes', []).toSet();
+      let after = request.resource.data.get('likes', []).toSet();
+      return after.difference(before).hasOnly([ownEmail()]) && before.difference(after).hasOnly([ownEmail()]);
+    }
+    function likeWrite(coll, id) {
+      let before = resource.data.get('like_count', 0);
+      let after = request.resource.data.get('like_count', 0);
+      return signedIn() && onlyChanged(['likes', 'like_count', 'updated_date', 'updated_at']) && onlySelfInLikes()
+        && (('like_count' in resource.data)
+          ? ((after == before + 1 && !exists(likePath(coll, id)) && existsAfter(likePath(coll, id)))
+            || (after == before - 1 && exists(likePath(coll, id)) && !existsAfter(likePath(coll, id))))
+          // Older things not counted yet: the list is still every liker.
+          : !('like_count' in request.resource.data));
+    }
+    // New things start with no likes and no server numbers.
+    function freshCounters() {
+      return request.resource.data.get('like_count', 0) == 0
+        && request.resource.data.get('likes', []).size() == 0
+        && !request.resource.data.keys().hasAny(['rank_score', 'rank_updated', 'comment_count']);
+    }
+    function countMoves(data, by) {
+      return getAfter(thingPath(data.target_type, data.target_id)).data.get('like_count', 0)
+        == get(thingPath(data.target_type, data.target_id)).data.get('like_count', 0) + by;
+    }
+
+    match /Like/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.user_email == ownEmail()
+        && request.resource.data.target_type in likeCollections()
+        && id == request.resource.data.target_type + '_' + request.resource.data.target_id + '_' + request.auth.uid
+        && countMoves(request.resource.data, 1);
+      allow delete: if isAdmin() || (signedIn()
+        && id == resource.data.target_type + '_' + resource.data.target_id + '_' + request.auth.uid
+        && countMoves(resource.data, -1));
+      allow update: if false;
+    }
+
+    // Numbers the ranking job keeps (read-only for everyone else).
+    match /System/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
 
     match /User/{uid} {
       allow read: if signedIn();
@@ -68,23 +127,23 @@ service cloud.firestore {
 
     match /Artwork/{id} {
       allow read: if signedIn();
-      allow create: if ownsIncomingData();
-      allow update: if isAdmin() || ownsResource() || onlyChanged(['likes', 'updated_date', 'updated_at']);
+      allow create: if ownsIncomingData() && freshCounters();
+      allow update: if isAdmin() || ownerEdit() || likeWrite('Artwork', id);
       allow delete: if isAdmin() || ownsResource();
     }
 
     match /CommunityPost/{id} {
       allow read: if signedIn();
-      allow create: if ownsIncomingData();
-      allow update: if isAdmin() || ownsResource() || onlyChanged(['likes', 'updated_date', 'updated_at']);
+      allow create: if ownsIncomingData() && freshCounters();
+      allow update: if isAdmin() || ownerEdit() || likeWrite('CommunityPost', id);
       allow delete: if isAdmin() || ownsResource();
     }
 
     match /MusicReview/{id} {
       allow read: if signedIn();
-      allow create: if ownsIncomingData();
+      allow create: if ownsIncomingData() && freshCounters();
       // Anyone may like, or bump the play counter by exactly one.
-      allow update: if isAdmin() || ownsResource() || onlyChanged(['likes', 'updated_date', 'updated_at'])
+      allow update: if isAdmin() || ownerEdit() || likeWrite('MusicReview', id)
         || (signedIn() && onlyChanged(['plays', 'updated_date', 'updated_at']) && request.resource.data.plays == resource.data.get('plays', 0) + 1);
       allow delete: if isAdmin() || ownsResource();
     }
@@ -93,8 +152,8 @@ service cloud.firestore {
     // view counter by exactly one; authors and admins edit or delete.
     match /Reel/{id} {
       allow read: if signedIn();
-      allow create: if signedIn() && request.resource.data.user_email == ownEmail();
-      allow update: if isAdmin() || ownsResource() || onlyChanged(['likes', 'updated_date', 'updated_at'])
+      allow create: if signedIn() && request.resource.data.user_email == ownEmail() && freshCounters();
+      allow update: if isAdmin() || ownerEdit() || likeWrite('Reel', id)
         || (signedIn() && onlyChanged(['views', 'updated_date', 'updated_at']) && request.resource.data.views == resource.data.get('views', 0) + 1);
       allow delete: if isAdmin() || ownsResource();
     }
@@ -109,7 +168,7 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if ownsIncomingData();
       // Anyone signed in can like a comment (only the likes change).
-      allow update: if isAdmin() || ownsResource() || (signedIn() && onlyChanged(['likes', 'updated_date', 'updated_at']));
+      allow update: if isAdmin() || ownsResource() || (signedIn() && onlyChanged(['likes', 'updated_date', 'updated_at']) && onlySelfInLikes());
       allow delete: if isAdmin() || ownsResource();
     }
 
@@ -126,7 +185,7 @@ service cloud.firestore {
       // No new comments on a reel whose creator turned comments off.
       allow create: if ownsIncomingData()
         && (!isReelComment(request.resource.data) || reelOf(request.resource.data.post_id).data.get('comments_off', false) != true);
-      allow update: if isAdmin() || ownsResource() || (signedIn() && onlyChanged(['likes', 'updated_date', 'updated_at']));
+      allow update: if isAdmin() || ownsResource() || (signedIn() && onlyChanged(['likes', 'updated_date', 'updated_at']) && onlySelfInLikes());
       // Profile owners moderate their message board (post_id "profile_<email>");
       // reel creators can remove comments on their reels.
       allow delete: if isAdmin() || ownsResource()

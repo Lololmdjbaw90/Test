@@ -14,6 +14,7 @@ import { Page } from "@/components/common/Page";
 import Avatar from "@/components/common/Avatar";
 import Confetti from "@/components/common/Confetti";
 import { getLevelInfo } from "@/components/profile/LevelBadge";
+import { likeCount } from "@/lib/likeCount";
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 const yesterdayKey = () => new Date(Date.now() - 86400000).toISOString().slice(0, 10);
@@ -134,7 +135,7 @@ export default function Home() {
   const trending = useMemo(() => rankFeed(posts.filter((p) => p.user_email !== user?.email), { taste }).slice(0, 6).map((x) => x.post), [posts, taste, user?.email]);
   const topArtists = useMemo(() => {
     const stats = {};
-    posts.forEach((p) => { if (!p.user_email) return; stats[p.user_email] = (stats[p.user_email] || 0) + (p.likes?.length || 0); });
+    posts.forEach((p) => { if (!p.user_email) return; stats[p.user_email] = (stats[p.user_email] || 0) + likeCount(p); });
     return users.filter((u) => stats[u.email] !== undefined).map((u) => ({ ...u, likes: stats[u.email] })).sort((a, b) => b.likes - a.likes).slice(0, 5);
   }, [posts, users]);
   const friendsList = useMemo(() => users.filter((u) => friendEmails.includes(u.email)).sort((a, b) => Number(isOnline(b)) - Number(isOnline(a))), [users, friendEmails]);
@@ -157,7 +158,7 @@ export default function Home() {
                   <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgb(20 8 14 / 0.75), transparent 55%)" }} />
                   <div className="absolute bottom-0 inset-x-0 p-4 text-white">
                     <p className="font-display text-lg font-semibold leading-tight truncate">{a.title}</p>
-                    <p className="text-xs opacity-80 flex items-center gap-1.5 mt-1"><Heart className="w-3 h-3 fill-current" />{a.likes?.length || 0}<span className="opacity-60">·</span><span className="capitalize truncate">{a.medium?.replace("_", " ")}</span></p>
+                    <p className="text-xs opacity-80 flex items-center gap-1.5 mt-1"><Heart className="w-3 h-3 fill-current" />{likeCount(a)}<span className="opacity-60">·</span><span className="capitalize truncate">{a.medium?.replace("_", " ")}</span></p>
                   </div>
                 </Link>
               </motion.div>
@@ -178,7 +179,7 @@ export default function Home() {
                     <div className="p-3 flex items-center gap-2">
                       <Avatar src={p.user_profile_picture} name={p.user_display_name} size={24} />
                       <span className="text-xs font-semibold truncate flex-1" style={{ color: "var(--text-secondary)" }}>{p.user_display_name}</span>
-                      <span className="text-xs font-bold flex items-center gap-1" style={{ color: "var(--accent-rose)" }}><Heart className="w-3 h-3 fill-current" />{p.likes?.length || 0}</span>
+                      <span className="text-xs font-bold flex items-center gap-1" style={{ color: "var(--accent-rose)" }}><Heart className="w-3 h-3 fill-current" />{likeCount(p)}</span>
                     </div>
                   </Link>
                 </motion.div>

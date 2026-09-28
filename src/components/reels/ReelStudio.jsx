@@ -84,7 +84,7 @@ function PostStep({ media, edits, music, coverTime, coverUrl, onBack, onPosted }
         user_email: user.email, user_display_name: displayName(user), user_profile_picture: user.profile_picture || "",
         kind: media.kind, media_url: mediaUrl, cover_url: cover, caption: caption.trim(), tags,
         music_url: music?.url || "", music_title: music?.title || "", music_artist: music?.artist || "", music_source: music?.source || "", media_urls: mediaUrls,
-        edits: finalEdits, likes: [], views: 0, duration: Math.round(span * 10) / 10, comments_off: !allowComments,
+        edits: finalEdits, likes: [], like_count: 0, views: 0, duration: Math.round(span * 10) / 10, comments_off: !allowComments,
       });
       toast.success("Your reel is live ✨");
       onPosted(created.id);

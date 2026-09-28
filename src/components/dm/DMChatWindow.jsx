@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { ArrowDown, CheckCheck, MessageSquare, Pencil, Phone, PhoneMissed, Play, SmilePlus, Trash2, Video } from "lucide-react";
 import { useMediaSrc } from "@/lib/media";
 import { base44 } from "@/api/base44Client";
-import { useLiveQuery } from "@/lib/useLiveQuery";
+import { useLiveQuery, useOlderPages } from "@/lib/useLiveQuery";
 import { checkText } from "@/lib/moderation";
 import { toast } from "@/lib/toast";
 import { clockTime, dayLabel, displayName } from "@/lib/format";
@@ -106,9 +106,18 @@ export default function DMChatWindow({ conversation, me, onCall }) {
   useStickToBottom(scrollRef, atBottom);
   const [editing, setEditing] = useState(null);
   const [tapped, setTapped] = useState(null); // bubble showing its actions on touch screens
-  const { data: raw, loading } = useLiveQuery("DirectMessage", { conversation_id: conversation.id, member_emails: { $contains: me.email } }, { sort: "-created_date", limit: 200 });
+  const dmQuery = useMemo(() => ({ conversation_id: conversation.id, member_emails: { $contains: me.email } }), [conversation.id, me.email]);
+  const { data: raw, loading } = useLiveQuery("DirectMessage", dmQuery, { sort: "-created_date", limit: 200 });
+  // Very long or old chats: earlier messages load a page at a time.
+  const { older, more, loadOlder, busy: loadingOlder } = useOlderPages("DirectMessage", dmQuery, raw, { pageSize: 100, liveLimit: 200 });
   const blocked = useBlocked();
-  const messages = useMemo(() => [...raw].reverse().filter((m) => !blocked.has(m.user_email)), [raw, blocked]);
+  const messages = useMemo(() => [...raw, ...older].reverse().filter((m) => !blocked.has(m.user_email)), [raw, older, blocked]);
+  const earlier = async () => {
+    const el = scrollRef.current;
+    const height = el?.scrollHeight || 0;
+    await loadOlder();
+    requestAnimationFrame(() => { if (el) el.scrollTop += el.scrollHeight - height; });
+  };
   const blockedOther = !isGroup && blocked.has(conversation.otherUser?.email);
 
   // Mark incoming messages as read.
@@ -189,7 +198,13 @@ export default function DMChatWindow({ conversation, me, onCall }) {
             <p className="text-sm" style={{ color: "var(--text-muted)" }}>This is the start of your conversation{isGroup ? ` in ${conversation.group.name}` : ` with ${displayName(conversation.otherUser)}`}.</p>
           </div>
         ) : (
-          messages.map((m, i) => {
+          <>
+          {more && (
+            <div className="flex justify-center pb-3">
+              <button className="btn-ghost text-xs" onClick={earlier} disabled={loadingOlder}>{loadingOlder ? "Loading…" : "Load earlier messages"}</button>
+            </div>
+          )}
+          {messages.map((m, i) => {
             const prev = messages[i - 1];
             const newDay = !prev || new Date(prev.created_date).toDateString() !== new Date(m.created_date).toDateString();
             const grouped = prev && !newDay && prev.type !== "call" && prev.user_email === m.user_email && new Date(m.created_date) - new Date(prev.created_date) < 5 * 60000;
@@ -205,7 +220,8 @@ export default function DMChatWindow({ conversation, me, onCall }) {
                 {m.type === "call" ? <CallNotice msg={m} me={me} onCall={onCall} /> : <Bubble msg={m} me={me} own={m.user_email === me.email} showAvatar={!grouped} showName={!grouped} isGroup={isGroup} seen={m.id === seenId} onEdit={setEditing} onDelete={remove} onReact={react} tapped={tapped === m.id} onTap={(id) => setTapped((t) => (t === id ? null : id))} />}
               </React.Fragment>
             );
-          })
+          })}
+          </>
         )}
       </div>
       <AnimatePresence>

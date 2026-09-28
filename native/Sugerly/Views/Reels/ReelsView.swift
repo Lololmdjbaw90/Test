@@ -150,6 +150,9 @@ struct ReelsView: View {
     @State private var exhausted = false
     @State private var loadingMore = false
     @State private var pageCount = 0
+    // Paging through the server's ranking (scripts/rank.mjs), best first.
+    @State private var hotCursor: Double?
+    @State private var hotExhausted = false
     // Pull down on the first reel to refresh (like TikTok).
     @State private var pull: CGFloat = 0
     @State private var armed = false
@@ -340,12 +343,19 @@ struct ReelsView: View {
         guard !refreshing else { return }
         withAnimation(.snappy) { refreshing = true }
         defer { withAnimation(.snappy) { refreshing = false } }
+        async let top = Self.hot(below: nil, limit: 15)
         guard let docs = try? await FS.query("Reel", orderBy: "created_date", limit: Self.pageSize + 10) else { return }
-        let batch = docs.map(Reel.init)
+        let newest = docs.map(Reel.init)
+        let best = await top
+        let have = Set(newest.map(\.id))
+        let batch = newest + best.filter { !have.contains($0.id) }
         let ranked = await ReelBrain.shared.rank(batch, me: model.me?.email ?? "", following: Set(model.me?.following ?? []))
         guard !ranked.isEmpty else { return }
-        cursor = batch.map(\.created).filter { !$0.isEmpty }.min()
+        await LikeBook.shared.prime(ranked)
+        cursor = newest.map(\.created).filter { !$0.isEmpty }.min()
         exhausted = docs.count < Self.pageSize
+        hotCursor = best.compactMap(\.rankScore).min()
+        hotExhausted = best.count < 15
         Self.cache = ranked
         lastLoad = Date()
         withAnimation(.easeInOut(duration: 0.25)) {
@@ -363,10 +373,16 @@ struct ReelsView: View {
             reels = cached
             if activeId == nil { activeId = reels.first?.id }
         }
+        async let top = Self.hot(below: nil, limit: 15)
         guard let docs = try? await FS.query("Reel", orderBy: "created_date", limit: Self.pageSize + 10) else { return }
         var batch = docs.map(Reel.init)
         cursor = batch.map(\.created).filter { !$0.isEmpty }.min()
         exhausted = docs.count < Self.pageSize
+        let best = await top
+        hotCursor = best.compactMap(\.rankScore).min()
+        hotExhausted = best.count < 15
+        let newest = Set(batch.map(\.id))
+        batch += best.filter { !newest.contains($0.id) }
         let picks = Array((model.me?.following ?? []).shuffled().prefix(4))
         async let r0 = Self.reels(by: picks.count > 0 ? picks[0] : nil)
         async let r1 = Self.reels(by: picks.count > 1 ? picks[1] : nil)
@@ -376,6 +392,7 @@ struct ReelsView: View {
         let have = Set(batch.map(\.id))
         batch += extra.filter { !have.contains($0.id) }
         let ranked = await ReelBrain.shared.rank(batch, me: model.me?.email ?? "", following: Set(model.me?.following ?? []))
+        await LikeBook.shared.prime(ranked)
         Self.cache = ranked
         if reels.isEmpty { reels = ranked } else {
             // Keep what's on screen in place; add new ones behind it.
@@ -398,6 +415,12 @@ struct ReelsView: View {
             try? await Task.sleep(for: .milliseconds(450))
             withAnimation(.snappy) { reels.removeAll { $0.id == id } }
         }
+    }
+
+    // The best reels right now, as scored on the server (scripts/rank.mjs).
+    private static func hot(below score: Double?, limit: Int) async -> [Reel] {
+        let filters: [FS.Filter] = score.map { [.below("rank_score", $0)] } ?? []
+        return ((try? await FS.query("Reel", filters, orderBy: "rank_score", limit: limit)) ?? []).map(Reel.init)
     }
 
     private static func reels(by email: String?) async -> [Reel] {
@@ -424,11 +447,20 @@ struct ReelsView: View {
             exhausted = docs.count < Self.pageSize
             page += timeline
         }
+        // Plus the next few from the server's ranking (liked, watched and
+        // commented most for their age), so good reels reach everyone.
+        if !hotExhausted, let hotCursor {
+            let best = await Self.hot(below: hotCursor, limit: 8)
+            self.hotCursor = best.compactMap(\.rankScore).min() ?? hotCursor
+            hotExhausted = best.count < 8
+            page += best
+        }
         let known = Set(reels.map(\.id))
         var seenIds = Set<String>()
         let fresh = page.filter { !known.contains($0.id) && seenIds.insert($0.id).inserted }
         guard !fresh.isEmpty else { return }
         let ranked = await ReelBrain.shared.rank(fresh, me: model.me?.email ?? "", following: Set(model.me?.following ?? []), recent: reels.suffix(2).map(\.authorEmail))
+        await LikeBook.shared.prime(ranked)
         reels += ranked
     }
 
@@ -476,7 +508,7 @@ struct ReelPage: View {
     var onHide: (String) -> Void = { _ in }
 
     private var me: String { model.me?.email ?? "" }
-    private var liked: Bool { reel.likes.contains(me) }
+    private var liked: Bool { LikeBook.shared.isLiked(reel, me: me) }
     private var saved: Bool { model.me?.savedReels.contains(reel.id) ?? false }
     private var author: UserProfile? { model.person(reel.authorEmail) }
     private var following: Bool { model.me?.following.contains(reel.authorEmail) ?? false }
@@ -676,7 +708,7 @@ struct ReelPage: View {
         if following && theyFollow { return "From your friend" }
         if following { return "From someone you follow" }
         if theyFollow { return "Follows you" }
-        if reel.likes.count >= 10 { return "Trending" }
+        if reel.likeTotal >= 10 { return "Trending" }
         _ = meProfile
         return nil
     }
@@ -750,7 +782,7 @@ struct ReelPage: View {
             }
             .buttonStyle(BouncyStyle())
             .padding(.bottom, 6)
-            bubble(liked ? "heart.fill" : "heart", count: reel.likes.count, tint: liked) { toggleLike() }
+            bubble(liked ? "heart.fill" : "heart", count: reel.likeTotal, tint: liked) { toggleLike() }
                 .sensoryFeedback(.impact(weight: .light), trigger: liked)
             bubble("bubble.left", count: reel.commentsOff ? nil : commentCount) {
                 comments = true
@@ -894,16 +926,16 @@ struct ReelPage: View {
 
     private func toggleLike() {
         guard let meProfile = model.me else { return }
-        let before = reel.likes
-        let liking = !before.contains(me)
-        reel.likes = liking ? before + [me] : before.filter { $0 != me }
+        let before = reel
+        let liking = !LikeBook.shared.isLiked(before, me: me)
+        reel.setLiked(liking, me: me)
         let r = reel
         Task { await ReelBrain.shared.liked(r, liking) }
         Task {
             do {
-                try await FS.change("Reel", reel.id, [liking ? .add("likes", me) : .remove("likes", me)], set: ["updated_date": FS.nowISO()])
+                try await LikeBook.shared.write(before, liking: liking, me: me, owner: before.authorEmail)
                 if liking { Notify.send(to: reel.authorEmail, from: meProfile, type: "like", message: "\(meProfile.displayName) liked your reel", link: "/Reels?r=\(reel.id)") }
-            } catch { reel.likes = before }
+            } catch { reel.restoreLikes(from: before) }
         }
     }
 

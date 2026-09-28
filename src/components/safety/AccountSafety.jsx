@@ -4,7 +4,7 @@ import { Ban, Loader2, Trash2, UserX } from "lucide-react";
 import Modal from "@/components/common/Modal";
 import Avatar from "@/components/common/Avatar";
 import { useAuth } from "@/lib/AuthContext";
-import { useLiveQuery } from "@/lib/useLiveQuery";
+import { usePeople } from "@/lib/people";
 import { toast } from "@/lib/toast";
 import { displayName, profileLink } from "@/lib/format";
 import { deleteMyAccount, setBlocked } from "@/lib/safety";
@@ -12,7 +12,7 @@ import { deleteMyAccount, setBlocked } from "@/lib/safety";
 export function BlockedPeople() {
   const { user, updateMe } = useAuth();
   const blocked = user?.blocked || [];
-  const { data: users } = useLiveQuery("User", null, { live: false, enabled: blocked.length > 0 });
+  const users = usePeople(blocked, { recentLimit: 20 });
   const byEmail = Object.fromEntries(users.map((u) => [u.email, u]));
   const unblock = async (email) => {
     try { await setBlocked({ me: user, email, updateMe, block: false }); toast.success("Unblocked"); } catch (e) { toast.error(e?.message || "Could not unblock."); }
