@@ -71,7 +71,7 @@ struct NotificationsPopup: View {
                 }
                 .padding(.bottom, 4)
                 if shown.isEmpty {
-                    EmptyCard(icon: "bell.fill", title: "All caught up", text: "Likes, follows and comments show up here.")
+                    EmptyCard(icon: "bell.fill", title: "All caught up", text: "Likes, follows and comments show up here.", animated: false)
                 }
                 ForEach(Array(groups.enumerated()), id: \.element.0) { gi, group in
                     Text(group.0.uppercased()).font(.jakarta(11, .heavy)).tracking(1.2).foregroundStyle(Palette.muted)

@@ -258,7 +258,6 @@ struct PickedMovie: Transferable {
 // Holds what the export needs while the video is rendered frame by frame.
 final class RenderBox: @unchecked Sendable {
     var look = ReelLook()
-    var faces: FaceFilterRenderer?
     var crop: CGRect?
     var scale: CGFloat = 1
     var overlays: [CIImage] = []
@@ -294,7 +293,6 @@ struct ReelStudioView: View {
     @State private var previewPhotos: [UIImage] = []
     @State private var soundVolume: Double = 1
     @State private var originalVolume: Double = 1
-    @State private var face: FaceFilter = .none
     @State private var strokes: [DrawStroke] = []
     @State private var drawing: DrawStroke?
     @State private var penColor: UInt32 = 0xFFFFFF
@@ -302,13 +300,12 @@ struct ReelStudioView: View {
     @State private var penNeon = false
 
     enum EditTool: String, CaseIterable {
-        case trim = "Trim", crop = "Crop", filters = "Filters", face = "Face", adjust = "Adjust", text = "Text", stickers = "Stickers", draw = "Draw", sound = "Sound"
+        case trim = "Trim", crop = "Crop", filters = "Filters", adjust = "Adjust", text = "Text", stickers = "Stickers", draw = "Draw", sound = "Sound"
         var icon: String {
             switch self {
             case .trim: return "scissors"
             case .crop: return "crop"
             case .filters: return "camera.filters"
-            case .face: return "face.dashed.fill"
             case .adjust: return "slider.horizontal.3"
             case .text: return "textformat"
             case .stickers: return "star.square.on.square.fill"
@@ -351,7 +348,7 @@ struct ReelStudioView: View {
         .preferredColorScheme(.dark)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: step)
         .fullScreenCover(isPresented: $camera) {
-            RecorderView(face: $face, sound: $sound, onVideo: { url in
+            RecorderView(sound: $sound, onVideo: { url in
                 camera = false
                 Task { await openVideo(url) }
             }, onPhotos: { images in
@@ -376,7 +373,6 @@ struct ReelStudioView: View {
         }
         .onChange(of: items) { _, list in Task { await loadPicked(list) } }
         .onChange(of: look) { _, _ in applyPreviewFilter() }
-        .onChange(of: face) { _, _ in applyPreviewFilter() }
         .fullScreenCover(item: $cropJob) { job in
             ImageCropper(image: job.image, circle: false, aspect: 9 / 16, choices: CropAspect.editor, title: "Move and pinch to crop", onDone: { rect in
                 cropJob = nil
@@ -605,11 +601,6 @@ struct ReelStudioView: View {
             }
             .padding(.horizontal, 16)
             .frame(maxWidth: .infinity)
-        case .face:
-            VStack(spacing: 8) {
-                Text(asset != nil ? "Face filters follow faces in your video" : "Face filters go on every photo").font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.7))
-                FaceFilterPicker(selection: $face)
-            }
         case .draw:
             DrawPanel(color: $penColor, width: $penWidth, neon: $penNeon, canUndo: !strokes.isEmpty, onUndo: {
                 checkpoint()
@@ -865,7 +856,7 @@ struct ReelStudioView: View {
     // MARK: drafts
 
     private func saveDraft() {
-        let state = Drafts.ReelState(caption: caption, allowComments: allowComments, look: look, face: face,
+        let state = Drafts.ReelState(caption: caption, allowComments: allowComments, look: look,
                                      trimStart: trimStart, trimEnd: trimEnd, sound: sound, soundVolume: soundVolume,
                                      originalVolume: originalVolume, video: asset != nil ? videoURL : nil,
                                      photos: asset == nil ? photos : [], cover: thumbs.first, stickers: stickers, strokes: strokes, videoCrop: videoCrop)
@@ -892,7 +883,6 @@ struct ReelStudioView: View {
             openPhotos(pics)
         }
         look = restored.look
-        face = restored.face
         stickers = restored.stickers
         strokes = restored.strokes
         caption = d.caption
@@ -938,28 +928,21 @@ struct ReelStudioView: View {
 
     private func applyPreviewFilter() {
         let chosen = look
-        let chosenFace = face
         if asset == nil {
-            // Slideshow: redraw the pictures with the look (and face filter).
+            // Slideshow: redraw the pictures with the look.
             let originals = photos
             Task {
-                var out = await FilterThumbs.applyAll(chosen, to: originals)
-                if chosenFace != .none {
-                    let faced = out
-                    out = await Task.detached(priority: .userInitiated) { faced.map { FaceFilterRenderer.bake($0, chosenFace) } }.value
-                }
-                if chosen == look && chosenFace == face { previewPhotos = out }
+                let out = await FilterThumbs.applyAll(chosen, to: originals)
+                if chosen == look { previewPhotos = out }
             }
             return
         }
         guard let asset, let item = player.currentItem else { return }
-        let faces = chosenFace == .none ? nil : FaceFilterRenderer(chosenFace)
         let crop = videoCrop
-        item.videoComposition = chosen.isNeutral && faces == nil && crop == nil ? nil : AVMutableVideoComposition(asset: asset) { request in
+        item.videoComposition = chosen.isNeutral && crop == nil ? nil : AVMutableVideoComposition(asset: asset) { request in
             var img = request.sourceImage
             if let crop { img = VideoCrop.fill(VideoCrop.cut(img, crop), request.renderSize) }
             if !chosen.isNeutral { img = chosen.apply(img) }
-            if let faces { img = faces.apply(img) }
             request.finish(with: img, context: nil)
         }
     }
@@ -993,7 +976,6 @@ struct ReelStudioView: View {
         photos = []
         stickers = []
         strokes = []
-        face = .none
         sound = nil
         look = ReelLook()
         caption = ""
@@ -1089,8 +1071,7 @@ struct ReelStudioView: View {
 
     // Filter + text stickers drawn onto a picture.
     private func bake(_ image: UIImage) -> UIImage {
-        let source = face == .none ? image : FaceFilterRenderer.bake(image, face)
-        guard !look.isNeutral || !stickers.isEmpty || !strokes.isEmpty || face != .none, let cg = source.cgImage else { return image }
+        guard !look.isNeutral || !stickers.isEmpty || !strokes.isEmpty, let cg = image.cgImage else { return image }
         var ci = CIImage(cgImage: cg)
         ci = look.apply(ci)
         for overlay in overlayImages(width: ci.extent.width, height: ci.extent.height) { ci = overlay.composited(over: ci) }
@@ -1124,14 +1105,12 @@ struct ReelStudioView: View {
     private func exportVideo(_ asset: AVURLAsset) async throws -> URL {
         let box = RenderBox()
         box.look = look
-        box.faces = face == .none ? nil : FaceFilterRenderer(face)
         box.crop = videoCrop
         let composition = AVMutableVideoComposition(asset: asset) { request in
             var img = request.sourceImage
             if let crop = box.crop { img = VideoCrop.cut(img, crop) }
             if box.scale < 1 { img = img.transformed(by: CGAffineTransform(scaleX: box.scale, y: box.scale)) }
             img = box.look.apply(img)
-            if let faces = box.faces { img = faces.apply(img) }
             for overlay in box.overlays { img = overlay.composited(over: img) }
             request.finish(with: img, context: nil)
         }

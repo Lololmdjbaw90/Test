@@ -21,10 +21,8 @@ final class RecorderModel: NSObject {
     let session = AVCaptureSession()
     private let movieOutput = AVCaptureMovieFileOutput()
     private let photoOutput = AVCapturePhotoOutput()
-    private let metadataOutput = AVCaptureMetadataOutput()
     private var soundPlayer: AVPlayer?
     private var clipSpeed: Double = 1
-    let faces = FaceTracker()
     private var videoInput: AVCaptureDeviceInput?
     private var device: AVCaptureDevice?
     private var progressTask: Task<Void, Never>?
@@ -83,13 +81,7 @@ final class RecorderModel: NSObject {
         }
         if session.canAddOutput(movieOutput) { session.addOutput(movieOutput) }
         if session.canAddOutput(photoOutput) { session.addOutput(photoOutput) }
-        let faceOutput = session.canAddOutput(metadataOutput)
-        if faceOutput { session.addOutput(metadataOutput) }
         session.commitConfiguration()
-        if faceOutput {
-            metadataOutput.setMetadataObjectsDelegate(self, queue: .main)
-            if metadataOutput.availableMetadataObjectTypes.contains(.face) { metadataOutput.metadataObjectTypes = [.face] }
-        }
         fixConnections()
     }
 
@@ -262,12 +254,6 @@ final class RecorderModel: NSObject {
     }
 }
 
-extension RecorderModel: AVCaptureMetadataOutputObjectsDelegate {
-    nonisolated func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
-        MainActor.assumeIsolated { self.faces.update(metadataObjects) }
-    }
-}
-
 extension RecorderModel: AVCaptureFileOutputRecordingDelegate, AVCapturePhotoCaptureDelegate {
     nonisolated func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
         let seconds = output.recordedDuration.seconds
@@ -283,7 +269,6 @@ extension RecorderModel: AVCaptureFileOutputRecordingDelegate, AVCapturePhotoCap
 // Live camera picture.
 struct CameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
-    var tracker: FaceTracker? = nil
 
     final class PreviewView: UIView {
         override static var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
@@ -295,7 +280,6 @@ struct CameraPreview: UIViewRepresentable {
         view.preview.session = session
         view.preview.videoGravity = .resizeAspectFill
         view.backgroundColor = .black
-        tracker?.layer = view.preview
         return view
     }
 
@@ -305,7 +289,6 @@ struct CameraPreview: UIViewRepresentable {
 // MARK: - Camera screen
 
 struct RecorderView: View {
-    @Binding var face: FaceFilter
     @Binding var sound: Track?
     var onVideo: (URL) -> Void
     var onPhotos: ([UIImage]) -> Void
@@ -335,8 +318,7 @@ struct RecorderView: View {
                 Color.black.ignoresSafeArea()
                 ZStack {
                     if camera.authorized == true {
-                        CameraPreview(session: camera.session, tracker: camera.faces)
-                            .overlay { FaceOverlayView(tracker: camera.faces, filter: face) }
+                        CameraPreview(session: camera.session)
                             .overlay { if grid { CameraGrid() } }
                             .gesture(MagnifyGesture()
                                 .onChanged { v in camera.setZoom(pinchStart * v.magnification) }
@@ -522,11 +504,7 @@ struct RecorderView: View {
 
     private var bottomControls: some View {
         VStack(spacing: 16) {
-            if !camera.recording {
-                if showSpeed && mode != .photo { speedRow }
-                FaceFilterPicker(selection: $face)
-                    .transition(.opacity)
-            }
+            if !camera.recording && showSpeed && mode != .photo { speedRow }
             if mode == .photo && !shots.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {

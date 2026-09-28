@@ -550,7 +550,7 @@ enum AppReleases {
             "Voice channels ring like real calls, with a green circle that grows while you talk.",
         ]),
         AppRelease(id: "ios-1.5", icon: "sparkles", title: "Nitro, GIFs & face filters", date: "2026-09-28T05:00:00Z", items: [
-            "Face filters in the camera — puppy, kitty, bunny, bear, crown and more — plus speed, 15s/60s and a grid.",
+            "A better camera: speed 0.5x–3x, 15s or 60s, a grid and your sound while you film.",
             "GIFs and stickers in chats, servers, comments and posts. Make your own stickers and GIFs.",
             "MimiNitro: GIF profile picture and banner, premium name styles and profile effects.",
             "Crop your picture and banner, add pronouns, a status, interests and colours.",

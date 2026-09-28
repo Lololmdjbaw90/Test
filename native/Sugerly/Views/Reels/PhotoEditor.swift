@@ -2,16 +2,15 @@ import SwiftUI
 import UIKit
 import CoreImage
 
-// Filters, face filters, adjustments, drawing, text and stickers drawn onto a photo, full size.
+// Filters, adjustments, drawing, text and stickers drawn onto a photo, full size.
 enum PhotoBaker {
     private static let context = CIContext(options: [.cacheIntermediates: false])
 
-    static func bake(_ image: UIImage, look: ReelLook, stickers: [TextSticker], face: FaceFilter = .none, strokes: [DrawStroke] = []) -> UIImage {
-        guard !look.isNeutral || !stickers.isEmpty || face != .none || !strokes.isEmpty, let cg = image.cgImage else { return image }
+    static func bake(_ image: UIImage, look: ReelLook, stickers: [TextSticker], strokes: [DrawStroke] = []) -> UIImage {
+        guard !look.isNeutral || !stickers.isEmpty || !strokes.isEmpty, let cg = image.cgImage else { return image }
         var ci = CIImage(cgImage: cg).oriented(CGImagePropertyOrientation(image.imageOrientation))
         ci = ci.transformed(by: CGAffineTransform(translationX: -ci.extent.minX, y: -ci.extent.minY))
         if !look.isNeutral { ci = look.apply(ci) }
-        if face != .none { ci = FaceFilterRenderer(face, video: false).apply(ci) }
         let width = ci.extent.width, height = ci.extent.height
         if let doodle = Doodle.render(strokes, size: CGSize(width: width, height: height))?.cgImage {
             ci = CIImage(cgImage: doodle).composited(over: ci)
@@ -42,19 +41,18 @@ enum PhotoBaker {
 }
 
 // The website's image editor, for posts and artworks: filters, adjust,
-// face filters, text, stickers, drawing, rotate, undo.
+// text, stickers, drawing, crop, rotate, undo.
 struct PhotoEditorView: View {
     let original: UIImage
     var onDone: (UIImage) -> Void
     @Environment(\.dismiss) private var dismiss
 
     enum Tool: String, CaseIterable {
-        case filters = "Filters", crop = "Crop", face = "Face", adjust = "Adjust", text = "Text", stickers = "Stickers", draw = "Draw", rotate = "Rotate"
+        case filters = "Filters", crop = "Crop", adjust = "Adjust", text = "Text", stickers = "Stickers", draw = "Draw", rotate = "Rotate"
         var icon: String {
             switch self {
             case .filters: return "camera.filters"
             case .crop: return "crop"
-            case .face: return "face.dashed.fill"
             case .adjust: return "slider.horizontal.3"
             case .text: return "textformat"
             case .stickers: return "star.square.on.square.fill"
@@ -64,7 +62,7 @@ struct PhotoEditorView: View {
         }
     }
 
-    struct Snapshot { var base: UIImage; var look: ReelLook; var stickers: [TextSticker]; var strokes: [DrawStroke] = []; var face: FaceFilter = .none }
+    struct Snapshot { var base: UIImage; var look: ReelLook; var stickers: [TextSticker]; var strokes: [DrawStroke] = [] }
 
     @State private var base: UIImage
     @State private var preview: UIImage?
@@ -74,7 +72,6 @@ struct PhotoEditorView: View {
     @State private var history: [Snapshot] = []
     @State private var editingText: TextSticker?
     @State private var saving = false
-    @State private var face: FaceFilter = .none
     @State private var strokes: [DrawStroke] = []
     @State private var drawing: DrawStroke?
     @State private var penColor: UInt32 = 0xFFFFFF
@@ -170,7 +167,6 @@ struct PhotoEditorView: View {
         .background(Color(hex: 0x140A11).ignoresSafeArea())
         .preferredColorScheme(.dark)
         .onChange(of: look) { _, _ in refreshPreview() }
-        .onChange(of: face) { _, _ in refreshPreview() }
         .fullScreenCover(item: $cropping) { job in
             ImageCropper(image: job.image, circle: false, aspect: 1, choices: CropAspect.editor, title: "Move and pinch to crop", onDone: { rect in
                 cropping = nil
@@ -234,11 +230,6 @@ struct PhotoEditorView: View {
                     .buttonStyle(GradientButtonStyle(height: 44, fullWidth: false))
             }
             .frame(maxWidth: .infinity)
-        case .face:
-            VStack(spacing: 8) {
-                Text("Cute filters on every face in your photo").font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.7))
-                FaceFilterPicker(selection: Binding(get: { face }, set: { checkpoint(); face = $0 }))
-            }
         case .draw:
             DrawPanel(color: $penColor, width: $penWidth, neon: $penNeon, canUndo: !strokes.isEmpty, onUndo: {
                 checkpoint()
@@ -268,20 +259,15 @@ struct PhotoEditorView: View {
     private func refreshPreview() {
         let chosen = look
         let image = base
-        let chosenFace = face
-        guard !chosen.isNeutral || chosenFace != .none else { preview = nil; return }
+        guard !chosen.isNeutral else { preview = nil; return }
         Task {
-            var out = chosen.isNeutral ? image : (await FilterThumbs.applyAll(chosen, to: [image])).first ?? image
-            if chosenFace != .none {
-                let faced = out
-                out = await Task.detached(priority: .userInitiated) { FaceFilterRenderer.bake(faced, chosenFace) }.value
-            }
-            if chosen == look, chosenFace == face, image === base { preview = out }
+            let out = await FilterThumbs.applyAll(chosen, to: [image])
+            if chosen == look, image === base { preview = out.first }
         }
     }
 
     private func checkpoint() {
-        history.append(Snapshot(base: base, look: look, stickers: stickers, strokes: strokes, face: face))
+        history.append(Snapshot(base: base, look: look, stickers: stickers, strokes: strokes))
         if history.count > 40 { history.removeFirst() }
     }
 
@@ -292,16 +278,15 @@ struct PhotoEditorView: View {
             look = last.look
             stickers = last.stickers
             strokes = last.strokes
-            face = last.face
         }
         refreshPreview()
     }
 
     private func save() {
         saving = true
-        let image = base, chosen = look, marks = stickers, chosenFace = face, doodles = strokes
+        let image = base, chosen = look, marks = stickers, doodles = strokes
         Task {
-            let baked = await Task.detached(priority: .userInitiated) { PhotoBaker.bake(image, look: chosen, stickers: marks, face: chosenFace, strokes: doodles) }.value
+            let baked = await Task.detached(priority: .userInitiated) { PhotoBaker.bake(image, look: chosen, stickers: marks, strokes: doodles) }.value
             saving = false
             onDone(baked)
             dismiss()

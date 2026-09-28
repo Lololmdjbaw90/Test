@@ -452,7 +452,6 @@ struct TopBar: View {
                     .background(Palette.surface, in: Circle())
                     .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
                     .shadow(color: Palette.shadow, radius: 6, y: 2)
-                    .symbolEffect(.bounce, value: notes.unread)
                     .overlay(alignment: .topTrailing) {
                         if notes.unread > 0 {
                             Text(notes.unread > 9 ? "9+" : "\(notes.unread)")

@@ -417,6 +417,7 @@ struct EmptyCard: View {
     let icon: String
     let title: String
     let text: String
+    var animated = true
     var body: some View {
         VStack(spacing: 10) {
             Image(systemName: icon)
@@ -424,7 +425,7 @@ struct EmptyCard: View {
                 .frame(width: 64, height: 64)
                 .background(Theme.gradient, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .shadow(color: Theme.pink.opacity(0.4), radius: 12, y: 6)
-                .phaseAnimator([false, true]) { view, up in
+                .phaseAnimator(animated ? [false, true] : [false]) { view, up in
                     view.offset(y: up ? -5 : 0).rotationEffect(.degrees(up ? -4 : 3))
                 } animation: { _ in .easeInOut(duration: 1.3) }
             Text(title).font(.display(24)).foregroundStyle(Palette.text).multilineTextAlignment(.center)

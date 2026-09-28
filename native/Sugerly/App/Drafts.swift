@@ -4,7 +4,7 @@ import UIKit
 // MARK: - Drafts (kept on this phone)
 
 // Unfinished posts and reels, saved in the app's Documents folder: the text,
-// the picture / video and every edit (filters, face filter, text, stickers,
+// the picture / video and every edit (filters, crop, text, stickers,
 // drawing, sound, trim), so you can pick up where you left off.
 enum Drafts {
     private static var root: URL {
@@ -134,7 +134,6 @@ enum Drafts {
         var caption: String
         var allowComments: Bool
         var look: ReelLook
-        var face: FaceFilter
         var trimStart: Double
         var trimEnd: Double
         var sound: Track?
@@ -180,7 +179,7 @@ enum Drafts {
         let a = state.look.adjust
         let draft = Reel(id: id, saved: Date(), caption: state.caption, allowComments: state.allowComments,
                          filter: state.look.filter.rawValue, adjust: [a.brightness, a.contrast, a.saturation, a.warmth, a.vignette],
-                         face: state.face.rawValue, trimStart: state.trimStart, trimEnd: state.trimEnd,
+                         face: "", trimStart: state.trimStart, trimEnd: state.trimEnd,
                          soundId: state.sound?.id ?? "", soundTitle: state.sound?.title ?? "", soundArtist: state.sound?.artist ?? "",
                          soundURL: state.sound?.audioURL ?? "", soundCover: state.sound?.coverURL ?? "",
                          soundVolume: state.soundVolume, originalVolume: state.originalVolume,
@@ -191,7 +190,7 @@ enum Drafts {
     }
 
     // Back to the editor's own types.
-    static func restore(_ d: Reel) -> (look: ReelLook, face: FaceFilter, sound: Track?, stickers: [TextSticker], strokes: [DrawStroke]) {
+    static func restore(_ d: Reel) -> (look: ReelLook, sound: Track?, stickers: [TextSticker], strokes: [DrawStroke]) {
         let a = d.adjust + Array(repeating: 0, count: max(0, 5 - d.adjust.count))
         let look = ReelLook(filter: ReelFilter(rawValue: d.filter) ?? .none,
                             adjust: ReelAdjust(brightness: a[0], contrast: a[1], saturation: a[2], warmth: a[3], vignette: a[4]))
@@ -204,7 +203,7 @@ enum Drafts {
         let strokes = d.strokes.map { s in
             DrawStroke(points: s.points.map { CGPoint(x: $0.first ?? 0, y: $0.count > 1 ? $0[1] : 0) }, color: s.color, width: CGFloat(s.width), neon: s.neon)
         }
-        return (look, FaceFilter(rawValue: d.face) ?? .none, sound, stickers, strokes)
+        return (look, sound, stickers, strokes)
     }
 }
 
