@@ -1073,7 +1073,10 @@ struct ReelStudioView: View {
                 "user_email": me.email, "user_display_name": me.displayName, "user_profile_picture": me.picture,
                 "created_by": me.email, "created_date": now, "updated_date": now,
             ]
-            try await FS.create("Reel", doc)
+            let created = try await FS.create("Reel", doc)
+            // Show it at the top of your feed right away.
+            NotificationCenter.default.post(name: ReelsView.posted, object: Reel(created))
+            model.tabRequest = .reels
             if let draftId { Drafts.delete("reels", draftId) }
             try? await model.updateMe(["xp": me.xp + 30, "coins": me.coins + 5])
             teardown()

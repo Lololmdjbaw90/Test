@@ -137,6 +137,8 @@ actor ReelBrain {
         var s = log1p(likes * 4 + views) * 0.55
         s += (likes + 1) / (views + 4) * 2.5
         s += 4 / pow(hours + 2, 0.4)
+        // Brand-new reels get a push so they reach people quickly.
+        if hours < 6 { s += 2.5 * (1 - hours / 6) }
 
         let topicScore = Self.tokens(r).reduce(0) { $0 + (topics[$1] ?? 0) }
         s += tanh(topicScore / 2) * 2.6
@@ -145,7 +147,7 @@ actor ReelBrain {
         }
         s += tanh((authors[r.authorEmail] ?? 0) / 2) * 2.2
         if following.contains(r.authorEmail) { s += 1.1 }
-        if r.authorEmail == me { s -= 3 }
+        if r.authorEmail == me && hours > 1 { s -= 3 } // your own, unless you just posted it
         if let last = seen[r.id] {
             let ago = (now.timeIntervalSince1970 - last) / 3600
             s -= ago < 24 ? 7 : 3.5

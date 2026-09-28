@@ -252,7 +252,13 @@ struct ReelsView: View {
             lastLoad = Date()
             await load()
         }
-        .onChange(of: visible) { _, now in if now, activeId == nil { activeId = shown.first?.id } }
+        .onChange(of: visible) { _, now in
+            if now, activeId == nil { activeId = shown.first?.id }
+            if now { Task { await checkNew() } }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Self.posted)) { note in
+            if let reel = note.object as? Reel { showPosted(reel) }
+        }
         .onChange(of: activeId) { _, id in
             // Fetch the next page before you reach the end.
             guard let id, let i = shown.firstIndex(where: { $0.id == id }), i >= shown.count - 6 else { return }
@@ -261,6 +267,31 @@ struct ReelsView: View {
     }
 
     private static let pageSize = 30
+    static let posted = Notification.Name("sugerly.reelPosted")
+
+    // Your new reel goes straight to the top of the feed.
+    private func showPosted(_ reel: Reel) {
+        reels.removeAll { $0.id == reel.id }
+        reels.insert(reel, at: 0)
+        Self.cache = reels
+        feed = "foryou"
+        activeId = reel.id
+    }
+
+    // Coming back to Reels: slot any brand-new reels in right after the one
+    // you're on, so the next swipe shows them (nothing jumps under you).
+    private func checkNew() async {
+        guard let lastLoad, Date().timeIntervalSince(lastLoad) > 45, !refreshing else { return }
+        self.lastLoad = Date()
+        guard let docs = try? await FS.query("Reel", orderBy: "created_date", limit: 12) else { return }
+        let known = Set(reels.map(\.id))
+        let fresh = docs.map(Reel.init).filter { !known.contains($0.id) }
+        guard !fresh.isEmpty else { return }
+        let ranked = await ReelBrain.shared.rank(fresh, me: model.me?.email ?? "", following: Set(model.me?.following ?? []))
+        let at = (reels.firstIndex { $0.id == activeId } ?? -1) + 1
+        reels.insert(contentsOf: ranked, at: min(at, reels.count))
+        Self.cache = reels
+    }
 
     // The "pull to refresh" pill that replaces the tabs while you pull.
     @ViewBuilder
