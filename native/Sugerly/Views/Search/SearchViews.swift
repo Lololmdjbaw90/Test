@@ -88,6 +88,32 @@ struct PeopleView: View {
         return all
     }
 
+    // The list above only shows people this phone knows about; these fetch
+    // the right ones from the server for each tab and search.
+    private func fetchForTab() async {
+        guard let me = model.me else { return }
+        if !query.isEmpty {
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            _ = await model.searchPeople(query)
+            return
+        }
+        switch filter {
+        case 2:
+            for email in me.following.prefix(300) { _ = model.person(email) }
+        case 3:
+            let docs = (try? await FS.query("User", [.contains("following", me.email)], limit: 300)) ?? []
+            var map = model.people
+            for doc in docs {
+                let u = UserProfile(doc)
+                if !u.email.isEmpty { map[u.email] = u }
+            }
+            model.people = map
+        default:
+            break
+        }
+    }
+
     static func score(_ p: UserProfile, me: UserProfile) -> Int {
         var s = p.xp / 50
         if p.following.contains(me.email) { s += 1000 }
@@ -135,6 +161,7 @@ struct PeopleView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await model.loadPeople() }
         .task { if model.people.isEmpty { await model.loadPeople() } }
+        .task(id: "\(filter)|\(query)") { await fetchForTab() }
         .onAppear { appeared = true }
     }
 }
@@ -321,6 +348,24 @@ struct SearchView: View {
         }
         .sugarBackground()
         .onAppear { if !initial.isEmpty && query.isEmpty { query = initial } }
+        .task(id: q) {
+            // Ask the server too (names starting with what you typed), so
+            // results aren't limited to what this phone has loaded.
+            guard !q.isEmpty else { return }
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            let capital = q.prefix(1).uppercased() + q.dropFirst()
+            async let people = model.searchPeople(q)
+            async let art1 = try? FS.prefix("Artwork", field: "title", q, limit: 12)
+            async let art2 = try? FS.prefix("Artwork", field: "title", capital, limit: 12)
+            async let srv1 = try? FS.prefix("Community", field: "name", q, limit: 8)
+            async let srv2 = try? FS.prefix("Community", field: "name", capital, limit: 8)
+            _ = await people
+            var knownArt = Set(artworks.map(\.id))
+            artworks += ((await art1 ?? []) + (await art2 ?? [])).map(Artwork.init).filter { knownArt.insert($0.id).inserted }
+            var knownServers = Set(servers.map(\.id))
+            servers += ((await srv1 ?? []) + (await srv2 ?? [])).map(Server.init).filter { knownServers.insert($0.id).inserted }
+        }
         .task {
             async let art = try? FS.query("Artwork", orderBy: "created_date", limit: 200)
             async let srv = try? FS.query("Community", orderBy: "created_date", limit: 150)

@@ -901,7 +901,7 @@ struct ReelPage: View {
         Task { await ReelBrain.shared.liked(r, liking) }
         Task {
             do {
-                try await FS.update("Reel", reel.id, ["likes": reel.likes, "updated_date": FS.nowISO()])
+                try await FS.change("Reel", reel.id, [liking ? .add("likes", me) : .remove("likes", me)], set: ["updated_date": FS.nowISO()])
                 if liking { Notify.send(to: reel.authorEmail, from: meProfile, type: "like", message: "\(meProfile.displayName) liked your reel", link: "/Reels?r=\(reel.id)") }
             } catch { reel.likes = before }
         }
@@ -979,9 +979,8 @@ struct ReelPage: View {
         guard !seen.contains(reel.id) else { return }
         seen.insert(reel.id)
         UserDefaults.standard.set(Array(seen.suffix(4000)), forKey: key)
-        let next = reel.views + 1
-        reel.views = next
-        Task { try? await FS.update("Reel", reel.id, ["views": next, "updated_date": FS.nowISO()]) }
+        reel.views += 1
+        Task { try? await FS.change("Reel", reel.id, [.increment("views", 1)], set: ["updated_date": FS.nowISO()]) }
     }
 }
 

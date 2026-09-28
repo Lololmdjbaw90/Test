@@ -214,6 +214,16 @@ enum FS {
         static func contains(_ field: String, _ value: Any) -> Filter { Filter(field: field, op: "ARRAY_CONTAINS", value: value) }
         static func after(_ field: String, _ value: String) -> Filter { Filter(field: field, op: "GREATER_THAN", value: value) }
         static func before(_ field: String, _ value: String) -> Filter { Filter(field: field, op: "LESS_THAN", value: value) }
+        static func atLeast(_ field: String, _ value: String) -> Filter { Filter(field: field, op: "GREATER_THAN_OR_EQUAL", value: value) }
+        static func isIn(_ field: String, _ values: [String]) -> Filter { Filter(field: field, op: "IN", value: values) }
+    }
+
+    // Atomic changes done by the database itself, so millions of people can
+    // like or view the same thing at once without overwriting each other.
+    enum Change {
+        case add(String, Any)        // add to an array (once)
+        case remove(String, Any)     // take out of an array
+        case increment(String, Int)  // bump a number
     }
 
     static func nowISO() -> String { Dates.iso(Date()) }
@@ -319,6 +329,64 @@ enum FS {
 
     static func delete(_ collection: String, _ id: String) async throws {
         _ = try await HTTP.json(URL(string: "\(base)/\(collection)/\(path(id))")!, method: "DELETE", auth: try await bearer())
+    }
+
+    static func change(_ collection: String, _ id: String, _ changes: [Change], set: Doc = [:]) async throws {
+        let name = "projects/\(FirebaseConfig.projectId)/databases/(default)/documents/\(collection)/\(id)"
+        let transforms: [[String: Any]] = changes.map { change in
+            switch change {
+            case .add(let field, let value):
+                return ["fieldPath": field, "appendMissingElements": ["values": [encode(value)]] as [String: Any]]
+            case .remove(let field, let value):
+                return ["fieldPath": field, "removeAllFromArray": ["values": [encode(value)]] as [String: Any]]
+            case .increment(let field, let by):
+                return ["fieldPath": field, "increment": encode(by)]
+            }
+        }
+        let update: [String: Any] = ["name": name, "fields": set.mapValues { encode($0) }]
+        let write: [String: Any] = [
+            "update": update,
+            "updateMask": ["fieldPaths": Array(set.keys)],
+            "updateTransforms": transforms,
+            "currentDocument": ["exists": true],
+        ]
+        let url = URL(string: "https://firestore.googleapis.com/v1/projects/\(FirebaseConfig.projectId)/databases/(default)/documents:commit")!
+        _ = try await HTTP.json(url, method: "POST", body: ["writes": [write]], auth: try await bearer())
+    }
+
+    // How many documents match, counted by the database (nothing is
+    // downloaded, so it works the same for ten rows or ten billion).
+    static func count(_ collection: String, _ filters: [Filter] = []) async throws -> Int {
+        var structured: [String: Any] = ["from": [["collectionId": collection]]]
+        if let clause = whereClause(filters) { structured["where"] = clause }
+        let aggregation: [String: Any] = ["alias": "n", "count": [String: Any]()]
+        let body: [String: Any] = ["structuredAggregationQuery": ["structuredQuery": structured, "aggregations": [aggregation]] as [String: Any]]
+        let json = try await HTTP.json(URL(string: "\(base):runAggregationQuery")!, method: "POST", body: body, auth: try await bearer())
+        let rows = json as? [[String: Any]] ?? []
+        for row in rows {
+            if let result = row["result"] as? [String: Any], let fields = result["aggregateFields"] as? [String: Any],
+               let n = fields["n"] as? [String: Any] {
+                if let text = n["integerValue"] as? String, let value = Int(text) { return value }
+                if let value = n["integerValue"] as? Int { return value }
+            }
+        }
+        return 0
+    }
+
+    private static func whereClause(_ filters: [Filter]) -> [String: Any]? {
+        let clauses: [[String: Any]] = filters.map { filter in
+            let fieldFilter: [String: Any] = ["field": ["fieldPath": filter.field], "op": filter.op, "value": encode(filter.value)]
+            return ["fieldFilter": fieldFilter]
+        }
+        if clauses.count == 1 { return clauses[0] }
+        if clauses.count > 1 { return ["compositeFilter": ["op": "AND", "filters": clauses] as [String: Any]] }
+        return nil
+    }
+
+    // Names starting with what you typed (a prefix range on one field).
+    static func prefix(_ collection: String, field: String, _ text: String, limit: Int = 20) async throws -> [Doc] {
+        guard !text.isEmpty else { return [] }
+        return try await query(collection, [.atLeast(field, text), .before(field, text + "\u{f8ff}")], orderBy: field, descending: false, limit: limit)
     }
 
     static func query(_ collection: String, _ filters: [Filter] = [], orderBy: String? = nil, descending: Bool = true, limit: Int? = nil) async throws -> [Doc] {

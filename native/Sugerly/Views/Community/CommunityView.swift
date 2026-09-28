@@ -14,28 +14,68 @@ final class PostsStore {
     var loading = false
     var error: String?
 
+    // Pages of posts (newest first); more load as you scroll, so the feed
+    // costs the same however many posts exist.
+    var hasMore = true
+    private var loadingMore = false
+    static let pageSize = 30
+
     func load() async {
         loading = true
         defer { loading = false }
         do {
-            async let comments = try? FS.query("CommunityComment", orderBy: "created_date", limit: 400)
-            let docs = try await FS.query("CommunityPost", orderBy: "created_date", limit: 150)
-            posts = docs.map(Post.init)
-            var counts: [String: Int] = [:]
-            var latest: [String: CommentPreview] = [:]
+            async let comments = try? FS.query("CommunityComment", orderBy: "created_date", limit: 300)
+            let docs = try await FS.query("CommunityPost", orderBy: "created_date", limit: Self.pageSize)
+            let page = docs.map(Post.init)
+            // Refresh the newest page but keep older pages you've scrolled to.
+            let cutoff = page.map(\.created).min() ?? ""
+            let older = posts.filter { !cutoff.isEmpty && $0.created < cutoff }
+            if posts.isEmpty { hasMore = docs.count >= Self.pageSize }
+            posts = page + older
+            var latest = latestComment
             for c in (await comments ?? []) {
                 let post = c.str("post_id")
-                counts[post, default: 0] += 1
                 if latest[post] == nil, c.str("parent_id").isEmpty, !c.str("content").isEmpty {
                     latest[post] = CommentPreview(email: c.str("user_email").lowercased(), name: c.str("user_display_name"), text: c.str("content"))
                 }
             }
-            commentCounts = counts
             latestComment = latest
             error = nil
+            await countComments(page)
         } catch {
             if posts.isEmpty { self.error = error.localizedDescription }
         }
+    }
+
+    func loadMore() async {
+        guard hasMore, !loadingMore, let oldest = posts.map(\.created).filter({ !$0.isEmpty }).min() else { return }
+        loadingMore = true
+        defer { loadingMore = false }
+        guard let docs = try? await FS.query("CommunityPost", [.before("created_date", oldest)], orderBy: "created_date", limit: Self.pageSize) else { return }
+        hasMore = docs.count >= Self.pageSize
+        let known = Set(posts.map(\.id))
+        let page = docs.map(Post.init).filter { !known.contains($0.id) }
+        posts += page
+        await countComments(page)
+    }
+
+    // Comment counts are counted by the database, one per post on the page.
+    private func countComments(_ page: [Post]) async {
+        let ids = page.map(\.id)
+        let results = await withTaskGroup(of: (String, Int)?.self) { group -> [(String, Int)] in
+            for id in ids {
+                group.addTask {
+                    guard let n = try? await FS.count("CommunityComment", [.equals("post_id", id)]) else { return nil }
+                    return (id, n)
+                }
+            }
+            var out: [(String, Int)] = []
+            for await item in group { if let item { out.append(item) } }
+            return out
+        }
+        var counts = commentCounts
+        for (id, n) in results { counts[id] = n }
+        commentCounts = counts
     }
 
     func replace(_ post: Post) {
@@ -50,7 +90,7 @@ final class PostsStore {
         replace(next)
         Task {
             do {
-                try await FS.update("CommunityPost", post.id, ["likes": next.likes, "updated_date": FS.nowISO()])
+                try await FS.change("CommunityPost", post.id, [liking ? .add("likes", me.email) : .remove("likes", me.email)], set: ["updated_date": FS.nowISO()])
                 if liking { Notify.send(to: post.authorEmail, from: me, type: "like", message: "\(me.displayName) liked your post\(post.title.isEmpty ? "" : " \"\(post.title)\"")", link: "/Community?post=\(post.id)") }
             } catch {
                 self.replace(post)
@@ -284,6 +324,7 @@ struct CommunityView: View {
                     ForEach(Array(visible.enumerated()), id: \.element.id) { index, post in
                         PostCard(post: post, path: $path, reporting: $reporting)
                             .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                            .onAppear { if index >= visible.count - 5 { Task { await store.loadMore() } } }
                         if index == 1 && !suggestions.isEmpty && feed == .forYou { suggested }
                     }
                 } header: {
@@ -926,9 +967,10 @@ struct CommentsScreen<Header: View>: View {
     private func like(_ c: Comment) {
         guard let me = model.me?.email, let i = comments.firstIndex(where: { $0.id == c.id }) else { return }
         var next = c
-        if next.likes.contains(me) { next.likes.removeAll { $0 == me } } else { next.likes.append(me) }
+        let liking = !next.likes.contains(me)
+        if liking { next.likes.append(me) } else { next.likes.removeAll { $0 == me } }
         comments[i] = next
-        Task { try? await FS.update(collection, c.id, ["likes": next.likes, "updated_date": FS.nowISO()]) }
+        Task { try? await FS.change(collection, c.id, [liking ? .add("likes", me) : .remove("likes", me)], set: ["updated_date": FS.nowISO()]) }
     }
 
     private func report(_ c: Comment) {

@@ -84,9 +84,11 @@ struct ProfileContent: View {
     @State private var shop = false
     @State private var appeared = false
     @State private var statusSheet = false
+    @State private var loadingMore = false
 
     private var following: Bool { model.me?.following.contains(person.email) ?? false }
-    private var followers: Int { model.people.values.filter { $0.following.contains(person.email) }.count }
+    // Counted by the database, so it's right however many people there are.
+    @State private var followers = 0
     private var totalLikes: Int { posts.reduce(0) { $0 + $1.likes.count } }
     private let columns = [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)]
 
@@ -329,6 +331,7 @@ struct ProfileContent: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
                         .buttonStyle(BouncyStyle(scale: 0.95))
+                        .onAppear { if reel.id == list.last?.id && tab == .reels { Task { await moreReels() } } }
                     }
                 }
     }
@@ -351,18 +354,40 @@ struct ProfileContent: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .buttonStyle(BouncyStyle(scale: 0.95))
+                .onAppear { if post.id == list.last?.id && tab == .posts { Task { await morePosts() } } }
             }
         }
     }
 
     private func load() async {
         defer { loading = false }
+        async let followerCount = try? FS.count("User", [.contains("following", person.email)])
         async let postDocs = try? FS.query("CommunityPost", [.equals("user_email", person.email)], orderBy: "created_date", limit: 90)
         async let reelDocs = try? FS.query("Reel", [.equals("user_email", person.email)], orderBy: "created_date", limit: 60)
         posts = (await postDocs ?? []).map(Post.init)
         reels = (await reelDocs ?? []).map(Reel.init)
+        if let n = await followerCount { followers = n }
         for post in posts where !store.posts.contains(where: { $0.id == post.id }) { store.posts.append(post) }
         if isMe { await loadSaved() }
+    }
+
+    // Older posts and reels load as you reach the end of the grid.
+    private func morePosts() async {
+        guard !loadingMore, let oldest = posts.last?.created, posts.count >= 30 else { return }
+        loadingMore = true
+        defer { loadingMore = false }
+        let docs = (try? await FS.query("CommunityPost", [.equals("user_email", person.email), .before("created_date", oldest)], orderBy: "created_date", limit: 60)) ?? []
+        let known = Set(posts.map(\.id))
+        posts += docs.map(Post.init).filter { !known.contains($0.id) }
+    }
+
+    private func moreReels() async {
+        guard !loadingMore, let oldest = reels.last?.created, reels.count >= 30 else { return }
+        loadingMore = true
+        defer { loadingMore = false }
+        let docs = (try? await FS.query("Reel", [.equals("user_email", person.email), .before("created_date", oldest)], orderBy: "created_date", limit: 60)) ?? []
+        let known = Set(reels.map(\.id))
+        reels += docs.map(Reel.init).filter { !known.contains($0.id) }
     }
 
     // Your saved posts and reels (fetched by id, newest saves first).

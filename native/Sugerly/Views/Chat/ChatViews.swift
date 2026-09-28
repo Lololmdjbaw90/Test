@@ -525,5 +525,12 @@ struct NewChatView: View {
         .padding(18)
         .sugarBackground()
         .task { if model.people.isEmpty { await model.loadPeople() } }
+        .task(id: search) {
+            // Anyone on Sugerly, not just people this phone already knows.
+            guard !search.isEmpty else { return }
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            _ = await model.searchPeople(search)
+        }
     }
 }

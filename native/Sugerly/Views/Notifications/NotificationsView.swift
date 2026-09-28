@@ -118,6 +118,11 @@ struct NotificationsPopup: View {
                                 .stagger(appeared, gi * 3 + i)
                         }
                     }
+                    if !shown.isEmpty && notes.hasOlder {
+                        ProgressView().controlSize(.small).tint(Theme.main)
+                            .frame(maxWidth: .infinity).padding(.vertical, 12)
+                            .onAppear { Task { await notes.loadOlder(me: model.me?.email ?? "") } }
+                    }
                 }
                 .padding(.bottom, 10)
             }
@@ -514,6 +519,17 @@ struct AdminView: View {
         let owner = FirebaseConfig.siteOwners.contains(model.me?.email ?? "")
         return VStack(alignment: .leading, spacing: 10) {
             SearchField(text: $search, placeholder: "Search users…")
+                .task(id: search) {
+                    guard !search.isEmpty else { return }
+                    try? await Task.sleep(for: .milliseconds(300))
+                    guard !Task.isCancelled else { return }
+                    _ = await model.searchPeople(search)
+                    if search.contains("@"), let docs = try? await FS.prefix("User", field: "email", search.lowercased(), limit: 20) {
+                        var map = model.people
+                        for doc in docs { let u = UserProfile(doc); if !u.email.isEmpty { map[u.email] = u } }
+                        model.people = map
+                    }
+                }
             Text("\(model.people.values.filter { rank($0) < 2 }.count) admins · Tap a name to give coins, Nitro or ban. \(owner ? "The shield makes or removes admins." : "")")
                 .font(.jakarta(12)).foregroundStyle(Palette.muted)
             ForEach(Array(list.prefix(200))) { u in

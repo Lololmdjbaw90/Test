@@ -220,9 +220,15 @@ struct ServerHubView: View {
         withAnimation(.snappy) { selected = server.id }
     }
 
+    // Servers you're in come straight from membership (so an old server
+    // never goes missing), plus the newest ones to discover.
     private func load() async {
-        guard let docs = try? await FS.query("Community", orderBy: "created_date", limit: 150) else { loaded = true; return }
-        servers = docs.map(Server.init)
+        async let joined = try? FS.query("Community", [.contains("member_emails", me)], limit: 300)
+        async let newest = try? FS.query("Community", orderBy: "created_date", limit: 100)
+        let mineDocs = await joined ?? []
+        guard let docs = await newest else { loaded = true; return }
+        var seen = Set<String>()
+        servers = (mineDocs + docs).map(Server.init).filter { seen.insert($0.id).inserted }
         loaded = true
         if selected == nil && initial == nil, let first = mine.first { open(first) }
     }

@@ -710,6 +710,20 @@ final class NotificationsStore {
         loaded = true
     }
 
+    // Older notifications, a page at a time, as you scroll the list.
+    var hasOlder = true
+    private var loadingOlder = false
+
+    func loadOlder(me: String) async {
+        guard hasOlder, !loadingOlder, let oldest = items.last?.created, !me.isEmpty else { return }
+        loadingOlder = true
+        defer { loadingOlder = false }
+        guard let docs = try? await FS.query("Notification", [.equals("to_email", me), .before("created_date", oldest)], orderBy: "created_date", limit: 40) else { return }
+        hasOlder = docs.count >= 40
+        let known = Set(items.map(\.id))
+        items += docs.map(AppNotification.init).filter { !known.contains($0.id) }
+    }
+
     func markAllRead() {
         let unread = items.filter { !$0.read }
         for i in items.indices { items[i].read = true }

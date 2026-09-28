@@ -212,7 +212,7 @@ struct HomeView: View {
     private func load() async {
         async let art = try? FS.query("Artwork", orderBy: "created_date", limit: 40)
         async let music = try? FS.query("MusicReview", orderBy: "created_date", limit: 8)
-        async let serverDocs = try? FS.query("Community", orderBy: "created_date", limit: 60)
+        async let serverDocs = try? FS.query("Community", [.contains("member_emails", model.me?.email ?? "")], limit: 12)
         async let reelDocs = try? FS.query("Reel", orderBy: "created_date", limit: 30)
         if posts.posts.isEmpty { await posts.load() }
         artworks = (await art ?? []).map(Artwork.init)

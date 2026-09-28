@@ -13,6 +13,8 @@ struct GalleryView: View {
     @State private var medium = "all"
     @State private var query = ""
     @State private var loading = true
+    @State private var hasMore = true
+    @State private var loadingMore = false
     @State private var adding = false
     @State private var appeared = false
 
@@ -221,6 +223,7 @@ struct GalleryView: View {
             ForEach(Array(list.enumerated()), id: \.element.id) { i, art in
                 GalleryCard(artwork: art, liked: art.likes.contains(model.me?.email ?? ""), onOpen: { path.append(.artwork(art)) }, onLike: { toggleLike(art) })
                     .stagger(appeared, 5 + i * 2 + offset)
+                    .onAppear { if i >= list.count - 3 { Task { await loadMore() } } }
             }
         }
     }
@@ -233,7 +236,8 @@ struct GalleryView: View {
         let next = artworks[i].likes
         Task {
             do {
-                try await FS.update("Artwork", art.id, ["likes": next, "updated_date": FS.nowISO()])
+                _ = next
+                try await FS.change("Artwork", art.id, [liking ? .add("likes", me.email) : .remove("likes", me.email)], set: ["updated_date": FS.nowISO()])
                 if liking { Notify.send(to: art.authorEmail, from: me, type: "like", message: "\(me.displayName) loved your artwork", link: "/Gallery?art=\(art.id)") }
             } catch {
                 if let j = artworks.firstIndex(where: { $0.id == art.id }) { artworks[j].likes = before }
@@ -241,10 +245,25 @@ struct GalleryView: View {
         }
     }
 
+    // Pages of 60 (newest first); more load as you scroll down the wall.
     private func load() async {
         defer { loading = false }
-        guard let docs = try? await FS.query("Artwork", orderBy: "created_date", limit: 200) else { return }
-        artworks = docs.map(Artwork.init)
+        guard let docs = try? await FS.query("Artwork", orderBy: "created_date", limit: 60) else { return }
+        let page = docs.map(Artwork.init)
+        let cutoff = page.map(\.created).min() ?? ""
+        let older = artworks.filter { !cutoff.isEmpty && $0.created < cutoff }
+        if artworks.isEmpty { hasMore = docs.count >= 60 }
+        artworks = page + older
+    }
+
+    private func loadMore() async {
+        guard hasMore, !loadingMore, let oldest = artworks.map(\.created).filter({ !$0.isEmpty }).min() else { return }
+        loadingMore = true
+        defer { loadingMore = false }
+        guard let docs = try? await FS.query("Artwork", [.before("created_date", oldest)], orderBy: "created_date", limit: 60) else { return }
+        hasMore = docs.count >= 60
+        let known = Set(artworks.map(\.id))
+        artworks += docs.map(Artwork.init).filter { !known.contains($0.id) }
     }
 }
 
@@ -394,7 +413,7 @@ struct ArtworkDetailView: View {
         artwork.likes = liking ? before + [me] : before.filter { $0 != me }
         Task {
             do {
-                try await FS.update("Artwork", artwork.id, ["likes": artwork.likes, "updated_date": FS.nowISO()])
+                try await FS.change("Artwork", artwork.id, [liking ? .add("likes", me) : .remove("likes", me)], set: ["updated_date": FS.nowISO()])
                 if liking { Notify.send(to: artwork.authorEmail, from: meProfile, type: "like", message: "\(meProfile.displayName) liked your artwork \"\(artwork.title)\"", link: "/Gallery?art=\(artwork.id)") }
             } catch { artwork.likes = before }
         }

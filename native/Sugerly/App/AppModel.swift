@@ -103,21 +103,77 @@ final class AppModel {
             let created = try await FS.create("User", profile, id: uid)
             me = UserProfile(created)
         }
-        Task { try? await FS.update("User", uid, ["last_seen": FS.nowISO()]) }
+        let searchName = (me?.displayName ?? "").lowercased()
+        Task { try? await FS.update("User", uid, ["last_seen": FS.nowISO(), "search_name": searchName]) }
         Task { await loadPeople() }
     }
 
+    // A starter set of the most recently active people (not everyone: there
+    // could be billions). Anyone else is fetched on demand the first time
+    // they show up on screen (see person()).
     func loadPeople() async {
-        guard let docs = try? await FS.query("User", limit: 1000) else { return }
-        var map: [String: UserProfile] = [:]
-        for doc in docs {
+        let recent = (try? await FS.query("User", orderBy: "last_seen", limit: 300)) ?? []
+        var map = people
+        for doc in recent {
             let user = UserProfile(doc)
             if !user.email.isEmpty { map[user.email] = user }
         }
+        if let me { map[me.email] = me }
         people = map
     }
 
-    func person(_ email: String) -> UserProfile? { people[email.lowercased()] }
+    func person(_ email: String) -> UserProfile? {
+        let key = email.lowercased()
+        if let hit = people[key] { return hit }
+        request(key)
+        return nil
+    }
+
+    // People we still need, fetched 30 at a time a moment later.
+    @ObservationIgnored private var wanted = Set<String>()
+    @ObservationIgnored private var unknown = Set<String>()
+    @ObservationIgnored private var fetchingPeople = false
+
+    private func request(_ email: String) {
+        guard email.contains("@"), !unknown.contains(email), !wanted.contains(email) else { return }
+        wanted.insert(email)
+        guard !fetchingPeople else { return }
+        fetchingPeople = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(150))
+            while !wanted.isEmpty {
+                let batch = Array(wanted.prefix(30))
+                wanted.subtract(batch)
+                guard let docs = try? await FS.query("User", [.isIn("email", batch)], limit: 30) else { continue }
+                var map = people
+                for doc in docs {
+                    let user = UserProfile(doc)
+                    if !user.email.isEmpty { map[user.email] = user }
+                }
+                for email in batch where map[email] == nil { unknown.insert(email) }
+                people = map
+            }
+            fetchingPeople = false
+        }
+    }
+
+    // Look people up by name on the server (prefix search).
+    func searchPeople(_ text: String) async -> [UserProfile] {
+        let q = text.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return [] }
+        async let lower = try? FS.prefix("User", field: "search_name", q.lowercased(), limit: 20)
+        async let exact = try? FS.prefix("User", field: "display_name", q, limit: 20)
+        async let capital = try? FS.prefix("User", field: "display_name", q.prefix(1).uppercased() + q.dropFirst(), limit: 20)
+        var found: [String: UserProfile] = [:]
+        for doc in (await lower ?? []) + (await exact ?? []) + (await capital ?? []) {
+            let u = UserProfile(doc)
+            if !u.email.isEmpty { found[u.email] = u }
+        }
+        var map = people
+        for (k, v) in found { map[k] = v }
+        people = map
+        return Array(found.values)
+    }
 
     var accent: Accent { Accent(rawValue: me?.accent ?? "") ?? .rose }
     var colorScheme: ColorScheme? {
@@ -132,6 +188,7 @@ final class AppModel {
     func updateMe(_ fields: Doc) async throws {
         guard let current = me else { return }
         var next = fields
+        if let name = fields["display_name"] as? String { next["search_name"] = name.lowercased() }
         next["updated_date"] = FS.nowISO()
         var merged = currentDoc(current)
         for (k, v) in next { merged[k] = v }
