@@ -12,7 +12,17 @@ import WebRTC
 @MainActor
 @Observable
 final class VoiceEngine: NSObject {
-    struct Room: Equatable { var id: String; var name: String; var serverId: String; var serverName: String }
+    struct Room: Equatable {
+        var id: String
+        var name: String
+        var serverId: String
+        var serverName: String
+        var kind = "channel"   // "channel" (server voice) or "call" (DM / group call)
+        var isCall: Bool { kind == "call" }
+    }
+
+    // Told when you leave a room (calls use it to end / log the call).
+    @ObservationIgnored var onLeft: ((Room) -> Void)?
     struct Participant: Identifiable, Equatable {
         var id: String // peer id
         var email: String
@@ -102,7 +112,7 @@ final class VoiceEngine: NSObject {
 
         speaker = true
         ping = nil
-        systemCall = await call.start(title: "\(room.name) · \(room.serverName)")
+        systemCall = await call.start(title: room.isCall ? room.name : "\(room.name) · \(room.serverName)")
         if !systemCall {
             // No CallKit: run the audio ourselves.
             let session = AVAudioSession.sharedInstance()
@@ -149,6 +159,7 @@ final class VoiceEngine: NSObject {
         if let presenceId { try? await FS.delete("VoicePresence", presenceId) }
         presenceId = nil
         let was = room != nil
+        let left = room
         room = nil
         connecting = false
         participants = []
@@ -157,6 +168,7 @@ final class VoiceEngine: NSObject {
         systemCall = false
         try? AVAudioSession.sharedInstance().setCategory(.playback)
         if was && !silent { Chime.play(.leave) }
+        if let left { onLeft?(left) }
     }
 
     func setMuted(_ value: Bool) {
@@ -193,7 +205,7 @@ final class VoiceEngine: NSObject {
 
     private func presenceDoc() -> Doc {
         [
-            "channel_id": room?.id ?? "", "community_id": room?.serverId ?? "", "room_type": "channel",
+            "channel_id": room?.id ?? "", "community_id": room?.serverId ?? "", "room_type": room?.kind ?? "channel",
             "peer_id": selfId, "user_email": email,
             "user": ["display_name": name, "profile_picture": picture, "email": email] as [String: Any],
             "muted": muted, "deafened": deafened, "video": NSNull(),

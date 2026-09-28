@@ -194,6 +194,29 @@ struct Message: Identifiable, Hashable {
     var edited: Bool
     var reactions: [String: [String]] = [:]
     var pending = false
+    // Extras (same fields as the website): calls, shared reels, replies, voice notes.
+    var kind = ""
+    var callOutcome = ""
+    var callDuration: Double = 0      // milliseconds
+    var sharedReel: SharedReel?
+    var replyId = ""
+    var replyPreview = ""
+    var replyName = ""
+    var audioURL = ""
+    var audioSeconds: Double = 0
+
+    struct SharedReel: Hashable {
+        var id: String
+        var cover: String
+        var caption: String
+        var by: String
+    }
+
+    // The words to show (the website puts the reel link on its own line).
+    var displayText: String {
+        guard sharedReel != nil else { return text }
+        return text.split(separator: "\n", omittingEmptySubsequences: false).filter { !$0.hasPrefix("\u{1F3AC}") }.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     init(_ d: Doc) {
         id = d.str("id")
@@ -203,6 +226,17 @@ struct Message: Identifiable, Hashable {
             if !people.isEmpty { parsed[emoji] = people }
         }
         reactions = parsed
+        kind = d.str("type")
+        callOutcome = d.str("call_outcome")
+        callDuration = ReelText.num(d["call_duration"]) ?? 0
+        if let r = d["shared_reel"] as? [String: Any], let rid = r["id"] as? String {
+            sharedReel = SharedReel(id: rid, cover: r["cover_url"] as? String ?? "", caption: r["caption"] as? String ?? "", by: r["by"] as? String ?? "")
+        }
+        replyId = d.str("reply_to_id")
+        replyPreview = d.str("reply_to_preview")
+        replyName = d.str("reply_to_name")
+        audioURL = d.str("audio_url")
+        audioSeconds = ReelText.num(d["audio_duration"]) ?? 0
         conversationId = d.str("conversation_id")
         isGroup = d.str("conversation_type") == "group"
         groupName = d.str("group_name")

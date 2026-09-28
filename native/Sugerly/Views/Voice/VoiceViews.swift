@@ -182,19 +182,20 @@ struct VoiceRoomView: View {
 // The little bar above the tab bar while you're in a voice channel.
 struct VoiceDock: View {
     @Environment(VoiceEngine.self) private var voice
+    @Environment(CallCenter.self) private var calls
     @State private var expanded = false
 
     var body: some View {
         if let room = voice.room {
             HStack(spacing: 10) {
-                Button { expanded = true } label: {
+                Button { if room.isCall { calls.showScreen = true } else { expanded = true } } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "waveform").font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
                             .frame(width: 36, height: 36).background(Palette.success, in: Circle())
                             .symbolEffect(.variableColor.iterative, isActive: true)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(voice.connecting ? "Connecting…" : "Voice connected").font(.jakarta(12, .heavy)).foregroundStyle(Palette.success)
-                            Text("\(room.name) · \(room.serverName)").font(.jakarta(12, .semibold)).foregroundStyle(Palette.text2).lineLimit(1)
+                            Text(voice.connecting ? "Connecting…" : room.isCall ? "In a call · tap to open" : "Voice connected").font(.jakarta(12, .heavy)).foregroundStyle(Palette.success)
+                            Text(room.isCall ? room.name : "\(room.name) · \(room.serverName)").font(.jakarta(12, .semibold)).foregroundStyle(Palette.text2).lineLimit(1)
                         }
                         Spacer(minLength: 0)
                         HStack(spacing: -6) {

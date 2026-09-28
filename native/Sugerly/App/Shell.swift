@@ -93,6 +93,7 @@ struct MainShell: View {
     @State private var player = Player()
     @State private var notes = NotificationsStore()
     @State private var voice = VoiceEngine()
+    @State private var calls = CallCenter()
     @State private var homePath: [Route] = []
     @State private var communityPath: [Route] = []
     @State private var galleryPath: [Route] = []
@@ -218,6 +219,25 @@ struct MainShell: View {
         .environment(player)
         .environment(notes)
         .environment(voice)
+        .environment(calls)
+        .overlay(alignment: .top) {
+            if let incoming = calls.incoming {
+                IncomingCallBanner(call: incoming)
+                    .environment(calls)
+                    .padding(.top, 4)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(30)
+            }
+        }
+        .fullScreenCover(isPresented: Binding(get: { calls.showScreen }, set: { calls.showScreen = $0 })) {
+            CallScreen().environment(calls).environment(voice).environment(model)
+        }
+        .task {
+            calls.attach(voice: voice)
+        }
+        .task(id: model.me?.email) {
+            if let me = model.me { await calls.watch(me: me) }
+        }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: voice.room?.id)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in typing = true }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in typing = false }
