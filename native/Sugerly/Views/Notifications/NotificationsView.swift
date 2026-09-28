@@ -96,7 +96,7 @@ struct NotificationsPopup: View {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     if shown.isEmpty {
                         VStack(spacing: 6) {
-                            MimiBuddy(icon: "bell.fill", mood: .sleepy, size: 84)
+                            MimiBuddy(icon: "bell.fill", mood: .sleepy, size: 100)
                             Text("All quiet here").font(.display(22)).foregroundStyle(Palette.text)
                             Doodles.squiggle.stroke(Theme.main.opacity(0.55), style: StrokeStyle(lineWidth: 2.2, lineCap: .round)).frame(width: 54, height: 7)
                             Text(filter == "all" ? "When someone likes, follows, comments or mentions you, it pops up here." : "Nothing like this yet.")

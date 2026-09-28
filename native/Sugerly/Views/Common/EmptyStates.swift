@@ -1,8 +1,9 @@
 import SwiftUI
 
-// Empty states with a little character instead of a stock icon: Mimi, a
-// mochi bunny, holding a sticker of what's missing, on a sketchbook card with
-// a dashed edge and doodles. Mimi blinks, bobs and changes face with the mood.
+// Empty states with a little character instead of a stock icon: Mimi, the
+// Sugerly bunny (hand-drawn art in every accent colour, so she matches
+// yours), thinking about what's missing, on a sketchbook card with a dashed
+// edge and doodles. She hops, sways or droops with the mood.
 
 struct MimiBuddy: View {
     enum Mood { case happy, sleepy, sad }
@@ -11,113 +12,92 @@ struct MimiBuddy: View {
     var size: CGFloat = 110
     var animated = true
 
-    private let ink = Color(hex: 0x4A2B3A)
-    private let blush = Color(hex: 0xFF9EB5)
+    // One drawing per accent colour.
+    static var imageName: String {
+        switch Theme.accent {
+        case .rose: return "MimiRose"
+        case .lavender: return "MimiLavender"
+        case .mint: return "MimiMint"
+        case .peach: return "MimiPeach"
+        case .sky: return "MimiSky"
+        }
+    }
 
     var body: some View {
         let s = size / 110
         ZStack {
             // soft shadow on the "floor"
-            Ellipse().fill(Theme.main.opacity(0.12))
-                .frame(width: 70 * s, height: 10 * s)
-                .offset(y: 46 * s)
-            character(s)
-                .phaseAnimator(animated ? [false, true] : [false]) { v, up in
-                    v.offset(y: up ? -4 * s : 0).rotationEffect(.degrees(up ? -2 : 2))
-                } animation: { _ in .easeInOut(duration: 1.4) }
+            Ellipse().fill(Theme.main.opacity(0.14))
+                .frame(width: 52 * s, height: 8 * s)
+                .offset(y: size * 0.5 - 3 * s)
+            bunny(s)
+            thought(s)
+                .offset(x: size * 0.5, y: -size * 0.34)
             doodles(s)
         }
-        .frame(width: size * 1.35, height: size)
+        .frame(width: size * 1.55, height: size)
         .accessibilityHidden(true)
     }
 
-    private func character(_ s: CGFloat) -> some View {
-        let fill = LinearGradient(colors: [.white, Theme.light.opacity(0.55)], startPoint: .top, endPoint: .bottom)
-        let outline = Theme.main.opacity(0.45)
-        return ZStack {
-            // ears
-            ForEach([-1.0, 1.0], id: \.self) { side in
-                Capsule().fill(fill)
-                    .overlay(Capsule().strokeBorder(outline, lineWidth: 2 * s))
-                    .overlay(Capsule().fill(blush.opacity(0.45)).padding(5 * s).padding(.top, 4 * s))
-                    .frame(width: 18 * s, height: 34 * s)
-                    .rotationEffect(.degrees(side * 14))
-                    .offset(x: side * 20 * s, y: -38 * s)
-            }
-            // body
-            RoundedRectangle(cornerRadius: 34 * s, style: .continuous)
-                .fill(fill)
-                .overlay(RoundedRectangle(cornerRadius: 34 * s, style: .continuous).strokeBorder(outline, lineWidth: 2 * s))
-                .overlay(alignment: .topLeading) {
-                    Ellipse().fill(.white.opacity(0.9)).frame(width: 16 * s, height: 9 * s)
-                        .rotationEffect(.degrees(-20)).offset(x: 14 * s, y: 10 * s)
+    private func bunny(_ s: CGFloat) -> some View {
+        Image(Self.imageName)
+            .resizable()
+            .interpolation(.high)
+            .scaledToFit()
+            .frame(height: size)
+            .saturation(mood == .sad ? 0.8 : 1)
+            // happy: a little hop and squish; sleepy: a slow sway; sad: a droop
+            .phaseAnimator(animated ? [0, 1, 2] : [0]) { v, k in
+                v.scaleEffect(x: stretch(k), y: 2 - stretch(k), anchor: .bottom)
+                    .offset(y: lift(k) * s)
+                    .rotationEffect(.degrees(rotation(k)), anchor: .bottom)
+            } animation: { k in
+                switch mood {
+                case .happy: return k == 1 ? .easeOut(duration: 0.28) : k == 2 ? .easeIn(duration: 0.22) : .spring(response: 0.4, dampingFraction: 0.5).delay(1.6)
+                case .sleepy: return .easeInOut(duration: 1.8)
+                case .sad: return .easeInOut(duration: 2.2)
                 }
-                .frame(width: 86 * s, height: 68 * s)
-            face(s).offset(y: 2 * s)
-            // the sticker it's holding
-            Image(systemName: icon)
-                .font(.system(size: 14 * s, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 34 * s, height: 34 * s)
-                .background(Theme.gradient, in: Circle())
-                .overlay(Circle().strokeBorder(.white, lineWidth: 3 * s))
-                .shadow(color: Theme.main.opacity(0.3), radius: 4 * s, y: 2 * s)
-                .rotationEffect(.degrees(-12))
-                .offset(x: 40 * s, y: 22 * s)
+            }
+    }
+
+    private func stretch(_ k: Int) -> CGFloat { mood == .happy && k == 2 ? 1.05 : 1 }
+
+    private func lift(_ k: Int) -> CGFloat {
+        guard k == 1 else { return 0 }
+        switch mood {
+        case .happy: return -7
+        case .sleepy: return -2
+        case .sad: return 0
         }
     }
 
-    @ViewBuilder
-    private func face(_ s: CGFloat) -> some View {
-        ZStack {
-            // eyes
-            HStack(spacing: 22 * s) {
-                ForEach(0..<2, id: \.self) { i in
-                    switch mood {
-                    case .sleepy:
-                        SmileArc().stroke(ink, style: StrokeStyle(lineWidth: 2.4 * s, lineCap: .round))
-                            .frame(width: 10 * s, height: 5 * s)
-                            .rotationEffect(.degrees(180))
-                    default:
-                        Capsule().fill(ink)
-                            .frame(width: 7 * s, height: 10 * s)
-                            .overlay(alignment: .topTrailing) {
-                                Circle().fill(.white).frame(width: 2.6 * s, height: 2.6 * s).offset(x: -1 * s, y: 1.5 * s)
-                            }
-                            // open → (wait) → shut → open: a blink every couple of seconds
-                            .phaseAnimator(animated ? [0, 1, 2] : [0]) { v, k in
-                                v.scaleEffect(x: 1, y: k == 2 ? 0.12 : k == 1 ? 0.97 : 1)
-                            } animation: { k in
-                                switch k {
-                                case 1: return .easeInOut(duration: 2.2)
-                                case 2: return .easeIn(duration: 0.07)
-                                default: return .easeOut(duration: 0.09)
-                                }
-                            }
-                    }
-                }
-            }
-            .offset(y: -6 * s)
-            if mood == .sad {
-                HStack(spacing: 26 * s) {
-                    Capsule().fill(ink).frame(width: 8 * s, height: 2 * s).rotationEffect(.degrees(-18))
-                    Capsule().fill(ink).frame(width: 8 * s, height: 2 * s).rotationEffect(.degrees(18))
-                }
-                .offset(y: -15 * s)
-            }
-            // cheeks
-            HStack(spacing: 38 * s) {
-                Ellipse().fill(blush.opacity(0.75)).frame(width: 12 * s, height: 7 * s)
-                Ellipse().fill(blush.opacity(0.75)).frame(width: 12 * s, height: 7 * s)
-            }
-            .offset(y: 5 * s)
-            // mouth
-            SmileArc()
-                .stroke(ink, style: StrokeStyle(lineWidth: 2.2 * s, lineCap: .round))
-                .frame(width: 10 * s, height: 5 * s)
-                .rotationEffect(.degrees(mood == .sad ? 180 : 0))
-                .offset(y: mood == .sad ? 9 * s : 6 * s)
+    private func rotation(_ k: Int) -> Double {
+        switch mood {
+        case .happy: return k == 1 ? -4 : 0
+        case .sleepy: return k == 1 ? -3 : k == 2 ? 3 : 0
+        case .sad: return k == 1 ? 5 : 3
         }
+    }
+
+    // A little thought bubble with what's missing.
+    private func thought(_ s: CGFloat) -> some View {
+        ZStack(alignment: .bottomLeading) {
+            Image(systemName: icon)
+                .font(.system(size: 13 * s, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 32 * s, height: 32 * s)
+                .background(Theme.gradient, in: Circle())
+                .overlay(Circle().strokeBorder(.white, lineWidth: 2.5 * s))
+                .shadow(color: Theme.main.opacity(0.3), radius: 4 * s, y: 2 * s)
+            Circle().fill(Theme.light).frame(width: 8 * s, height: 8 * s)
+                .overlay(Circle().strokeBorder(.white, lineWidth: 1.5 * s))
+                .offset(x: -9 * s, y: 11 * s)
+            Circle().fill(Theme.light).frame(width: 5 * s, height: 5 * s)
+                .offset(x: -16 * s, y: 19 * s)
+        }
+        .phaseAnimator(animated ? [false, true] : [false]) { v, up in
+            v.offset(y: up ? -3 * s : 0)
+        } animation: { _ in .easeInOut(duration: 1.3) }
     }
 
     // Hand-drawn little sparkles and a heart around Mimi.
@@ -131,24 +111,15 @@ struct MimiBuddy: View {
             Doodles.sparkle
                 .stroke(Color(hex: 0xF0A020).opacity(0.75), style: StrokeStyle(lineWidth: 1.8 * s, lineCap: .round, lineJoin: .round))
                 .frame(width: 11 * s, height: 11 * s)
-                .offset(x: 64 * s, y: -40 * s)
+                .offset(x: 70 * s, y: 12 * s)
             Doodles.heart
                 .stroke(Theme.main.opacity(0.55), style: StrokeStyle(lineWidth: 1.8 * s, lineCap: .round, lineJoin: .round))
                 .frame(width: 13 * s, height: 12 * s)
                 .rotationEffect(.degrees(-14))
                 .offset(x: -56 * s, y: 26 * s)
-            Circle().fill(Theme.light.opacity(0.8)).frame(width: 5 * s, height: 5 * s).offset(x: 58 * s, y: -8 * s)
+            Circle().fill(Theme.light.opacity(0.8)).frame(width: 5 * s, height: 5 * s).offset(x: 54 * s, y: 34 * s)
             Circle().fill(Theme.light.opacity(0.6)).frame(width: 4 * s, height: 4 * s).offset(x: -46 * s, y: -48 * s)
         }
-    }
-}
-
-struct SmileArc: Shape {
-    func path(in r: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: r.minX, y: r.minY))
-        p.addQuadCurve(to: CGPoint(x: r.maxX, y: r.minY), control: CGPoint(x: r.midX, y: r.maxY * 1.6))
-        return p
     }
 }
 
@@ -214,7 +185,7 @@ struct EmptyCard: View {
 
     var body: some View {
         VStack(spacing: compact ? 6 : 8) {
-            MimiBuddy(icon: icon, mood: face, size: compact ? 80 : 104, animated: animated)
+            MimiBuddy(icon: icon, mood: face, size: compact ? 96 : 124, animated: animated)
                 .padding(.bottom, 2)
             Text(title).font(.display(compact ? 21 : 25)).foregroundStyle(Palette.text).multilineTextAlignment(.center)
             Doodles.squiggle

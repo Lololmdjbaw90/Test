@@ -713,7 +713,7 @@ enum AppReleases {
             "Changing colours is smooth and keeps your music playing.",
             "A big, crisp white shine sweeps over the whole screen when you switch pages, and pages pop in again each time.",
             "Soft click sounds when you tap (Settings → Sounds & haptics).",
-            "Empty pages have Mimi, a little mochi bunny, instead of plain icons.",
+            "Empty pages have Mimi, the Sugerly bunny, in your accent colour.",
             "The animated background keeps moving after you change it.",
             "Your picture opens a quick menu that pops open instantly.",
             "Admins can add, remove and pin weekly challenges and daily art prompts.",
