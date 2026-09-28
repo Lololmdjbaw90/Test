@@ -234,6 +234,7 @@ struct AdminView: View {
     @State private var confirmRole: UserProfile?
     @State private var announcement = ""
     @State private var announcementOn = false
+    @State private var giphyKey = ""
     @State private var announcementColor = Color(hex: 0xD9577F)
     @State private var defaultAccent = "rose"
     @State private var reports: [Doc] = []
@@ -298,6 +299,7 @@ struct AdminView: View {
             announcementOn = SiteTheme.shared.announcementActive
             announcementColor = Color(hex: SiteTheme.shared.announcementColor)
             defaultAccent = SiteTheme.shared.defaultAccent
+            giphyKey = SiteTheme.shared.giphyKey
             if model.people.isEmpty { await model.loadPeople() }
             await everything
         }
@@ -535,6 +537,8 @@ struct AdminView: View {
                     .buttonStyle(BouncyStyle())
                 }
             }
+            Text("GIFs").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+            SugarField(placeholder: "GIPHY API key (empty = built-in key)", text: $giphyKey)
             Button { Task { await saveSite() } } label: { Label("Save site settings", systemImage: "checkmark") }
                 .buttonStyle(GradientButtonStyle(height: 46))
             Divider().padding(.vertical, 6)
@@ -546,6 +550,7 @@ struct AdminView: View {
         let fields: Doc = [
             "announcement": String(announcement.prefix(160)), "announcement_active": announcementOn,
             "announcement_color": SiteTheme.string(hexValue(announcementColor)), "default_accent": defaultAccent,
+            "giphy_key": giphyKey.trimmingCharacters(in: .whitespacesAndNewlines),
             "updated_date": FS.nowISO(),
         ]
         do {
@@ -561,6 +566,7 @@ struct AdminView: View {
             SiteTheme.shared.announcementActive = announcementOn
             SiteTheme.shared.announcementColor = hexValue(announcementColor)
             SiteTheme.shared.defaultAccent = defaultAccent
+            SiteTheme.shared.giphyKey = giphyKey.trimmingCharacters(in: .whitespacesAndNewlines)
             model.showToast("Site settings saved", icon: "checkmark.seal.fill")
         } catch {
             model.showToast("Couldn't save — \(error.localizedDescription)", error: true)

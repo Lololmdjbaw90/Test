@@ -542,6 +542,14 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-1.5", icon: "sparkles", title: "Nitro, GIFs & face filters", date: "2026-09-28T05:00:00Z", items: [
+            "Face filters in the camera — puppy, kitty, bunny, bear, crown and more — plus speed, 15s/60s and a grid.",
+            "GIFs and stickers in chats, servers, comments and posts. Make your own stickers and GIFs.",
+            "MimiNitro: GIF profile picture and banner, premium name styles and profile effects.",
+            "Crop your picture and banner, add pronouns, a status, interests and colours.",
+            "Use any reel's sound, draw on reels and photos, and smoother two-finger text.",
+            "A smarter For You feed that learns what you like, right on your phone.",
+        ]),
         AppRelease(id: "ios-1.4", icon: "waveform.circle.fill", title: "Servers, voice & admin", date: "2026-09-27T20:00:00Z", items: [
             "Discord-style servers: a rail of your servers, channels, roles with colours and permissions, pins and reactions.",
             "Voice channels right in the app — talk with people on the app and the website.",
@@ -549,7 +557,7 @@ enum AppReleases {
         ]),
         AppRelease(id: "ios-1.3", icon: "camera.aperture", title: "Camera & editor", date: "2026-09-27T19:30:00Z", items: [
             "Film in clips: pause, delete the last clip or start over, with flash, timer and flip.",
-            "Text you can drag, pinch and twist, emoji stickers, filters and adjustments.",
+            "Text you can drag, pinch and twist, stickers, filters and adjustments.",
             "Reels and Community look just like the website.",
         ]),
         AppRelease(id: "ios-1.2", icon: "heart.circle.fill", title: "Cuter everywhere", date: "2026-09-27T19:00:00Z", items: [
