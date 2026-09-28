@@ -79,6 +79,10 @@ struct UserProfile: Identifiable, Hashable {
     var ignored: [String]         // muted: no notifications, their chats and posts tucked away
     var presence: String          // online, idle, dnd or invisible
     var statusUntil: String       // when the custom status clears ("" = never)
+    // Set by admins
+    var banned: Bool
+    var banReason: String
+    var bannedUntil: String       // "" = until an admin lifts it
 
     init(_ d: Doc) {
         id = d.str("id")
@@ -118,6 +122,15 @@ struct UserProfile: Identifiable, Hashable {
         ignored = d.strs("ignored").map { $0.lowercased() }
         presence = d.str("presence")
         statusUntil = d.str("custom_status_until")
+        banned = d.bool("banned")
+        banReason = d.str("ban_reason")
+        bannedUntil = d.str("banned_until")
+    }
+
+    var isBanned: Bool {
+        guard banned else { return false }
+        guard let until = Dates.parse(bannedUntil) else { return true }
+        return until > Date()
     }
 
     // MimiNitro: active and not expired (same rule as the website).

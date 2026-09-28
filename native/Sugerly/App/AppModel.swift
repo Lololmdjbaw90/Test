@@ -7,7 +7,7 @@ import UIKit
 @MainActor
 @Observable
 final class AppModel {
-    enum Phase: Equatable { case loading, signedOut, signedIn, offline(String) }
+    enum Phase: Equatable { case loading, signedOut, signedIn, offline(String), banned(String) }
 
     var phase: Phase = .loading
     var me: UserProfile?
@@ -39,7 +39,7 @@ final class AppModel {
         guard auth.hasSession else { phase = .signedOut; return }
         do {
             try await loadProfile()
-            phase = .signedIn
+            phase = entryPhase
         } catch let error as APIError where error.status == -1 {
             phase = .offline(error.message)
         } catch {
@@ -51,13 +51,34 @@ final class AppModel {
     func signIn(email: String, password: String) async throws {
         try await auth.signIn(email: email, password: password)
         try await loadProfile()
-        phase = .signedIn
+        phase = entryPhase
     }
 
     func signUp(name: String, email: String, password: String) async throws {
         try await auth.signUp(email: email, password: password, name: name)
         try await loadProfile(newName: name)
-        phase = .signedIn
+        phase = entryPhase
+    }
+
+    // Banned accounts see the ban screen instead of the app.
+    var entryPhase: Phase {
+        guard let me, me.isBanned else { return .signedIn }
+        return .banned(Self.banMessage(me))
+    }
+
+    static func banMessage(_ u: UserProfile) -> String {
+        var text = u.banReason.isEmpty ? "An admin banned this account." : u.banReason
+        if let until = Dates.parse(u.bannedUntil) {
+            text += "\nThe ban ends \(until.formatted(date: .abbreviated, time: .shortened))."
+        }
+        return text
+    }
+
+    // Checked every couple of minutes while the app is open.
+    func checkBan() async {
+        guard let uid = auth.uid, let doc = try? await FS.get("User", uid) else { return }
+        let fresh = UserProfile(doc)
+        if fresh.isBanned { phase = .banned(Self.banMessage(fresh)) }
     }
 
     // Loads User/<uid>, creating it the same way the website does on first login.
@@ -134,6 +155,7 @@ final class AppModel {
             "interests": u.interests, "pronouns": u.pronouns, "custom_status": u.status, "profile_color": u.profileColor,
             "profile_effect": u.profileEffect, "website": u.website, "stickers": u.stickers, "my_gifs": u.myGifs,
             "accepted_chats": u.acceptedChats, "ignored": u.ignored, "presence": u.presence, "custom_status_until": u.statusUntil,
+            "banned": u.banned, "ban_reason": u.banReason, "banned_until": u.bannedUntil,
         ]
     }
 

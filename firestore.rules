@@ -48,7 +48,11 @@ service cloud.firestore {
             && request.resource.data.get('role', 'user') == resource.data.get('role', 'user'))
         || (isSelf(uid)
             && request.resource.data.email == resource.data.email
-            && request.resource.data.role == resource.data.role);
+            && request.resource.data.role == resource.data.role
+            // Only admins can ban or lift a ban.
+            && request.resource.data.get('banned', false) == resource.data.get('banned', false)
+            && request.resource.data.get('banned_until', '') == resource.data.get('banned_until', '')
+            && request.resource.data.get('ban_reason', '') == resource.data.get('ban_reason', ''));
       // Admins, or the person themselves when they delete their account.
       allow delete: if isSiteOwner() || isSelf(uid) || (isAdmin() && !(resource.data.email in siteOwners()));
     }

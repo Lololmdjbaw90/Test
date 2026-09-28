@@ -404,6 +404,7 @@ struct MainShell: View {
                 Alerts.shared.doNotDisturb = model.me?.presence == "dnd"
                 // Stay "online" for others while the app is open.
                 if tick % 8 == 0, let uid = model.me?.id { Task { try? await FS.update("User", uid, ["last_seen": FS.nowISO()]) } }
+                if tick % 8 == 4 { await model.checkBan() }
                 if tick % 2 == 0 { await Alerts.shared.check() }
                 Alerts.shared.setBadge(chats.unread + notes.unread)
                 WidgetBridge.update(model: model, unreadDMs: chats.unread, unreadAlerts: notes.unread)

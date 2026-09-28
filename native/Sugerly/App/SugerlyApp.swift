@@ -69,6 +69,8 @@ struct RootView: View {
             case .signedIn:
                 // A fresh shell per account: no pages, chats or players carry over.
                 MainShell().id(model.me?.id ?? "").transition(.opacity)
+            case .banned(let message):
+                BannedView(message: message).transition(.opacity)
             case .offline(let message):
                 VStack(spacing: 16) {
                     Image(systemName: "wifi.slash")
@@ -94,6 +96,35 @@ struct RootView: View {
         .animation(.smooth(duration: 0.35), value: model.phase)
         .task { await model.start() }
         .task { await site.load() }
+    }
+}
+
+// Shown instead of the app when an admin has banned the account.
+struct BannedView: View {
+    let message: String
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            MimiBuddy(icon: "hand.raised.fill", mood: .sad, size: 150)
+            Text("Your account is banned").font(.display(30)).foregroundStyle(Palette.text).multilineTextAlignment(.center)
+            Text(message).font(.jakarta(15)).foregroundStyle(Palette.text2).multilineTextAlignment(.center)
+                .padding(.horizontal, 30)
+            Text("If you think this is a mistake, contact the Sugerly team.").font(.jakarta(13)).foregroundStyle(Palette.muted)
+                .multilineTextAlignment(.center).padding(.horizontal, 30)
+            Spacer()
+            Button("Try again") { Task { await model.start() } }
+                .buttonStyle(OutlineButtonStyle(height: 48, fullWidth: true))
+                .padding(.horizontal, 30)
+            Button("Log out") { model.signOut() }
+                .buttonStyle(GradientButtonStyle(height: 50))
+                .padding(.horizontal, 30)
+                .padding(.bottom, 30)
+        }
+        .frame(maxWidth: 520)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .sugarBackground()
     }
 }
 

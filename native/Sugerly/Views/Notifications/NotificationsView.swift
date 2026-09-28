@@ -345,6 +345,7 @@ struct AdminView: View {
     @State private var contentType = "All"
     @State private var confirmDelete: AdminItem?
     @State private var confirmRole: UserProfile?
+    @State private var managing: String?
     @State private var announcement = ""
     @State private var announcementOn = false
     @State private var giphyKey = ""
@@ -513,18 +514,28 @@ struct AdminView: View {
         let owner = FirebaseConfig.siteOwners.contains(model.me?.email ?? "")
         return VStack(alignment: .leading, spacing: 10) {
             SearchField(text: $search, placeholder: "Search users…")
-            Text("\(model.people.values.filter { rank($0) < 2 }.count) admins · \(owner ? "Tap the shield to make or remove admins." : "Only the site owner can add or remove admins.")")
+            Text("\(model.people.values.filter { rank($0) < 2 }.count) admins · Tap a name to give coins, Nitro or ban. \(owner ? "The shield makes or removes admins." : "")")
                 .font(.jakarta(12)).foregroundStyle(Palette.muted)
             ForEach(Array(list.prefix(200))) { u in
                 HStack(spacing: 12) {
                     NavigationLink(value: Route.person(u.email)) {
                         Avatar(url: u.picture, name: u.displayName, size: 42, online: u.isOnline)
                     }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(u.displayName).font(.jakarta(14, .bold)).foregroundStyle(Palette.text).lineLimit(1)
-                        Text("\(u.email) · joined \(Dates.ago(u.joined))").font(.jakarta(11)).foregroundStyle(Palette.muted).lineLimit(1)
+                    Button { managing = u.email } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text(u.displayName).font(.jakarta(14, .bold)).foregroundStyle(Palette.text).lineLimit(1)
+                                if u.isBanned {
+                                    Text("banned").font(.jakarta(9, .heavy)).foregroundStyle(.white)
+                                        .padding(.horizontal, 6).padding(.vertical, 2).background(Palette.danger, in: Capsule())
+                                }
+                            }
+                            Text("\(u.email) · \(u.coins) coins\(u.isNitro ? " · Nitro" : "")").font(.jakarta(11)).foregroundStyle(Palette.muted).lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                     }
-                    Spacer()
+                    .buttonStyle(.plain)
                     Text(FirebaseConfig.siteOwners.contains(u.email) ? "owner" : (u.role.isEmpty ? "user" : u.role))
                         .font(.jakarta(10, .heavy)).foregroundStyle(rank(u) < 2 ? Theme.main : Palette.muted)
                         .padding(.horizontal, 8).padding(.vertical, 4)
@@ -541,7 +552,12 @@ struct AdminView: View {
                 .sugarCard(radius: 18, padding: 10)
             }
         }
+        .sheet(item: Binding(get: { managing.map { ManagedUser(id: $0) } }, set: { managing = $0?.id })) { m in
+            AdminUserSheet(email: m.id).presentationCornerRadius(30)
+        }
     }
+
+    struct ManagedUser: Identifiable { var id: String }
 
     private func setRole(_ u: UserProfile) async {
         let next = u.role == "admin" ? "user" : "admin"
