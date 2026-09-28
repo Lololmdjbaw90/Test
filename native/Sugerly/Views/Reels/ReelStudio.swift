@@ -1210,7 +1210,7 @@ struct ReelStudioView: View {
                 last = now
                 if next >= timelineLength {
                     next = 0
-                    soundPlayer?.seek(to: .zero)
+                    soundPlayer?.seek(to: .zero, completionHandler: { _ in })
                 }
                 playhead = next
                 let i = slideIndex(at: next)
