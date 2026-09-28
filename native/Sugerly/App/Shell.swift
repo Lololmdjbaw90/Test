@@ -80,6 +80,74 @@ struct PageShine: View {
     }
 }
 
+enum Composer: String, Identifiable { case post, artwork, reel, track; var id: String { rawValue } }
+
+// Where a tap leads, shared by every tab's navigation stack.
+struct RouteView: View {
+    let route: Route
+    @Binding var path: [Route]
+
+    var body: some View {
+        switch route {
+        case .post(let post): PostDetailView(postId: post.id, initial: post, path: $path)
+        case .person(let email): PersonView(email: email, path: $path)
+        case .chat(let conversation): ChatView(conversation: conversation)
+        case .artwork(let artwork): ArtworkDetailView(artwork: artwork, path: $path)
+        case .reel(let reel): SingleReelView(reel: reel, path: $path)
+        case .gallery: GalleryView(path: $path)
+        case .music: MusicView(path: $path)
+        case .admin: AdminView()
+        case .servers: ServerHubView(path: $path).navigationTitle("Servers").navigationBarTitleDisplayMode(.inline).sugarBackground()
+        case .people: PeopleView(path: $path)
+        case .commissions: CommissionsView(path: $path)
+        case .topArtists: TopArtistsView(path: $path)
+        case .updates: UpdatesView()
+        case .server(let server): ServerHubView(path: $path, initial: server).navigationTitle(server.name).navigationBarTitleDisplayMode(.inline).sugarBackground()
+        case .channel(let server, let channel): ChannelChatView(server: server, channel: channel)
+        case .voice(let server, let channel): VoiceRoomView(server: server, channel: channel)
+        }
+    }
+}
+
+extension View {
+    func sugarRoutes(_ path: Binding<[Route]>) -> some View {
+        navigationDestination(for: Route.self) { route in RouteView(route: route, path: path) }
+    }
+
+    // Page background: warm off-white with two soft accent glows.
+    func sugarBackground() -> some View {
+        background {
+            ZStack {
+                Palette.bg
+                Circle().fill(Theme.light.opacity(0.32)).frame(width: 360).blur(radius: 95).offset(x: 150, y: -300)
+                Circle().fill(Theme.lavender.opacity(0.18)).frame(width: 320).blur(radius: 95).offset(x: -170, y: 260)
+                Circle().fill(Color(hex: 0xFFD6A5).opacity(0.14)).frame(width: 240).blur(radius: 80).offset(x: 140, y: 120)
+            }
+            .drawingGroup()
+            .ignoresSafeArea()
+        }
+    }
+}
+
+// Presses squish a little and spring back, with a light tap (all buttons).
+struct BouncyStyle: ButtonStyle {
+    var scale: CGFloat = 0.93
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? scale : 1)
+            .brightness(configuration.isPressed ? -0.03 : 0)
+            .animation(.spring(response: 0.28, dampingFraction: 0.55), value: configuration.isPressed)
+            .clickSound(configuration.isPressed)
+    }
+}
+
+extension View {
+    // A soft pop when a button goes down.
+    func clickSound(_ pressed: Bool, _ kind: TapSound.Kind = .tap) -> some View {
+        onChange(of: pressed) { _, down in if down { TapSound.play(kind) } }
+    }
+}
+
 // MARK: - App shell
 
 struct MainShell: View {
