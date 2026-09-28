@@ -2,8 +2,8 @@ import SwiftUI
 
 // Empty states with a little character instead of a stock icon: Mimi, the
 // Sugerly bunny (hand-drawn art in every accent colour, so she matches
-// yours), thinking about what's missing, on a sketchbook card with a dashed
-// edge and doodles. She hops, sways or droops with the mood.
+// yours), on a sketchbook card with a dashed edge. She hops, sways or droops
+// with the mood.
 
 struct MimiBuddy: View {
     enum Mood { case happy, sleepy, sad }
@@ -31,11 +31,8 @@ struct MimiBuddy: View {
                 .frame(width: 52 * s, height: 8 * s)
                 .offset(y: size * 0.5 - 3 * s)
             bunny(s)
-            thought(s)
-                .offset(x: size * 0.5, y: -size * 0.34)
-            doodles(s)
         }
-        .frame(width: size * 1.55, height: size)
+        .frame(width: size * 0.8, height: size)
         .accessibilityHidden(true)
     }
 
@@ -78,74 +75,9 @@ struct MimiBuddy: View {
         case .sad: return k == 1 ? 5 : 3
         }
     }
-
-    // A little thought bubble with what's missing.
-    private func thought(_ s: CGFloat) -> some View {
-        ZStack(alignment: .bottomLeading) {
-            Image(systemName: icon)
-                .font(.system(size: 13 * s, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 32 * s, height: 32 * s)
-                .background(Theme.gradient, in: Circle())
-                .overlay(Circle().strokeBorder(.white, lineWidth: 2.5 * s))
-                .shadow(color: Theme.main.opacity(0.3), radius: 4 * s, y: 2 * s)
-            Circle().fill(Theme.light).frame(width: 8 * s, height: 8 * s)
-                .overlay(Circle().strokeBorder(.white, lineWidth: 1.5 * s))
-                .offset(x: -9 * s, y: 11 * s)
-            Circle().fill(Theme.light).frame(width: 5 * s, height: 5 * s)
-                .offset(x: -16 * s, y: 19 * s)
-        }
-        .phaseAnimator(animated ? [false, true] : [false]) { v, up in
-            v.offset(y: up ? -3 * s : 0)
-        } animation: { _ in .easeInOut(duration: 1.3) }
-    }
-
-    // Hand-drawn little sparkles and a heart around Mimi.
-    private func doodles(_ s: CGFloat) -> some View {
-        ZStack {
-            Doodles.sparkle
-                .stroke(Theme.main.opacity(0.7), style: StrokeStyle(lineWidth: 2 * s, lineCap: .round, lineJoin: .round))
-                .frame(width: 16 * s, height: 16 * s)
-                .offset(x: -62 * s, y: -30 * s)
-                .phaseAnimator(animated ? [0.6, 1.0] : [1.0]) { v, k in v.scaleEffect(k).opacity(k) } animation: { _ in .easeInOut(duration: 0.9) }
-            Doodles.sparkle
-                .stroke(Color(hex: 0xF0A020).opacity(0.75), style: StrokeStyle(lineWidth: 1.8 * s, lineCap: .round, lineJoin: .round))
-                .frame(width: 11 * s, height: 11 * s)
-                .offset(x: 70 * s, y: 12 * s)
-            Doodles.heart
-                .stroke(Theme.main.opacity(0.55), style: StrokeStyle(lineWidth: 1.8 * s, lineCap: .round, lineJoin: .round))
-                .frame(width: 13 * s, height: 12 * s)
-                .rotationEffect(.degrees(-14))
-                .offset(x: -56 * s, y: 26 * s)
-            Circle().fill(Theme.light.opacity(0.8)).frame(width: 5 * s, height: 5 * s).offset(x: 54 * s, y: 34 * s)
-            Circle().fill(Theme.light.opacity(0.6)).frame(width: 4 * s, height: 4 * s).offset(x: -46 * s, y: -48 * s)
-        }
-    }
 }
 
 enum Doodles {
-    // A four-point sparkle with slightly curved sides, like a pen doodle.
-    static let sparkle = DoodleShape { r in
-        var p = Path()
-        let c = CGPoint(x: r.midX, y: r.midY)
-        p.move(to: CGPoint(x: c.x, y: r.minY))
-        p.addQuadCurve(to: CGPoint(x: r.maxX, y: c.y), control: CGPoint(x: c.x + r.width * 0.08, y: c.y - r.height * 0.08))
-        p.addQuadCurve(to: CGPoint(x: c.x, y: r.maxY), control: CGPoint(x: c.x + r.width * 0.08, y: c.y + r.height * 0.08))
-        p.addQuadCurve(to: CGPoint(x: r.minX, y: c.y), control: CGPoint(x: c.x - r.width * 0.08, y: c.y + r.height * 0.08))
-        p.addQuadCurve(to: CGPoint(x: c.x, y: r.minY), control: CGPoint(x: c.x - r.width * 0.08, y: c.y - r.height * 0.08))
-        return p
-    }
-
-    static let heart = DoodleShape { r in
-        var p = Path()
-        p.move(to: CGPoint(x: r.midX, y: r.maxY))
-        p.addCurve(to: CGPoint(x: r.minX, y: r.minY + r.height * 0.3), control1: CGPoint(x: r.midX - r.width * 0.2, y: r.maxY - r.height * 0.2), control2: CGPoint(x: r.minX, y: r.midY + r.height * 0.1))
-        p.addArc(center: CGPoint(x: r.minX + r.width * 0.25, y: r.minY + r.height * 0.3), radius: r.width * 0.25, startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
-        p.addArc(center: CGPoint(x: r.maxX - r.width * 0.25, y: r.minY + r.height * 0.3), radius: r.width * 0.25, startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
-        p.addCurve(to: CGPoint(x: r.midX, y: r.maxY), control1: CGPoint(x: r.maxX, y: r.midY + r.height * 0.1), control2: CGPoint(x: r.midX + r.width * 0.2, y: r.maxY - r.height * 0.2))
-        return p
-    }
-
     // A wobbly underline.
     static let squiggle = DoodleShape { r in
         var p = Path()
