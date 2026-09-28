@@ -698,6 +698,13 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-1.7", icon: "person.2.wave.2.fill", title: "More social & smoother", date: "2026-09-28T11:00:00Z", items: [
+            "Home has stories, today's art prompt, Happening now, people you might like and trending tags.",
+            "Community has a weekly challenge, top creators this week and you can send posts to chats.",
+            "Top artists has a bouncing crown, a rising podium and confetti.",
+            "Changing colours is smooth and keeps your music playing. Tabs slide when you switch.",
+            "A new notifications card, and long-press on server messages to reply, edit or delete.",
+        ]),
         AppRelease(id: "ios-1.6", icon: "bell.badge.fill", title: "Widgets, notifications & calls", date: "2026-09-28T06:00:00Z", items: [
             "Home-screen and lock-screen widgets: streak & coins, inbox and featured art.",
             "Notifications for DMs, servers, likes, comments, follows and new reels.",
@@ -705,7 +712,7 @@ enum AppReleases {
             "Animated backgrounds — polka dots, clouds, stripes, hearts or stars — in Settings.",
             "Voice channels ring like real calls, with a green circle that grows while you talk.",
         ]),
-        AppRelease(id: "ios-1.5", icon: "sparkles", title: "Nitro, GIFs & face filters", date: "2026-09-28T05:00:00Z", items: [
+        AppRelease(id: "ios-1.5", icon: "sparkles", title: "Nitro, GIFs & stickers", date: "2026-09-28T05:00:00Z", items: [
             "A better camera: speed 0.5x–3x, 15s or 60s, a grid and your sound while you film.",
             "GIFs and stickers in chats, servers, comments and posts. Make your own stickers and GIFs.",
             "MimiNitro: GIF profile picture and banner, premium name styles and profile effects.",
