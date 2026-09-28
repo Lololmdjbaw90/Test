@@ -201,13 +201,13 @@ final class SiteTheme {
         giphyKey = doc.str("giphy_key")
     }
 
-    static func hex(_ s: String) -> UInt32? {
+    nonisolated static func hex(_ s: String) -> UInt32? {
         let clean = s.trimmingCharacters(in: CharacterSet(charactersIn: "# ")).uppercased()
         guard clean.count == 6, let v = UInt32(clean, radix: 16) else { return nil }
         return v
     }
 
-    static func string(_ v: UInt32) -> String { String(format: "#%06X", v) }
+    nonisolated static func string(_ v: UInt32) -> String { String(format: "#%06X", v) }
 }
 
 struct AdminView: View {
