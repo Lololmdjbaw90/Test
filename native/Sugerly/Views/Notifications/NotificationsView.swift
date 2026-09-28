@@ -267,6 +267,11 @@ final class SiteTheme {
     var announcementColor: UInt32 = 0xD9577F
     var defaultAccent = "rose"
     var giphyKey = ""
+    // Admin-picked weekly challenges and daily art prompts (nil = built-ins).
+    var challenges: [Challenge]?
+    var challengePinned = ""
+    var prompts: [ArtPrompt]?
+    var promptPinned = ""
 
     func load() async {
         guard let docs = try? await FS.query("SiteConfig", [.equals("key", "global")], limit: 1), let doc = docs.first else { return }
@@ -278,6 +283,29 @@ final class SiteTheme {
         announcementColor = Self.hex(doc.str("announcement_color")) ?? 0xD9577F
         defaultAccent = doc.str("default_accent").isEmpty ? "rose" : doc.str("default_accent")
         giphyKey = doc.str("giphy_key")
+        if let list = doc["challenges"] as? [Any] {
+            challenges = list.compactMap { ($0 as? Doc).flatMap { Challenge($0) } }
+        }
+        challengePinned = doc.str("challenge_pinned")
+        if let list = doc["prompts"] as? [Any] {
+            prompts = list.compactMap { ($0 as? Doc).flatMap { ArtPrompt($0) } }
+        }
+        promptPinned = doc.str("prompt_pinned")
+    }
+
+    // Writes a few fields to the shared SiteConfig doc (creating it if needed).
+    func save(_ fields: Doc) async throws {
+        var fields = fields
+        fields["updated_date"] = FS.nowISO()
+        if let id = configId {
+            try await FS.update("SiteConfig", id, fields)
+        } else {
+            var doc = fields
+            doc["key"] = "global"
+            doc["created_date"] = FS.nowISO()
+            let created = try await FS.create("SiteConfig", doc)
+            configId = created.str("id")
+        }
     }
 
     nonisolated static func hex(_ s: String) -> UInt32? {
@@ -316,6 +344,8 @@ struct AdminView: View {
     @State private var giphyKey = ""
     @State private var announcementColor = Color(hex: 0xD9577F)
     @State private var defaultAccent = "rose"
+    @State private var editChallenges = false
+    @State private var editPrompts = false
     @State private var reports: [Doc] = []
     @State private var loading = true
     @State private var primary = Color(hex: 0xD9577F)
@@ -620,6 +650,15 @@ struct AdminView: View {
             SugarField(placeholder: "GIPHY API key (empty = built-in key)", text: $giphyKey)
             Button { Task { await saveSite() } } label: { Label("Save site settings", systemImage: "checkmark") }
                 .buttonStyle(GradientButtonStyle(height: 46))
+            Text("Community").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+            HStack(spacing: 10) {
+                Button { editChallenges = true } label: { Label("Weekly challenges", systemImage: "trophy.fill").frame(maxWidth: .infinity) }
+                    .buttonStyle(OutlineButtonStyle(height: 44, fullWidth: true))
+                Button { editPrompts = true } label: { Label("Daily prompts", systemImage: "paintpalette.fill").frame(maxWidth: .infinity) }
+                    .buttonStyle(OutlineButtonStyle(height: 44, fullWidth: true))
+            }
+            .sheet(isPresented: $editChallenges) { DailyContentEditor(kind: .challenges).presentationCornerRadius(30) }
+            .sheet(isPresented: $editPrompts) { DailyContentEditor(kind: .prompts).presentationCornerRadius(30) }
             Divider().padding(.vertical, 6)
             Text("App colours").font(.display(22)).foregroundStyle(Palette.text)
         }

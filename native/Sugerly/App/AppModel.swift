@@ -16,6 +16,8 @@ final class AppModel {
     var toast: Toast?
     // The notifications pop-up (opened from the bell).
     var showNotifications = false
+    // The quick menu (opened from your picture in the top bar).
+    var showMenu = false
     // Ask the shell to switch tabs (e.g. "See all" art → Gallery tab).
     var tabRequest: AppTab?
     // "Use this sound" on a reel: opens the reel maker with that sound.

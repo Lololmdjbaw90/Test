@@ -34,10 +34,55 @@ enum AppTab: Hashable {
     }
 }
 
-struct TabSlide {
-    var x: CGFloat = 0
-    var opacity: Double = 1
-    var scale: CGFloat = 1
+// The page-switch shine: a wide, soft white band that sweeps over the page
+// (the way you're going) and is gone in about half a second.
+struct PageShine: View {
+    let trigger: Int
+    var forward = true
+
+    struct Sweep { var p: CGFloat = 1; var glow: Double = 0 }
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            let band = w * 0.7
+            let angle = 16.0
+            let tall = h * 1.25
+            let half = (band * cos(angle * .pi / 180) + tall * sin(angle * .pi / 180)) / 2
+            Color.clear
+                .keyframeAnimator(initialValue: Sweep(), trigger: trigger) { content, v in
+                    content
+                        .overlay {
+                            // soft whole-page glow under the band
+                            Color.white.opacity(v.glow)
+                        }
+                        .overlay {
+                            LinearGradient(stops: [
+                                .init(color: .white.opacity(0), location: 0),
+                                .init(color: .white.opacity(0.55), location: 0.3),
+                                .init(color: .white.opacity(0.95), location: 0.5),
+                                .init(color: .white.opacity(0.55), location: 0.7),
+                                .init(color: .white.opacity(0), location: 1),
+                            ], startPoint: .leading, endPoint: .trailing)
+                            .frame(width: band, height: tall)
+                            .rotationEffect(.degrees(forward ? angle : -angle))
+                            .position(x: forward ? -half + v.p * (w + half * 2) : w + half - v.p * (w + half * 2), y: h / 2)
+                        }
+                } keyframes: { _ in
+                    KeyframeTrack(\.p) {
+                        MoveKeyframe(0)
+                        CubicKeyframe(1, duration: 0.55)
+                    }
+                    KeyframeTrack(\.glow) {
+                        MoveKeyframe(0)
+                        LinearKeyframe(0.14, duration: 0.12)
+                        LinearKeyframe(0, duration: 0.4)
+                    }
+                }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
 }
 
 enum Composer: String, Identifiable { case post, artwork, reel, track; var id: String { rawValue } }
@@ -123,8 +168,9 @@ struct MainShell: View {
     @State private var composer: Composer?
     @State private var typing = false
     @State private var dailyShown = false
-    @State private var slideTick = 0
-    @State private var slideEdge: CGFloat = 1
+    @State private var shineTick = 0
+    @State private var shineForward = true
+    @State private var menuSheet: MenuSheet?
 
     private var currentPath: [Route] {
         switch tab {
@@ -189,26 +235,15 @@ struct MainShell: View {
             .tag(AppTab.me)
             .toolbar(.hidden, for: .tabBar)
         }
-        // A quick, springy slide toward the tab you picked.
-        .keyframeAnimator(initialValue: TabSlide(), trigger: slideTick) { content, v in
-            content.offset(x: v.x).opacity(v.opacity).scaleEffect(v.scale, anchor: .bottom)
-        } keyframes: { _ in
-            KeyframeTrack(\.x) {
-                MoveKeyframe(34 * slideEdge)
-                SpringKeyframe(0, duration: 0.42, spring: .snappy)
-            }
-            KeyframeTrack(\.opacity) {
-                MoveKeyframe(0.35)
-                LinearKeyframe(1, duration: 0.2)
-            }
-            KeyframeTrack(\.scale) {
-                MoveKeyframe(0.985)
-                SpringKeyframe(1, duration: 0.4)
-            }
-        }
+        // A big white shine sweeps across whenever you switch pages.
+        .overlay { PageShine(trigger: shineTick, forward: shineForward) }
         .onChange(of: tab) { old, new in
-            slideEdge = new.order >= old.order ? 1 : -1
-            slideTick += 1
+            shineForward = new.order >= old.order
+            shineTick += 1
+        }
+        .onChange(of: currentPath.count) { old, new in
+            shineForward = new >= old
+            shineTick += 1
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !barHidden {
@@ -228,6 +263,26 @@ struct MainShell: View {
                 }
                 .transition(.opacity)
                 .zIndex(5)
+            }
+        }
+        .overlay {
+            if model.showMenu {
+                QuickMenu(close: closeMenu, go: { route in
+                    closeMenu()
+                    currentPathBinding.wrappedValue.append(route)
+                }, open: { sheet in
+                    closeMenu()
+                    menuSheet = sheet
+                })
+                .transition(.opacity)
+                .zIndex(6)
+            }
+        }
+        .sheet(item: $menuSheet) { sheet in
+            switch sheet {
+            case .settings: SettingsView()
+            case .shop: NitroShopView()
+            case .legal(let doc): LegalView(doc: doc)
             }
         }
         .onChange(of: model.tabRequest) { _, next in
@@ -331,6 +386,10 @@ struct MainShell: View {
 
 extension MainShell {
     // Opens the place a notification or widget points at.
+    private func closeMenu() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) { model.showMenu = false }
+    }
+
     func open(_ kind: String, _ target: String) async {
         switch kind {
         case "dm", "chat":
@@ -487,7 +546,6 @@ struct TopBar: View {
     var title: String? = nil
     @Environment(AppModel.self) private var model
     @Environment(NotificationsStore.self) private var notes
-    @State private var more = false
     @State private var searching = false
 
     var body: some View {
@@ -525,7 +583,7 @@ struct TopBar: View {
             }
             .buttonStyle(BouncyStyle())
             .accessibilityLabel("Notifications")
-            Button { more = true } label: {
+            Button { withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) { model.showMenu = true } } label: {
                 Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 38, ring: true)
                     .shadow(color: Theme.pink.opacity(0.3), radius: 6, y: 3)
             }
@@ -543,9 +601,6 @@ struct TopBar: View {
             SearchView { route in path.append(route) }
                 .presentationDetents([.large])
                 .presentationCornerRadius(34)
-        }
-        .sheet(isPresented: $more) {
-            MoreSheet(path: $path).presentationDetents([.medium, .large]).presentationCornerRadius(34)
         }
     }
 }
@@ -599,125 +654,6 @@ struct CreateSheet: View {
 }
 
 // MARK: - Menu behind your avatar
-
-struct MoreSheet: View {
-    @Binding var path: [Route]
-    @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    @State private var settings = false
-    @State private var shop = false
-    @State private var legal: LegalDoc?
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                if let me = model.me {
-                    let info = LevelInfo(xp: me.xp)
-                    Button { go(.person(me.email)) } label: {
-                        VStack(alignment: .leading, spacing: 14) {
-                            HStack(spacing: 14) {
-                                Avatar(url: me.picture, name: me.displayName, size: 62, ring: true, nitro: me.isNitro)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    NameText(name: me.displayName, style: me.nameStyle, size: 26, display: true, nitro: me.isNitro).lineLimit(1)
-                                    Text("Lv. \(info.level) · \(info.title)").font(.jakarta(13, .bold)).foregroundStyle(info.color)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right").font(.system(size: 13, weight: .heavy)).foregroundStyle(Palette.muted)
-                            }
-                            HStack(spacing: 8) {
-                                miniStat("\(me.coins)", "Coins", "circle.hexagongrid.fill", Color(hex: 0xF0A020))
-                                miniStat("\(me.dailyStreak)", "Streak", "flame.fill", Color(hex: 0xF08A20))
-                                miniStat("\(me.following.count)", "Following", "heart.fill", Theme.main)
-                            }
-                            XPBar(info: info)
-                        }
-                        .padding(16)
-                        .sugarCard(radius: 28)
-                    }
-                    .buttonStyle(BouncyStyle(scale: 0.97))
-                }
-
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                    tile("Nitro", "sparkles", [0xC084FC, 0x8B5CF6]) { shop = true }
-                    tile("Music", "music.note", [0xFF7AA2, 0xD9577F]) { go(.music) }
-                    tile("Servers", "person.3.fill", [0xFF9EC4, 0xE0508A]) { go(.servers) }
-                    tile("People", "person.crop.circle.badge.plus", [0xFFD166, 0xF08A20]) { go(.people) }
-                    tile("Commissions", "storefront.fill", [0x5FD3B0, 0x16A37F]) { go(.commissions) }
-                    tile("Top artists", "crown.fill", [0xFFD166, 0xF0A020]) { go(.topArtists) }
-                    tile("What's new", "sparkles", [0xFF9EC4, 0xE0508A]) { go(.updates) }
-                    tile("Alerts", "bell.fill", [0xB19CFF, 0x7C5CF0]) {
-                        dismiss()
-                        Task { @MainActor in
-                            try? await Task.sleep(for: .milliseconds(300))
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { model.showNotifications = true }
-                        }
-                    }
-                    tile("Settings", "gearshape.fill", [0x7CBEFF, 0x2F80E0]) { settings = true }
-                    tile("Help", "questionmark.circle.fill", [0x5FD3B0, 0x16A37F]) { legal = .guidelines }
-                    if model.me?.isAdmin == true {
-                        tile("Admin", "shield.lefthalf.filled", [0xFFD166, 0xF0A020]) { go(.admin) }
-                    }
-                }
-
-                Button {
-                    Task {
-                        let next = model.me?.theme == "dark" ? "light" : "dark"
-                        try? await model.updateMe(["theme": next])
-                    }
-                } label: {
-                    Label(model.me?.theme == "dark" ? "Light mode" : "Dark mode", systemImage: model.me?.theme == "dark" ? "sun.max.fill" : "moon.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(OutlineButtonStyle(fullWidth: true))
-            }
-            .padding(20)
-        }
-        .sugarBackground()
-        .sheet(isPresented: $settings) { SettingsView() }
-        .sheet(isPresented: $shop) { NitroShopView() }
-        .sheet(item: $legal) { doc in LegalView(doc: doc) }
-    }
-
-    private func go(_ route: Route) {
-        dismiss()
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(300))
-            path.append(route)
-        }
-    }
-
-    private func miniStat(_ value: String, _ label: String, _ icon: String, _ color: Color) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon).font(.system(size: 12, weight: .bold)).foregroundStyle(color)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(value).font(.jakarta(14, .heavy)).foregroundStyle(Palette.text)
-                Text(label).font(.jakarta(10, .semibold)).foregroundStyle(Palette.muted)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 10).padding(.vertical, 8)
-        .frame(maxWidth: .infinity)
-        .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-    }
-
-    private func tile(_ title: String, _ icon: String, _ colors: [UInt32], action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 46, height: 46)
-                    .background(LinearGradient(colors: colors.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-                    .shadow(color: Color(hex: colors[1]).opacity(0.4), radius: 8, y: 4)
-                Text(title).font(.jakarta(13, .bold)).foregroundStyle(Palette.text)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .sugarCard(radius: 22)
-        }
-        .buttonStyle(BouncyStyle())
-    }
-}
 
 // MARK: - Notifications (checked in the background, like chats)
 

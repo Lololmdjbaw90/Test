@@ -83,6 +83,7 @@ struct GalleryView: View {
         .refreshable { await load() }
         .task { if artworks.isEmpty { await load() } }
         .onAppear { appeared = true }
+        .onDisappear { appeared = false }
         .fullScreenCover(isPresented: $adding) { NewArtworkView() }
 
         if isRoot {

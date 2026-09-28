@@ -78,6 +78,7 @@ struct ProfileContent: View {
     @State private var editing = false
     @State private var settings = false
     @State private var shop = false
+    @State private var appeared = false
 
     private var following: Bool { model.me?.following.contains(person.email) ?? false }
     private var followers: Int { model.people.values.filter { $0.following.contains(person.email) }.count }
@@ -87,15 +88,15 @@ struct ProfileContent: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                banner
+                banner.stagger(appeared, 0)
                 VStack(alignment: .leading, spacing: 14) {
-                    identity
-                    if !person.bio.isEmpty { Text(person.bio).font(.jakarta(15)).foregroundStyle(Palette.text) }
-                    buttons
-                    stats
-                    if isMe { XPBar(info: LevelInfo(xp: person.xp)).sugarCard(radius: 22, padding: 14) }
-                    tabs
-                    grid
+                    identity.stagger(appeared, 1)
+                    if !person.bio.isEmpty { Text(person.bio).font(.jakarta(15)).foregroundStyle(Palette.text).stagger(appeared, 2) }
+                    buttons.stagger(appeared, 2)
+                    stats.stagger(appeared, 3)
+                    if isMe { XPBar(info: LevelInfo(xp: person.xp)).sugarCard(radius: 22, padding: 14).stagger(appeared, 4) }
+                    tabs.stagger(appeared, 4)
+                    grid.stagger(appeared, 5)
                 }
                 .padding(.horizontal, 16)
             }
@@ -110,6 +111,8 @@ struct ProfileContent: View {
             }
         }
         .sugarBackground()
+        .onAppear { appeared = true }
+        .onDisappear { appeared = false }
         .refreshable { await load() }
         .task(id: person.email) { await load() }
         .sheet(isPresented: $editing) { EditProfileView() }

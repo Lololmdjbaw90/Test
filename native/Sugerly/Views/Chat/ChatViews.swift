@@ -107,6 +107,7 @@ struct ChatListView: View {
     @Environment(ChatStore.self) private var store
     @State private var search = ""
     @State private var starting = false
+    @State private var appeared = false
     @AppStorage("sugerly.chat.section") private var section = 0
 
     private var shown: [Conversation] {
@@ -160,6 +161,8 @@ struct ChatListView: View {
         .animation(.snappy, value: section)
         .sugarBackground()
         .sugarTopBar($path)
+        .onAppear { appeared = true }
+        .onDisappear { appeared = false }
         .sheet(isPresented: $starting) {
             NewChatView { email in
                 starting = false
@@ -196,9 +199,10 @@ struct ChatListView: View {
                     EmptyCard(icon: "bubble.left.and.bubble.right.fill", title: search.isEmpty ? "No messages yet" : "No chats found", text: search.isEmpty ? "Tap New to start a chat with someone on Sugerly." : "Try another name.")
                 }
 
-                ForEach(shown) { c in
+                ForEach(Array(shown.enumerated()), id: \.element.id) { i, c in
                     Button { path.append(.chat(c)) } label: { ConversationRow(conversation: c) }
                         .buttonStyle(BouncyStyle(scale: 0.97))
+                        .stagger(appeared, i + 1)
                         .contextMenu {
                             if c.unread > 0 {
                                 Button { store.markRead(c.id) } label: { Label("Mark as read", systemImage: "checkmark.bubble") }

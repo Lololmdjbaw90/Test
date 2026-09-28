@@ -244,7 +244,7 @@ struct CommunityView: View {
                 header.stagger(appeared, 0)
                 stories.stagger(appeared, 1)
                 composerCard.stagger(appeared, 2)
-                WeeklyChallengeCard(posts: store.posts, active: tag == WeeklyChallengeCard.current.tag, compose: compose) { t in
+                WeeklyChallengeCard(posts: store.posts, active: tag != nil && tag == DailyContent.challenge?.tag, compose: compose) { t in
                     withAnimation(.snappy) { tag = tag == t ? nil : t; feed = .latest }
                 }
                 .stagger(appeared, 3)
@@ -305,6 +305,7 @@ struct CommunityView: View {
         }
         .task { if store.posts.isEmpty { await store.load() } }
         .onAppear { appeared = true }
+        .onDisappear { appeared = false }
     }
 
     private var header: some View {

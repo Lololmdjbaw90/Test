@@ -669,17 +669,25 @@ struct TopArtistsView: View {
 }
 
 // A soft white glint that sweeps across now and then, like the logo shine.
+// The band is much taller than the view and starts/ends well outside it, so
+// no sliver is ever left showing at the edge while it waits.
 struct Glint: View {
+    var pause: Double = 2.2
+    var strength: Double = 0.75
+
     var body: some View {
         GeometryReader { geo in
-            LinearGradient(colors: [.clear, .white.opacity(0.75), .clear], startPoint: .leading, endPoint: .trailing)
-                .frame(width: max(12, geo.size.width * 0.45))
+            let w = geo.size.width, h = geo.size.height
+            let band = max(20, min(w, h) * 0.55)
+            let reach = band + h * 0.5
+            LinearGradient(colors: [.white.opacity(0), .white.opacity(strength), .white.opacity(0)], startPoint: .leading, endPoint: .trailing)
+                .frame(width: band, height: h * 3 + band)
                 .rotationEffect(.degrees(20))
                 .phaseAnimator([false, true]) { v, go in
-                    v.offset(x: go ? geo.size.width * 1.4 : -geo.size.width * 0.6)
-                } animation: { go in go ? .easeInOut(duration: 0.9).delay(1.6) : .linear(duration: 0) }
+                    v.position(x: go ? w + reach : -reach, y: h / 2)
+                } animation: { go in go ? .easeInOut(duration: 0.9).delay(pause) : nil }
         }
-        .blendMode(.plusLighter)
+        .clipped()
         .allowsHitTesting(false)
     }
 }
@@ -702,7 +710,10 @@ enum AppReleases {
             "Home has stories, today's art prompt, Happening now, people you might like and trending tags.",
             "Community has a weekly challenge, top creators this week and you can send posts to chats.",
             "Top artists has a bouncing crown, a rising podium and confetti.",
-            "Changing colours is smooth and keeps your music playing. Tabs slide when you switch.",
+            "Changing colours is smooth and keeps your music playing.",
+            "A big white shine sweeps across when you switch pages, and pages pop in again each time.",
+            "Your picture opens a quick menu that pops open instantly.",
+            "Admins can add, remove and pin weekly challenges and daily art prompts.",
             "A new notifications card, and long-press on server messages to reply, edit or delete.",
         ]),
         AppRelease(id: "ios-1.6", icon: "bell.badge.fill", title: "Widgets, notifications & calls", date: "2026-09-28T06:00:00Z", items: [

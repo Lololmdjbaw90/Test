@@ -164,30 +164,9 @@ struct HomeComposerBar: View {
 
 struct ArtPromptCard: View {
     var compose: (Composer) -> Void
+    @Environment(AppModel.self) private var model
     @State private var float = false
-
-    static let prompts: [(String, String)] = [
-        ("A cat café on the moon", "moon.stars.fill"), ("Your favourite snack as a monster", "fork.knife"),
-        ("A tiny house inside a teacup", "cup.and.saucer.fill"), ("Clouds that look like animals", "cloud.fill"),
-        ("A dragon who loves flowers", "leaf.fill"), ("Your room, but underwater", "drop.fill"),
-        ("A robot's first birthday", "gift.fill"), ("Pastel city at night", "building.2.fill"),
-        ("A strawberry knight", "shield.fill"), ("Draw your mood as weather", "cloud.sun.fill"),
-        ("A secret garden door", "door.left.hand.open"), ("Your OC on holiday", "sun.max.fill"),
-        ("A bakery run by bunnies", "birthday.cake.fill"), ("Stars falling like snow", "sparkles"),
-        ("A ghost who is scared of people", "moon.fill"), ("Magical girl transformation", "wand.and.stars"),
-        ("A bus stop in a forest", "tree.fill"), ("Your favourite song as a picture", "music.note"),
-        ("A frog prince, but make it cute", "crown.fill"), ("Rainy day window", "cloud.rain.fill"),
-        ("A shop that sells dreams", "bag.fill"), ("A sleepy fox in autumn", "leaf.fill"),
-        ("Candy planet", "globe.europe.africa.fill"), ("Sketch someone you admire", "heart.fill"),
-        ("An island shaped like a heart", "heart.circle.fill"), ("A witch's messy desk", "book.fill"),
-        ("A penguin astronaut", "airplane"), ("Butterflies made of glass", "sparkle"),
-        ("A cosy reading nook", "books.vertical.fill"), ("Redraw an old drawing of yours", "arrow.triangle.2.circlepath"),
-    ]
-
-    private var today: (String, String) {
-        let day = Calendar.current.ordinality(of: .day, in: .era, for: Date()) ?? 0
-        return Self.prompts[day % Self.prompts.count]
-    }
+    @State private var editing = false
 
     private var hoursLeft: Int {
         let end = Calendar.current.startOfDay(for: Date()).addingTimeInterval(86_400)
@@ -195,13 +174,30 @@ struct ArtPromptCard: View {
     }
 
     var body: some View {
-        let prompt = today
+        if let prompt = DailyContent.prompt {
+            card(prompt)
+                .sheet(isPresented: $editing) { DailyContentEditor(kind: .prompts).presentationCornerRadius(30) }
+        } else if model.me?.isAdmin == true {
+            Button { editing = true } label: {
+                Label("Add daily art prompts", systemImage: "plus.circle.fill").font(.jakarta(14, .bold)).foregroundStyle(Theme.main)
+                    .frame(maxWidth: .infinity).frame(height: 50)
+                    .background(Theme.soft, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            }
+            .buttonStyle(BouncyStyle(scale: 0.97))
+            .sheet(isPresented: $editing) { DailyContentEditor(kind: .prompts).presentationCornerRadius(30) }
+        }
+    }
+
+    private func card(_ prompt: ArtPrompt) -> some View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 8) {
-                Label("TODAY'S PROMPT", systemImage: "paintpalette.fill").font(.jakarta(11, .black)).tracking(1)
-                    .foregroundStyle(.white.opacity(0.9))
-                Text(prompt.0).font(.display(24)).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
-                Text("New prompt in \(hoursLeft)h").font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.8))
+                HStack(spacing: 8) {
+                    Label("TODAY'S PROMPT", systemImage: "paintpalette.fill").font(.jakarta(11, .black)).tracking(1)
+                        .foregroundStyle(.white.opacity(0.9))
+                    if model.me?.isAdmin == true { AdminEditChip { editing = true } }
+                }
+                Text(prompt.text).font(.display(24)).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
+                Text(DailyContent.promptPinned ? "Picked by the Sugerly team" : "New prompt in \(hoursLeft)h").font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.8))
                 HStack(spacing: 8) {
                     Button { compose(.artwork) } label: {
                         Label("Draw it", systemImage: "paintbrush.pointed.fill").font(.jakarta(13, .heavy))
@@ -222,7 +218,7 @@ struct ArtPromptCard: View {
             Spacer(minLength: 0)
             ZStack {
                 Circle().fill(.white.opacity(0.2)).frame(width: 86, height: 86)
-                Image(systemName: prompt.1).font(.system(size: 38, weight: .bold)).foregroundStyle(.white)
+                Image(systemName: prompt.icon).font(.system(size: 38, weight: .bold)).foregroundStyle(.white)
                     .offset(y: float ? -6 : 4)
                     .rotationEffect(.degrees(float ? -6 : 6))
                     .animation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true), value: float)
@@ -477,26 +473,7 @@ struct WeeklyChallengeCard: View {
     var showEntries: (String) -> Void
     @Environment(AppModel.self) private var model
     @State private var shine = false
-
-    struct Challenge { var title: String; var tag: String; var icon: String }
-
-    static let all: [Challenge] = [
-        Challenge(title: "Cosy corners", tag: "cosycorners", icon: "cup.and.saucer.fill"),
-        Challenge(title: "Pastel monsters", tag: "pastelmonsters", icon: "pawprint.fill"),
-        Challenge(title: "Dreamy skies", tag: "dreamyskies", icon: "cloud.sun.fill"),
-        Challenge(title: "Sweet treats", tag: "sweettreats", icon: "birthday.cake.fill"),
-        Challenge(title: "Magic school", tag: "magicschool", icon: "wand.and.stars"),
-        Challenge(title: "Tiny worlds", tag: "tinyworlds", icon: "globe.europe.africa.fill"),
-        Challenge(title: "Ocean friends", tag: "oceanfriends", icon: "fish.fill"),
-        Challenge(title: "Flower power", tag: "flowerpower", icon: "camera.macro"),
-        Challenge(title: "Space cadets", tag: "spacecadets", icon: "moon.stars.fill"),
-        Challenge(title: "Redraw your old art", tag: "redrawit", icon: "arrow.triangle.2.circlepath"),
-    ]
-
-    static var current: Challenge {
-        let week = Calendar.current.component(.weekOfYear, from: Date()) + Calendar.current.component(.yearForWeekOfYear, from: Date()) * 53
-        return all[week % all.count]
-    }
+    @State private var editing = false
 
     private var daysLeft: Int {
         let cal = Calendar.current
@@ -505,7 +482,23 @@ struct WeeklyChallengeCard: View {
     }
 
     var body: some View {
-        let c = Self.current
+        Group {
+            if let c = DailyContent.challenge {
+                card(c)
+            } else if model.me?.isAdmin == true {
+                Button { editing = true } label: {
+                    Label("Add weekly challenges", systemImage: "plus.circle.fill").font(.jakarta(14, .bold)).foregroundStyle(Theme.main)
+                        .frame(maxWidth: .infinity).frame(height: 50)
+                        .background(Theme.soft, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                }
+                .buttonStyle(BouncyStyle(scale: 0.97))
+            }
+        }
+        .sheet(isPresented: $editing) { DailyContentEditor(kind: .challenges).presentationCornerRadius(30) }
+    }
+
+    @ViewBuilder
+    private func card(_ c: Challenge) -> some View {
         let entries = posts.filter { Hashtags.find($0.title + " " + $0.text).contains(c.tag) }
         let people = Array(uniqued(entries.map(\.authorEmail)).prefix(4))
         VStack(alignment: .leading, spacing: 12) {
@@ -516,7 +509,10 @@ struct WeeklyChallengeCard: View {
                     .rotationEffect(.degrees(shine ? -6 : 6))
                     .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: shine)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("WEEKLY CHALLENGE").font(.jakarta(11, .black)).tracking(1).foregroundStyle(.white.opacity(0.85))
+                    HStack(spacing: 8) {
+                        Text("WEEKLY CHALLENGE").font(.jakarta(11, .black)).tracking(1).foregroundStyle(.white.opacity(0.85))
+                        if model.me?.isAdmin == true { AdminEditChip { editing = true } }
+                    }
                     Text(c.title).font(.display(26)).foregroundStyle(.white)
                 }
                 Spacer(minLength: 0)
@@ -563,7 +559,7 @@ struct WeeklyChallengeCard: View {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(LinearGradient(colors: [Color(hex: 0xB19CFF), Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing))
                 .overlay(alignment: .topTrailing) { Circle().fill(.white.opacity(0.12)).frame(width: 140, height: 140).offset(x: 40, y: -60) }
-                .overlay { Glint().opacity(0.5) }
+                .overlay { Glint(pause: 3, strength: 0.5) }
                 .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         }
         .shadow(color: Theme.main.opacity(0.3), radius: 14, y: 7)
