@@ -631,7 +631,7 @@ struct MoreSheet: View {
             }
             .padding(20)
         }
-        .patternBackground()
+        .sugarBackground()
         .sheet(isPresented: $settings) { SettingsView() }
         .sheet(isPresented: $shop) { NitroShopView() }
         .sheet(item: $legal) { doc in LegalView(doc: doc) }

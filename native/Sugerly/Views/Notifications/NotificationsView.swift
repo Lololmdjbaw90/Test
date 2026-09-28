@@ -11,34 +11,57 @@ struct NotificationsPopup: View {
     @State private var filter = "all"
     @State private var appeared = false
 
-    private let filters: [(String, String, String)] = [("all", "All", "sparkles"), ("like", "Likes", "heart.fill"), ("comment", "Comments", "bubble.left.fill"), ("follow", "Follows", "person.fill.badge.plus")]
+    private let filters: [(String, String, String)] = [("all", "All", "sparkles"), ("like", "Likes", "heart.fill"), ("comment", "Comments", "bubble.left.fill"), ("follow", "Follows", "person.fill.badge.plus"), ("mention", "Mentions", "at")]
 
     private var shown: [AppNotification] {
         switch filter {
         case "like": return notes.items.filter { $0.type == "like" }
         case "comment": return notes.items.filter { $0.type == "comment" || $0.type == "reply" }
         case "follow": return notes.items.filter { $0.type == "follow" }
+        case "mention": return notes.items.filter { $0.type == "mention" }
         default: return notes.items
         }
     }
 
+    // Likes on the same thing collapse into one row ("Mia and 3 others liked…").
+    struct Bundle: Identifiable {
+        var items: [AppNotification]
+        var id: String { items[0].id }
+        var first: AppNotification { items[0] }
+        var unread: Bool { items.contains { !$0.read } }
+    }
+
     // Today / This week / Earlier, like the website.
-    private var groups: [(String, [AppNotification])] {
+    private var groups: [(String, [Bundle])] {
         let now = Date()
-        var today: [AppNotification] = [], week: [AppNotification] = [], earlier: [AppNotification] = []
+        var buckets: [String: [AppNotification]] = [:]
         for n in shown {
             let age = now.timeIntervalSince(Dates.parse(n.created) ?? now)
-            if age < 86_400 { today.append(n) } else if age < 7 * 86_400 { week.append(n) } else { earlier.append(n) }
+            let key = age < 86_400 ? "Today" : age < 7 * 86_400 ? "This week" : "Earlier"
+            buckets[key, default: []].append(n)
         }
-        return [("Today", today), ("This week", week), ("Earlier", earlier)].filter { !$0.1.isEmpty }
+        return ["Today", "This week", "Earlier"].compactMap { (key: String) -> (String, [Bundle])? in
+            guard let list = buckets[key], !list.isEmpty else { return nil }
+            var bundles: [Bundle] = []
+            var index: [String: Int] = [:]
+            for n in list {
+                if n.type == "like", !n.link.isEmpty, let i = index[n.link] {
+                    bundles[i].items.append(n)
+                } else {
+                    if n.type == "like" && !n.link.isEmpty { index[n.link] = bundles.count }
+                    bundles.append(Bundle(items: [n]))
+                }
+            }
+            return (key, bundles)
+        }
     }
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Color.black.opacity(0.18).ignoresSafeArea()
+            Color.black.opacity(0.22).ignoresSafeArea()
                 .onTapGesture(perform: close)
             card
-                .frame(maxWidth: 420)
+                .frame(maxWidth: 400)
                 .padding(.horizontal, 12)
                 .padding(.top, 58)
                 .transition(.scale(scale: 0.6, anchor: .topTrailing).combined(with: .opacity))
@@ -48,77 +71,133 @@ struct NotificationsPopup: View {
     }
 
     private var card: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Notifications").font(.display(28)).foregroundStyle(Palette.text)
-                        Text(notes.unread > 0 ? "\(notes.unread) new" : "You're all caught up").font(.jakarta(13, .semibold)).foregroundStyle(notes.unread > 0 ? Theme.main : Palette.muted)
-                    }
-                    Spacer()
-                    if notes.unread > 0 {
-                        Button { withAnimation { notes.markAllRead() } } label: { Label("Read all", systemImage: "checkmark.circle.fill") }
-                            .buttonStyle(OutlineButtonStyle(height: 36))
+        VStack(spacing: 0) {
+            header
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(filters, id: \.0) { f in
+                        let on = filter == f.0
+                        Button { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { filter = f.0 } } label: {
+                            Label(f.1, systemImage: f.2).font(.jakarta(12, .bold))
+                                .foregroundStyle(on ? .white : Palette.text2)
+                                .padding(.horizontal, 12).frame(height: 32)
+                                .background {
+                                    if on { Capsule().fill(Theme.gradient).matchedGeometryEffect(id: "pill", in: pill) }
+                                    else { Capsule().fill(Palette.surface2) }
+                                }
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(filters, id: \.0) { f in
-                            Chip(title: f.1, icon: f.2, active: filter == f.0) { withAnimation(.snappy) { filter = f.0 } }
+                .padding(.horizontal, 14).padding(.vertical, 10)
+            }
+            Divider().overlay(Palette.border)
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    if shown.isEmpty {
+                        VStack(spacing: 8) {
+                            Image(systemName: "bell.badge.fill").font(.system(size: 26, weight: .bold)).foregroundStyle(.white)
+                                .frame(width: 58, height: 58).background(Theme.gradient, in: Circle())
+                            Text("All caught up").font(.display(22)).foregroundStyle(Palette.text)
+                            Text("Likes, follows, comments and mentions show up here.").font(.jakarta(13)).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity).padding(.vertical, 30).padding(.horizontal, 20)
+                    }
+                    ForEach(Array(groups.enumerated()), id: \.element.0) { gi, group in
+                        Text(group.0).font(.jakarta(12, .heavy)).foregroundStyle(Palette.muted)
+                            .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 4)
+                        ForEach(Array(group.1.enumerated()), id: \.element.id) { i, b in
+                            Button { open(b.first) } label: { row(b) }
+                                .buttonStyle(.plain)
+                                .stagger(appeared, gi * 3 + i)
                         }
                     }
-                    .padding(.vertical, 2)
                 }
-                .padding(.bottom, 4)
-                if shown.isEmpty {
-                    EmptyCard(icon: "bell.fill", title: "All caught up", text: "Likes, follows and comments show up here.", animated: false)
-                }
-                ForEach(Array(groups.enumerated()), id: \.element.0) { gi, group in
-                    Text(group.0.uppercased()).font(.jakarta(11, .heavy)).tracking(1.2).foregroundStyle(Palette.muted)
-                        .padding(.top, 8).padding(.leading, 4)
-                    ForEach(Array(group.1.enumerated()), id: \.element.id) { i, n in
-                        Button { open(n) } label: { row(n) }
-                            .buttonStyle(BouncyStyle(scale: 0.97))
-                            .stagger(appeared, gi * 3 + i)
-                    }
-                }
+                .padding(.bottom, 10)
             }
-            .padding(14)
+            .scrollIndicators(.hidden)
+            .frame(maxHeight: 470)
+            .fixedSize(horizontal: false, vertical: true)
         }
-        .scrollIndicators(.hidden)
-        .frame(maxHeight: 560)
-        .fixedSize(horizontal: false, vertical: true)
-        .background(Palette.bg, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 30, style: .continuous).strokeBorder(Theme.light.opacity(0.6), lineWidth: 1.2))
-        .shadow(color: Theme.main.opacity(0.25), radius: 30, y: 14)
-        .refreshable { await notes.refresh(me: model.me?.email ?? "") }
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .shadow(color: Theme.main.opacity(0.22), radius: 28, y: 14)
     }
 
-    private func row(_ n: AppNotification) -> some View {
+    @Namespace private var pill
+
+    private var header: some View {
         HStack(spacing: 12) {
-            Avatar(url: model.person(n.fromEmail)?.picture ?? n.fromPicture, name: n.fromName, size: 50)
-                .overlay(alignment: .bottomTrailing) {
-                    Image(systemName: icon(n.type)).font(.system(size: 10, weight: .black)).foregroundStyle(.white)
-                        .frame(width: 22, height: 22)
-                        .background(LinearGradient(colors: tint(n.type), startPoint: .topLeading, endPoint: .bottomTrailing), in: Circle())
-                        .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
-                        .offset(x: 3, y: 3)
+            Image(systemName: "bell.fill").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                .frame(width: 38, height: 38).background(Theme.gradient, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Activity").font(.jakarta(18, .heavy)).foregroundStyle(Palette.text)
+                Text(notes.unread > 0 ? "\(notes.unread) new" : "You're all caught up").font(.jakarta(12, .semibold))
+                    .foregroundStyle(notes.unread > 0 ? Theme.main : Palette.muted)
+            }
+            Spacer()
+            if notes.unread > 0 {
+                Button { withAnimation { notes.markAllRead() } } label: {
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 20, weight: .semibold)).foregroundStyle(Theme.main)
                 }
-            VStack(alignment: .leading, spacing: 3) {
-                Text(n.message).font(.jakarta(14, n.read ? .medium : .bold)).foregroundStyle(Palette.text).multilineTextAlignment(.leading).lineLimit(3)
-                Text(Dates.ago(n.created)).font(.jakarta(12)).foregroundStyle(Palette.muted)
+                .accessibilityLabel("Mark all as read")
+            }
+            Button(action: close) {
+                Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(Palette.text2)
+                    .frame(width: 32, height: 32).background(Palette.surface2, in: Circle())
+            }
+            .accessibilityLabel("Close")
+        }
+        .padding(.horizontal, 14).padding(.top, 14)
+    }
+
+    private func row(_ b: Bundle) -> some View {
+        let n = b.first
+        var names: [String] = []
+        for item in b.items {
+            let name = item.fromName.isEmpty ? "Someone" : item.fromName
+            if !names.contains(name) { names.append(name) }
+        }
+        let text: String = {
+            guard b.items.count > 1 else { return n.message }
+            let what = n.link.contains("Reels") ? "your reel" : n.link.contains("Gallery") ? "your artwork" : "your post"
+            let others = names.count - 1
+            return "\(names[0]) and \(others) other\(others == 1 ? "" : "s") liked \(what)"
+        }()
+        return HStack(spacing: 12) {
+            ZStack(alignment: .bottomTrailing) {
+                if b.items.count > 1 {
+                    ZStack(alignment: .topLeading) {
+                        Avatar(url: model.person(b.items[1].fromEmail)?.picture ?? b.items[1].fromPicture, name: b.items[1].fromName, size: 34)
+                        Avatar(url: model.person(n.fromEmail)?.picture ?? n.fromPicture, name: n.fromName, size: 34)
+                            .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
+                            .offset(x: 12, y: 12)
+                    }
+                    .frame(width: 48, height: 48, alignment: .topLeading)
+                } else {
+                    Avatar(url: model.person(n.fromEmail)?.picture ?? n.fromPicture, name: n.fromName, size: 46)
+                }
+                Image(systemName: icon(n.type)).font(.system(size: 9, weight: .black)).foregroundStyle(.white)
+                    .frame(width: 20, height: 20)
+                    .background(LinearGradient(colors: tint(n.type), startPoint: .topLeading, endPoint: .bottomTrailing), in: Circle())
+                    .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
+                    .offset(x: 4, y: 4)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(text).font(.jakarta(14, b.unread ? .bold : .medium)).foregroundStyle(Palette.text).multilineTextAlignment(.leading).lineLimit(3)
+                Text(Dates.ago(n.created)).font(.jakarta(11, .semibold)).foregroundStyle(b.unread ? Theme.main : Palette.muted)
             }
             Spacer(minLength: 0)
             if n.type == "follow" && !n.fromEmail.isEmpty {
                 FollowButton(email: n.fromEmail, compact: true)
-            } else if !n.read {
-                Circle().fill(Theme.gradient).frame(width: 10, height: 10).shadow(color: Theme.main.opacity(0.5), radius: 4)
+            } else if b.unread {
+                Circle().fill(Theme.main).frame(width: 9, height: 9)
             }
         }
-        .padding(12)
-        .background(n.read ? Palette.surface : Theme.pink.opacity(0.07), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(n.read ? Palette.border : Theme.pink.opacity(0.25), lineWidth: 1))
-        .shadow(color: Palette.shadow, radius: 6, y: 2)
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(b.unread ? Theme.soft : Color.clear)
+        .contentShape(Rectangle())
     }
 
     private func tint(_ type: String) -> [Color] {

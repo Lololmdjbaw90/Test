@@ -31,21 +31,35 @@ struct RootView: View {
     @Environment(AppModel.self) private var model
     private var site = SiteTheme.shared
 
+    @State private var colorFlash = false
+
     // The admin's site colours apply unless you picked your own accent.
     private var themeKey: String {
+        "\(model.accent.rawValue)-\(site.primary.map(String.init) ?? "none")-\(site.secondary.map(String.init) ?? "none")"
+    }
+
+    private func applyTheme(animated: Bool) {
         let custom: (main: UInt32, light: UInt32)?
         if model.accent == .rose, let main = site.primary {
             custom = (main, site.secondary ?? main)
         } else {
             custom = nil
         }
-        Theme.accent = model.accent
-        Theme.custom = custom
-        return "\(model.accent.rawValue)-\(custom.map { "\($0.main)-\($0.light)" } ?? "none")"
+        guard animated else {
+            Theme.accent = model.accent
+            Theme.custom = custom
+            return
+        }
+        // A soft wash of the new colour sweeps over while everything fades to it.
+        withAnimation(.easeInOut(duration: 0.5)) {
+            Theme.accent = model.accent
+            Theme.custom = custom
+            colorFlash = true
+        }
+        withAnimation(.easeOut(duration: 0.6).delay(0.25)) { colorFlash = false }
     }
 
     var body: some View {
-        let key = themeKey
         ZStack {
             switch model.phase {
             case .loading:
@@ -68,8 +82,12 @@ struct RootView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .sugarBackground()
             }
+            Theme.gradient
+                .opacity(colorFlash ? 0.22 : 0)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
         }
-        .id(key)
+        .onChange(of: themeKey, initial: true) { old, _ in applyTheme(animated: old != themeKey && model.phase == .signedIn) }
         .tint(Theme.main)
         .preferredColorScheme(model.colorScheme)
         .animation(.smooth(duration: 0.35), value: model.phase)

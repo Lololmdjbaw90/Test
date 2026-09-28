@@ -56,12 +56,35 @@ enum Accent: String, CaseIterable, Identifiable {
     var logo: String { "Logo-\(rawValue)" }
 }
 
+// The colours in use. It's observable, so every view that reads a Theme
+// colour redraws (with a smooth fade) when you pick another — without
+// rebuilding the app, so music, calls and where you are all stay put.
+@Observable
+final class ThemeStore {
+    static let shared = ThemeStore()
+    var accent: Accent = .rose
+    var customMain: UInt32?
+    var customLight: UInt32?
+}
+
 enum Theme {
-    // Set from your profile at the top of the app; the whole app redraws when it changes.
-    nonisolated(unsafe) static var accent: Accent = .rose
+    // Set from your profile at the top of the app.
+    static var accent: Accent {
+        get { ThemeStore.shared.accent }
+        set { if ThemeStore.shared.accent != newValue { ThemeStore.shared.accent = newValue } }
+    }
     // App colours an admin picked for everyone (Admin → App colors), used
     // unless you chose your own accent in Settings.
-    nonisolated(unsafe) static var custom: (main: UInt32, light: UInt32)?
+    static var custom: (main: UInt32, light: UInt32)? {
+        get {
+            guard let main = ThemeStore.shared.customMain else { return nil }
+            return (main, ThemeStore.shared.customLight ?? main)
+        }
+        set {
+            if ThemeStore.shared.customMain != newValue?.main { ThemeStore.shared.customMain = newValue?.main }
+            if ThemeStore.shared.customLight != newValue?.light { ThemeStore.shared.customLight = newValue?.light }
+        }
+    }
     static var main: Color { custom.map { Color(hex: $0.main) } ?? accent.main }
     static var light: Color { custom.map { Color(hex: $0.light) } ?? accent.light }
     static var pink: Color { main }

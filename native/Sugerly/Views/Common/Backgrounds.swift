@@ -58,59 +58,90 @@ private struct PatternBackgroundModifier: ViewModifier {
     }
 }
 
+// Each pattern is drawn once (a little bigger than the screen) and then just
+// slides — the phone's graphics chip moves it, so it costs almost nothing
+// and never slows the app down. It stops when the page isn't showing.
 struct PatternBackground: View {
     let kind: AppBackground
     var animated = true
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var go = false
+
+    private struct Colors {
+        var dark: Bool
+        var main: Color
+        var light: Color
+    }
 
     var body: some View {
-        let moving = animated && !reduceMotion
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: !moving)) { timeline in
-            let t = moving ? timeline.date.timeIntervalSinceReferenceDate : 0
-            Canvas(rendersAsynchronously: true) { context, size in
-                draw(&context, size: size, t: t)
+        let colors = Colors(dark: scheme == .dark, main: Theme.main, light: Theme.light)
+        GeometryReader { geo in
+            let size = geo.size
+            ZStack(alignment: .topLeading) {
+                base(colors)
+                switch kind {
+                case .dots:
+                    sliding(dx: 52, dy: 0, duration: 8, size: size) { ctx, s in Self.dots(&ctx, s, colors) }
+                case .stripes:
+                    sliding(dx: 40, dy: 0, duration: 5, size: size) { ctx, s in Self.stripes(&ctx, s, colors) }
+                case .hearts:
+                    sliding(dx: 0, dy: 86.4, duration: 9, size: size) { ctx, s in Self.hearts(&ctx, s, colors) }
+                case .stars:
+                    twinkle(size: size, colors)
+                case .clouds:
+                    Canvas { ctx, s in Self.sky(&ctx, s, colors) }.frame(width: size.width, height: size.height)
+                    sliding(dx: Self.cloudSpacing(size), dy: 0, duration: 40, size: size) { ctx, s in Self.cloudLanes(&ctx, s, colors, visibleWidth: size.width) }
+                    Canvas { ctx, s in Self.cloudBank(&ctx, s, colors) }.frame(width: size.width, height: size.height)
+                case .off:
+                    EmptyView()
+                }
             }
+            .frame(width: size.width, height: size.height, alignment: .topLeading)
+            .clipped()
         }
         .background(Palette.bg)
+        .onAppear { go = animated && !reduceMotion }
+        .onDisappear { go = false }
+        .onChange(of: animated) { _, now in go = now && !reduceMotion }
     }
 
-    private var dark: Bool { scheme == .dark }
+    private func sliding(dx: CGFloat, dy: CGFloat, duration: Double, size: CGSize, draw: @escaping (inout GraphicsContext, CGSize) -> Void) -> some View {
+        Canvas { ctx, s in draw(&ctx, s) }
+            .frame(width: size.width + dx, height: size.height + abs(dy))
+            .offset(x: go ? -dx : 0, y: go ? -abs(dy) : 0)
+            .animation(go ? .linear(duration: duration).repeatForever(autoreverses: false) : .easeOut(duration: 0.2), value: go)
+    }
+
+    private func twinkle(size: CGSize, _ c: Colors) -> some View {
+        ZStack {
+            Canvas { ctx, s in Self.stars(&ctx, s, c, even: true) }
+                .opacity(go ? 0.25 : 1)
+                .animation(go ? .easeInOut(duration: 1.6).repeatForever(autoreverses: true) : .default, value: go)
+            Canvas { ctx, s in Self.stars(&ctx, s, c, even: false) }
+                .opacity(go ? 1 : 0.25)
+                .animation(go ? .easeInOut(duration: 1.6).repeatForever(autoreverses: true) : .default, value: go)
+        }
+        .frame(width: size.width, height: size.height)
+    }
 
     // Soft base: blush at the bottom (like the pictures), deep plum in dark mode.
-    private func base(_ context: inout GraphicsContext, _ size: CGSize) {
-        let rect = CGRect(origin: .zero, size: size)
-        let top = dark ? Color(hex: 0x140A11) : Color.white
-        let bottom = dark ? Theme.main.opacity(0.28) : Theme.light.opacity(0.55)
-        context.fill(Path(rect), with: .color(Palette.bg))
-        context.fill(Path(rect), with: .linearGradient(Gradient(colors: [top.opacity(dark ? 1 : 0.9), bottom]), startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height)))
+    private func base(_ c: Colors) -> some View {
+        LinearGradient(colors: [c.dark ? Color(hex: 0x140A11) : Color.white.opacity(0.92), c.dark ? c.main.opacity(0.28) : c.light.opacity(0.55)],
+                       startPoint: .top, endPoint: .bottom)
     }
 
-    private func draw(_ context: inout GraphicsContext, size: CGSize, t: Double) {
-        base(&context, size)
-        switch kind {
-        case .dots: dots(&context, size, t)
-        case .clouds: clouds(&context, size, t)
-        case .stripes: stripes(&context, size, t)
-        case .hearts: hearts(&context, size, t)
-        case .stars: stars(&context, size, t)
-        case .off: break
-        }
-    }
-
-    // Halftone polka dots drifting diagonally, stronger towards the bottom.
-    private func dots(_ context: inout GraphicsContext, _ size: CGSize, _ t: Double) {
+    // Polka dots, a little stronger towards the bottom.
+    private static func dots(_ context: inout GraphicsContext, _ size: CGSize, _ c: Colors) {
         let gap: CGFloat = 26
-        let drift = CGFloat((t * 8).truncatingRemainder(dividingBy: Double(gap * 2)))
-        let tint = dark ? Theme.light : Theme.main
-        var row = -2
-        var y = -gap * 2 + drift * 0.5
+        let tint = c.dark ? c.light : c.main
+        var row = 0
+        var y: CGFloat = 8
         while y < size.height + gap {
             let depth = max(0, min(1, y / max(1, size.height)))
-            let alpha = dark ? 0.06 + depth * 0.16 : 0.05 + depth * 0.22
+            let alpha = c.dark ? 0.06 + depth * 0.16 : 0.05 + depth * 0.22
             let radius = 5.2 + depth * 1.6
-            let shift = (row % 2 == 0 ? 0 : gap / 2) + drift
-            var x = -gap * 2 + shift
+            var x: CGFloat = row % 2 == 0 ? 6 : 6 + gap / 2
             var path = Path()
             while x < size.width + gap {
                 path.addEllipse(in: CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2))
@@ -122,54 +153,134 @@ struct PatternBackground: View {
         }
     }
 
-    // Neat rows of puffy clouds with a candy outline drifting over a
-    // polka-dot sky, and a scalloped cloud bank along the bottom.
-    private func clouds(_ context: inout GraphicsContext, _ size: CGSize, _ t: Double) {
-        let rect = CGRect(origin: .zero, size: size)
-        let skyTop = dark ? Theme.main.opacity(0.18) : Theme.light.opacity(0.28)
-        let skyBottom = dark ? Theme.main.opacity(0.3) : Theme.light.opacity(0.5)
-        context.fill(Path(rect), with: .linearGradient(Gradient(colors: [skyTop, skyBottom]), startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height)))
+    private static func stripes(_ context: inout GraphicsContext, _ size: CGSize, _ c: Colors) {
+        let width: CGFloat = 20
+        var path = Path()
+        var x: CGFloat = 0
+        while x < size.width + width {
+            path.addRect(CGRect(x: x, y: 0, width: width, height: size.height))
+            x += width * 2
+        }
+        let tint = c.dark ? c.light : c.main
+        context.fill(path, with: .linearGradient(Gradient(colors: [tint.opacity(c.dark ? 0.04 : 0.03), tint.opacity(c.dark ? 0.16 : 0.2)]), startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height)))
+    }
 
-        // Tidy polka dots in the sky.
+    private static func hearts(_ context: inout GraphicsContext, _ size: CGSize, _ c: Colors) {
+        let gap: CGFloat = 54
+        let tint = c.dark ? c.light : c.main
+        var row = 0
+        var y: CGFloat = 20
+        var path = Path()
+        while y < size.height + gap {
+            var x: CGFloat = row % 2 == 0 ? 14 : 14 + gap / 2
+            while x < size.width + gap {
+                path.addPath(heartPath(CGRect(x: x - 7, y: y - 7, width: 14, height: 12.6)))
+                x += gap
+            }
+            y += gap * 0.8
+            row += 1
+        }
+        context.fill(path, with: .color(tint.opacity(c.dark ? 0.16 : 0.18)))
+    }
+
+    static func heartPath(_ r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.midX, y: r.maxY))
+        p.addCurve(to: CGPoint(x: r.minX, y: r.minY + r.height * 0.3), control1: CGPoint(x: r.midX - r.width * 0.1, y: r.maxY - r.height * 0.15), control2: CGPoint(x: r.minX, y: r.minY + r.height * 0.62))
+        p.addArc(center: CGPoint(x: r.minX + r.width * 0.25, y: r.minY + r.height * 0.3), radius: r.width * 0.25, startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
+        p.addArc(center: CGPoint(x: r.minX + r.width * 0.75, y: r.minY + r.height * 0.3), radius: r.width * 0.25, startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
+        p.addCurve(to: CGPoint(x: r.midX, y: r.maxY), control1: CGPoint(x: r.maxX, y: r.minY + r.height * 0.62), control2: CGPoint(x: r.midX + r.width * 0.1, y: r.maxY - r.height * 0.15))
+        p.closeSubpath()
+        return p
+    }
+
+    private static func stars(_ context: inout GraphicsContext, _ size: CGSize, _ c: Colors, even: Bool) {
+        let gap: CGFloat = 48
+        let tint = c.dark ? Color.white : c.main
+        var row = 0
+        var y: CGFloat = 20
+        var path = Path()
+        while y < size.height + gap {
+            var x: CGFloat = row % 2 == 0 ? 18 : 18 + gap / 2
+            var col = 0
+            while x < size.width + gap {
+                if ((row + col) % 2 == 0) == even {
+                    path.addPath(sparkle(CGPoint(x: x, y: y), (row * 3 + col) % 3 == 0 ? 8 : 6))
+                }
+                x += gap
+                col += 1
+            }
+            y += gap * 0.85
+            row += 1
+        }
+        context.fill(path, with: .color(tint.opacity(c.dark ? 0.35 : 0.3)))
+    }
+
+    private static func sparkle(_ c: CGPoint, _ radius: CGFloat) -> Path {
+        var p = Path()
+        let inner = radius * 0.3
+        for i in 0..<8 {
+            let a = Double(i) * .pi / 4 - .pi / 2
+            let r = i % 2 == 0 ? radius : inner
+            let pt = CGPoint(x: c.x + CGFloat(cos(a)) * r, y: c.y + CGFloat(sin(a)) * r)
+            if i == 0 { p.move(to: pt) } else { p.addLine(to: pt) }
+        }
+        p.closeSubpath()
+        return p
+    }
+
+    // MARK: clouds
+
+    private static func cloudWidth(_ size: CGSize) -> CGFloat { min(160, max(110, size.width * 0.36)) }
+    static func cloudSpacing(_ size: CGSize) -> CGFloat { cloudWidth(size) * 2.1 }
+
+    // Pink sky with tidy white polka dots.
+    private static func sky(_ context: inout GraphicsContext, _ size: CGSize, _ c: Colors) {
+        let top = c.dark ? c.main.opacity(0.18) : c.light.opacity(0.28)
+        let bottom = c.dark ? c.main.opacity(0.3) : c.light.opacity(0.5)
+        context.fill(Path(CGRect(origin: .zero, size: size)), with: .linearGradient(Gradient(colors: [top, bottom]), startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height)))
         let gap: CGFloat = 24
-        var sky = Path()
+        var dotsPath = Path()
         var row = 0
         var y: CGFloat = 10
         while y < size.height {
             var x: CGFloat = row % 2 == 0 ? 8 : 8 + gap / 2
             while x < size.width + gap {
-                sky.addEllipse(in: CGRect(x: x - 2.4, y: y - 2.4, width: 4.8, height: 4.8))
+                dotsPath.addEllipse(in: CGRect(x: x - 2.4, y: y - 2.4, width: 4.8, height: 4.8))
                 x += gap
             }
             y += gap * 0.86
             row += 1
         }
-        context.fill(sky, with: .color(.white.opacity(dark ? 0.09 : 0.8)))
+        context.fill(dotsPath, with: .color(.white.opacity(c.dark ? 0.09 : 0.8)))
+    }
 
-        let fill = dark ? Color(hex: 0x2A1822) : Color.white
-        let edge = Theme.light.opacity(dark ? 0.55 : 0.9)
-
-        // Clouds in even lanes, every other lane shifted half a step.
-        let width = min(160, max(110, size.width * 0.36))
+    // Even lanes of clouds, every other lane shifted half a step.
+    private static func cloudLanes(_ context: inout GraphicsContext, _ size: CGSize, _ c: Colors, visibleWidth: CGFloat) {
+        let fill = c.dark ? Color(hex: 0x2A1822) : Color.white
+        let edge = c.light.opacity(c.dark ? 0.55 : 0.9)
+        let width = cloudWidth(CGSize(width: visibleWidth, height: size.height))
         let spacing = width * 2.1
-        let laneGap: CGFloat = 165
-        let slide = CGFloat((t * 7).truncatingRemainder(dividingBy: Double(spacing)))
         var lane = 0
         var laneY: CGFloat = 80
+        var all = Path()
         while laneY < size.height - 90 {
-            var x = -spacing + (lane % 2 == 0 ? 0 : spacing / 2) + slide
-            let bob = CGFloat(sin(t * 0.7 + Double(lane) * 1.3)) * 3
+            var x = (lane % 2 == 0 ? 0 : spacing / 2) - spacing / 2
             while x < size.width + spacing {
-                let cloud = cloudPath(center: CGPoint(x: x, y: laneY + bob), width: width)
-                context.stroke(cloud, with: .color(edge), lineWidth: 6)
-                context.fill(cloud, with: .color(fill))
+                all.addPath(cloudPath(center: CGPoint(x: x, y: laneY), width: width))
                 x += spacing
             }
-            laneY += laneGap
+            laneY += 165
             lane += 1
         }
+        context.stroke(all, with: .color(edge), lineWidth: 6)
+        context.fill(all, with: .color(fill))
+    }
 
-        // Scalloped cloud bank at the bottom.
+    // Scalloped cloud bank along the bottom.
+    private static func cloudBank(_ context: inout GraphicsContext, _ size: CGSize, _ c: Colors) {
+        let fill = c.dark ? Color(hex: 0x2A1822) : Color.white
+        let edge = c.light.opacity(c.dark ? 0.55 : 0.9)
         let r: CGFloat = 40
         var bank = Path()
         var bx: CGFloat = -r * 0.5
@@ -183,7 +294,7 @@ struct PatternBackground: View {
     }
 
     // A classic cute cloud: flat bottom and three round puffs.
-    private func cloudPath(center c: CGPoint, width w: CGFloat) -> Path {
+    private static func cloudPath(center c: CGPoint, width w: CGFloat) -> Path {
         var p = Path()
         let h = w * 0.5
         p.addRoundedRect(in: CGRect(x: c.x - w / 2, y: c.y - h * 0.02, width: w, height: h * 0.42), cornerSize: CGSize(width: h * 0.21, height: h * 0.21))
@@ -192,86 +303,6 @@ struct PatternBackground: View {
             let rr = w * puff.2
             p.addEllipse(in: CGRect(x: c.x + w * puff.0 - rr, y: c.y + h * puff.1 - rr, width: rr * 2, height: rr * 2))
         }
-        return p
-    }
-
-    // Candy stripes gently sliding sideways, fading to white at the top.
-    private func stripes(_ context: inout GraphicsContext, _ size: CGSize, _ t: Double) {
-        let width: CGFloat = 20
-        let slide = CGFloat((t * 10).truncatingRemainder(dividingBy: Double(width * 2)))
-        var path = Path()
-        var x = -width * 2 + slide
-        while x < size.width + width {
-            path.addRect(CGRect(x: x, y: 0, width: width, height: size.height))
-            x += width * 2
-        }
-        let tint = dark ? Theme.light : Theme.main
-        context.fill(path, with: .linearGradient(Gradient(colors: [tint.opacity(dark ? 0.04 : 0.03), tint.opacity(dark ? 0.16 : 0.2)]), startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height)))
-    }
-
-    // Little hearts floating up in a loose grid.
-    private func hearts(_ context: inout GraphicsContext, _ size: CGSize, _ t: Double) {
-        let gap: CGFloat = 54
-        let rise = CGFloat((t * 12).truncatingRemainder(dividingBy: Double(gap)))
-        let tint = dark ? Theme.light : Theme.main
-        var row = 0
-        var y = size.height + gap - rise
-        while y > -gap {
-            let depth = max(0, min(1, y / max(1, size.height)))
-            var x: CGFloat = row % 2 == 0 ? 14 : 14 + gap / 2
-            var path = Path()
-            while x < size.width + gap {
-                let s: CGFloat = 13 + CGFloat(sin(Double(x) * 0.05 + t)) * 1.5
-                path.addPath(heartPath(CGRect(x: x - s / 2, y: y - s / 2, width: s, height: s * 0.9)))
-                x += gap
-            }
-            context.fill(path, with: .color(tint.opacity((dark ? 0.08 : 0.08) + depth * 0.16)))
-            y -= gap * 0.8
-            row += 1
-        }
-    }
-
-    private func heartPath(_ r: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: r.midX, y: r.maxY))
-        p.addCurve(to: CGPoint(x: r.minX, y: r.minY + r.height * 0.3), control1: CGPoint(x: r.midX - r.width * 0.1, y: r.maxY - r.height * 0.15), control2: CGPoint(x: r.minX, y: r.minY + r.height * 0.62))
-        p.addArc(center: CGPoint(x: r.minX + r.width * 0.25, y: r.minY + r.height * 0.3), radius: r.width * 0.25, startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
-        p.addArc(center: CGPoint(x: r.minX + r.width * 0.75, y: r.minY + r.height * 0.3), radius: r.width * 0.25, startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
-        p.addCurve(to: CGPoint(x: r.midX, y: r.maxY), control1: CGPoint(x: r.maxX, y: r.minY + r.height * 0.62), control2: CGPoint(x: r.midX + r.width * 0.1, y: r.maxY - r.height * 0.15))
-        p.closeSubpath()
-        return p
-    }
-
-    // Four-point stars that twinkle on and off.
-    private func stars(_ context: inout GraphicsContext, _ size: CGSize, _ t: Double) {
-        let gap: CGFloat = 48
-        let tint = dark ? Color.white : Theme.main
-        var row = 0
-        var y: CGFloat = 20
-        while y < size.height + gap {
-            var x: CGFloat = row % 2 == 0 ? 18 : 18 + gap / 2
-            while x < size.width + gap {
-                let seed = Double(x * 0.37 + y * 0.91)
-                let twinkle = (sin(t * 1.6 + seed) + 1) / 2
-                let r = CGFloat(4 + twinkle * 4)
-                context.fill(sparkle(CGPoint(x: x, y: y), r), with: .color(tint.opacity(0.08 + twinkle * (dark ? 0.3 : 0.28))))
-                x += gap
-            }
-            y += gap * 0.85
-            row += 1
-        }
-    }
-
-    private func sparkle(_ c: CGPoint, _ radius: CGFloat) -> Path {
-        var p = Path()
-        let inner = radius * 0.3
-        for i in 0..<8 {
-            let a = Double(i) * .pi / 4 - .pi / 2
-            let r = i % 2 == 0 ? radius : inner
-            let pt = CGPoint(x: c.x + CGFloat(cos(a)) * r, y: c.y + CGFloat(sin(a)) * r)
-            if i == 0 { p.move(to: pt) } else { p.addLine(to: pt) }
-        }
-        p.closeSubpath()
         return p
     }
 }

@@ -21,6 +21,7 @@ struct ChannelChatView: View {
     @State private var pinsShown = false
     @State private var membersShown = false
     @State private var profile: String?
+    @State private var confirmDelete: ChannelMessage?
     @FocusState private var focused: Bool
 
     init(server: Server, channel: ServerChannel) {
@@ -102,6 +103,12 @@ struct ChannelChatView: View {
             MemberSheet(store: store, email: box.email) { _ in profile = nil }
                 .presentationDetents([.medium, .large]).presentationCornerRadius(32)
         }
+        .confirmationDialog("Delete this message?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }), titleVisibility: .visible, presenting: confirmDelete) { message in
+            Button("Delete message", role: .destructive) { delete(message) }
+            Button("Cancel", role: .cancel) {}
+        } message: { message in
+            Text(message.text.isEmpty ? "This can't be undone." : "\"\(message.text.prefix(80))\" will be removed for everyone.")
+        }
         .onAppear { Alerts.shared.openChannel = channel.id }
         .onDisappear { if Alerts.shared.openChannel == channel.id { Alerts.shared.openChannel = nil } }
         .task {
@@ -131,7 +138,7 @@ struct ChannelChatView: View {
             Button { pin(message) } label: { Label(message.pinned ? "Unpin" : "Pin", systemImage: message.pinned ? "pin.slash" : "pin") }
         }
         if message.authorEmail == me || access.can(.manage_messages) || model.me?.isAdmin == true {
-            Button(role: .destructive) { delete(message) } label: { Label("Delete", systemImage: "trash") }
+            Button(role: .destructive) { confirmDelete = message } label: { Label("Delete message", systemImage: "trash") }
         }
         if message.authorEmail != me {
             Button { reporting = ReportSheet.Target(id: message.id, type: "message", ownerEmail: message.authorEmail, preview: message.text, link: "/CommunityChat?id=\(server.id)") } label: { Label("Report", systemImage: "flag") }
@@ -387,7 +394,6 @@ struct ChannelMessageRow: View {
                     if !message.text.isEmpty {
                         (Text(message.text).font(.jakarta(15)).foregroundColor(Palette.text)
                          + Text(message.edited ? "  (edited)" : "").font(.jakarta(11)).foregroundColor(Palette.muted))
-                            .textSelection(.enabled)
                     }
                     if !message.imageURL.isEmpty {
                         MessageMedia(url: message.imageURL, width: 260, widest: 1.8)

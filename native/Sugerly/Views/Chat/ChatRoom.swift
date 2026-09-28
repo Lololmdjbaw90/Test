@@ -24,6 +24,7 @@ struct ChatView: View {
     @State private var reporting: ReportSheet.Target?
     @State private var failed: String?
     @State private var replyTo: Message?
+    @State private var confirmDelete: Message?
     @State private var recorder = VoiceNoteRecorder()
     @FocusState private var typing: Bool
 
@@ -77,6 +78,10 @@ struct ChatView: View {
         .sheet(item: $reporting) { target in ReportSheet(target: target) }
         .sheet(isPresented: $gifs) { GifPickerSheet { url in Task { await sendMedia(url) } } }
         .photosPicker(isPresented: $pickingPhoto, selection: $photo, matching: .images)
+        .confirmationDialog("Delete this message?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }), titleVisibility: .visible, presenting: confirmDelete) { message in
+            Button("Delete for everyone", role: .destructive) { delete(message) }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in Text("This can't be undone.") }
         .onAppear {
             chats.reopen(conversation.id)
             Alerts.shared.openConversation = conversation.id
@@ -173,7 +178,7 @@ struct ChatView: View {
             Button { UIPasteboard.general.string = message.displayText; model.showToast("Copied", icon: "doc.on.doc.fill") } label: { Label("Copy", systemImage: "doc.on.doc") }
         }
         if message.authorEmail == me {
-            Button(role: .destructive) { delete(message) } label: { Label("Delete", systemImage: "trash") }
+            Button(role: .destructive) { confirmDelete = message } label: { Label("Delete message", systemImage: "trash") }
         } else {
             Button { reporting = ReportSheet.Target(id: message.id, type: "message", ownerEmail: message.authorEmail, preview: message.text, link: "/DirectMessages") } label: { Label("Report", systemImage: "flag") }
         }
@@ -583,7 +588,6 @@ struct ChatBubble: View {
                         .font(.jakarta(15.5))
                         .foregroundStyle(Palette.text)
                         .padding(.horizontal, 8).padding(.top, 4).padding(.bottom, 6)
-                        .textSelection(.enabled)
                     meta.padding(.trailing, 7).padding(.bottom, 4)
                 }
             } else {
