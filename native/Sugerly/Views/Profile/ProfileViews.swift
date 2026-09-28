@@ -766,6 +766,14 @@ struct SettingsView: View {
                         }
                     }
                     Text("The logo changes colour to match.").font(.jakarta(12)).foregroundStyle(Palette.muted)
+                    Text("Background").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2).padding(.top, 6)
+                    BackgroundPicker()
+                    Text("Shown on Home and the menu. It follows your colour and dark mode.").font(.jakarta(12)).foregroundStyle(Palette.muted)
+                }
+
+                section("Notifications", icon: "bell.badge.fill") {
+                    AlertSettings()
+                    Text("Sugerly checks for new things while it's open and every so often in the background.").font(.jakarta(12)).foregroundStyle(Palette.muted)
                 }
 
                 section("Sounds & haptics", icon: "hand.tap.fill") {

@@ -185,7 +185,7 @@ struct HomeView: View {
             .frame(maxWidth: 760)
             .frame(maxWidth: .infinity)
         }
-        .sugarBackground()
+        .patternBackground()
         .sugarTopBar($path)
         .refreshable { await load() }
         .task { await load() }

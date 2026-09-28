@@ -102,6 +102,8 @@ struct ChannelChatView: View {
             MemberSheet(store: store, email: box.email) { _ in profile = nil }
                 .presentationDetents([.medium, .large]).presentationCornerRadius(32)
         }
+        .onAppear { Alerts.shared.openChannel = channel.id }
+        .onDisappear { if Alerts.shared.openChannel == channel.id { Alerts.shared.openChannel = nil } }
         .task {
             await store.load()
             await poll()

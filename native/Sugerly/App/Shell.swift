@@ -193,6 +193,15 @@ struct MainShell: View {
             tab = next
             model.tabRequest = nil
         }
+        .onChange(of: Alerts.shared.destination) { _, dest in
+            guard let dest else { return }
+            Alerts.shared.destination = nil
+            Task { await open(dest.kind, dest.target) }
+        }
+        .onOpenURL { url in
+            // Widgets: sugerly://chat, sugerly://gallery, sugerly://alerts …
+            Task { await open(url.host() ?? "", "") }
+        }
         .overlay(alignment: .top) {
             if let toast = model.toast {
                 ToastView(toast: toast)
@@ -238,17 +247,52 @@ struct MainShell: View {
             try? await Task.sleep(for: .seconds(1.2))
             if model.me?.lastDailyClaim != DailyReward.todayKey() { dailyShown = true }
         }
+        .task { await Alerts.shared.requestPermission() }
         .task(id: scenePhase) {
+            if scenePhase == .background { Alerts.shared.scheduleBackground() }
             guard scenePhase == .active else { return }
             var tick = 0
             while !Task.isCancelled {
                 let me = model.me?.email ?? ""
                 await chats.refresh(me: me)
                 if tick % 6 == 0 { await notes.refresh(me: me) }
+                Alerts.shared.following = model.me?.following ?? []
+                if tick % 2 == 0 { await Alerts.shared.check() }
+                Alerts.shared.setBadge(chats.unread + notes.unread)
+                WidgetBridge.update(model: model, unreadDMs: chats.unread, unreadAlerts: notes.unread)
                 tick += 1
                 let base: Double = tab == .chat ? 6 : 15
                 try? await Task.sleep(for: .seconds(base * (FS.missingIndex.contains("DirectMessage") ? 2 : 1)))
             }
+        }
+    }
+}
+
+extension MainShell {
+    // Opens the place a notification or widget points at.
+    func open(_ kind: String, _ target: String) async {
+        switch kind {
+        case "dm", "chat":
+            tab = .chat
+            guard !target.isEmpty else { return }
+            let me = model.me?.email ?? ""
+            if chats.conversations.first(where: { $0.id == target }) == nil { await chats.refresh(me: me) }
+            if let c = chats.conversations.first(where: { $0.id == target }) {
+                chatPath = [.chat(c)]
+            } else if target.contains("__dm__") {
+                let members = target.components(separatedBy: "__dm__")
+                chatPath = [.chat(Conversation(id: target, members: members, isGroup: false, groupName: "", last: nil, unread: 0))]
+            }
+        case "server":
+            tab = .chat
+            UserDefaults.standard.set(1, forKey: "sugerly.chat.section")
+            if !target.isEmpty, let doc = try? await FS.get("Community", target) { chatPath = [.server(Server(doc))] }
+        case "reels": tab = .reels
+        case "gallery": tab = .gallery
+        case "home": tab = .home
+        case "alerts", "social":
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { model.showNotifications = true }
+        default: break
         }
     }
 }
@@ -574,7 +618,7 @@ struct MoreSheet: View {
             }
             .padding(20)
         }
-        .sugarBackground()
+        .patternBackground()
         .sheet(isPresented: $settings) { SettingsView() }
         .sheet(isPresented: $shop) { NitroShopView() }
         .sheet(item: $legal) { doc in LegalView(doc: doc) }

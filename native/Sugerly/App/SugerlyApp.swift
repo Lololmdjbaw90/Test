@@ -15,6 +15,8 @@ struct SugerlyApp: App {
         if let large = UIFont(name: "Bubbly-Regular", size: 34) {
             nav.largeTitleTextAttributes = [.font: large]
         }
+        // Notifications + background checks have to be set up at launch.
+        Alerts.shared.registerBackground()
     }
 
     var body: some Scene {

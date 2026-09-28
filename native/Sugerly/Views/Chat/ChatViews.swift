@@ -17,6 +17,26 @@ final class ChatStore {
 
     var unread: Int { conversations.reduce(0) { $0 + $1.unread } }
 
+    // Closed DMs hide from the list until a new message comes in (like Discord).
+    private(set) var closed: [String: String] = (UserDefaults.standard.dictionary(forKey: "sugerly.closedDMs") as? [String: String]) ?? [:]
+
+    func isClosed(_ c: Conversation) -> Bool {
+        guard let at = closed[c.id] else { return false }
+        return (c.last?.created ?? "") <= at
+    }
+
+    func close(_ id: String) {
+        closed[id] = FS.nowISO()
+        markRead(id)
+        UserDefaults.standard.set(closed, forKey: "sugerly.closedDMs")
+    }
+
+    func reopen(_ id: String) {
+        guard closed[id] != nil else { return }
+        closed[id] = nil
+        UserDefaults.standard.set(closed, forKey: "sugerly.closedDMs")
+    }
+
     func refresh(me: String) async {
         guard !me.isEmpty else { return }
         if !loaded { loading = true }
@@ -94,7 +114,7 @@ struct ChatListView: View {
         let me = model.me?.email ?? ""
         return store.conversations.filter { c in
             (c.isGroup || !c.others(me).contains(where: blocked.contains)) &&
-                (search.isEmpty || c.title(model).localizedCaseInsensitiveContains(search))
+                (search.isEmpty ? !store.isClosed(c) : c.title(model).localizedCaseInsensitiveContains(search))
         }
     }
 
@@ -179,6 +199,21 @@ struct ChatListView: View {
                 ForEach(shown) { c in
                     Button { path.append(.chat(c)) } label: { ConversationRow(conversation: c) }
                         .buttonStyle(BouncyStyle(scale: 0.97))
+                        .contextMenu {
+                            if c.unread > 0 {
+                                Button { store.markRead(c.id) } label: { Label("Mark as read", systemImage: "checkmark.bubble") }
+                            }
+                            Button(role: .destructive) { withAnimation(.snappy) { store.close(c.id) } } label: {
+                                Label(c.isGroup ? "Hide chat" : "Close DM", systemImage: "xmark.circle")
+                            }
+                        }
+                        .transition(.asymmetric(insertion: .opacity, removal: .move(edge: .leading).combined(with: .opacity)))
+                }
+                let hidden = store.conversations.filter { store.isClosed($0) }.count
+                if search.isEmpty && hidden > 0 {
+                    Label("\(hidden) closed chat\(hidden == 1 ? "" : "s") — search a name to open one again", systemImage: "eye.slash")
+                        .font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
+                        .frame(maxWidth: .infinity).padding(.top, 8)
                 }
     }
 }
@@ -272,6 +307,7 @@ struct ChatView: View {
     let conversation: Conversation
     @Environment(AppModel.self) private var model
     @Environment(ChatStore.self) private var chats
+    @Environment(\.dismiss) private var dismissChat
     @State private var messages: [Message] = []
     @State private var draft = ""
     @State private var photo: PhotosPickerItem?
@@ -353,6 +389,21 @@ struct ChatView: View {
         }
         .sheet(item: $reporting) { target in ReportSheet(target: target) }
         .sheet(isPresented: $gifs) { GifPickerSheet { url in Task { await sendMedia(url) } } }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button(role: .destructive) {
+                        chats.close(conversation.id)
+                        dismissChat()
+                    } label: { Label(conversation.isGroup ? "Hide chat" : "Close DM", systemImage: "xmark.circle") }
+                } label: { Image(systemName: "ellipsis.circle") }
+            }
+        }
+        .onAppear {
+            chats.reopen(conversation.id)
+            Alerts.shared.openConversation = conversation.id
+        }
+        .onDisappear { if Alerts.shared.openConversation == conversation.id { Alerts.shared.openConversation = nil } }
         .task { await poll() }
         .onChange(of: photo) { _, item in
             guard let item else { return }

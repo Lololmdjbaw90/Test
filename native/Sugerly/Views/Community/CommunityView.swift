@@ -924,9 +924,22 @@ struct NewPostView: View {
     @State private var gifs = false
     @State private var posting = false
     @State private var error: String?
+    @State private var drafts: [Drafts.Post] = []
+    @State private var draftId: String?
+    @State private var askDraft = false
+
+    private var hasContent: Bool {
+        image != nil || !gif.isEmpty || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !title.trimmingCharacters(in: .whitespaces).isEmpty
+    }
 
     var body: some View {
-        ComposerScaffold(title: "New post", actionTitle: "Post", busy: posting, canPost: image != nil || !gif.isEmpty || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, onClose: { dismiss() }, onPost: { Task { await post() } }) {
+        ComposerScaffold(title: "New post", actionTitle: "Post", busy: posting, canPost: image != nil || !gif.isEmpty || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, onClose: { if hasContent { askDraft = true } else { dismiss() } }, onPost: { Task { await post() } }) {
+            if !drafts.isEmpty && draftId == nil && !hasContent {
+                DraftStrip(title: "Drafts", items: drafts, thumb: { d in d.hasImage ? Drafts.image("posts", d.id, "image.jpg") : nil },
+                           label: { d in d.title.isEmpty ? (d.text.isEmpty ? "Draft" : d.text) : d.title },
+                           onOpen: { d in openDraft(d) },
+                           onDelete: { d in Drafts.delete("posts", d.id); drafts = Drafts.posts() })
+            }
             HStack(spacing: 12) {
                 Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 46)
                 VStack(alignment: .leading) {
@@ -955,6 +968,26 @@ struct NewPostView: View {
             if let error { Text(error).font(.jakarta(13, .semibold)).foregroundStyle(Palette.danger) }
         }
         .sheet(isPresented: $gifs) { GifPickerSheet { url in withAnimation(.snappy) { gif = url; image = nil; item = nil } } }
+        .onAppear { drafts = Drafts.posts() }
+        .confirmationDialog("Save this post as a draft?", isPresented: $askDraft, titleVisibility: .visible) {
+            Button("Save draft") {
+                Drafts.savePost(id: draftId, title: title, text: text, gif: gif, image: image)
+                model.showToast("Saved to drafts", icon: "tray.and.arrow.down.fill")
+                dismiss()
+            }
+            Button("Discard", role: .destructive) { dismiss() }
+            Button("Keep editing", role: .cancel) {}
+        }
+    }
+
+    private func openDraft(_ d: Drafts.Post) {
+        withAnimation(.snappy) {
+            draftId = d.id
+            title = d.title
+            text = d.text
+            gif = d.gif
+            image = d.hasImage ? Drafts.image("posts", d.id, "image.jpg") : nil
+        }
     }
 
     private func post() async {
@@ -974,6 +1007,7 @@ struct NewPostView: View {
                 "created_date": now, "updated_date": now,
             ]
             try await FS.create("CommunityPost", data)
+            if let draftId { Drafts.delete("posts", draftId) }
             try? await model.updateMe(["xp": me.xp + 20, "coins": me.coins + 5])
             await onPosted()
             dismiss()

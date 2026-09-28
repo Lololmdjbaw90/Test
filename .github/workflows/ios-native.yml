@@ -55,6 +55,14 @@ jobs:
         run: |
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/Sugerly.app Payload/
+          # Put the app-group entitlements into the binaries (fake-signed) so
+          # sideloading tools keep the widgets' shared data working.
+          if brew install ldid >/dev/null 2>&1; then
+            ldid -SSupport/Sugerly.entitlements Payload/Sugerly.app/Sugerly || true
+            APPEX=Payload/Sugerly.app/PlugIns/SugerlyWidgets.appex
+            if [ -d "$APPEX" ]; then ldid -SSugerlyWidgets/SugerlyWidgets.entitlements "$APPEX/SugerlyWidgets" || true; fi
+          fi
+          ls Payload/Sugerly.app/PlugIns || true
           zip -qry Sugerly-native-unsigned.ipa Payload
           ls -lh Sugerly-native-unsigned.ipa
 

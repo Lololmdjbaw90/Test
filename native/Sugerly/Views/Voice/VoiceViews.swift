@@ -27,8 +27,23 @@ struct VoiceRoomView: View {
                     .shadow(color: Theme.main.opacity(0.45), radius: 14, y: 6)
                     .symbolEffect(.variableColor.iterative, isActive: here)
                 Text(channel.name).font(.display(30)).foregroundStyle(Palette.text)
-                Text(here ? "Connected · \(voice.participants.count) here" : "\(others.count) in the channel")
-                    .font(.jakarta(13, .semibold)).foregroundStyle(here ? Palette.success : Palette.muted)
+                if here, let since = voice.joinedAt {
+                    HStack(spacing: 8) {
+                        TimelineView(.periodic(from: since, by: 1)) { t in
+                            Label("Voice connected · \(Self.clock(t.date.timeIntervalSince(since)))", systemImage: "phone.connection.fill")
+                                .monospacedDigit()
+                        }
+                        if let ping = voice.ping {
+                            Label("\(ping) ms", systemImage: "cellularbars")
+                                .foregroundStyle(ping < 150 ? Palette.success : ping < 300 ? Palette.warning : Palette.danger)
+                        }
+                    }
+                    .font(.jakarta(13, .semibold)).foregroundStyle(Palette.success)
+                    Text("\(voice.participants.count) here\(voice.systemCall ? " · shows as a call on your phone" : "")")
+                        .font(.jakarta(11, .semibold)).foregroundStyle(Palette.muted)
+                } else {
+                    Text("\(others.count) in the channel").font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
+                }
             }
             .padding(.top, 12)
 
@@ -36,7 +51,7 @@ struct VoiceRoomView: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 14)], spacing: 14) {
                     if here {
                         ForEach(voice.participants) { p in
-                            tile(name: p.isSelf ? "You" : p.name, picture: model.person(p.email)?.picture ?? p.picture, muted: p.muted, deafened: p.deafened, speaking: p.speaking, connecting: !p.isSelf && !p.connected)
+                            tile(name: p.isSelf ? "You" : p.name, picture: model.person(p.email)?.picture ?? p.picture, muted: p.muted, deafened: p.deafened, speaking: p.speaking, connecting: !p.isSelf && !p.connected, level: p.level)
                         }
                     } else {
                         ForEach(others) { p in
@@ -72,37 +87,58 @@ struct VoiceRoomView: View {
 
     private var others: [VoicePresenceInfo] { store.voice[channel.id] ?? [] }
 
-    private func tile(name: String, picture: String, muted: Bool, deafened: Bool, speaking: Bool, connecting: Bool) -> some View {
+    private static func clock(_ seconds: TimeInterval) -> String {
+        let s = Int(max(0, seconds))
+        return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60) : String(format: "%02d:%02d", s / 60, s % 60)
+    }
+
+    // Discord-style: a green ring when someone talks, and a soft green circle
+    // behind them that grows the louder they are.
+    private func tile(name: String, picture: String, muted: Bool, deafened: Bool, speaking: Bool, connecting: Bool, level: Double = 0) -> some View {
         VStack(spacing: 8) {
-            Avatar(url: picture, name: name, size: 78)
-                .padding(4)
-                .overlay(Circle().strokeBorder(speaking ? AnyShapeStyle(Palette.success) : AnyShapeStyle(Color.clear), lineWidth: 3))
-                .shadow(color: speaking ? Palette.success.opacity(0.6) : .clear, radius: 12)
-                .scaleEffect(speaking ? 1.05 : 1)
-                .animation(.spring(response: 0.25, dampingFraction: 0.6), value: speaking)
-                .overlay(alignment: .bottomTrailing) {
-                    if muted || deafened {
-                        Image(systemName: deafened ? "speaker.slash.fill" : "mic.slash.fill").font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
-                            .frame(width: 26, height: 26).background(Palette.danger, in: Circle())
-                            .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
-                    }
+            ZStack {
+                Circle()
+                    .fill(Palette.success.opacity(0.22))
+                    .frame(width: 86, height: 86)
+                    .scaleEffect(speaking ? 1.02 + level * 0.3 : 0.85)
+                    .opacity(speaking ? 1 : 0)
+                Circle()
+                    .strokeBorder(Palette.success, lineWidth: 3.5)
+                    .frame(width: 90, height: 90)
+                    .opacity(speaking ? 1 : 0)
+                Avatar(url: picture, name: name, size: 78)
+                    .opacity(connecting ? 0.55 : 1)
+            }
+            .frame(width: 112, height: 112)
+            .shadow(color: speaking ? Palette.success.opacity(0.45) : .clear, radius: 10 + level * 10)
+            .animation(.easeOut(duration: 0.14), value: level)
+            .animation(.spring(response: 0.25, dampingFraction: 0.65), value: speaking)
+            .overlay(alignment: .bottomTrailing) {
+                if muted || deafened {
+                    Image(systemName: deafened ? "speaker.slash.fill" : "mic.slash.fill").font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                        .frame(width: 26, height: 26).background(Palette.danger, in: Circle())
+                        .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
+                        .offset(x: -10, y: -10)
                 }
-            Text(name).font(.jakarta(13, .bold)).foregroundStyle(Palette.text).lineLimit(1)
+            }
+            Text(name).font(.jakarta(13, .bold)).foregroundStyle(speaking ? Palette.success : Palette.text).lineLimit(1)
             if connecting { Text("connecting…").font(.jakarta(10)).foregroundStyle(Palette.muted) }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
+        .padding(.vertical, 12)
         .background(speaking ? Palette.success.opacity(0.08) : Palette.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(speaking ? Palette.success.opacity(0.4) : Palette.border, lineWidth: 1))
+        .animation(.easeOut(duration: 0.2), value: speaking)
     }
 
     @ViewBuilder
     private var controls: some View {
         if here {
-            HStack(spacing: 18) {
+            HStack(spacing: 14) {
                 round(voice.muted ? "mic.slash.fill" : "mic.fill", active: voice.muted, label: voice.muted ? "Unmute" : "Mute") { voice.toggleMute() }
                     .disabled(!access.can(.speak))
-                round(voice.deafened ? "speaker.slash.fill" : "speaker.wave.2.fill", active: voice.deafened, label: voice.deafened ? "Undeafen" : "Deafen") { voice.toggleDeafen() }
+                round(voice.deafened ? "speaker.slash.fill" : "headphones", active: voice.deafened, label: voice.deafened ? "Undeafen" : "Deafen") { voice.toggleDeafen() }
+                round(voice.speaker ? "speaker.wave.3.fill" : "iphone", active: false, label: voice.speaker ? "Use earpiece" : "Use speaker") { voice.toggleSpeaker() }
                 Button { Task { await voice.leave() } } label: {
                     Image(systemName: "phone.down.fill").font(.system(size: 24, weight: .bold)).foregroundStyle(.white)
                         .frame(width: 72, height: 72).background(Palette.danger, in: Circle())
@@ -161,9 +197,13 @@ struct VoiceDock: View {
                             Text("\(room.name) · \(room.serverName)").font(.jakarta(12, .semibold)).foregroundStyle(Palette.text2).lineLimit(1)
                         }
                         Spacer(minLength: 0)
-                        HStack(spacing: -8) {
-                            ForEach(voice.participants.prefix(3)) { p in
-                                Avatar(url: p.picture, name: p.name, size: 24).overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
+                        HStack(spacing: -6) {
+                            ForEach(voice.participants.prefix(4)) { p in
+                                Avatar(url: p.picture, name: p.name, size: 24)
+                                    .overlay(Circle().strokeBorder(p.speaking ? Palette.success : Palette.surface, lineWidth: p.speaking ? 2.5 : 2))
+                                    .scaleEffect(p.speaking ? 1.12 : 1)
+                                    .animation(.spring(response: 0.25, dampingFraction: 0.6), value: p.speaking)
+                                    .zIndex(p.speaking ? 1 : 0)
                             }
                         }
                     }

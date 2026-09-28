@@ -23,6 +23,7 @@ final class VoiceEngine: NSObject {
         var speaking: Bool
         var isSelf: Bool
         var connected: Bool
+        var level: Double = 0 // 0…1, how loud they are right now
     }
 
     var room: Room?
@@ -33,6 +34,9 @@ final class VoiceEngine: NSObject {
     var participants: [Participant] = []
     var error: String?
     var joinedAt: Date?
+    var speaker = true
+    var ping: Int?
+    var systemCall = false
 
     private var selfId = ""
     private var email = ""
@@ -42,6 +46,9 @@ final class VoiceEngine: NSObject {
     private var loop: Task<Void, Never>?
     private let factory: RTCPeerConnectionFactory
     private var localTrack: RTCAudioTrack?
+    private let call = CallBridge()
+    private var levelLoop: Task<Void, Never>?
+    private var selfLevel = 0.0
 
     private final class Peer {
         let id: String
@@ -56,6 +63,7 @@ final class VoiceEngine: NSObject {
         var pendingIce: [RTCIceCandidate] = []
         var lastSeen = Date()
         var remoteTrack: RTCAudioTrack?
+        var level = 0.0
         init(id: String, email: String) { self.id = id; self.email = email }
     }
     private var peers: [String: Peer] = [:]
@@ -64,7 +72,12 @@ final class VoiceEngine: NSObject {
     override init() {
         RTCInitializeSSL()
         factory = RTCPeerConnectionFactory(encoderFactory: RTCDefaultVideoEncoderFactory(), decoderFactory: RTCDefaultVideoDecoderFactory())
+        // Audio starts when iOS hands us the call's audio (CallKit), not before.
+        RTCAudioSession.sharedInstance().useManualAudio = true
+        RTCAudioSession.sharedInstance().isAudioEnabled = false
         super.init()
+        call.onMute = { [weak self] muted in self?.setMuted(muted) }
+        call.onEnd = { [weak self] in Task { await self?.leave() } }
     }
 
     var isConnected: Bool { room != nil && !connecting }
@@ -87,9 +100,17 @@ final class VoiceEngine: NSObject {
         name = me.displayName
         picture = me.picture
 
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP])
-        try? session.setActive(true)
+        speaker = true
+        ping = nil
+        systemCall = await call.start(title: "\(room.name) · \(room.serverName)")
+        if !systemCall {
+            // No CallKit: run the audio ourselves.
+            let session = AVAudioSession.sharedInstance()
+            try? session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP])
+            try? session.setActive(true)
+            RTCAudioSession.sharedInstance().audioSessionDidActivate(session)
+            RTCAudioSession.sharedInstance().isAudioEnabled = true
+        }
 
         let source = factory.audioSource(with: RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil))
         let track = factory.audioTrack(with: source, trackId: "mic-\(selfId)")
@@ -106,14 +127,21 @@ final class VoiceEngine: NSObject {
         }
         connecting = false
         joinedAt = Date()
+        call.connected()
         Chime.play(.join)
         refreshParticipants()
         loop = Task { [weak self] in await self?.run() }
+        levelLoop = Task { [weak self] in await self?.levelsLoop() }
     }
 
     func leave(silent: Bool = false) async {
         loop?.cancel()
         loop = nil
+        levelLoop?.cancel()
+        levelLoop = nil
+        call.end()
+        selfLevel = 0
+        speakingSelf = false
         for peer in peers.values { peer.pc?.close() }
         peers = [:]
         byConnection = [:]
@@ -125,13 +153,27 @@ final class VoiceEngine: NSObject {
         connecting = false
         participants = []
         joinedAt = nil
+        RTCAudioSession.sharedInstance().isAudioEnabled = false
+        systemCall = false
         try? AVAudioSession.sharedInstance().setCategory(.playback)
         if was && !silent { Chime.play(.leave) }
+    }
+
+    func setMuted(_ value: Bool) {
+        guard value != muted else { return }
+        toggleMute()
+    }
+
+    // Speaker ↔ earpiece (or headphones).
+    func toggleSpeaker() {
+        speaker.toggle()
+        try? AVAudioSession.sharedInstance().overrideOutputAudioPort(speaker ? .speaker : .none)
     }
 
     func toggleMute() {
         muted.toggle()
         localTrack?.isEnabled = !muted
+        call.setMuted(muted)
         Chime.play(muted ? .mute : .unmute)
         pushPresence()
         refreshParticipants()
@@ -173,7 +215,6 @@ final class VoiceEngine: NSObject {
             await pollSignals()
             if tick % 4 == 0 { await pollPresence() }
             if tick % 14 == 0 { pushPresence() }
-            if tick % 2 == 0 { await measureSpeaking() }
             tick += 1
             try? await Task.sleep(for: .milliseconds(700))
         }
@@ -330,31 +371,62 @@ final class VoiceEngine: NSObject {
         refreshParticipants()
     }
 
-    // Who's talking: audio levels from the connection stats.
-    private func measureSpeaking() async {
+    // Who's talking and how loud (for the growing green ring), several
+    // times a second, plus the ping now and then — all from connection stats.
+    private func levelsLoop() async {
+        var n = 0
+        while !Task.isCancelled, room != nil {
+            await measureLevels(withPing: n % 8 == 0)
+            n += 1
+            try? await Task.sleep(for: .milliseconds(160))
+        }
+    }
+
+    private func measureLevels(withPing: Bool) async {
+        var mine = 0.0
+        var rtts: [Double] = []
         for peer in peers.values {
             guard let pc = peer.pc else { continue }
-            let level: Double = await withCheckedContinuation { done in
+            let result: (Double, Double, Double) = await withCheckedContinuation { done in
                 pc.statistics { report in
-                    var best = 0.0
-                    for stat in report.statistics.values where stat.type == "inbound-rtp" {
-                        if let v = stat.values["audioLevel"] as? NSNumber { best = max(best, v.doubleValue) }
+                    var inbound = 0.0, outbound = 0.0, rtt = -1.0
+                    for stat in report.statistics.values {
+                        switch stat.type {
+                        case "inbound-rtp":
+                            if let v = stat.values["audioLevel"] as? NSNumber { inbound = max(inbound, v.doubleValue) }
+                        case "media-source":
+                            if let v = stat.values["audioLevel"] as? NSNumber { outbound = max(outbound, v.doubleValue) }
+                        case "candidate-pair":
+                            if (stat.values["nominated"] as? NSNumber)?.boolValue == true, let v = stat.values["currentRoundTripTime"] as? NSNumber { rtt = v.doubleValue }
+                        default: break
+                        }
                     }
-                    done.resume(returning: best)
+                    done.resume(returning: (inbound, outbound, rtt))
                 }
             }
-            peer.speaking = level > 0.02 && !peer.muted
+            let heard = peer.muted || deafened ? 0 : result.0
+            peer.level = max(heard, peer.level * 0.55)
+            peer.speaking = peer.level > 0.015
+            mine = max(mine, result.1)
+            if result.2 >= 0 { rtts.append(result.2) }
         }
+        selfLevel = muted ? 0 : max(mine, selfLevel * 0.55)
+        speakingSelf = selfLevel > 0.015
+        if withPing { ping = rtts.isEmpty ? nil : Int(rtts.reduce(0, +) / Double(rtts.count) * 1000) }
         refreshParticipants()
+    }
+
+    private static func shown(_ level: Double) -> Double {
+        (min(1, level.squareRoot() * 1.7) * 20).rounded() / 20
     }
 
     private func refreshParticipants() {
         guard room != nil else { participants = []; return }
-        var list = [Participant(id: selfId, email: email, name: name, picture: picture, muted: muted, deafened: deafened, speaking: false, isSelf: true, connected: true)]
+        var list = [Participant(id: selfId, email: email, name: name, picture: picture, muted: muted, deafened: deafened, speaking: speakingSelf, isSelf: true, connected: true, level: Self.shown(selfLevel))]
         for peer in peers.values.sorted(by: { $0.name < $1.name }) where !peer.email.isEmpty {
             let connected = peer.pc.map { $0.iceConnectionState == .connected || $0.iceConnectionState == .completed } ?? false
             list.append(Participant(id: peer.id, email: peer.email, name: peer.name.isEmpty ? String(peer.email.split(separator: "@").first ?? "") : peer.name,
-                                    picture: peer.picture, muted: peer.muted, deafened: peer.deafened, speaking: peer.speaking, isSelf: false, connected: connected))
+                                    picture: peer.picture, muted: peer.muted, deafened: peer.deafened, speaking: peer.speaking, isSelf: false, connected: connected, level: Self.shown(peer.level)))
         }
         if list != participants { participants = list }
     }

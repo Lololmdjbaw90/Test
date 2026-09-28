@@ -542,6 +542,13 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-1.6", icon: "bell.badge.fill", title: "Widgets, notifications & calls", date: "2026-09-28T06:00:00Z", items: [
+            "Home-screen and lock-screen widgets: streak & coins, inbox and featured art.",
+            "Notifications for DMs, servers, likes, comments, follows and new reels.",
+            "Drafts for posts and reels, and you can close DMs.",
+            "Animated backgrounds — polka dots, clouds, stripes, hearts or stars — in Settings.",
+            "Voice channels ring like real calls, with a green circle that grows while you talk.",
+        ]),
         AppRelease(id: "ios-1.5", icon: "sparkles", title: "Nitro, GIFs & face filters", date: "2026-09-28T05:00:00Z", items: [
             "Face filters in the camera — puppy, kitty, bunny, bear, crown and more — plus speed, 15s/60s and a grid.",
             "GIFs and stickers in chats, servers, comments and posts. Make your own stickers and GIFs.",

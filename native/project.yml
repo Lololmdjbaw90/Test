@@ -27,6 +27,12 @@ targets:
       - path: Sugerly
     dependencies:
       - package: WebRTC
+      - target: SugerlyWidgets
+    entitlements:
+      path: Support/Sugerly.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.mimilocks.app
     info:
       path: Support/Info.plist
       properties:
@@ -50,6 +56,13 @@ targets:
         UIBackgroundModes:
           - audio
           - voip
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.mimilocks.app.refresh
+        CFBundleURLTypes:
+          - CFBundleURLName: com.mimilocks.app
+            CFBundleURLSchemes:
+              - sugerly
         UIAppFonts:
           - Bubbly-Regular.otf
           - CuteHere.otf
@@ -69,3 +82,28 @@ targets:
         ENABLE_PREVIEWS: YES
         CODE_SIGN_STYLE: Automatic
     scheme: {}
+  SugerlyWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: SugerlyWidgets
+    entitlements:
+      path: SugerlyWidgets/SugerlyWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.mimilocks.app
+    info:
+      path: SugerlyWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Sugerly
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mimilocks.app.widgets
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Automatic
+        SKIP_INSTALL: YES

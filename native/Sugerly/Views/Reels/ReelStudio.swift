@@ -328,6 +328,9 @@ struct ReelStudioView: View {
     // posting
     @State private var caption = ""
     @State private var allowComments = true
+    @State private var drafts: [Drafts.Reel] = []
+    @State private var draftId: String?
+    @State private var askDraft = false
     @State private var busy = false
     @State private var status = ""
     @State private var error: String?
@@ -370,7 +373,16 @@ struct ReelStudioView: View {
         .onChange(of: items) { _, list in Task { await loadPicked(list) } }
         .onChange(of: look) { _, _ in applyPreviewFilter() }
         .onChange(of: face) { _, _ in applyPreviewFilter() }
+        .confirmationDialog("Save this reel as a draft?", isPresented: $askDraft, titleVisibility: .visible) {
+            Button("Save draft") {
+                saveDraft()
+                resetToPick()
+            }
+            Button("Discard", role: .destructive) { resetToPick() }
+            Button("Keep editing", role: .cancel) {}
+        }
         .onAppear {
+            drafts = Drafts.reels()
             if let requested = model.soundRequest {
                 sound = requested
                 model.soundRequest = nil
@@ -406,6 +418,13 @@ struct ReelStudioView: View {
             Spacer()
             if loadingPick {
                 ProgressView().tint(.white).padding()
+            }
+            if !drafts.isEmpty {
+                DraftStrip(title: "Drafts", items: drafts, dark: true, thumb: { Drafts.reelCover($0) },
+                           label: { d in d.caption.isEmpty ? d.saved.formatted(date: .abbreviated, time: .omitted) : d.caption },
+                           onOpen: { d in Task { await openDraft(d) } },
+                           onDelete: { d in Drafts.delete("reels", d.id); drafts = Drafts.reels() })
+                    .padding(.horizontal, 24)
             }
             VStack(spacing: 12) {
                 Button { camera = true } label: { Label("Open camera", systemImage: "camera.fill") }
@@ -507,7 +526,7 @@ struct ReelStudioView: View {
 
     private var editTopBar: some View {
         HStack(spacing: 10) {
-            Button { resetToPick() } label: {
+            Button { askDraft = true } label: {
                 Image(systemName: "chevron.left").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
                     .frame(width: 42, height: 42).background(.white.opacity(0.14), in: Circle())
             }
@@ -713,15 +732,20 @@ struct ReelStudioView: View {
                 .padding(.horizontal, 16)
             }
             .scrollDismissesKeyboard(.interactively)
-            Button { Task { await post() } } label: {
-                if busy {
-                    HStack(spacing: 10) { ProgressView().tint(.white); Text(status) }
-                } else {
-                    Label("Post reel", systemImage: "paperplane.fill")
+            HStack(spacing: 10) {
+                Button { saveDraft(); dismiss() } label: { Label("Draft", systemImage: "tray.and.arrow.down.fill") }
+                    .buttonStyle(OutlineButtonStyle())
+                    .disabled(busy)
+                Button { Task { await post() } } label: {
+                    if busy {
+                        HStack(spacing: 10) { ProgressView().tint(.white); Text(status) }
+                    } else {
+                        Label("Post reel", systemImage: "paperplane.fill")
+                    }
                 }
+                .buttonStyle(GradientButtonStyle(height: 56))
+                .disabled(busy)
             }
-            .buttonStyle(GradientButtonStyle(height: 56))
-            .disabled(busy)
             .padding(.horizontal, 24)
             .padding(.bottom, 20)
         }
@@ -775,6 +799,45 @@ struct ReelStudioView: View {
         applyPreviewFilter()
         withAnimation { step = .edit }
         if sound != nil { startSound() }
+    }
+
+    // MARK: drafts
+
+    private func saveDraft() {
+        let state = Drafts.ReelState(caption: caption, allowComments: allowComments, look: look, face: face,
+                                     trimStart: trimStart, trimEnd: trimEnd, sound: sound, soundVolume: soundVolume,
+                                     originalVolume: originalVolume, video: asset != nil ? videoURL : nil,
+                                     photos: asset == nil ? photos : [], cover: thumbs.first, stickers: stickers, strokes: strokes)
+        draftId = Drafts.saveReel(id: draftId, state)
+        drafts = Drafts.reels()
+        model.showToast("Saved to drafts", icon: "tray.and.arrow.down.fill")
+    }
+
+    private func openDraft(_ d: Drafts.Reel) async {
+        let restored = Drafts.restore(d)
+        draftId = d.id
+        sound = restored.sound
+        soundVolume = d.soundVolume
+        originalVolume = d.originalVolume
+        if let url = Drafts.reelVideo(d) {
+            await openVideo(url)
+            trimStart = min(d.trimStart, max(0, duration - 1))
+            trimEnd = min(duration, max(trimStart + 1, d.trimEnd))
+            player.volume = Float(originalVolume)
+            muteOriginal = originalVolume < 0.02
+        } else {
+            let pics = Drafts.reelPhotos(d)
+            guard !pics.isEmpty else { error = "That draft is empty."; return }
+            openPhotos(pics)
+        }
+        look = restored.look
+        face = restored.face
+        stickers = restored.stickers
+        strokes = restored.strokes
+        caption = d.caption
+        allowComments = d.allowComments
+        history = []
+        applyPreviewFilter()
     }
 
     private func openVideo(_ url: URL) async {
@@ -866,6 +929,11 @@ struct ReelStudioView: View {
         strokes = []
         face = .none
         sound = nil
+        look = ReelLook()
+        caption = ""
+        history = []
+        draftId = nil
+        drafts = Drafts.reels()
         withAnimation { step = .pick }
     }
 
@@ -932,6 +1000,7 @@ struct ReelStudioView: View {
                 "created_by": me.email, "created_date": now, "updated_date": now,
             ]
             try await FS.create("Reel", doc)
+            if let draftId { Drafts.delete("reels", draftId) }
             try? await model.updateMe(["xp": me.xp + 30, "coins": me.coins + 5])
             teardown()
             dismiss()

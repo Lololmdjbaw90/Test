@@ -107,6 +107,8 @@ struct ChannelMessage: Identifiable, Hashable {
     var created: String
     var reactions: [String: [String]] = [:]
     var pending = false
+    var channelId = ""
+    var serverId = ""
 
     init(_ d: Doc) {
         id = d.str("id")
@@ -117,6 +119,8 @@ struct ChannelMessage: Identifiable, Hashable {
         authorPicture = d.str("user_profile_picture")
         replyPreview = d.str("reply_to_preview")
         kind = d.str("type")
+        channelId = d.str("channel_id")
+        serverId = d.str("community_id")
         pinned = d.bool("is_pinned")
         edited = d.bool("is_edited")
         created = d.str("created_date")
