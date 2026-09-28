@@ -43,7 +43,7 @@ enum TapSound {
         }
     }
 
-    private static let rate = 44_100.0
+    static let rate = 44_100.0
 
     // A quick sine "pop": fast attack, pitch sliding down, soft decay.
     private static func samples(_ kind: Kind) -> [Int16] {
@@ -71,7 +71,7 @@ enum TapSound {
         return out
     }
 
-    private static func wav(_ samples: [Int16]) -> Data {
+    static func wav(_ samples: [Int16]) -> Data {
         var data = Data()
         func put<T: FixedWidthInteger>(_ v: T) { withUnsafeBytes(of: v.littleEndian) { data.append(contentsOf: $0) } }
         let bytes = UInt32(samples.count * 2)

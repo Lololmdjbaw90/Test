@@ -241,7 +241,7 @@ final class CallCenter {
         ringTask?.cancel()
         ringTask = Task {
             while !Task.isCancelled, incoming != nil {
-                AudioServicesPlaySystemSound(1151)
+                CallTones.play(.ringtone)
                 AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
                 try? await Task.sleep(for: .seconds(2.2))
             }
@@ -253,7 +253,7 @@ final class CallCenter {
         ringTask = Task {
             try? await Task.sleep(for: .seconds(1))
             while !Task.isCancelled, current?.id == id, current?.status == "ringing", (voice?.participants.count ?? 0) <= 1 {
-                AudioServicesPlaySystemSound(1106)
+                CallTones.play(.ringback)
                 try? await Task.sleep(for: .seconds(3))
             }
         }
