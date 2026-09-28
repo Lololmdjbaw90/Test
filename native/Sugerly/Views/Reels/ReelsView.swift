@@ -126,6 +126,9 @@ struct ReelsView: View {
     @State private var feed = "foryou"
     @State private var loading = true
     @State private var lastLoad: Date?
+    @State private var cursor: String?
+    @State private var exhausted = false
+    @State private var loadingMore = false
 
     private var shown: [Reel] {
         let blocked = Set(model.me?.blocked ?? [])
@@ -215,33 +218,64 @@ struct ReelsView: View {
             await load()
         }
         .onChange(of: visible) { _, now in if now, activeId == nil { activeId = shown.first?.id } }
+        .onChange(of: activeId) { _, id in
+            // Fetch the next page before you reach the end.
+            guard let id, let i = shown.firstIndex(where: { $0.id == id }), i >= shown.count - 6 else { return }
+            Task { await loadMore() }
+        }
     }
 
+    private static let pageSize = 30
+
+    // First page: the newest reels plus a few from people you follow, ranked
+    // by the on-device brain. More pages load as you scroll (cursor paging),
+    // so the feed stays light however many reels exist.
     private func load() async {
         defer { loading = false }
         if let cached = Self.cache, reels.isEmpty {
             reels = cached
             if activeId == nil { activeId = reels.first?.id }
         }
-        guard let docs = try? await FS.query("Reel", orderBy: "created_date", limit: 60) else { return }
-        let all = docs.map(Reel.init)
-        // Freshest and most liked first, a little shuffled so it feels alive.
-        let now = Date()
-        func score(_ r: Reel) -> Double {
-            let age: Double = now.timeIntervalSince(Dates.parse(r.created) ?? now) / 3600.0
-            let hours: Double = Swift.max(1.0, age) + 2.0
-            let points = Double(r.likes.count * 3 + r.views)
-            return points / pow(hours, 0.8)
-        }
-        let scores = Dictionary(all.map { ($0.id, score($0)) }, uniquingKeysWith: { a, _ in a })
-        let sorted = all.sorted { (scores[$0.id] ?? 0) > (scores[$1.id] ?? 0) }
-        Self.cache = sorted
-        if reels.isEmpty { reels = sorted } else {
+        guard let docs = try? await FS.query("Reel", orderBy: "created_date", limit: Self.pageSize + 10) else { return }
+        var batch = docs.map(Reel.init)
+        cursor = batch.map(\.created).filter { !$0.isEmpty }.min()
+        exhausted = docs.count < Self.pageSize
+        let picks = Array((model.me?.following ?? []).shuffled().prefix(4))
+        async let r0 = Self.reels(by: picks.count > 0 ? picks[0] : nil)
+        async let r1 = Self.reels(by: picks.count > 1 ? picks[1] : nil)
+        async let r2 = Self.reels(by: picks.count > 2 ? picks[2] : nil)
+        async let r3 = Self.reels(by: picks.count > 3 ? picks[3] : nil)
+        let extra = await r0 + r1 + r2 + r3
+        let have = Set(batch.map(\.id))
+        batch += extra.filter { !have.contains($0.id) }
+        let ranked = await ReelBrain.shared.rank(batch, me: model.me?.email ?? "", following: Set(model.me?.following ?? []))
+        Self.cache = ranked
+        if reels.isEmpty { reels = ranked } else {
             // Keep what's on screen in place; add new ones behind it.
-            let have = Set(reels.map(\.id))
-            reels += sorted.filter { !have.contains($0.id) }
+            let known = Set(reels.map(\.id))
+            reels += ranked.filter { !known.contains($0.id) }
         }
         if activeId == nil { activeId = reels.first?.id }
+    }
+
+    private static func reels(by email: String?) async -> [Reel] {
+        guard let email else { return [] }
+        return ((try? await FS.query("Reel", [.equals("user_email", email)], limit: 4)) ?? []).map(Reel.init)
+    }
+
+    private func loadMore() async {
+        guard !loadingMore, !exhausted, let cursor else { return }
+        loadingMore = true
+        defer { loadingMore = false }
+        guard let docs = try? await FS.query("Reel", [.before("created_date", cursor)], orderBy: "created_date", limit: Self.pageSize) else { return }
+        let page = docs.map(Reel.init)
+        self.cursor = page.map(\.created).filter { !$0.isEmpty }.min() ?? cursor
+        exhausted = docs.count < Self.pageSize
+        let known = Set(reels.map(\.id))
+        let fresh = page.filter { !known.contains($0.id) }
+        guard !fresh.isEmpty else { return }
+        let ranked = await ReelBrain.shared.rank(fresh, me: model.me?.email ?? "", following: Set(model.me?.following ?? []), recent: reels.suffix(2).map(\.authorEmail))
+        reels += ranked
     }
 
     nonisolated(unsafe) private static var cache: [Reel]?
@@ -265,6 +299,8 @@ struct ReelPage: View {
     @State private var slide = 0
     @State private var reporting: ReportSheet.Target?
     @State private var commentCount = 0
+    @State private var watchStart: Date?
+    @State private var useSound = false
     @AppStorage("sugerly.reels.muted") private var muted = false
 
     private var me: String { model.me?.email ?? "" }
@@ -303,9 +339,14 @@ struct ReelPage: View {
             if active { start() } else if near { preload() }
         }
         .onChange(of: near) { _, now in if now && !active { preload() } }
-        .onDisappear { video?.pause(); sound?.pause() }
+        .onDisappear { video?.pause(); sound?.pause(); learnWatch() }
         .onChange(of: active) { _, now in
-            if now { start() } else { video?.pause(); sound?.pause() }
+            if now { start(); watchStart = Date() } else { video?.pause(); sound?.pause(); learnWatch() }
+        }
+        .confirmationDialog(soundName, isPresented: $useSound, titleVisibility: .visible) {
+            Button("Use this sound") { Task { await takeSound() } }
+        } message: {
+            Text("Make your own reel with this sound")
         }
         .onChange(of: muted) { _, now in
             video?.player.isMuted = now || reel.muted
@@ -449,12 +490,18 @@ struct ReelPage: View {
             if !reel.caption.isEmpty {
                 Text(ReelCaption.styled(reel.caption)).font(.jakarta(15)).foregroundStyle(.white).lineLimit(3)
             }
-            if !reel.musicTitle.isEmpty {
-                HStack(spacing: 8) {
-                    Image(systemName: "music.note").font(.system(size: 14, weight: .semibold))
-                    Text("\(reel.musicTitle)\(reel.musicArtist.isEmpty ? "" : " · \(reel.musicArtist)")").lineLimit(1)
+            if !reel.musicTitle.isEmpty || reel.isVideo {
+                Button { useSound = true } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "music.note").font(.system(size: 14, weight: .semibold))
+                        Text(soundName).lineLimit(1)
+                        Image(systemName: "chevron.right").font(.system(size: 10, weight: .heavy)).opacity(0.7)
+                    }
+                    .font(.jakarta(14, .medium)).foregroundStyle(.white.opacity(0.95))
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(.white.opacity(0.14), in: Capsule())
                 }
-                .font(.jakarta(14, .medium)).foregroundStyle(.white.opacity(0.95))
+                .buttonStyle(BouncyStyle(scale: 0.95))
             }
         }
         .shadow(color: .black.opacity(0.45), radius: 4)
@@ -480,7 +527,11 @@ struct ReelPage: View {
             .padding(.bottom, 6)
             bubble(liked ? "heart.fill" : "heart", count: reel.likes.count, tint: liked) { toggleLike() }
                 .sensoryFeedback(.impact(weight: .light), trigger: liked)
-            bubble("bubble.left", count: reel.commentsOff ? nil : commentCount) { comments = true }
+            bubble("bubble.left", count: reel.commentsOff ? nil : commentCount) {
+                comments = true
+                let r = reel
+                Task { await ReelBrain.shared.commented(r) }
+            }
             bubble(saved ? "bookmark.fill" : "bookmark", tint: saved) { toggleSave() }
             ShareLink(item: reel.caption.isEmpty ? "A reel on Sugerly" : reel.caption) {
                 bubbleLabel("paperplane", tint: false)
@@ -496,8 +547,12 @@ struct ReelPage: View {
             } label: {
                 bubbleLabel("ellipsis", tint: false)
             }
-            MusicDisc(picture: author?.picture ?? reel.authorPicture, name: reel.authorName, spinning: active && !paused)
-                .padding(.top, 4)
+            Button { useSound = true } label: {
+                MusicDisc(picture: author?.picture ?? reel.authorPicture, name: reel.authorName, spinning: active && !paused)
+            }
+            .buttonStyle(BouncyStyle())
+            .accessibilityLabel("Use this sound")
+            .padding(.top, 4)
         }
     }
 
@@ -594,6 +649,8 @@ struct ReelPage: View {
         let before = reel.likes
         let liking = !before.contains(me)
         reel.likes = liking ? before + [me] : before.filter { $0 != me }
+        let r = reel
+        Task { await ReelBrain.shared.liked(r, liking) }
         Task {
             do {
                 try await FS.update("Reel", reel.id, ["likes": reel.likes, "updated_date": FS.nowISO()])
@@ -605,16 +662,60 @@ struct ReelPage: View {
     private func toggleSave() {
         guard let meProfile = model.me else { return }
         var next = meProfile.savedReels
-        if next.contains(reel.id) { next.removeAll { $0 == reel.id } } else { next.append(reel.id) }
+        let saving = !next.contains(reel.id)
+        if saving { next.append(reel.id) } else { next.removeAll { $0 == reel.id } }
+        let r = reel
+        Task { await ReelBrain.shared.saved(r, saving) }
         Task { try? await model.updateMe(["saved_reels": next]) }
     }
 
     private func follow() {
         guard let meProfile = model.me else { return }
+        let email = reel.authorEmail
+        Task { await ReelBrain.shared.followed(email) }
         Task {
             try? await model.updateMe(["following": meProfile.following + [reel.authorEmail]])
             Notify.send(to: reel.authorEmail, from: meProfile, type: "follow", message: "\(meProfile.displayName) started following you", link: "/Profile?email=\(meProfile.email)")
         }
+    }
+
+    private var soundName: String {
+        if !reel.musicTitle.isEmpty { return "\(reel.musicTitle)\(reel.musicArtist.isEmpty ? "" : " · \(reel.musicArtist)")" }
+        return "Original sound · \(reel.authorName)"
+    }
+
+    // How long you watched teaches the For You brain.
+    private func learnWatch() {
+        guard let started = watchStart else { return }
+        watchStart = nil
+        let seconds = Date().timeIntervalSince(started)
+        let r = reel
+        Task { await ReelBrain.shared.watched(r, seconds: seconds) }
+    }
+
+    // "Use this sound": the song (with a fresh preview link) or the video's own sound.
+    private func takeSound() async {
+        var link = reel.musicURL
+        var id = "reel_\(reel.id)"
+        if reel.musicSource.hasPrefix("deezer:"), let dz = reel.musicSource.split(separator: ":").last {
+            id = "deezer_\(dz)"
+            if let url = URL(string: "https://api.deezer.com/track/\(dz)"),
+               let json = try? await HTTP.json(url) as? [String: Any], let fresh = json["preview"] as? String, !fresh.isEmpty {
+                link = fresh
+            }
+        }
+        if reel.musicTitle.isEmpty { link = reel.mediaURL }
+        guard !link.isEmpty else { return }
+        video?.pause()
+        sound?.pause()
+        let track = Track([
+            "id": id,
+            "title": reel.musicTitle.isEmpty ? "Original sound" : reel.musicTitle,
+            "user_display_name": reel.musicTitle.isEmpty ? reel.authorName : reel.musicArtist,
+            "music_url": link,
+            "cover_url": reel.coverURL.isEmpty ? (author?.picture ?? reel.authorPicture) : reel.coverURL,
+        ])
+        model.soundRequest = track
     }
 
     // A view counts once per person (not rewatches, not your own).

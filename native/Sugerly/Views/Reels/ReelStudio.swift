@@ -152,13 +152,14 @@ struct TextSticker: Identifiable, Equatable {
     var scale: CGFloat = 1
     var rotation: Double = 0 // radians
     var isEmoji = false
+    var image: UIImage? = nil    // picture stickers (vector, your own, GIPHY)
 
     func uiFont(size: CGFloat) -> UIFont {
         if isEmoji { return .systemFont(ofSize: size) }
         return UIFont(name: font.uiName, size: size) ?? .boldSystemFont(ofSize: size)
     }
 
-    var baseSize: CGFloat { isEmoji ? 0.16 : 0.075 }
+    var baseSize: CGFloat { image != nil ? 0.3 : isEmoji ? 0.16 : 0.075 }
 
     // Text colour and label colour for the chosen style.
     var inkColor: UInt32 {
@@ -169,6 +170,14 @@ struct TextSticker: Identifiable, Equatable {
     // The sticker drawn as a picture (for baking into the video).
     func render(width: CGFloat) -> UIImage {
         let size = width * baseSize * scale
+        if let image {
+            let h = size * image.size.height / max(1, image.size.width)
+            let format = UIGraphicsImageRendererFormat.default()
+            format.scale = 1
+            return UIGraphicsImageRenderer(size: CGSize(width: ceil(size), height: ceil(h)), format: format).image { _ in
+                image.draw(in: CGRect(x: 0, y: 0, width: size, height: h))
+            }
+        }
         let font = uiFont(size: size)
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = align
@@ -249,6 +258,7 @@ struct PickedMovie: Transferable {
 // Holds what the export needs while the video is rendered frame by frame.
 final class RenderBox: @unchecked Sendable {
     var look = ReelLook()
+    var faces: FaceFilterRenderer?
     var scale: CGFloat = 1
     var overlays: [CIImage] = []
 }
@@ -283,22 +293,30 @@ struct ReelStudioView: View {
     @State private var previewPhotos: [UIImage] = []
     @State private var soundVolume: Double = 1
     @State private var originalVolume: Double = 1
+    @State private var face: FaceFilter = .none
+    @State private var strokes: [DrawStroke] = []
+    @State private var drawing: DrawStroke?
+    @State private var penColor: UInt32 = 0xFFFFFF
+    @State private var penWidth: CGFloat = 0.012
+    @State private var penNeon = false
 
     enum EditTool: String, CaseIterable {
-        case trim = "Trim", filters = "Filters", adjust = "Adjust", text = "Text", stickers = "Stickers", sound = "Sound"
+        case trim = "Trim", filters = "Filters", face = "Face", adjust = "Adjust", text = "Text", stickers = "Stickers", draw = "Draw", sound = "Sound"
         var icon: String {
             switch self {
             case .trim: return "scissors"
             case .filters: return "camera.filters"
+            case .face: return "face.dashed.fill"
             case .adjust: return "slider.horizontal.3"
             case .text: return "textformat"
-            case .stickers: return "face.smiling"
+            case .stickers: return "star.square.on.square.fill"
+            case .draw: return "scribble.variable"
             case .sound: return "music.note"
             }
         }
     }
 
-    struct Snapshot { var look: ReelLook; var stickers: [TextSticker] }
+    struct Snapshot { var look: ReelLook; var stickers: [TextSticker]; var strokes: [DrawStroke] = [] }
     @State private var editingText: TextSticker?
     @State private var sound: Track?
     @State private var soundPlayer: AVPlayer?
@@ -326,7 +344,7 @@ struct ReelStudioView: View {
         .preferredColorScheme(.dark)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: step)
         .fullScreenCover(isPresented: $camera) {
-            RecorderView(onVideo: { url in
+            RecorderView(face: $face, sound: $sound, onVideo: { url in
                 camera = false
                 Task { await openVideo(url) }
             }, onPhotos: { images in
@@ -351,6 +369,13 @@ struct ReelStudioView: View {
         }
         .onChange(of: items) { _, list in Task { await loadPicked(list) } }
         .onChange(of: look) { _, _ in applyPreviewFilter() }
+        .onChange(of: face) { _, _ in applyPreviewFilter() }
+        .onAppear {
+            if let requested = model.soundRequest {
+                sound = requested
+                model.soundRequest = nil
+            }
+        }
         .onDisappear { teardown() }
     }
 
@@ -369,6 +394,13 @@ struct ReelStudioView: View {
                     .shadow(color: Theme.pink.opacity(0.6), radius: 24, y: 10)
             }
             Text("Make something cute").font(.display(34)).foregroundStyle(.white)
+            if let sound {
+                Label("Using \(sound.title) · \(sound.artist)", systemImage: "music.note")
+                    .font(.jakarta(13, .bold)).foregroundStyle(.white).lineLimit(1)
+                    .padding(.horizontal, 14).frame(height: 34)
+                    .background(Theme.gradient, in: Capsule())
+                    .padding(.horizontal, 30)
+            }
             Text("Film in clips (pause, delete, start over), snap photos, or pick from your library.")
                 .font(.jakarta(15)).foregroundStyle(.white.opacity(0.7)).multilineTextAlignment(.center).padding(.horizontal, 30)
             Spacer()
@@ -412,7 +444,10 @@ struct ReelStudioView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                         .allowsHitTesting(false)
                     }
+                    DrawingLayer(strokes: strokes, current: drawing)
+                        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                     StickerCanvas(stickers: $stickers, size: geo.size, onEdit: { sticker in
+                        guard sticker.image == nil else { return }
                         checkpoint()
                         editingText = sticker
                     }, onTapEmpty: {
@@ -423,6 +458,9 @@ struct ReelStudioView: View {
                         guard !photos.isEmpty else { return }
                         withAnimation(.snappy) { slide = min(photos.count - 1, max(0, slide + step)) }
                     }, onBegin: { checkpoint() })
+                    if tool == .draw {
+                        DrawCapture(strokes: $strokes, current: $drawing, color: penColor, width: penWidth, neon: penNeon) { checkpoint() }
+                    }
                 }
             }
             .aspectRatio(9 / 16, contentMode: .fit)
@@ -518,6 +556,19 @@ struct ReelStudioView: View {
                 .padding(.horizontal, 16)
             }
             .sensoryFeedback(.selection, trigger: look.filter)
+        case .face:
+            VStack(spacing: 8) {
+                Text(asset != nil ? "Face filters follow faces in your video" : "Face filters go on every photo").font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.7))
+                FaceFilterPicker(selection: $face)
+            }
+        case .draw:
+            DrawPanel(color: $penColor, width: $penWidth, neon: $penNeon, canUndo: !strokes.isEmpty, onUndo: {
+                checkpoint()
+                _ = strokes.popLast()
+            }, onClear: {
+                checkpoint()
+                withAnimation { strokes.removeAll() }
+            })
         case .adjust:
             ScrollView {
                 VStack(spacing: 6) {
@@ -533,7 +584,7 @@ struct ReelStudioView: View {
             }
         case .text:
             VStack(spacing: 10) {
-                Text(stickers.contains { !$0.isEmoji } ? "Drag to move · pinch to resize · twist to turn · tap to edit · drop on the bin to delete" : "Add some words to your reel")
+                Text(stickers.contains { !$0.isEmoji && $0.image == nil } ? "Drag with one or two fingers · pinch to resize · twist to turn · tap to edit · drop on the bin to delete" : "Add some words to your reel")
                     .font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.7)).multilineTextAlignment(.center)
                 Button { checkpoint(); editingText = TextSticker(text: "") } label: { Label("Add text", systemImage: "plus") }
                     .buttonStyle(GradientButtonStyle(height: 44, fullWidth: false))
@@ -541,22 +592,11 @@ struct ReelStudioView: View {
             .padding(.horizontal, 16)
             .frame(maxWidth: .infinity)
         case .stickers:
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHGrid(rows: [GridItem(.fixed(50)), GridItem(.fixed(50))], spacing: 8) {
-                    ForEach(Self.emojis, id: \.self) { e in
-                        Button {
-                            checkpoint()
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                                stickers.append(TextSticker(text: e, x: CGFloat.random(in: 0.3...0.7), y: CGFloat.random(in: 0.3...0.6), isEmoji: true))
-                            }
-                        } label: {
-                            Text(e).font(.system(size: 30)).frame(width: 50, height: 50)
-                                .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        }
-                        .buttonStyle(BouncyStyle(scale: 0.8))
-                    }
+            StickerTray { image in
+                checkpoint()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                    stickers.append(TextSticker(text: "", x: CGFloat.random(in: 0.3...0.7), y: CGFloat.random(in: 0.3...0.6), image: image))
                 }
-                .padding(.horizontal, 16)
             }
         case .sound:
             VStack(spacing: 8) {
@@ -590,8 +630,6 @@ struct ReelStudioView: View {
         }
     }
 
-    static let emojis = ["💖", "✨", "🌸", "🎀", "🍓", "🦋", "🌈", "⭐️", "🔥", "😍", "🥹", "😂", "🫶", "👑", "🎨", "🎧", "🌙", "☁️", "🍰", "🐱", "🐰", "💫", "🌷", "💅"]
-
     private func filterThumb(_ f: ReelFilter) -> some View {
         Group {
             if let base = thumbs.first ?? photos.first {
@@ -613,7 +651,7 @@ struct ReelStudioView: View {
     }
 
     private func checkpoint() {
-        history.append(Snapshot(look: look, stickers: stickers))
+        history.append(Snapshot(look: look, stickers: stickers, strokes: strokes))
         if history.count > 40 { history.removeFirst() }
     }
 
@@ -622,6 +660,7 @@ struct ReelStudioView: View {
         withAnimation(.snappy) {
             look = last.look
             stickers = last.stickers
+            strokes = last.strokes
         }
     }
 
@@ -733,7 +772,9 @@ struct ReelStudioView: View {
         previewPhotos = []
         asset = nil
         tool = .filters
+        applyPreviewFilter()
         withAnimation { step = .edit }
+        if sound != nil { startSound() }
     }
 
     private func openVideo(_ url: URL) async {
@@ -753,6 +794,7 @@ struct ReelStudioView: View {
         loopPreview()
         player.play()
         withAnimation { step = .edit }
+        if sound != nil { startSound() }
         await makeThumbs(a, seconds: seconds)
     }
 
@@ -770,18 +812,26 @@ struct ReelStudioView: View {
 
     private func applyPreviewFilter() {
         let chosen = look
+        let chosenFace = face
         if asset == nil {
-            // Slideshow: redraw the pictures with the look.
+            // Slideshow: redraw the pictures with the look (and face filter).
             let originals = photos
             Task {
-                let out = await FilterThumbs.applyAll(chosen, to: originals)
-                if chosen == look { previewPhotos = out }
+                var out = await FilterThumbs.applyAll(chosen, to: originals)
+                if chosenFace != .none {
+                    let faced = out
+                    out = await Task.detached(priority: .userInitiated) { faced.map { FaceFilterRenderer.bake($0, chosenFace) } }.value
+                }
+                if chosen == look && chosenFace == face { previewPhotos = out }
             }
             return
         }
         guard let asset, let item = player.currentItem else { return }
-        item.videoComposition = chosen.isNeutral ? nil : AVMutableVideoComposition(asset: asset) { request in
-            request.finish(with: chosen.apply(request.sourceImage), context: nil)
+        let faces = chosenFace == .none ? nil : FaceFilterRenderer(chosenFace)
+        item.videoComposition = chosen.isNeutral && faces == nil ? nil : AVMutableVideoComposition(asset: asset) { request in
+            var img = chosen.isNeutral ? request.sourceImage : chosen.apply(request.sourceImage)
+            if let faces { img = faces.apply(img) }
+            request.finish(with: img, context: nil)
         }
     }
 
@@ -813,6 +863,8 @@ struct ReelStudioView: View {
         asset = nil
         photos = []
         stickers = []
+        strokes = []
+        face = .none
         sound = nil
         withAnimation { step = .pick }
     }
@@ -899,7 +951,8 @@ struct ReelStudioView: View {
 
     // Filter + text stickers drawn onto a picture.
     private func bake(_ image: UIImage) -> UIImage {
-        guard !look.isNeutral || !stickers.isEmpty, let cg = image.cgImage else { return image }
+        let source = face == .none ? image : FaceFilterRenderer.bake(image, face)
+        guard !look.isNeutral || !stickers.isEmpty || !strokes.isEmpty || face != .none, let cg = source.cgImage else { return image }
         var ci = CIImage(cgImage: cg)
         ci = look.apply(ci)
         for overlay in overlayImages(width: ci.extent.width, height: ci.extent.height) { ci = overlay.composited(over: ci) }
@@ -909,7 +962,15 @@ struct ReelStudioView: View {
     }
 
     private func overlayImages(width: CGFloat, height: CGFloat) -> [CIImage] {
-        stickers.filter { !$0.text.isEmpty }.compactMap { sticker in
+        var out: [CIImage] = []
+        if let doodle = Doodle.render(strokes, size: CGSize(width: width, height: height))?.cgImage {
+            out.append(CIImage(cgImage: doodle))
+        }
+        return out + stickerImages(width: width, height: height)
+    }
+
+    private func stickerImages(width: CGFloat, height: CGFloat) -> [CIImage] {
+        stickers.filter { !$0.text.isEmpty || $0.image != nil }.compactMap { sticker in
             guard let cg = sticker.render(width: width).cgImage else { return nil }
             let img = CIImage(cgImage: cg)
             let w = img.extent.width, h = img.extent.height
@@ -925,10 +986,12 @@ struct ReelStudioView: View {
     private func exportVideo(_ asset: AVURLAsset) async throws -> URL {
         let box = RenderBox()
         box.look = look
+        box.faces = face == .none ? nil : FaceFilterRenderer(face)
         let composition = AVMutableVideoComposition(asset: asset) { request in
             var img = request.sourceImage
             if box.scale < 1 { img = img.transformed(by: CGAffineTransform(scaleX: box.scale, y: box.scale)) }
             img = box.look.apply(img)
+            if let faces = box.faces { img = faces.apply(img) }
             for overlay in box.overlays { img = overlay.composited(over: img) }
             request.finish(with: img, context: nil)
         }

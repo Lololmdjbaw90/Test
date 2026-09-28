@@ -2,17 +2,21 @@ import SwiftUI
 import UIKit
 import CoreImage
 
-// Filters + adjustments + text + emoji drawn onto a photo, full size.
+// Filters, face filters, adjustments, drawing, text and stickers drawn onto a photo, full size.
 enum PhotoBaker {
     private static let context = CIContext(options: [.cacheIntermediates: false])
 
-    static func bake(_ image: UIImage, look: ReelLook, stickers: [TextSticker]) -> UIImage {
-        guard !look.isNeutral || !stickers.isEmpty, let cg = image.cgImage else { return image }
+    static func bake(_ image: UIImage, look: ReelLook, stickers: [TextSticker], face: FaceFilter = .none, strokes: [DrawStroke] = []) -> UIImage {
+        guard !look.isNeutral || !stickers.isEmpty || face != .none || !strokes.isEmpty, let cg = image.cgImage else { return image }
         var ci = CIImage(cgImage: cg).oriented(CGImagePropertyOrientation(image.imageOrientation))
         ci = ci.transformed(by: CGAffineTransform(translationX: -ci.extent.minX, y: -ci.extent.minY))
         if !look.isNeutral { ci = look.apply(ci) }
+        if face != .none { ci = FaceFilterRenderer(face, video: false).apply(ci) }
         let width = ci.extent.width, height = ci.extent.height
-        for sticker in stickers where !sticker.text.isEmpty {
+        if let doodle = Doodle.render(strokes, size: CGSize(width: width, height: height))?.cgImage {
+            ci = CIImage(cgImage: doodle).composited(over: ci)
+        }
+        for sticker in stickers where !sticker.text.isEmpty || sticker.image != nil {
             guard let sc = sticker.render(width: width).cgImage else { continue }
             let img = CIImage(cgImage: sc)
             let w = img.extent.width, h = img.extent.height
@@ -38,26 +42,28 @@ enum PhotoBaker {
 }
 
 // The website's image editor, for posts and artworks: filters, adjust,
-// text, emoji stickers, rotate, undo.
+// face filters, text, stickers, drawing, rotate, undo.
 struct PhotoEditorView: View {
     let original: UIImage
     var onDone: (UIImage) -> Void
     @Environment(\.dismiss) private var dismiss
 
     enum Tool: String, CaseIterable {
-        case filters = "Filters", adjust = "Adjust", text = "Text", stickers = "Stickers", rotate = "Rotate"
+        case filters = "Filters", face = "Face", adjust = "Adjust", text = "Text", stickers = "Stickers", draw = "Draw", rotate = "Rotate"
         var icon: String {
             switch self {
             case .filters: return "camera.filters"
+            case .face: return "face.dashed.fill"
             case .adjust: return "slider.horizontal.3"
             case .text: return "textformat"
-            case .stickers: return "face.smiling"
+            case .stickers: return "star.square.on.square.fill"
+            case .draw: return "scribble.variable"
             case .rotate: return "rotate.right"
             }
         }
     }
 
-    struct Snapshot { var base: UIImage; var look: ReelLook; var stickers: [TextSticker] }
+    struct Snapshot { var base: UIImage; var look: ReelLook; var stickers: [TextSticker]; var strokes: [DrawStroke] = []; var face: FaceFilter = .none }
 
     @State private var base: UIImage
     @State private var preview: UIImage?
@@ -67,6 +73,12 @@ struct PhotoEditorView: View {
     @State private var history: [Snapshot] = []
     @State private var editingText: TextSticker?
     @State private var saving = false
+    @State private var face: FaceFilter = .none
+    @State private var strokes: [DrawStroke] = []
+    @State private var drawing: DrawStroke?
+    @State private var penColor: UInt32 = 0xFFFFFF
+    @State private var penWidth: CGFloat = 0.012
+    @State private var penNeon = false
 
     init(image: UIImage, onDone: @escaping (UIImage) -> Void) {
         original = image
@@ -102,10 +114,15 @@ struct PhotoEditorView: View {
                 let fit = fitted(in: geo.size)
                 ZStack {
                     Image(uiImage: preview ?? base).resizable().frame(width: fit.width, height: fit.height)
+                    DrawingLayer(strokes: strokes, current: drawing)
                     StickerCanvas(stickers: $stickers, size: fit, onEdit: { sticker in
+                        guard sticker.image == nil else { return }
                         checkpoint()
                         editingText = sticker
                     }, onTapEmpty: {}, onSwipe: { _ in }, onBegin: { checkpoint() })
+                    if tool == .draw {
+                        DrawCapture(strokes: $strokes, current: $drawing, color: penColor, width: penWidth, neon: penNeon) { checkpoint() }
+                    }
                 }
                 .frame(width: fit.width, height: fit.height)
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -147,6 +164,7 @@ struct PhotoEditorView: View {
         .background(Color(hex: 0x140A11).ignoresSafeArea())
         .preferredColorScheme(.dark)
         .onChange(of: look) { _, _ in refreshPreview() }
+        .onChange(of: face) { _, _ in refreshPreview() }
         .sheet(item: $editingText) { sticker in
             TextStickerEditor(sticker: sticker) { updated in
                 if let i = stickers.firstIndex(where: { $0.id == updated.id }) { stickers[i] = updated } else { stickers.append(updated) }
@@ -200,22 +218,25 @@ struct PhotoEditorView: View {
                     .buttonStyle(GradientButtonStyle(height: 44, fullWidth: false))
             }
             .frame(maxWidth: .infinity)
+        case .face:
+            VStack(spacing: 8) {
+                Text("Cute filters on every face in your photo").font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.7))
+                FaceFilterPicker(selection: Binding(get: { face }, set: { checkpoint(); face = $0 }))
+            }
+        case .draw:
+            DrawPanel(color: $penColor, width: $penWidth, neon: $penNeon, canUndo: !strokes.isEmpty, onUndo: {
+                checkpoint()
+                _ = strokes.popLast()
+            }, onClear: {
+                checkpoint()
+                withAnimation { strokes.removeAll() }
+            })
         case .stickers, .rotate:
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHGrid(rows: [GridItem(.fixed(50)), GridItem(.fixed(50))], spacing: 8) {
-                    ForEach(ReelStudioView.emojis, id: \.self) { e in
-                        Button {
-                            checkpoint()
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                                stickers.append(TextSticker(text: e, x: CGFloat.random(in: 0.3...0.7), y: CGFloat.random(in: 0.3...0.7), isEmoji: true))
-                            }
-                        } label: {
-                            Text(e).font(.system(size: 30)).frame(width: 50, height: 50).background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        }
-                        .buttonStyle(BouncyStyle(scale: 0.8))
-                    }
+            StickerTray { image in
+                checkpoint()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                    stickers.append(TextSticker(text: "", x: CGFloat.random(in: 0.3...0.7), y: CGFloat.random(in: 0.3...0.7), image: image))
                 }
-                .padding(.horizontal, 16)
             }
         }
     }
@@ -231,15 +252,20 @@ struct PhotoEditorView: View {
     private func refreshPreview() {
         let chosen = look
         let image = base
-        guard !chosen.isNeutral else { preview = nil; return }
+        let chosenFace = face
+        guard !chosen.isNeutral || chosenFace != .none else { preview = nil; return }
         Task {
-            let out = await FilterThumbs.applyAll(chosen, to: [image])
-            if chosen == look, image === base { preview = out.first }
+            var out = chosen.isNeutral ? image : (await FilterThumbs.applyAll(chosen, to: [image])).first ?? image
+            if chosenFace != .none {
+                let faced = out
+                out = await Task.detached(priority: .userInitiated) { FaceFilterRenderer.bake(faced, chosenFace) }.value
+            }
+            if chosen == look, chosenFace == face, image === base { preview = out }
         }
     }
 
     private func checkpoint() {
-        history.append(Snapshot(base: base, look: look, stickers: stickers))
+        history.append(Snapshot(base: base, look: look, stickers: stickers, strokes: strokes, face: face))
         if history.count > 40 { history.removeFirst() }
     }
 
@@ -249,15 +275,17 @@ struct PhotoEditorView: View {
             base = last.base
             look = last.look
             stickers = last.stickers
+            strokes = last.strokes
+            face = last.face
         }
         refreshPreview()
     }
 
     private func save() {
         saving = true
-        let image = base, chosen = look, marks = stickers
+        let image = base, chosen = look, marks = stickers, chosenFace = face, doodles = strokes
         Task {
-            let baked = await Task.detached(priority: .userInitiated) { PhotoBaker.bake(image, look: chosen, stickers: marks) }.value
+            let baked = await Task.detached(priority: .userInitiated) { PhotoBaker.bake(image, look: chosen, stickers: marks, face: chosenFace, strokes: doodles) }.value
             saving = false
             onDone(baked)
             dismiss()

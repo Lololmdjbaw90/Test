@@ -219,6 +219,9 @@ struct MainShell: View {
                 .presentationDetents([.height(430)])
                 .presentationCornerRadius(34)
         }
+        .onChange(of: model.soundRequest?.id) { _, id in
+            if id != nil { composer = .reel }
+        }
         .fullScreenCover(item: $composer) { kind in
             switch kind {
             case .post: NewPostView { await posts.load() }

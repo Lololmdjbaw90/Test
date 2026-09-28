@@ -10,11 +10,21 @@ import AVFoundation
 @MainActor
 @Observable
 final class RecorderModel: NSObject {
-    struct Clip: Identifiable { let id = UUID(); let url: URL; let seconds: Double }
+    struct Clip: Identifiable {
+        let id = UUID()
+        let url: URL
+        let seconds: Double
+        var speed: Double = 1
+        var effective: Double { seconds / speed }
+    }
 
     let session = AVCaptureSession()
     private let movieOutput = AVCaptureMovieFileOutput()
     private let photoOutput = AVCapturePhotoOutput()
+    private let metadataOutput = AVCaptureMetadataOutput()
+    private var soundPlayer: AVPlayer?
+    private var clipSpeed: Double = 1
+    let faces = FaceTracker()
     private var videoInput: AVCaptureDeviceInput?
     private var device: AVCaptureDevice?
     private var progressTask: Task<Void, Never>?
@@ -27,11 +37,12 @@ final class RecorderModel: NSObject {
     var current: Double = 0
     var flash = false
     var zoom: CGFloat = 1
-    let maxSeconds: Double = 60
+    var maxSeconds: Double = 60
+    var speed: Double = 1
     var onPhoto: ((UIImage) -> Void)?
     var busy = false
 
-    var total: Double { clips.reduce(0) { $0 + $1.seconds } + (recording ? current : 0) }
+    var total: Double { clips.reduce(0) { $0 + $1.effective } + (recording ? current / clipSpeed : 0) }
     var hasFlash: Bool { device?.hasTorch ?? false }
 
     func start() async {
@@ -49,6 +60,13 @@ final class RecorderModel: NSObject {
         Task.detached { session.stopRunning() }
         progressTask?.cancel()
         setTorch(false)
+        soundPlayer?.pause()
+    }
+
+    // The sound plays while you film (slower or faster to match the speed).
+    func setSound(_ track: Track?) {
+        soundPlayer?.pause()
+        soundPlayer = track.flatMap { URL(string: $0.audioURL) }.map { AVPlayer(url: $0) }
     }
 
     private func configure() {
@@ -65,7 +83,13 @@ final class RecorderModel: NSObject {
         }
         if session.canAddOutput(movieOutput) { session.addOutput(movieOutput) }
         if session.canAddOutput(photoOutput) { session.addOutput(photoOutput) }
+        let faceOutput = session.canAddOutput(metadataOutput)
+        if faceOutput { session.addOutput(metadataOutput) }
         session.commitConfiguration()
+        if faceOutput {
+            metadataOutput.setMetadataObjectsDelegate(self, queue: .main)
+            if metadataOutput.availableMetadataObjectTypes.contains(.face) { metadataOutput.metadataObjectTypes = [.face] }
+        }
         fixConnections()
     }
 
@@ -137,6 +161,11 @@ final class RecorderModel: NSObject {
         movieOutput.startRecording(to: url, recordingDelegate: self)
         recording = true
         current = 0
+        clipSpeed = speed
+        if let soundPlayer {
+            soundPlayer.seek(to: CMTime(seconds: total, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+            soundPlayer.rate = Float(1 / speed)
+        }
         progressTask?.cancel()
         progressTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -152,6 +181,7 @@ final class RecorderModel: NSObject {
         guard recording else { return }
         movieOutput.stopRecording()
         setTorch(false)
+        soundPlayer?.pause()
     }
 
     fileprivate func finished(_ url: URL, _ seconds: Double) {
@@ -159,7 +189,7 @@ final class RecorderModel: NSObject {
         progressTask?.cancel()
         current = 0
         if seconds > 0.2 {
-            clips.append(Clip(url: url, seconds: seconds))
+            clips.append(Clip(url: url, seconds: seconds, speed: clipSpeed))
         } else {
             try? FileManager.default.removeItem(at: url)
         }
@@ -192,10 +222,19 @@ final class RecorderModel: NSObject {
                 try videoTrack.insertTimeRange(range, of: v, at: cursor)
                 if cursor == .zero { videoTrack.preferredTransform = try await v.load(.preferredTransform) }
             }
+            var hasAudio = false
             if let a = try await asset.loadTracks(withMediaType: .audio).first {
-                try? audioTrack?.insertTimeRange(range, of: a, at: cursor)
+                hasAudio = (try? audioTrack?.insertTimeRange(range, of: a, at: cursor)) != nil
             }
-            cursor = CMTimeAdd(cursor, duration)
+            // Speed: 2x makes the clip half as long, 0.5x twice as long.
+            var length = duration
+            if abs(clip.speed - 1) > 0.01 {
+                length = CMTimeMultiplyByFloat64(duration, multiplier: 1 / clip.speed)
+                let placed = CMTimeRange(start: cursor, duration: duration)
+                videoTrack.scaleTimeRange(placed, toDuration: length)
+                if hasAudio { audioTrack?.scaleTimeRange(placed, toDuration: length) }
+            }
+            cursor = CMTimeAdd(cursor, length)
         }
         let out = FileManager.default.temporaryDirectory.appendingPathComponent("reel-\(UUID().uuidString).mp4")
         guard let export = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
@@ -223,6 +262,12 @@ final class RecorderModel: NSObject {
     }
 }
 
+extension RecorderModel: AVCaptureMetadataOutputObjectsDelegate {
+    nonisolated func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
+        MainActor.assumeIsolated { self.faces.update(metadataObjects) }
+    }
+}
+
 extension RecorderModel: AVCaptureFileOutputRecordingDelegate, AVCapturePhotoCaptureDelegate {
     nonisolated func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
         let seconds = output.recordedDuration.seconds
@@ -238,6 +283,7 @@ extension RecorderModel: AVCaptureFileOutputRecordingDelegate, AVCapturePhotoCap
 // Live camera picture.
 struct CameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
+    var tracker: FaceTracker? = nil
 
     final class PreviewView: UIView {
         override static var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
@@ -249,6 +295,7 @@ struct CameraPreview: UIViewRepresentable {
         view.preview.session = session
         view.preview.videoGravity = .resizeAspectFill
         view.backgroundColor = .black
+        tracker?.layer = view.preview
         return view
     }
 
@@ -258,11 +305,13 @@ struct CameraPreview: UIViewRepresentable {
 // MARK: - Camera screen
 
 struct RecorderView: View {
+    @Binding var face: FaceFilter
+    @Binding var sound: Track?
     var onVideo: (URL) -> Void
     var onPhotos: ([UIImage]) -> Void
     var onClose: () -> Void
 
-    enum Mode: String { case video = "Video", photo = "Photo" }
+    enum Mode: String { case short = "15s", video = "60s", photo = "Photo" }
 
     @State private var camera = RecorderModel()
     @State private var mode: Mode = .video
@@ -274,6 +323,9 @@ struct RecorderView: View {
     @State private var error: String?
     @State private var pinchStart: CGFloat = 1
     @State private var confirmRestart = false
+    @State private var grid = false
+    @State private var showSpeed = false
+    @State private var pickingSound = false
 
     var body: some View {
         GeometryReader { geo in
@@ -283,7 +335,9 @@ struct RecorderView: View {
                 Color.black.ignoresSafeArea()
                 ZStack {
                     if camera.authorized == true {
-                        CameraPreview(session: camera.session)
+                        CameraPreview(session: camera.session, tracker: camera.faces)
+                            .overlay { FaceOverlayView(tracker: camera.faces, filter: face) }
+                            .overlay { if grid { CameraGrid() } }
                             .gesture(MagnifyGesture()
                                 .onChanged { v in camera.setZoom(pinchStart * v.magnification) }
                                 .onEnded { _ in pinchStart = camera.zoom })
@@ -327,12 +381,24 @@ struct RecorderView: View {
         .preferredColorScheme(.dark)
         .statusBarHidden()
         .task {
+            camera.setSound(sound)
             camera.onPhoto = { image in
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { shots.append(image) }
             }
             await camera.start()
         }
         .onDisappear { camera.stop() }
+        .sheet(isPresented: $pickingSound) {
+            SoundPicker { track in
+                sound = track
+                camera.setSound(track)
+            }
+            .presentationDetents([.medium, .large])
+            .presentationCornerRadius(30)
+        }
+        .onChange(of: mode) { _, m in
+            camera.maxSeconds = m == .short ? 15 : 60
+        }
         .confirmationDialog("Start over?", isPresented: $confirmRestart, titleVisibility: .visible) {
             Button("Delete all clips", role: .destructive) { withAnimation { camera.restart() } }
         }
@@ -347,10 +413,10 @@ struct RecorderView: View {
             let w = geo.size.width
             HStack(spacing: 2) {
                 ForEach(camera.clips) { clip in
-                    Capsule().fill(Theme.gradient).frame(width: max(2, w * clip.seconds / camera.maxSeconds - 2))
+                    Capsule().fill(Theme.gradient).frame(width: max(2, w * clip.effective / camera.maxSeconds - 2))
                 }
                 if camera.recording {
-                    Capsule().fill(Color.white).frame(width: max(2, w * camera.current / camera.maxSeconds))
+                    Capsule().fill(Color.white).frame(width: max(2, w * (camera.total - camera.clips.reduce(0) { $0 + $1.effective }) / camera.maxSeconds))
                 }
                 Spacer(minLength: 0)
             }
@@ -362,28 +428,50 @@ struct RecorderView: View {
 
     private var topControls: some View {
         VStack(spacing: 10) {
-            if mode == .video { progressBar.padding(.horizontal, 14) }
+            if mode != .photo { progressBar.padding(.horizontal, 14) }
             HStack(spacing: 10) {
                 roundButton("xmark") { camera.stop(); onClose() }
-                Spacer()
-                if mode == .video && !camera.clips.isEmpty && !camera.recording {
+                Spacer(minLength: 6)
+                soundPill
+                Spacer(minLength: 6)
+                if mode != .photo && !camera.clips.isEmpty && !camera.recording {
                     roundButton("arrow.counterclockwise") { confirmRestart = true }
+                } else {
+                    Color.clear.frame(width: 44, height: 44)
                 }
-                roundButton(camera.flash ? "bolt.fill" : "bolt.slash.fill", active: camera.flash) { camera.flash.toggle() }
-                Button {
-                    timer = timer == 0 ? 3 : timer == 3 ? 10 : 0
-                } label: {
-                    HStack(spacing: 3) {
-                        Image(systemName: "timer").font(.system(size: 15, weight: .bold))
-                        if timer > 0 { Text("\(timer)s").font(.jakarta(12, .heavy)) }
+            }
+            .padding(.horizontal, 14)
+            HStack {
+                Spacer()
+                VStack(spacing: 12) {
+                    roundButton("arrow.triangle.2.circlepath.camera.fill") { camera.flip() }
+                    roundButton(camera.flash ? "bolt.fill" : "bolt.slash.fill", active: camera.flash) { camera.flash.toggle() }
+                    Button {
+                        timer = timer == 0 ? 3 : timer == 3 ? 10 : 0
+                    } label: {
+                        VStack(spacing: 0) {
+                            Image(systemName: "timer").font(.system(size: 15, weight: .bold))
+                            if timer > 0 { Text("\(timer)s").font(.jakarta(10, .heavy)) }
+                        }
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(timer > 0 ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Color.black.opacity(0.35)), in: Circle())
+                        .overlay(Circle().strokeBorder(.white.opacity(0.25), lineWidth: 1))
                     }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, timer > 0 ? 12 : 0)
-                    .frame(minWidth: 44, minHeight: 44)
-                    .background(timer > 0 ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Color.black.opacity(0.35)), in: Capsule())
+                    .buttonStyle(BouncyStyle())
+                    if mode != .photo {
+                        Button { withAnimation(.snappy) { showSpeed.toggle() } } label: {
+                            Text(speedLabel(camera.speed)).font(.jakarta(13, .heavy)).foregroundStyle(.white)
+                                .frame(width: 44, height: 44)
+                                .background(camera.speed != 1 || showSpeed ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Color.black.opacity(0.35)), in: Circle())
+                                .overlay(Circle().strokeBorder(.white.opacity(0.25), lineWidth: 1))
+                        }
+                        .buttonStyle(BouncyStyle())
+                        .accessibilityLabel("Speed")
+                    }
+                    roundButton("grid", active: grid) { grid.toggle() }
                 }
-                .buttonStyle(BouncyStyle())
-                roundButton("arrow.triangle.2.circlepath.camera.fill") { camera.flip() }
+                .opacity(camera.recording ? 0 : 1)
             }
             .padding(.horizontal, 14)
             if camera.zoom > 1.05 {
@@ -394,8 +482,51 @@ struct RecorderView: View {
         .padding(.top, 8)
     }
 
+    private var soundPill: some View {
+        Button { if !camera.recording { pickingSound = true } } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "music.note").font(.system(size: 13, weight: .bold))
+                Text(sound?.title ?? "Add sound").font(.jakarta(13, .bold)).lineLimit(1)
+                if sound != nil {
+                    Image(systemName: "xmark").font(.system(size: 10, weight: .heavy))
+                        .onTapGesture { sound = nil; camera.setSound(nil) }
+                }
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 14).frame(height: 36)
+            .frame(maxWidth: 200)
+            .background(.black.opacity(0.4), in: Capsule())
+            .overlay(Capsule().strokeBorder(.white.opacity(0.25), lineWidth: 1))
+        }
+        .buttonStyle(BouncyStyle())
+    }
+
+    private func speedLabel(_ v: Double) -> String { v == 0.5 ? "0.5x" : "\(Int(v))x" }
+
+    private var speedRow: some View {
+        HStack(spacing: 4) {
+            ForEach([0.5, 1.0, 2.0, 3.0], id: \.self) { v in
+                Button { withAnimation(.snappy) { camera.speed = v } } label: {
+                    Text(speedLabel(v)).font(.jakarta(13, .heavy))
+                        .foregroundStyle(camera.speed == v ? Color(hex: 0x2A1620) : .white)
+                        .frame(width: 58, height: 34)
+                        .background(camera.speed == v ? Color.white : Color.clear, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .background(.black.opacity(0.45), in: Capsule())
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
     private var bottomControls: some View {
         VStack(spacing: 16) {
+            if !camera.recording {
+                if showSpeed && mode != .photo { speedRow }
+                FaceFilterPicker(selection: $face)
+                    .transition(.opacity)
+            }
             if mode == .photo && !shots.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -417,7 +548,7 @@ struct RecorderView: View {
             HStack(alignment: .center) {
                 // Left: delete the last clip (video) or nothing.
                 Group {
-                    if mode == .video && !camera.clips.isEmpty && !camera.recording {
+                    if mode != .photo && !camera.clips.isEmpty && !camera.recording {
                         roundButton("delete.backward.fill", size: 50) { withAnimation { camera.deleteLast() } }
                             .transition(.scale.combined(with: .opacity))
                     } else {
@@ -430,7 +561,7 @@ struct RecorderView: View {
 
                 // Right: done.
                 Group {
-                    let ready = mode == .video ? (!camera.clips.isEmpty && !camera.recording) : !shots.isEmpty
+                    let ready = mode != .photo ? (!camera.clips.isEmpty && !camera.recording) : !shots.isEmpty
                     if ready {
                         Button { Task { await finish() } } label: {
                             Group {
@@ -451,8 +582,12 @@ struct RecorderView: View {
                 .frame(maxWidth: .infinity)
             }
             HStack(spacing: 26) {
-                ForEach([Mode.video, Mode.photo], id: \.self) { m in
-                    Button { if !camera.recording { withAnimation(.snappy) { mode = m } } } label: {
+                ForEach([Mode.short, Mode.video, Mode.photo], id: \.self) { m in
+                    Button {
+                        guard !camera.recording else { return }
+                        if m == .short && camera.total > 15 { error = "You've already filmed more than 15s"; return }
+                        withAnimation(.snappy) { mode = m }
+                    } label: {
                         VStack(spacing: 4) {
                             Text(m.rawValue).font(.jakarta(14, .heavy)).foregroundStyle(mode == m ? .white : .white.opacity(0.55))
                             Circle().fill(Theme.gradient).frame(width: 5, height: 5).opacity(mode == m ? 1 : 0)
@@ -471,7 +606,7 @@ struct RecorderView: View {
         Button { Task { await shutter() } } label: {
             ZStack {
                 Circle().strokeBorder(.white.opacity(0.9), lineWidth: 5).frame(width: 84, height: 84)
-                if mode == .video {
+                if mode != .photo {
                     Circle()
                         .trim(from: 0, to: camera.total / camera.maxSeconds)
                         .stroke(Theme.gradient, style: StrokeStyle(lineWidth: 5, lineCap: .round))
@@ -503,7 +638,7 @@ struct RecorderView: View {
 
     private func shutter() async {
         error = nil
-        if mode == .video && camera.recording {
+        if mode != .photo && camera.recording {
             camera.stopClip()
             return
         }
@@ -514,8 +649,8 @@ struct RecorderView: View {
             }
             countdown = 0
         }
-        if mode == .video {
-            if camera.total >= camera.maxSeconds - 0.3 { error = "60 seconds max — tap Done to continue."; return }
+        if mode != .photo {
+            if camera.total >= camera.maxSeconds - 0.3 { error = "\(Int(camera.maxSeconds)) seconds max — tap Done to continue."; return }
             camera.startClip()
         } else {
             if camera.flash && camera.position == .front {
@@ -543,5 +678,25 @@ struct RecorderView: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+// Rule-of-thirds lines over the camera.
+struct CameraGrid: View {
+    var body: some View {
+        GeometryReader { g in
+            Path { p in
+                for i in 1...2 {
+                    let x = g.size.width * CGFloat(i) / 3
+                    let y = g.size.height * CGFloat(i) / 3
+                    p.move(to: CGPoint(x: x, y: 0))
+                    p.addLine(to: CGPoint(x: x, y: g.size.height))
+                    p.move(to: CGPoint(x: 0, y: y))
+                    p.addLine(to: CGPoint(x: g.size.width, y: y))
+                }
+            }
+            .stroke(.white.opacity(0.35), lineWidth: 1)
+        }
+        .allowsHitTesting(false)
     }
 }

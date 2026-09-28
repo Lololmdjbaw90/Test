@@ -326,6 +326,7 @@ struct Reel: Identifiable, Hashable {
     var commentsOff: Bool
     var trimStart: Double
     var created: String
+    var duration: Double = 0
     // Website edits played live on top of the video.
     var texts: [ReelText] = []
     var filterId = "none"
@@ -350,6 +351,7 @@ struct Reel: Identifiable, Hashable {
         likes = d.strs("likes")
         views = d.int("views")
         commentsOff = d.bool("comments_off")
+        duration = ReelText.num(d["duration"]) ?? 0
         let edits = d["edits"] as? [String: Any] ?? [:]
         trimStart = ReelText.num(edits["trim_start"]) ?? 0
         if let clips = edits["clips"] as? [Any], let first = clips.first as? [String: Any], let start = ReelText.num(first["start"]) {

@@ -213,6 +213,7 @@ enum FS {
         static func equals(_ field: String, _ value: Any) -> Filter { Filter(field: field, op: "EQUAL", value: value) }
         static func contains(_ field: String, _ value: Any) -> Filter { Filter(field: field, op: "ARRAY_CONTAINS", value: value) }
         static func after(_ field: String, _ value: String) -> Filter { Filter(field: field, op: "GREATER_THAN", value: value) }
+        static func before(_ field: String, _ value: String) -> Filter { Filter(field: field, op: "LESS_THAN", value: value) }
     }
 
     static func nowISO() -> String { Dates.iso(Date()) }
@@ -328,11 +329,11 @@ enum FS {
             // filters only, then filter and sort here instead.
             missingIndex.insert(collection)
             let simple = filters.filter { $0.op == "EQUAL" || $0.op == "ARRAY_CONTAINS" }
-            let ranges = filters.filter { $0.op == "GREATER_THAN" }
+            let ranges = filters.filter { $0.op == "GREATER_THAN" || $0.op == "LESS_THAN" }
             var docs = try await runQuery(collection, simple, orderBy: nil, descending: descending, limit: nil)
             for range in ranges {
-                let floor = range.value as? String ?? ""
-                docs = docs.filter { $0.str(range.field) > floor }
+                let edge = range.value as? String ?? ""
+                docs = docs.filter { range.op == "LESS_THAN" ? $0.str(range.field) < edge : $0.str(range.field) > edge }
             }
             if let key = orderBy {
                 docs.sort { a, b in

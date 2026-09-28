@@ -354,7 +354,11 @@ struct StickerLabel: View {
     private var fontSize: CGFloat { width * sticker.baseSize * sticker.scale }
 
     var body: some View {
-        if sticker.isEmoji {
+        if let image = sticker.image {
+            Image(uiImage: image).resizable().scaledToFit()
+                .frame(width: fontSize)
+                .shadow(color: .black.opacity(0.25), radius: 5, y: 2)
+        } else if sticker.isEmoji {
             Text(sticker.text).font(.system(size: fontSize)).fixedSize()
         } else {
             let size = fontSize

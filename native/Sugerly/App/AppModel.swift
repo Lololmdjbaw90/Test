@@ -18,6 +18,8 @@ final class AppModel {
     var showNotifications = false
     // Ask the shell to switch tabs (e.g. "See all" art → Gallery tab).
     var tabRequest: AppTab?
+    // "Use this sound" on a reel: opens the reel maker with that sound.
+    var soundRequest: Track?
 
     private var auth: AuthClient { AuthClient.shared }
 
