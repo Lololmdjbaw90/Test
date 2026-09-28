@@ -267,6 +267,7 @@ struct Message: Identifiable, Hashable {
     var replyName = ""
     var audioURL = ""
     var audioSeconds: Double = 0
+    var videoURL = ""
 
     struct SharedReel: Hashable {
         var id: String
@@ -300,6 +301,7 @@ struct Message: Identifiable, Hashable {
         replyName = d.str("reply_to_name")
         audioURL = d.str("audio_url")
         audioSeconds = ReelText.num(d["audio_duration"]) ?? 0
+        videoURL = d.str("video_url")
         conversationId = d.str("conversation_id")
         isGroup = d.str("conversation_type") == "group"
         groupName = d.str("group_name")

@@ -1,4 +1,5 @@
 import SwiftUI
+import AVKit
 import UIKit
 import PhotosUI
 import AVFoundation
@@ -17,8 +18,6 @@ struct ChatView: View {
     @Environment(\.dismiss) private var dismissChat
     @State private var messages: [Message] = []
     @State private var draft = ""
-    @State private var photo: PhotosPickerItem?
-    @State private var pickingPhoto = false
     @State private var gifs = false
     @State private var loaded = false
     @State private var reporting: ReportSheet.Target?
@@ -26,6 +25,8 @@ struct ChatView: View {
     @State private var replyTo: Message?
     @State private var confirmDelete: Message?
     @State private var recorder = VoiceNoteRecorder()
+    @State private var studio = false
+    @State private var uploading: String?
     @FocusState private var typing: Bool
 
     private var me: String { model.me?.email ?? "" }
@@ -95,7 +96,11 @@ struct ChatView: View {
         }
         .sheet(item: $reporting) { target in ReportSheet(target: target) }
         .sheet(isPresented: $gifs) { GifPickerSheet { url in Task { await sendMedia(url) } } }
-        .photosPicker(isPresented: $pickingPhoto, selection: $photo, matching: .images)
+        .fullScreenCover(isPresented: $studio) {
+            ReelStudioView(chatName: conversation.title(model)) { media in
+                Task { await sendStudio(media) }
+            }
+        }
         .confirmationDialog("Delete this message?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }), titleVisibility: .visible, presenting: confirmDelete) { message in
             Button("Delete for everyone", role: .destructive) { delete(message) }
             Button("Cancel", role: .cancel) {}
@@ -109,10 +114,6 @@ struct ChatView: View {
             recorder.cancel()
         }
         .task { await poll() }
-        .onChange(of: photo) { _, item in
-            guard let item else { return }
-            Task { await sendPhoto(item) }
-        }
     }
 
     // MARK: header
@@ -276,6 +277,13 @@ struct ChatView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.soft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
+            if let uploading {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small).tint(Theme.main)
+                    Text(uploading).font(.jakarta(12, .semibold)).foregroundStyle(Palette.text2)
+                }
+                .transition(.opacity)
+            }
             if let failed { Text(failed).font(.jakarta(12, .semibold)).foregroundStyle(Palette.danger) }
             if let replyTo { replyBar(replyTo).transition(.move(edge: .bottom).combined(with: .opacity)) }
             if recorder.recording {
@@ -284,7 +292,7 @@ struct ChatView: View {
                 HStack(alignment: .bottom, spacing: 8) {
                     HStack(alignment: .bottom, spacing: 4) {
                         Menu {
-                            Button { pickingPhoto = true } label: { Label("Photo", systemImage: "photo.on.rectangle") }
+                            Button { studio = true } label: { Label("Photo or video", systemImage: "camera.on.rectangle") }
                             Button { gifs = true } label: { Label("GIFs & stickers", systemImage: "photo.stack") }
                         } label: {
                             Image(systemName: "plus").font(.system(size: 19, weight: .semibold)).foregroundStyle(Palette.text2)
@@ -303,11 +311,11 @@ struct ChatView: View {
                         }
                         .accessibilityLabel("GIFs and stickers")
                         if draft.isEmpty {
-                            Button { pickingPhoto = true } label: {
+                            Button { studio = true } label: {
                                 Image(systemName: "camera.fill").font(.system(size: 17, weight: .semibold)).foregroundStyle(Palette.text2)
                                     .frame(width: 34, height: 36)
                             }
-                            .accessibilityLabel("Send a photo")
+                            .accessibilityLabel("Send a photo or video")
                             .transition(.scale.combined(with: .opacity))
                         }
                     }
@@ -506,15 +514,37 @@ struct ChatView: View {
         await post(data)
     }
 
-    private func sendPhoto(_ item: PhotosPickerItem) async {
-        defer { photo = nil }
-        guard let raw = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: raw), let jpeg = ImageTools.jpeg(image, maxSide: 1600) else { return }
-        do {
-            let url = try await StorageClient.upload(jpeg, contentType: "image/jpeg", fileExtension: "jpg")
-            await sendMedia(url)
-        } catch {
-            failed = "Couldn't send the photo — \(error.localizedDescription)"
+    // Photos and videos made in the in-app camera + editor.
+    private func sendStudio(_ media: ChatMedia) async {
+        failed = nil
+        switch media {
+        case .photos(let images):
+            for (i, image) in images.enumerated() {
+                withAnimation { uploading = images.count > 1 ? "Sending photo \(i + 1) of \(images.count)…" : "Sending photo…" }
+                guard let jpeg = ImageTools.jpeg(image, maxSide: 1600) else { continue }
+                do {
+                    let url = try await StorageClient.upload(jpeg, contentType: "image/jpeg", fileExtension: "jpg")
+                    await sendMedia(url)
+                } catch {
+                    failed = "Couldn't send the photo — \(error.localizedDescription)"
+                }
+            }
+        case .video(let file, let cover):
+            withAnimation { uploading = "Sending video…" }
+            do {
+                let data = try Data(contentsOf: file)
+                guard data.count < 58 * 1024 * 1024 else { throw APIError(message: "That video is too big — trim it a little shorter.") }
+                let link = try await StorageClient.upload(data, contentType: "video/mp4", fileExtension: "mp4")
+                var coverURL = ""
+                if let cover, let jpeg = ImageTools.jpeg(cover, maxSide: 900) {
+                    coverURL = (try? await StorageClient.upload(jpeg, contentType: "image/jpeg", fileExtension: "jpg")) ?? ""
+                }
+                if let doc = payload(text: "", imageURL: coverURL, extra: ["video_url": link]) { await post(doc) }
+            } catch {
+                failed = "Couldn't send the video — \(error.localizedDescription)"
+            }
         }
+        withAnimation { uploading = nil }
     }
 
     private func sendMedia(_ url: String) async {
@@ -533,6 +563,7 @@ struct ChatView: View {
         guard seconds >= 0.8, let data = try? Data(contentsOf: url) else { return }
         do {
             let link = try await StorageClient.upload(data, contentType: "audio/mp4", fileExtension: "m4a")
+            VoiceNoteCache.store(url, for: link)
             guard let doc = payload(text: "Voice message", imageURL: "", extra: ["audio_url": link, "audio_duration": (seconds * 10).rounded() / 10]) else { return }
             await post(doc)
         } catch {
@@ -547,6 +578,63 @@ struct ChatView: View {
 }
 
 // MARK: - Pieces
+
+// A video in a chat: its cover with a play button; tap to watch full screen.
+struct ChatVideoThumb: View {
+    let cover: String
+    let video: String
+    @State private var watching = false
+
+    var body: some View {
+        Button { watching = true } label: {
+            ZStack {
+                if cover.isEmpty {
+                    LinearGradient(colors: [Theme.light, Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing)
+                } else {
+                    RemoteImage(url: cover)
+                }
+                Color.black.opacity(0.18)
+                Image(systemName: "play.fill").font(.system(size: 22, weight: .bold)).foregroundStyle(.white)
+                    .frame(width: 54, height: 54).background(.black.opacity(0.35), in: Circle())
+                    .overlay(Circle().strokeBorder(.white.opacity(0.7), lineWidth: 1.5))
+            }
+            .frame(width: 210, height: 300)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .buttonStyle(BouncyStyle(scale: 0.97))
+        .accessibilityLabel("Play video")
+        .fullScreenCover(isPresented: $watching) { ChatVideoPlayer(url: video) }
+    }
+}
+
+struct ChatVideoPlayer: View {
+    let url: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var player: AVPlayer?
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+            if let player {
+                VideoPlayer(player: player).ignoresSafeArea()
+            }
+            Button { dismiss() } label: {
+                Image(systemName: "xmark").font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
+                    .frame(width: 40, height: 40).background(.black.opacity(0.45), in: Circle())
+            }
+            .padding(16)
+            .accessibilityLabel("Close")
+        }
+        .onAppear {
+            guard player == nil, let link = URL(string: url) else { return }
+            try? AVAudioSession.sharedInstance().setCategory(.playback)
+            let p = AVPlayer(url: link)
+            player = p
+            p.play()
+        }
+        .onDisappear { player?.pause() }
+    }
+}
 
 struct DayPill: View {
     let date: Date
@@ -602,6 +690,7 @@ struct ChatBubble: View {
 
     static func preview(_ m: Message) -> String {
         if !m.audioURL.isEmpty { return "Voice message" }
+        if !m.videoURL.isEmpty { return "Video" }
         if m.sharedReel != nil { return "Reel" }
         if !m.displayText.isEmpty { return m.displayText }
         if !m.imageURL.isEmpty { return Media.label(m.imageURL).replacingOccurrences(of: "Sent a ", with: "").capitalized }
@@ -666,7 +755,9 @@ struct ChatBubble: View {
             if let reel = message.sharedReel {
                 SharedReelCard(reel: reel)
             }
-            if !message.imageURL.isEmpty {
+            if !message.videoURL.isEmpty {
+                ChatVideoThumb(cover: message.imageURL, video: message.videoURL)
+            } else if !message.imageURL.isEmpty {
                 MessageMedia(url: message.imageURL, width: 230)
             }
             if !message.audioURL.isEmpty {
@@ -971,47 +1062,116 @@ final class VoiceNoteRecorder: NSObject {
     }
 }
 
+// Voice notes are small, so each one is downloaded once (as soon as its
+// bubble shows up) and then plays straight from the phone: no waiting for a
+// stream to buffer.
+enum VoiceNoteCache {
+    private static var folder: URL {
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("VoiceNotes", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    static func file(for url: String) -> URL {
+        var hash: UInt64 = 1469598103934665603
+        for byte in url.utf8 { hash = (hash ^ UInt64(byte)) &* 1099511628211 }
+        return folder.appendingPathComponent(String(hash, radix: 36) + ".m4a")
+    }
+
+    static func local(_ url: String) -> URL? {
+        let f = file(for: url)
+        return FileManager.default.fileExists(atPath: f.path) ? f : nil
+    }
+
+    // Your own just-recorded note is already on the phone.
+    static func store(_ local: URL, for url: String) {
+        try? FileManager.default.copyItem(at: local, to: file(for: url))
+    }
+
+    @discardableResult
+    static func fetch(_ url: String) async -> URL? {
+        if let hit = local(url) { return hit }
+        guard let link = URL(string: url), let (temp, response) = try? await URLSession.shared.download(from: link),
+              (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true else { return nil }
+        let target = file(for: url)
+        try? FileManager.default.removeItem(at: target)
+        do { try FileManager.default.moveItem(at: temp, to: target) } catch { return nil }
+        return target
+    }
+}
+
 // Plays one voice note at a time.
 @MainActor
 @Observable
 final class VoiceNotePlayer {
     static let shared = VoiceNotePlayer()
     var playingId: String?
+    var loadingId: String?
     var progress: Double = 0
-    @ObservationIgnored private var player: AVPlayer?
-    @ObservationIgnored private var observer: Any?
+    @ObservationIgnored private var player: AVAudioPlayer?
+    @ObservationIgnored private var timer: Timer?
+    @ObservationIgnored private var finisher = Finisher()
+    @ObservationIgnored private var request = 0
+
+    private final class Finisher: NSObject, AVAudioPlayerDelegate {
+        var done: () -> Void = {}
+        func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+            DispatchQueue.main.async { self.done() }
+        }
+    }
 
     func toggle(_ id: String, url: String) {
-        if playingId == id {
+        if playingId == id || loadingId == id {
             stop()
             return
         }
         stop()
-        guard let link = URL(string: url) else { return }
-        try? AVAudioSession.sharedInstance().setCategory(.playback)
-        let p = AVPlayer(url: link)
+        request += 1
+        let mine = request
+        if let file = VoiceNoteCache.local(url) {
+            start(id, file)
+            return
+        }
+        loadingId = id
+        Task {
+            let file = await VoiceNoteCache.fetch(url)
+            guard mine == request else { return }
+            loadingId = nil
+            if let file { start(id, file) }
+        }
+    }
+
+    private func start(_ id: String, _ file: URL) {
+        let session = AVAudioSession.sharedInstance()
+        // Don't touch the audio setup during a call.
+        if session.category != .playAndRecord {
+            try? session.setCategory(.playback, mode: .spokenAudio)
+        }
+        try? session.setActive(true)
+        guard let p = try? AVAudioPlayer(contentsOf: file) else { return }
+        finisher.done = { [weak self] in self?.stop() }
+        p.delegate = finisher
+        p.prepareToPlay()
+        guard p.play() else { return }
         player = p
         playingId = id
         progress = 0
-        observer = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.05, preferredTimescale: 600), queue: .main) { [weak self] time in
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, let item = self.player?.currentItem else { return }
-                let total = item.duration.seconds
-                if total.isFinite, total > 0 {
-                    self.progress = min(1, time.seconds / total)
-                    if time.seconds >= total - 0.05 { self.stop() }
-                }
+                guard let self, let p = self.player, p.duration > 0 else { return }
+                self.progress = min(1, p.currentTime / p.duration)
             }
         }
-        p.play()
     }
 
     func stop() {
-        if let observer { player?.removeTimeObserver(observer) }
-        observer = nil
-        player?.pause()
+        request += 1
+        timer?.invalidate()
+        timer = nil
+        player?.stop()
         player = nil
         playingId = nil
+        loadingId = nil
         progress = 0
     }
 }
@@ -1035,9 +1195,15 @@ struct VoiceNoteBubble: View {
     var body: some View {
         HStack(spacing: 10) {
             Button { notes.toggle(id, url: url) } label: {
-                Image(systemName: playing ? "pause.fill" : "play.fill").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 40, height: 40).background(Theme.gradient, in: Circle())
-                    .contentTransition(.symbolEffect(.replace))
+                ZStack {
+                    if notes.loadingId == id {
+                        ProgressView().tint(.white).controlSize(.small)
+                    } else {
+                        Image(systemName: playing ? "pause.fill" : "play.fill").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
+                            .contentTransition(.symbolEffect(.replace))
+                    }
+                }
+                .frame(width: 40, height: 40).background(Theme.gradient, in: Circle())
             }
             .buttonStyle(BouncyStyle(scale: 0.88))
             VStack(alignment: .leading, spacing: 4) {
@@ -1049,6 +1215,8 @@ struct VoiceNoteBubble: View {
         .padding(.vertical, 6)
         .padding(.trailing, 40)
         .frame(width: 250, alignment: .leading)
+        // Download it now so play starts instantly.
+        .task(id: url) { await VoiceNoteCache.fetch(url) }
     }
 
     private var waveform: some View {

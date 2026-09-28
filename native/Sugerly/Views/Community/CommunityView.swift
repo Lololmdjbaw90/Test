@@ -941,7 +941,8 @@ struct CommentRow: View {
                     NameText(name: comment.authorName, style: model.person(comment.authorEmail)?.nameStyle ?? "", size: 13, nitro: model.person(comment.authorEmail)?.isNitro ?? false)
                     if !comment.text.isEmpty { Text(comment.text).font(.jakarta(15)).foregroundStyle(Palette.text) }
                     if !comment.gifURL.isEmpty {
-                        RemoteImage(url: comment.gifURL, contentMode: .fit).frame(maxWidth: 200, maxHeight: 160).clipShape(RoundedRectangle(cornerRadius: 12))
+                        // GIFs play, stickers show without a frame (same as chats).
+                        MessageMedia(url: comment.gifURL, width: 180)
                     }
                 }
                 .padding(.horizontal, 14)

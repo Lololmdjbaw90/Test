@@ -149,6 +149,11 @@ struct ReelsView: View {
     @State private var cursor: String?
     @State private var exhausted = false
     @State private var loadingMore = false
+    // Pull down on the first reel to refresh (like TikTok).
+    @State private var pull: CGFloat = 0
+    @State private var armed = false
+    @State private var refreshing = false
+    private let pullToRefresh: CGFloat = 90
 
     private var shown: [Reel] {
         let blocked = Set(model.me?.blocked ?? [])
@@ -200,7 +205,13 @@ struct ReelsView: View {
                             }
                         }
                         .scrollTargetLayout()
+                        .onGeometryChange(for: CGFloat.self) { proxy in
+                            proxy.frame(in: .named("reels")).minY
+                        } action: { y in
+                            pullChanged(max(0, y))
+                        }
                     }
+                    .coordinateSpace(.named("reels"))
                     .scrollTargetBehavior(.paging)
                     .scrollPosition(id: $activeId)
                     .scrollIndicators(.hidden)
@@ -209,6 +220,7 @@ struct ReelsView: View {
                 .ignoresSafeArea()
             }
 
+            refreshBadge
             HStack(spacing: 22) {
                 ForEach([("following", "Following"), ("foryou", "For you")], id: \.0) { id, title in
                     Button { withAnimation(.snappy) { feed = id; activeId = shown.first?.id } } label: {
@@ -222,6 +234,8 @@ struct ReelsView: View {
             }
             .shadow(color: .black.opacity(0.4), radius: 6)
             .frame(maxWidth: .infinity)
+            .opacity(pull > 8 || refreshing ? 0 : 1)
+            .animation(.easeOut(duration: 0.15), value: pull > 8 || refreshing)
             .overlay(alignment: .trailing) {
                 Button(action: create) {
                     Image(systemName: "camera.fill").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
@@ -247,6 +261,66 @@ struct ReelsView: View {
     }
 
     private static let pageSize = 30
+
+    // The "pull to refresh" pill that replaces the tabs while you pull.
+    @ViewBuilder
+    private var refreshBadge: some View {
+        if pull > 8 || refreshing {
+            let progress = min(1, pull / pullToRefresh)
+            HStack(spacing: 8) {
+                if refreshing {
+                    ProgressView().tint(.white).controlSize(.small)
+                } else {
+                    Image(systemName: "arrow.down")
+                        .font(.system(size: 13, weight: .heavy))
+                        .rotationEffect(.degrees(armed ? 180 : 0))
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: armed)
+                }
+                Text(refreshing ? "Refreshing…" : armed ? "Release to refresh" : "Pull to refresh")
+                    .font(.jakarta(14, .bold))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 14).frame(height: 34)
+            .background(.black.opacity(0.35), in: Capsule())
+            .opacity(refreshing ? 1 : Double(progress))
+            .scaleEffect(refreshing ? 1 : 0.85 + 0.15 * progress)
+            .padding(.top, 8)
+            .frame(maxWidth: .infinity)
+            .transition(.opacity)
+        }
+    }
+
+    private func pullChanged(_ y: CGFloat) {
+        guard !refreshing else { pull = 0; return }
+        pull = y
+        if y >= pullToRefresh, !armed {
+            armed = true
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        } else if y < 6, armed {
+            // Let go past the line: refresh.
+            armed = false
+            Task { await refresh() }
+        }
+    }
+
+    // A brand-new For You page: fresh reels, unseen ones first.
+    private func refresh() async {
+        guard !refreshing else { return }
+        withAnimation(.snappy) { refreshing = true }
+        defer { withAnimation(.snappy) { refreshing = false } }
+        guard let docs = try? await FS.query("Reel", orderBy: "created_date", limit: Self.pageSize + 10) else { return }
+        let batch = docs.map(Reel.init)
+        let ranked = await ReelBrain.shared.rank(batch, me: model.me?.email ?? "", following: Set(model.me?.following ?? []))
+        guard !ranked.isEmpty else { return }
+        cursor = batch.map(\.created).filter { !$0.isEmpty }.min()
+        exhausted = docs.count < Self.pageSize
+        Self.cache = ranked
+        lastLoad = Date()
+        withAnimation(.easeInOut(duration: 0.25)) {
+            reels = ranked
+            activeId = ranked.first?.id
+        }
+    }
 
     // First page: the newest reels plus a few from people you follow, ranked
     // by the on-device brain. More pages load as you scroll (cursor paging),

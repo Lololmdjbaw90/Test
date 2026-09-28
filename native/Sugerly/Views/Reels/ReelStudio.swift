@@ -265,8 +265,26 @@ final class RenderBox: @unchecked Sendable {
 
 // MARK: - Reel Studio
 
+// What the studio hands back when it's used to send something in a chat.
+enum ChatMedia {
+    case photos([UIImage])
+    case video(URL, cover: UIImage?)
+}
+
 struct ReelStudioView: View {
     enum Step { case pick, edit, post }
+
+    // Chat mode: the same camera and editor, but "Send" instead of posting.
+    var chatName: String? = nil
+    var onChatSend: ((ChatMedia) -> Void)? = nil
+    private var isChat: Bool { onChatSend != nil }
+
+    init() {}
+
+    init(chatName: String, onSend: @escaping (ChatMedia) -> Void) {
+        self.chatName = chatName
+        self.onChatSend = onSend
+    }
 
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -345,6 +363,7 @@ struct ReelStudioView: View {
             case .post: postScreen
             }
         }
+        .overlay { chatBusyOverlay }
         .preferredColorScheme(.dark)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: step)
         .fullScreenCover(isPresented: $camera) {
@@ -402,7 +421,7 @@ struct ReelStudioView: View {
 
     private var pickScreen: some View {
         VStack(spacing: 22) {
-            topBar(title: "New reel", back: { dismiss() }, next: nil)
+            topBar(title: chatName.map { "Send to \($0)" } ?? "New reel", back: { dismiss() }, next: nil)
             Spacer()
             ZStack {
                 Circle().fill(Theme.gradient).frame(width: 190, height: 190).blur(radius: 50).opacity(0.7)
@@ -412,7 +431,7 @@ struct ReelStudioView: View {
                     .background(Theme.gradient, in: RoundedRectangle(cornerRadius: 40, style: .continuous))
                     .shadow(color: Theme.pink.opacity(0.6), radius: 24, y: 10)
             }
-            Text("Make something cute").font(.display(34)).foregroundStyle(.white)
+            Text(isChat ? "Snap or film something" : "Make something cute").font(.display(34)).foregroundStyle(.white)
             if let sound {
                 Label("Using \(sound.title) · \(sound.artist)", systemImage: "music.note")
                     .font(.jakarta(13, .bold)).foregroundStyle(.white).lineLimit(1)
@@ -426,7 +445,7 @@ struct ReelStudioView: View {
             if loadingPick {
                 ProgressView().tint(.white).padding()
             }
-            if !drafts.isEmpty {
+            if !drafts.isEmpty && !isChat {
                 DraftStrip(title: "Drafts", items: drafts, dark: true, thumb: { Drafts.reelCover($0) },
                            label: { d in d.caption.isEmpty ? d.saved.formatted(date: .abbreviated, time: .omitted) : d.caption },
                            onOpen: { d in Task { await openDraft(d) } },
@@ -533,7 +552,7 @@ struct ReelStudioView: View {
 
     private var editTopBar: some View {
         HStack(spacing: 10) {
-            Button { askDraft = true } label: {
+            Button { if isChat { resetToPick() } else { askDraft = true } } label: {
                 Image(systemName: "chevron.left").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
                     .frame(width: 42, height: 42).background(.white.opacity(0.14), in: Circle())
             }
@@ -548,7 +567,13 @@ struct ReelStudioView: View {
             Text("Edit").font(.display(24)).foregroundStyle(.white)
             Spacer()
             Color.clear.frame(width: 42, height: 42)
-            Button("Next") { goToPost() }.buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
+            if isChat {
+                Button { Task { await sendToChat() } } label: { Label("Send", systemImage: "paperplane.fill") }
+                    .buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
+                    .disabled(busy)
+            } else {
+                Button("Next") { goToPost() }.buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
+            }
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
@@ -1054,6 +1079,47 @@ struct ReelStudioView: View {
             teardown()
             dismiss()
             model.showToast("Your reel is live! +30 XP", icon: "play.rectangle.fill")
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    @ViewBuilder
+    private var chatBusyOverlay: some View {
+        if isChat && (busy || error != nil) {
+            ZStack {
+                Color.black.opacity(0.55).ignoresSafeArea()
+                VStack(spacing: 12) {
+                    if busy { ProgressView().tint(.white).controlSize(.large) }
+                    Text(busy ? (status.isEmpty ? "Getting it ready…" : status) : (error ?? "")).font(.jakarta(15, .bold)).foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                    if !busy { Button("OK") { error = nil }.buttonStyle(GradientButtonStyle(height: 40, fullWidth: false)) }
+                }
+                .padding(24)
+            }
+            .transition(.opacity)
+        }
+    }
+
+    // Chat mode: finish the edits and hand the result to the chat.
+    private func sendToChat() async {
+        guard let onChatSend else { return }
+        busy = true
+        error = nil
+        defer { busy = false }
+        do {
+            if let asset {
+                status = "Making your video…"
+                let exported = try await exportVideo(asset)
+                let cover = await coverImage(asset)
+                onChatSend(.video(exported, cover: cover))
+            } else {
+                guard !photos.isEmpty else { return }
+                status = "Getting your photos ready…"
+                onChatSend(.photos(photos.map { bake($0) }))
+            }
+            teardown()
+            dismiss()
         } catch {
             self.error = error.localizedDescription
         }
