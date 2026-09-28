@@ -397,22 +397,46 @@ struct ConfettiBurst: View {
 
 // Pinch and drag a picture inside a circle (profile picture) or a wide
 // frame (banner). Returns the chosen part as a 0…1 rectangle of the picture.
+// Shapes you can pick when cropping in the editors.
+struct CropAspect: Identifiable, Hashable {
+    let label: String
+    let ratio: CGFloat   // width / height; 0 = the picture's own shape
+    var id: String { label }
+
+    static let editor: [CropAspect] = [
+        CropAspect(label: "Original", ratio: 0), CropAspect(label: "9:16", ratio: 9 / 16),
+        CropAspect(label: "4:5", ratio: 4 / 5), CropAspect(label: "1:1", ratio: 1),
+        CropAspect(label: "3:4", ratio: 3 / 4), CropAspect(label: "16:9", ratio: 16 / 9),
+    ]
+}
+
 struct ImageCropper: View {
     let image: UIImage
     let circle: Bool
     let aspect: CGFloat
+    var choices: [CropAspect] = []
+    var title: String? = nil
     var onDone: (CGRect) -> Void
     var onCancel: () -> Void
 
     @State private var scale: CGFloat = 1
     @State private var offset: CGSize = .zero
+    @State private var picked: CropAspect?
     @GestureState private var pinch: CGFloat = 1
     @GestureState private var drag: CGSize = .zero
 
+    private var ratio: CGFloat {
+        guard let picked else { return aspect }
+        return picked.ratio > 0 ? picked.ratio : max(0.1, image.size.width / max(1, image.size.height))
+    }
+
     var body: some View {
         GeometryReader { geo in
-            let frameW = min(geo.size.width - 40, 620, circle ? geo.size.height - 260 : .infinity)
-            let frameH = frameW / aspect
+            let maxW = min(geo.size.width - 40, 620)
+            let maxH = max(120, geo.size.height - (choices.isEmpty ? 220 : 280))
+            let fitW = circle ? min(maxW, maxH) : maxW
+            let frameW = fitW / ratio > maxH ? maxH * ratio : fitW
+            let frameH = frameW / ratio
             let base = max(frameW / max(1, image.size.width), frameH / max(1, image.size.height))
             let s = max(1, scale * pinch)
             let shown = CGSize(width: image.size.width * base * s, height: image.size.height * base * s)
@@ -447,10 +471,34 @@ struct ImageCropper: View {
                 )
             )
             .overlay(alignment: .top) {
-                Text(circle ? "Move and pinch your profile picture" : "Move and pinch your banner")
+                Text(title ?? (circle ? "Move and pinch your profile picture" : "Move and pinch your banner"))
                     .font(.jakarta(14, .bold)).foregroundStyle(.white.opacity(0.9)).padding(.top, 20)
             }
             .overlay(alignment: .bottom) {
+                VStack(spacing: 14) {
+                if !choices.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(choices) { c in
+                                let on = (picked ?? choices.first) == c
+                                Button {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        picked = c
+                                        scale = 1
+                                        offset = .zero
+                                    }
+                                } label: {
+                                    Text(c.label).font(.jakarta(13, .heavy))
+                                        .foregroundStyle(on ? Color(hex: 0x2A1620) : .white)
+                                        .padding(.horizontal, 14).frame(height: 36)
+                                        .background(on ? Color.white : Color.white.opacity(0.14), in: Capsule())
+                                }
+                                .buttonStyle(BouncyStyle())
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                    }
+                }
                 HStack(spacing: 12) {
                     Button("Cancel", action: onCancel).buttonStyle(OutlineButtonStyle(fullWidth: true))
                     Button {
@@ -463,10 +511,12 @@ struct ImageCropper: View {
                         .buttonStyle(GradientButtonStyle(height: 48))
                 }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 24)
                 .frame(maxWidth: 520)
+                }
+                .padding(.bottom, 24)
             }
         }
+        .onAppear { if picked == nil, let first = choices.first { picked = first } }
     }
 
     @ViewBuilder private var cutout: some View {

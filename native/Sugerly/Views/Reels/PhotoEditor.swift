@@ -49,10 +49,11 @@ struct PhotoEditorView: View {
     @Environment(\.dismiss) private var dismiss
 
     enum Tool: String, CaseIterable {
-        case filters = "Filters", face = "Face", adjust = "Adjust", text = "Text", stickers = "Stickers", draw = "Draw", rotate = "Rotate"
+        case filters = "Filters", crop = "Crop", face = "Face", adjust = "Adjust", text = "Text", stickers = "Stickers", draw = "Draw", rotate = "Rotate"
         var icon: String {
             switch self {
             case .filters: return "camera.filters"
+            case .crop: return "crop"
             case .face: return "face.dashed.fill"
             case .adjust: return "slider.horizontal.3"
             case .text: return "textformat"
@@ -79,6 +80,7 @@ struct PhotoEditorView: View {
     @State private var penColor: UInt32 = 0xFFFFFF
     @State private var penWidth: CGFloat = 0.012
     @State private var penNeon = false
+    @State private var cropping: EditorCrop?
 
     init(image: UIImage, onDone: @escaping (UIImage) -> Void) {
         original = image
@@ -137,6 +139,10 @@ struct PhotoEditorView: View {
                 HStack(spacing: 8) {
                     ForEach(Tool.allCases, id: \.self) { t in
                         Button {
+                            if t == .crop {
+                                cropping = EditorCrop(image: base, slide: 0)
+                                return
+                            }
                             if t == .rotate {
                                 checkpoint()
                                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { base = PhotoBaker.rotate(base) }
@@ -165,6 +171,16 @@ struct PhotoEditorView: View {
         .preferredColorScheme(.dark)
         .onChange(of: look) { _, _ in refreshPreview() }
         .onChange(of: face) { _, _ in refreshPreview() }
+        .fullScreenCover(item: $cropping) { job in
+            ImageCropper(image: job.image, circle: false, aspect: 1, choices: CropAspect.editor, title: "Move and pinch to crop", onDone: { rect in
+                cropping = nil
+                checkpoint()
+                let cropped = Cropping.crop(base, rect, maxSide: 3000)
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { base = cropped }
+                refreshPreview()
+            }, onCancel: { cropping = nil })
+            .preferredColorScheme(.dark)
+        }
         .sheet(item: $editingText) { sticker in
             TextStickerEditor(sticker: sticker) { updated in
                 if let i = stickers.firstIndex(where: { $0.id == updated.id }) { stickers[i] = updated } else { stickers.append(updated) }
@@ -231,7 +247,7 @@ struct PhotoEditorView: View {
                 checkpoint()
                 withAnimation { strokes.removeAll() }
             })
-        case .stickers, .rotate:
+        case .stickers, .rotate, .crop:
             StickerTray { image in
                 checkpoint()
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {

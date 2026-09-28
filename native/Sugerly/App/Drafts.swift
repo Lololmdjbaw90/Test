@@ -112,6 +112,7 @@ enum Drafts {
         var photoCount: Int
         var stickers: [Sticker]
         var strokes: [Stroke]
+        var crop: [Double]? = nil
     }
 
     static func reels() -> [Reel] { list("reels", as: Reel.self).sorted { $0.saved > $1.saved } }
@@ -144,6 +145,7 @@ enum Drafts {
         var cover: UIImage?
         var stickers: [TextSticker]
         var strokes: [DrawStroke]
+        var videoCrop: CGRect? = nil
     }
 
     @discardableResult
@@ -182,7 +184,8 @@ enum Drafts {
                          soundId: state.sound?.id ?? "", soundTitle: state.sound?.title ?? "", soundArtist: state.sound?.artist ?? "",
                          soundURL: state.sound?.audioURL ?? "", soundCover: state.sound?.coverURL ?? "",
                          soundVolume: state.soundVolume, originalVolume: state.originalVolume,
-                         videoFile: videoFile, photoCount: state.photos.count, stickers: stickers, strokes: strokes)
+                         videoFile: videoFile, photoCount: state.photos.count, stickers: stickers, strokes: strokes,
+                         crop: state.videoCrop.map { [Double($0.minX), Double($0.minY), Double($0.width), Double($0.height)] })
         write(draft, kind: "reels", id: id)
         return id
     }

@@ -259,6 +259,7 @@ struct PickedMovie: Transferable {
 final class RenderBox: @unchecked Sendable {
     var look = ReelLook()
     var faces: FaceFilterRenderer?
+    var crop: CGRect?
     var scale: CGFloat = 1
     var overlays: [CIImage] = []
 }
@@ -301,10 +302,11 @@ struct ReelStudioView: View {
     @State private var penNeon = false
 
     enum EditTool: String, CaseIterable {
-        case trim = "Trim", filters = "Filters", face = "Face", adjust = "Adjust", text = "Text", stickers = "Stickers", draw = "Draw", sound = "Sound"
+        case trim = "Trim", crop = "Crop", filters = "Filters", face = "Face", adjust = "Adjust", text = "Text", stickers = "Stickers", draw = "Draw", sound = "Sound"
         var icon: String {
             switch self {
             case .trim: return "scissors"
+            case .crop: return "crop"
             case .filters: return "camera.filters"
             case .face: return "face.dashed.fill"
             case .adjust: return "slider.horizontal.3"
@@ -316,7 +318,9 @@ struct ReelStudioView: View {
         }
     }
 
-    struct Snapshot { var look: ReelLook; var stickers: [TextSticker]; var strokes: [DrawStroke] = [] }
+    struct Snapshot { var look: ReelLook; var stickers: [TextSticker]; var strokes: [DrawStroke] = []; var photos: [UIImage] = []; var videoCrop: CGRect? = nil }
+    @State private var videoCrop: CGRect?
+    @State private var cropJob: EditorCrop?
     @State private var editingText: TextSticker?
     @State private var sound: Track?
     @State private var soundPlayer: AVPlayer?
@@ -373,6 +377,13 @@ struct ReelStudioView: View {
         .onChange(of: items) { _, list in Task { await loadPicked(list) } }
         .onChange(of: look) { _, _ in applyPreviewFilter() }
         .onChange(of: face) { _, _ in applyPreviewFilter() }
+        .fullScreenCover(item: $cropJob) { job in
+            ImageCropper(image: job.image, circle: false, aspect: 9 / 16, choices: CropAspect.editor, title: "Move and pinch to crop", onDone: { rect in
+                cropJob = nil
+                applyCrop(job, rect)
+            }, onCancel: { cropJob = nil })
+            .preferredColorScheme(.dark)
+        }
         .confirmationDialog("Save this reel as a draft?", isPresented: $askDraft, titleVisibility: .visible) {
             Button("Save draft") {
                 saveDraft()
@@ -575,6 +586,25 @@ struct ReelStudioView: View {
                 .padding(.horizontal, 16)
             }
             .sensoryFeedback(.selection, trigger: look.filter)
+        case .crop:
+            VStack(spacing: 10) {
+                Text(asset != nil ? (videoCrop == nil ? "Crop the video to a new shape" : "Video cropped") : "Crop photo \(slide + 1) of \(photos.count) — swipe to pick another")
+                    .font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.7))
+                HStack(spacing: 10) {
+                    Button { Task { await startCrop() } } label: { Label(asset != nil ? "Crop video" : "Crop photo", systemImage: "crop") }
+                        .buttonStyle(GradientButtonStyle(height: 44, fullWidth: false))
+                    if asset != nil && videoCrop != nil {
+                        Button {
+                            checkpoint()
+                            videoCrop = nil
+                            applyPreviewFilter()
+                        } label: { Label("Reset", systemImage: "arrow.counterclockwise") }
+                            .buttonStyle(OutlineButtonStyle())
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity)
         case .face:
             VStack(spacing: 8) {
                 Text(asset != nil ? "Face filters follow faces in your video" : "Face filters go on every photo").font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.7))
@@ -670,7 +700,7 @@ struct ReelStudioView: View {
     }
 
     private func checkpoint() {
-        history.append(Snapshot(look: look, stickers: stickers, strokes: strokes))
+        history.append(Snapshot(look: look, stickers: stickers, strokes: strokes, photos: photos, videoCrop: videoCrop))
         if history.count > 40 { history.removeFirst() }
     }
 
@@ -681,6 +711,10 @@ struct ReelStudioView: View {
             stickers = last.stickers
             strokes = last.strokes
         }
+        let cropChanged = last.videoCrop != videoCrop || (asset == nil && last.photos.count == photos.count && !zip(last.photos, photos).allSatisfy { $0 === $1 })
+        videoCrop = last.videoCrop
+        if asset == nil && !last.photos.isEmpty { photos = last.photos }
+        if cropChanged { applyPreviewFilter() }
     }
 
     // MARK: step 3 — post
@@ -801,13 +835,40 @@ struct ReelStudioView: View {
         if sound != nil { startSound() }
     }
 
+    // MARK: crop
+
+    private func startCrop() async {
+        if let asset {
+            player.pause()
+            let generator = AVAssetImageGenerator(asset: asset)
+            generator.appliesPreferredTrackTransform = true
+            generator.maximumSize = CGSize(width: 1400, height: 1400)
+            let at = CMTime(seconds: max(trimStart, player.currentTime().seconds.isFinite ? player.currentTime().seconds : trimStart), preferredTimescale: 600)
+            guard let frame = try? await generator.image(at: at) else { return }
+            cropJob = EditorCrop(image: UIImage(cgImage: frame.image), slide: nil)
+        } else if photos.indices.contains(slide) {
+            cropJob = EditorCrop(image: photos[slide], slide: slide)
+        }
+    }
+
+    private func applyCrop(_ job: EditorCrop, _ rect: CGRect) {
+        checkpoint()
+        if let i = job.slide, photos.indices.contains(i) {
+            photos[i] = Cropping.crop(photos[i], rect, maxSide: 2048)
+        } else {
+            videoCrop = rect
+            player.play()
+        }
+        applyPreviewFilter()
+    }
+
     // MARK: drafts
 
     private func saveDraft() {
         let state = Drafts.ReelState(caption: caption, allowComments: allowComments, look: look, face: face,
                                      trimStart: trimStart, trimEnd: trimEnd, sound: sound, soundVolume: soundVolume,
                                      originalVolume: originalVolume, video: asset != nil ? videoURL : nil,
-                                     photos: asset == nil ? photos : [], cover: thumbs.first, stickers: stickers, strokes: strokes)
+                                     photos: asset == nil ? photos : [], cover: thumbs.first, stickers: stickers, strokes: strokes, videoCrop: videoCrop)
         draftId = Drafts.saveReel(id: draftId, state)
         drafts = Drafts.reels()
         model.showToast("Saved to drafts", icon: "tray.and.arrow.down.fill")
@@ -836,6 +897,7 @@ struct ReelStudioView: View {
         strokes = restored.strokes
         caption = d.caption
         allowComments = d.allowComments
+        if let c = d.crop, c.count == 4 { videoCrop = CGRect(x: c[0], y: c[1], width: c[2], height: c[3]) }
         history = []
         applyPreviewFilter()
     }
@@ -844,6 +906,7 @@ struct ReelStudioView: View {
         let a = AVURLAsset(url: url)
         let seconds = (try? await a.load(.duration).seconds) ?? 0
         guard seconds > 0.3 else { error = "That video couldn't be opened."; return }
+        videoCrop = nil
         videoURL = url
         asset = a
         duration = seconds
@@ -891,8 +954,11 @@ struct ReelStudioView: View {
         }
         guard let asset, let item = player.currentItem else { return }
         let faces = chosenFace == .none ? nil : FaceFilterRenderer(chosenFace)
-        item.videoComposition = chosen.isNeutral && faces == nil ? nil : AVMutableVideoComposition(asset: asset) { request in
-            var img = chosen.isNeutral ? request.sourceImage : chosen.apply(request.sourceImage)
+        let crop = videoCrop
+        item.videoComposition = chosen.isNeutral && faces == nil && crop == nil ? nil : AVMutableVideoComposition(asset: asset) { request in
+            var img = request.sourceImage
+            if let crop { img = VideoCrop.fill(VideoCrop.cut(img, crop), request.renderSize) }
+            if !chosen.isNeutral { img = chosen.apply(img) }
             if let faces { img = faces.apply(img) }
             request.finish(with: img, context: nil)
         }
@@ -932,6 +998,7 @@ struct ReelStudioView: View {
         look = ReelLook()
         caption = ""
         history = []
+        videoCrop = nil
         draftId = nil
         drafts = Drafts.reels()
         withAnimation { step = .pick }
@@ -1015,7 +1082,9 @@ struct ReelStudioView: View {
         generator.appliesPreferredTrackTransform = true
         generator.maximumSize = CGSize(width: 1080, height: 1920)
         guard let result = try? await generator.image(at: CMTime(seconds: trimStart + 0.1, preferredTimescale: 600)) else { return nil }
-        return bake(UIImage(cgImage: result.image))
+        var frame = UIImage(cgImage: result.image)
+        if let videoCrop { frame = Cropping.crop(frame, videoCrop, maxSide: 1920) }
+        return bake(frame)
     }
 
     // Filter + text stickers drawn onto a picture.
@@ -1056,18 +1125,21 @@ struct ReelStudioView: View {
         let box = RenderBox()
         box.look = look
         box.faces = face == .none ? nil : FaceFilterRenderer(face)
+        box.crop = videoCrop
         let composition = AVMutableVideoComposition(asset: asset) { request in
             var img = request.sourceImage
+            if let crop = box.crop { img = VideoCrop.cut(img, crop) }
             if box.scale < 1 { img = img.transformed(by: CGAffineTransform(scaleX: box.scale, y: box.scale)) }
             img = box.look.apply(img)
             if let faces = box.faces { img = faces.apply(img) }
             for overlay in box.overlays { img = overlay.composited(over: img) }
             request.finish(with: img, context: nil)
         }
-        let natural = composition.renderSize
+        let full = composition.renderSize
+        let natural = videoCrop.map { CGSize(width: full.width * $0.width, height: full.height * $0.height) } ?? full
         let scale = min(1, 1280 / max(natural.width, natural.height))
         box.scale = scale
-        let size = CGSize(width: (natural.width * scale / 2).rounded() * 2, height: (natural.height * scale / 2).rounded() * 2)
+        let size = CGSize(width: max(2, (natural.width * scale / 2).rounded() * 2), height: max(2, (natural.height * scale / 2).rounded() * 2))
         composition.renderSize = size
         box.overlays = overlayImages(width: size.width, height: size.height)
 

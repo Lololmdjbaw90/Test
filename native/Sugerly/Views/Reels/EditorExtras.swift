@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import CoreImage
 
 // MARK: - Vector stickers (no emoji): cute SF Symbols with a white die-cut edge
 
@@ -267,4 +268,31 @@ struct DrawPanel: View {
             .padding(.horizontal, 16)
         }
     }
+}
+
+// MARK: - Cropping video frames
+
+enum VideoCrop {
+    // The part of a frame inside `unit` (0…1, measured from the top-left), moved to 0,0.
+    static func cut(_ img: CIImage, _ unit: CGRect) -> CIImage {
+        let e = img.extent
+        let r = CGRect(x: e.minX + unit.minX * e.width, y: e.minY + (1 - unit.maxY) * e.height,
+                       width: unit.width * e.width, height: unit.height * e.height)
+        return img.cropped(to: r).transformed(by: CGAffineTransform(translationX: -r.minX, y: -r.minY))
+    }
+
+    // Fills a size with a picture (the live preview keeps the video's size).
+    static func fill(_ img: CIImage, _ size: CGSize) -> CIImage {
+        let e = img.extent
+        let k = max(size.width / max(1, e.width), size.height / max(1, e.height))
+        let scaled = img.transformed(by: CGAffineTransform(scaleX: k, y: k))
+        let dx = (size.width - e.width * k) / 2, dy = (size.height - e.height * k) / 2
+        return scaled.transformed(by: CGAffineTransform(translationX: dx, y: dy)).cropped(to: CGRect(origin: .zero, size: size))
+    }
+}
+
+struct EditorCrop: Identifiable {
+    let id = UUID()
+    let image: UIImage
+    let slide: Int?   // nil = the video
 }
