@@ -356,7 +356,7 @@ struct ArtworkDetailView: View {
                     .sensoryFeedback(.impact(weight: .light), trigger: liked)
                     Button { toggleSave() } label: { Label(saved ? "Saved" : "Save", systemImage: saved ? "bookmark.fill" : "bookmark") }
                         .buttonStyle(OutlineButtonStyle())
-                    ShareLink(item: artwork.title) { Image(systemName: "paperplane.fill") }
+                    ShareLink(item: ReelLinks.artwork(artwork.id), subject: Text(artwork.title), message: Text("\(artwork.title) by \(artwork.authorName) on Sugerly")) { Image(systemName: "paperplane.fill") }
                         .buttonStyle(OutlineButtonStyle())
                     Spacer()
                     Menu {

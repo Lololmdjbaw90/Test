@@ -52,6 +52,7 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         NSPhotoLibraryUsageDescription: Choose photos to post, send in chats or use as your profile picture.
         NSCameraUsageDescription: Take photos and videos to share on Sugerly.
+        NSPhotoLibraryAddUsageDescription: Save reels you like to your photos.
         NSMicrophoneUsageDescription: Talk in voice channels and record sound for the reels you film.
         UIBackgroundModes:
           - audio

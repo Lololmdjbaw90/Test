@@ -274,7 +274,14 @@ struct ConversationRow: View {
                     Spacer()
                     Text(Dates.ago(conversation.last?.created ?? "")).font(.jakarta(12, unread ? .bold : .regular)).foregroundStyle(unread ? Theme.pink : Palette.muted)
                 }
-                HStack {
+                HStack(spacing: 5) {
+                    if let last = conversation.last, last.authorEmail == me, last.kind != "call" {
+                        Ticks(pending: false, read: last.readBy.contains { $0 != me })
+                    }
+                    if let icon = previewIcon {
+                        Image(systemName: icon).font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(conversation.last?.callOutcome == "missed" ? Palette.danger : Palette.muted)
+                    }
                     Text(preview(me)).font(.jakarta(14, unread ? .semibold : .regular)).foregroundStyle(unread ? Palette.text : Palette.muted).lineLimit(1)
                     Spacer()
                     if unread {
@@ -293,11 +300,33 @@ struct ConversationRow: View {
         .shadow(color: unread ? Theme.main.opacity(0.12) : Palette.shadow, radius: unread ? 12 : 6, y: 3)
     }
 
+    private var previewIcon: String? {
+        guard let last = conversation.last else { return nil }
+        if last.kind == "call" { return last.callOutcome == "missed" ? "phone.arrow.down.left.fill" : "phone.fill" }
+        if !last.audioURL.isEmpty { return "mic.fill" }
+        if last.sharedReel != nil { return "play.rectangle.fill" }
+        if !last.imageURL.isEmpty && last.displayText.isEmpty { return Media.isSticker(last.imageURL) ? "face.smiling" : "photo.fill" }
+        return nil
+    }
+
     private func preview(_ me: String) -> String {
         guard let last = conversation.last else { return "Say hi" }
-        let body = last.text.isEmpty ? (last.imageURL.isEmpty ? "Message" : Media.label(last.imageURL)) : last.text
-        if last.authorEmail == me { return "You: \(body)" }
-        return conversation.isGroup ? "\(last.authorName): \(body)" : body
+        if last.kind == "call" {
+            switch last.callOutcome {
+            case "missed": return last.authorEmail == me ? "No answer" : "Missed voice call"
+            case "declined": return "Declined call"
+            default:
+                let s = Int(last.callDuration / 1000)
+                return "Voice call · \(s / 60):\(String(format: "%02d", s % 60))"
+            }
+        }
+        let body: String
+        if !last.audioURL.isEmpty { body = "Voice message" }
+        else if last.sharedReel != nil { body = last.displayText.isEmpty ? "Sent a reel" : last.displayText }
+        else if last.displayText.isEmpty { body = last.imageURL.isEmpty ? "Message" : Media.label(last.imageURL) }
+        else { body = last.displayText }
+        if last.authorEmail == me || !conversation.isGroup { return body }
+        return "\(last.authorName.split(separator: " ").first.map(String.init) ?? last.authorName): \(body)"
     }
 }
 

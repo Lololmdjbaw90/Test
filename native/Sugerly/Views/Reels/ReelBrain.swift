@@ -65,6 +65,10 @@ actor ReelBrain {
     func liked(_ reel: Reel, _ on: Bool) { learn(reel, on ? 1.2 : -0.6) }
     func saved(_ reel: Reel, _ on: Bool) { learn(reel, on ? 1.4 : -0.4) }
     func commented(_ reel: Reel) { learn(reel, 0.8) }
+    func notInterested(_ reel: Reel) {
+        seen[reel.id] = Date().timeIntervalSince1970
+        learn(reel, -1.6)
+    }
     func followed(_ email: String) {
         authors[email] = min(5, (authors[email] ?? 0) + 1.5)
         scheduleSave()

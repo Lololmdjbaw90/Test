@@ -597,7 +597,7 @@ struct PostCard: View {
                     Text("\(store.commentCounts[post.id] ?? 0)").font(.jakarta(17, .semibold)).foregroundStyle(Palette.text2)
                 }
             }
-            ShareLink(item: post.title.isEmpty ? post.text : post.title, subject: Text("Sugerly")) {
+            ShareLink(item: ReelLinks.post(post.id), subject: Text("Sugerly"), message: Text(post.title.isEmpty ? post.text : post.title)) {
                 Image(systemName: "square.and.arrow.up").foregroundStyle(Palette.text2)
             }
             Spacer()

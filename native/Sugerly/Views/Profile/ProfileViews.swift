@@ -71,6 +71,8 @@ struct ProfileContent: View {
     @Environment(PostsStore.self) private var store
     @State private var posts: [Post] = []
     @State private var reels: [Reel] = []
+    @State private var savedPosts: [Post] = []
+    @State private var savedReels: [Reel] = []
     @State private var loading = true
     @State private var tab: Tab = .posts
     @State private var editing = false
@@ -273,8 +275,24 @@ struct ProfileContent: View {
                 postGrid(posts)
             case .reels:
                 if reels.isEmpty { EmptyCard(icon: "play.rectangle.fill", title: "No reels yet", text: isMe ? "Tap + → Create a reel." : "Nothing to see here yet.") }
+                reelGrid(reels)
+            case .saved:
+                if savedPosts.isEmpty && savedReels.isEmpty { EmptyCard(icon: "bookmark.fill", title: "Nothing saved", text: "Tap the bookmark on any post or reel to keep it here.") }
+                if !savedReels.isEmpty {
+                    Label("Reels", systemImage: "play.rectangle.fill").font(.jakarta(13, .heavy)).foregroundStyle(Palette.text2)
+                    reelGrid(savedReels)
+                }
+                if !savedPosts.isEmpty {
+                    Label("Posts", systemImage: "square.grid.2x2.fill").font(.jakarta(13, .heavy)).foregroundStyle(Palette.text2).padding(.top, 6)
+                    postGrid(savedPosts)
+                }
+            }
+        }
+    }
+
+    private func reelGrid(_ list: [Reel]) -> some View {
                 LazyVGrid(columns: columns, spacing: 4) {
-                    ForEach(reels) { reel in
+                    ForEach(list) { reel in
                         Button { path.append(.reel(reel)) } label: {
                             Rectangle().fill(Palette.surface2)
                                 .aspectRatio(9 / 16, contentMode: .fit)
@@ -287,12 +305,6 @@ struct ProfileContent: View {
                         .buttonStyle(BouncyStyle(scale: 0.95))
                     }
                 }
-            case .saved:
-                let saved = store.posts.filter { person.savedPosts.contains($0.id) }
-                if saved.isEmpty { EmptyCard(icon: "bookmark.fill", title: "Nothing saved", text: "Tap the bookmark on any post to keep it here.") }
-                postGrid(saved)
-            }
-        }
     }
 
     private func postGrid(_ list: [Post]) -> some View {
@@ -324,6 +336,22 @@ struct ProfileContent: View {
         posts = (await postDocs ?? []).map(Post.init)
         reels = (await reelDocs ?? []).map(Reel.init)
         for post in posts where !store.posts.contains(where: { $0.id == post.id }) { store.posts.append(post) }
+        if isMe { await loadSaved() }
+    }
+
+    // Your saved posts and reels (fetched by id, newest saves first).
+    private func loadSaved() async {
+        var foundPosts: [Post] = []
+        for id in person.savedPosts.reversed().prefix(30) {
+            if let hit = store.posts.first(where: { $0.id == id }) { foundPosts.append(hit) }
+            else if let doc = try? await FS.get("CommunityPost", id) { foundPosts.append(Post(doc)) }
+        }
+        var foundReels: [Reel] = []
+        for id in person.savedReels.reversed().prefix(30) {
+            if let doc = try? await FS.get("Reel", id) { foundReels.append(Reel(doc)) }
+        }
+        savedPosts = foundPosts
+        savedReels = foundReels
     }
 
     private func toggleFollow() {

@@ -57,6 +57,13 @@ final class ReelVideo {
     var progress: Double = 0
     private var timeObserver: Any?
 
+    // Forget a video so the next try loads it fresh.
+    static func drop(_ id: String) {
+        pool[id]?.pause()
+        pool[id] = nil
+        order.removeAll { $0 == id }
+    }
+
     init(url: URL, start: Double, filter: String = "none", speed: Double = 1) {
         let asset = AVURLAsset(url: url)
         let item = AVPlayerItem(asset: asset)
@@ -97,12 +104,25 @@ final class ReelVideo {
                 MainActor.assumeIsolated {
                     guard let self, let item = self.player.currentItem else { return }
                     let total = item.duration.seconds
-                    if total.isFinite, total > 0 { self.progress = min(1, max(0, time.seconds / total)) }
+                    if total.isFinite, total > 0 {
+                        self.duration = total
+                        self.progress = min(1, max(0, time.seconds / total))
+                    }
                 }
             }
         }
     }
     func pause() { player.pause() }
+
+    var duration: Double = 0
+
+    func seek(to fraction: Double) {
+        guard let item = player.currentItem else { return }
+        let total = item.duration.seconds
+        guard total.isFinite, total > 0 else { return }
+        progress = fraction
+        player.seek(to: CMTime(seconds: fraction * total, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+    }
 }
 
 // Set up playback audio once, not on every swipe (it can take a moment).
@@ -168,7 +188,8 @@ struct ReelsView: View {
                                             .blur(radius: 40)
                                             .overlay(Color.black.opacity(0.45))
                                     }
-                                    ReelPage(reel: reel, active: visible && activeId == reel.id, near: abs(i - activeIndex) <= 1, path: $path)
+                                    ReelPage(reel: reel, active: visible && activeId == reel.id, near: abs(i - activeIndex) <= 1, path: $path,
+                                             onNext: { advance(from: reel.id) }, onHide: { hide($0) })
                                         .frame(width: column, height: geo.size.height)
                                         .clipShape(RoundedRectangle(cornerRadius: column < geo.size.width - 1 ? 28 : 0, style: .continuous))
                                         .padding(.vertical, column < geo.size.width - 1 ? 0 : 0)
@@ -258,6 +279,21 @@ struct ReelsView: View {
         if activeId == nil { activeId = reels.first?.id }
     }
 
+    // Auto-scroll and "Not interested" move on to the next reel.
+    private func advance(from id: String) {
+        let list = shown
+        guard let i = list.firstIndex(where: { $0.id == id }), i + 1 < list.count else { return }
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.9)) { activeId = list[i + 1].id }
+    }
+
+    private func hide(_ id: String) {
+        advance(from: id)
+        Task {
+            try? await Task.sleep(for: .milliseconds(450))
+            withAnimation(.snappy) { reels.removeAll { $0.id == id } }
+        }
+    }
+
     private static func reels(by email: String?) async -> [Reel] {
         guard let email else { return [] }
         return ((try? await FS.query("Reel", [.equals("user_email", email)], limit: 4)) ?? []).map(Reel.init)
@@ -301,7 +337,18 @@ struct ReelPage: View {
     @State private var commentCount = 0
     @State private var watchStart: Date?
     @State private var useSound = false
+    @State private var sharing = false
+    @State private var hearts: [HeartBurst] = []
+    @State private var captionOpen = false
+    @State private var justFollowed = false
+    @State private var scrubbing = false
+    @State private var lastProgress: Double = 0
     @AppStorage("sugerly.reels.muted") private var muted = false
+    @AppStorage("sugerly.reels.speed") private var playSpeed = 1.0
+    @AppStorage("sugerly.reels.autoscroll") private var autoScroll = false
+    @AppStorage("sugerly.reels.clear") private var clearMode = false
+    var onNext: () -> Void = {}
+    var onHide: (String) -> Void = { _ in }
 
     private var me: String { model.me?.email ?? "" }
     private var liked: Bool { reel.likes.contains(me) }
@@ -323,18 +370,45 @@ struct ReelPage: View {
                     .transition(.scale.combined(with: .opacity))
                     .allowsHitTesting(false)
             }
-            Image(systemName: "heart.fill")
-                .font(.system(size: 110))
-                .foregroundStyle(Theme.gradient)
-                .shadow(color: Theme.pink.opacity(0.7), radius: 24)
-                .scaleEffect(heart ? 1 : 0.3)
-                .opacity(heart ? 1 : 0)
-                .allowsHitTesting(false)
-            overlay
+            ForEach(hearts) { HeartBurstView(burst: $0) }
+            if clearMode {
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button { withAnimation(.snappy) { clearMode = false } } label: {
+                            Label("Show", systemImage: "eye.fill").font(.jakarta(13, .bold)).foregroundStyle(.white)
+                                .padding(.horizontal, 14).frame(height: 36).background(.black.opacity(0.4), in: Capsule())
+                        }
+                        .padding(.trailing, 16).padding(.top, showBack ? 54 : 110)
+                    }
+                    Spacer()
+                }
+                .transition(.opacity)
+            } else {
+                overlay.transition(.opacity)
+            }
         }
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) { doubleTap() }
+        .onTapGesture(count: 2, coordinateSpace: .local) { point in doubleTap(at: point) }
         .onTapGesture { togglePause() }
+        .onLongPressGesture(minimumDuration: 0.45) { sharing = true }
+        .sensoryFeedback(.impact(weight: .medium), trigger: sharing) { _, now in now }
+        .animation(.easeInOut(duration: 0.25), value: clearMode)
+        .onChange(of: video?.progress ?? 0) { _, now in
+            // Finished a loop: auto-scroll to the next reel.
+            if autoScroll && active && !scrubbing && lastProgress > 0.9 && now < 0.1 { onNext() }
+            lastProgress = now
+        }
+        .onChange(of: playSpeed) { _, _ in applySpeed() }
+        .sheet(isPresented: $sharing) {
+            ReelShareSheet(reel: reel, mine: reel.authorEmail == me,
+                           onNotInterested: { notInterested() },
+                           onReport: { reporting = ReportSheet.Target(id: reel.id, type: "reel", ownerEmail: reel.authorEmail, preview: reel.caption, link: "/Reels?r=\(reel.id)") },
+                           onDelete: { deleteReel() },
+                           onUseSound: { useSound = true })
+                .presentationDetents([.height(440), .large])
+                .presentationCornerRadius(30)
+        }
         .onAppear {
             if active { start() } else if near { preload() }
         }
@@ -352,11 +426,8 @@ struct ReelPage: View {
             video?.player.isMuted = now || reel.muted
             sound?.isMuted = now
         }
-        .task(id: reel.id) {
-            let docs = (try? await FS.query("CommunityComment", [.equals("post_id", "reel_\(reel.id)")], limit: 200)) ?? []
-            commentCount = docs.count
-        }
-        .sheet(isPresented: $comments) {
+        .task(id: reel.id) { await refreshComments() }
+        .sheet(isPresented: $comments, onDismiss: { Task { await refreshComments() } }) {
             NavigationStack {
                 CommentsScreen(collection: "CommunityComment", field: "post_id", targetId: "reel_\(reel.id)", ownerEmail: reel.authorEmail, link: "/Reels?r=\(reel.id)", disabled: reel.commentsOff) {
                     if reel.commentsOff {
@@ -390,9 +461,17 @@ struct ReelPage: View {
                 ZStack {
                     RemoteImage(url: reel.coverURL)
                     if video?.failed == true {
-                        Label("This video can't play on iPhone yet", systemImage: "exclamationmark.triangle.fill")
-                            .font(.jakarta(13, .semibold)).foregroundStyle(.white)
-                            .padding(.horizontal, 14).padding(.vertical, 8).background(.black.opacity(0.5), in: Capsule())
+                        VStack(spacing: 10) {
+                            Label("This video didn't load", systemImage: "exclamationmark.triangle.fill")
+                                .font(.jakarta(13, .semibold)).foregroundStyle(.white)
+                            Button {
+                                ReelVideo.drop(reel.id)
+                                video = nil
+                                start()
+                            } label: { Label("Try again", systemImage: "arrow.clockwise") }
+                                .buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
+                        }
+                        .padding(14).background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     }
                 }
                 .ignoresSafeArea()
@@ -409,7 +488,10 @@ struct ReelPage: View {
                 // Slideshows move on by themselves, like on the website.
                 while active && !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(3))
-                    if active && !paused { withAnimation(.easeInOut) { slide = (slide + 1) % reel.pictures.count } }
+                    if active && !paused {
+                        if autoScroll && slide == reel.pictures.count - 1 { onNext() }
+                        withAnimation(.easeInOut) { slide = (slide + 1) % reel.pictures.count }
+                    }
                 }
             }
         } else {
@@ -454,7 +536,10 @@ struct ReelPage: View {
             .padding(.trailing, 10)
             .padding(.bottom, 14)
             if reel.isVideo, let video {
-                ReelProgress(video: video)
+                ReelSeekBar(video: video) { on in
+                    scrubbing = on
+                    if on { video.pause() } else if !paused { video.play() }
+                }
             }
         }
         .padding(.bottom, showBack ? 20 : 110)
@@ -477,6 +562,9 @@ struct ReelPage: View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text("@\(author?.displayName ?? reel.authorName)").font(.jakarta(17, .heavy)).foregroundStyle(.white)
                     Text("· \(Dates.ago(reel.created))").font(.jakarta(13)).foregroundStyle(.white.opacity(0.7))
+                    if reel.views > 0 {
+                        Label(Self.compact(reel.views), systemImage: "play.fill").font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.75))
+                    }
                 }
             }
             .buttonStyle(.plain)
@@ -488,7 +576,16 @@ struct ReelPage: View {
                     .overlay(Capsule().strokeBorder(.white.opacity(0.25), lineWidth: 1))
             }
             if !reel.caption.isEmpty {
-                Text(ReelCaption.styled(reel.caption)).font(.jakarta(15)).foregroundStyle(.white).lineLimit(3)
+                Button { withAnimation(.snappy) { captionOpen.toggle() } } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(ReelCaption.styled(reel.caption)).font(.jakarta(15)).foregroundStyle(.white)
+                            .lineLimit(captionOpen ? 12 : 2).multilineTextAlignment(.leading)
+                        if reel.caption.count > 70 {
+                            Text(captionOpen ? "less" : "more").font(.jakarta(13, .heavy)).foregroundStyle(.white.opacity(0.8))
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
             }
             if !reel.musicTitle.isEmpty || reel.isVideo {
                 Button { useSound = true } label: {
@@ -513,10 +610,13 @@ struct ReelPage: View {
                 Avatar(url: author?.picture ?? reel.authorPicture, name: reel.authorName, size: 54, nitro: author?.isNitro ?? false)
                     .overlay(Circle().strokeBorder(.white, lineWidth: (author?.isNitro ?? false) ? 0 : 2.5))
                     .overlay(alignment: .bottom) {
-                        if !following && reel.authorEmail != me {
-                            Image(systemName: "plus").font(.system(size: 12, weight: .black)).foregroundStyle(.white)
-                                .frame(width: 24, height: 24).background(Theme.gradient, in: Circle())
+                        if (!following || justFollowed) && reel.authorEmail != me {
+                            Image(systemName: justFollowed ? "checkmark" : "plus").font(.system(size: 12, weight: .black))
+                                .foregroundStyle(justFollowed ? Theme.main : .white)
+                                .frame(width: 24, height: 24)
+                                .background(justFollowed ? AnyShapeStyle(Color.white) : AnyShapeStyle(Theme.gradient), in: Circle())
                                 .overlay(Circle().strokeBorder(.white, lineWidth: 1.5))
+                                .contentTransition(.symbolEffect(.replace))
                                 .offset(y: 11)
                                 .onTapGesture { follow() }
                                 .transition(.scale.combined(with: .opacity))
@@ -533,20 +633,8 @@ struct ReelPage: View {
                 Task { await ReelBrain.shared.commented(r) }
             }
             bubble(saved ? "bookmark.fill" : "bookmark", tint: saved) { toggleSave() }
-            ShareLink(item: reel.caption.isEmpty ? "A reel on Sugerly" : reel.caption) {
-                bubbleLabel("paperplane", tint: false)
-            }
-            .buttonStyle(BouncyStyle(scale: 0.85))
-            Menu {
-                if reel.authorEmail != me {
-                    Button { reporting = ReportSheet.Target(id: reel.id, type: "reel", ownerEmail: reel.authorEmail, preview: reel.caption, link: "/Reels?r=\(reel.id)") } label: { Label("Report", systemImage: "flag") }
-                } else {
-                    Button(role: .destructive) { Task { try? await FS.delete("Reel", reel.id); model.showToast("Reel deleted", icon: "trash.fill") } } label: { Label("Delete reel", systemImage: "trash") }
-                }
-                Button { muted.toggle() } label: { Label(muted ? "Sound on" : "Mute", systemImage: muted ? "speaker.wave.2" : "speaker.slash") }
-            } label: {
-                bubbleLabel("ellipsis", tint: false)
-            }
+            bubble("arrowshape.turn.up.right.fill") { sharing = true }
+                .accessibilityLabel("Share")
             Button { useSound = true } label: {
                 MusicDisc(picture: author?.picture ?? reel.authorPicture, name: reel.authorName, spinning: active && !paused)
             }
@@ -596,6 +684,7 @@ struct ReelPage: View {
                 video = ReelVideo.get(reel.id, url: url, start: reel.trimStart, filter: reel.filterId, speed: reel.speed)
             }
             ReelAudio.prepare()
+            applySpeed()
             video?.player.isMuted = muted || reel.muted
             if !paused { video?.play() }
         }
@@ -635,13 +724,47 @@ struct ReelPage: View {
         }
     }
 
-    private func doubleTap() {
+    // Double-tap: a heart pops where you tapped (tap again for more).
+    private func doubleTap(at point: CGPoint) {
         if !liked { toggleLike() }
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { heart = true }
+        let burst = HeartBurst(point: point, angle: Double.random(in: -22...22))
+        hearts.append(burst)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         Task {
-            try? await Task.sleep(for: .milliseconds(700))
-            withAnimation(.easeOut(duration: 0.25)) { heart = false }
+            try? await Task.sleep(for: .milliseconds(1000))
+            hearts.removeAll { $0.id == burst.id }
         }
+    }
+
+    private func applySpeed() {
+        let rate = Float(max(0.25, min(3, reel.speed * playSpeed)))
+        video?.player.defaultRate = rate
+        if video?.player.timeControlStatus == .playing { video?.player.rate = rate }
+    }
+
+    private func refreshComments() async {
+        let docs = (try? await FS.query("CommunityComment", [.equals("post_id", "reel_\(reel.id)")], limit: 200)) ?? []
+        commentCount = docs.count
+    }
+
+    private func notInterested() {
+        let r = reel
+        Task { await ReelBrain.shared.notInterested(r) }
+        model.showToast("Got it — you'll see fewer reels like this", icon: "heart.slash.fill")
+        onHide(reel.id)
+    }
+
+    private func deleteReel() {
+        let id = reel.id
+        Task {
+            try? await FS.delete("Reel", id)
+            model.showToast("Reel deleted", icon: "trash.fill")
+        }
+        onHide(id)
+    }
+
+    static func compact(_ n: Int) -> String {
+        n >= 1_000_000 ? String(format: "%.1fM", Double(n) / 1_000_000) : n >= 1000 ? String(format: "%.1fK", Double(n) / 1000) : "\(n)"
     }
 
     private func toggleLike() {
@@ -673,6 +796,11 @@ struct ReelPage: View {
         guard let meProfile = model.me else { return }
         let email = reel.authorEmail
         Task { await ReelBrain.shared.followed(email) }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { justFollowed = true }
+        Task {
+            try? await Task.sleep(for: .seconds(1.2))
+            withAnimation(.easeOut(duration: 0.25)) { justFollowed = false }
+        }
         Task {
             try? await model.updateMe(["following": meProfile.following + [reel.authorEmail]])
             Notify.send(to: reel.authorEmail, from: meProfile, type: "follow", message: "\(meProfile.displayName) started following you", link: "/Profile?email=\(meProfile.email)")
