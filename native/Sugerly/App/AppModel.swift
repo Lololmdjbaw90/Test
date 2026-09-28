@@ -123,6 +123,9 @@ final class AppModel {
             "saved_posts": u.savedPosts, "blocked": u.blocked, "xp": u.xp, "coins": u.coins, "last_seen": u.lastSeen,
             "accent": u.accent, "theme": u.theme, "last_daily_claim": u.lastDailyClaim, "daily_streak": u.dailyStreak,
             "created_date": u.joined, "saved_artworks": u.savedArtworks, "saved_reels": u.savedReels,
+            "nitro_active": u.nitroActive, "nitro_until": u.nitroUntil, "name_style": u.nameStyle, "banner_color": u.bannerColor,
+            "interests": u.interests, "pronouns": u.pronouns, "custom_status": u.status, "profile_color": u.profileColor,
+            "profile_effect": u.profileEffect, "website": u.website, "stickers": u.stickers, "my_gifs": u.myGifs,
         ]
     }
 

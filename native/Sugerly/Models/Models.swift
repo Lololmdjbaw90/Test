@@ -61,6 +61,19 @@ struct UserProfile: Identifiable, Hashable {
     var joined: String
     var savedArtworks: [String]
     var savedReels: [String]
+    // Nitro + profile customisation (website fields, plus a few app extras)
+    var nitroActive: Bool
+    var nitroUntil: String
+    var nameStyle: String
+    var bannerColor: String
+    var interests: [String]
+    var pronouns: String
+    var status: String
+    var profileColor: String
+    var profileEffect: String
+    var website: String
+    var stickers: [String]
+    var myGifs: [String]
 
     init(_ d: Doc) {
         id = d.str("id")
@@ -84,6 +97,25 @@ struct UserProfile: Identifiable, Hashable {
         joined = d.str("created_date")
         savedArtworks = d.strs("saved_artworks")
         savedReels = d.strs("saved_reels")
+        nitroActive = d.bool("nitro_active")
+        nitroUntil = d.str("nitro_until")
+        nameStyle = d.str("name_style")
+        bannerColor = d.str("banner_color")
+        interests = d.strs("interests")
+        pronouns = d.str("pronouns")
+        status = d.str("custom_status")
+        profileColor = d.str("profile_color")
+        profileEffect = d.str("profile_effect")
+        website = d.str("website")
+        stickers = d.strs("stickers")
+        myGifs = d.strs("my_gifs")
+    }
+
+    // MimiNitro: active and not expired (same rule as the website).
+    var isNitro: Bool {
+        guard nitroActive else { return false }
+        guard let until = Dates.parse(nitroUntil) else { return nitroUntil.isEmpty }
+        return until > Date()
     }
 
     var isAdmin: Bool { role == "admin" || FirebaseConfig.siteOwners.contains(email) }

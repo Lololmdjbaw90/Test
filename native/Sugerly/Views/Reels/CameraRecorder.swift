@@ -515,7 +515,7 @@ struct RecorderView: View {
             countdown = 0
         }
         if mode == .video {
-            if camera.total >= camera.maxSeconds - 0.3 { error = "60 seconds max — tap ✓ to continue."; return }
+            if camera.total >= camera.maxSeconds - 0.3 { error = "60 seconds max — tap Done to continue."; return }
             camera.startClip()
         } else {
             if camera.flash && camera.position == .front {

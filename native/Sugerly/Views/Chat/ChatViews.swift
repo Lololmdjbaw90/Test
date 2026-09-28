@@ -259,8 +259,8 @@ struct ConversationRow: View {
     }
 
     private func preview(_ me: String) -> String {
-        guard let last = conversation.last else { return "Say hi 👋" }
-        let body = last.text.isEmpty ? (last.imageURL.isEmpty ? "Message" : "📷 Photo") : last.text
+        guard let last = conversation.last else { return "Say hi" }
+        let body = last.text.isEmpty ? (last.imageURL.isEmpty ? "Message" : "Sent a photo") : last.text
         if last.authorEmail == me { return "You: \(body)" }
         return conversation.isGroup ? "\(last.authorName): \(body)" : body
     }
@@ -293,7 +293,7 @@ struct ChatView: View {
                                 .overlay(Circle().strokeBorder(Theme.gradient, lineWidth: 3))
                                 .shadow(color: Theme.pink.opacity(0.3), radius: 14, y: 6)
                             Text(conversation.title(model)).font(.display(28)).foregroundStyle(Palette.text)
-                            Text("Say hi 👋").font(.jakarta(15)).foregroundStyle(Palette.muted)
+                            Label("Say hi", systemImage: "hand.wave.fill").font(.jakarta(15)).foregroundStyle(Palette.muted)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.top, 60)

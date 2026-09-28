@@ -117,20 +117,12 @@ struct ServerSettingsView: View {
                         RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Theme.soft)
                         if let iconImage { Image(uiImage: iconImage).resizable().scaledToFill() }
                         else if !store.server.iconURL.isEmpty { RemoteImage(url: store.server.iconURL) }
-                        else { Text(emoji.isEmpty ? "💬" : emoji).font(.system(size: 34)) }
+                        else { LinearGradient(colors: [Theme.light, Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing).overlay(Text(ServerIcon.initials(name)).font(.display(26)).foregroundStyle(.white)) }
                     }
                     .frame(width: 72, height: 72)
                     .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 }
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 6), spacing: 6) {
-                    ForEach(CreateServerView.emojis, id: \.self) { e in
-                        Button { emoji = e } label: {
-                            Text(e).font(.system(size: 20)).frame(maxWidth: .infinity).frame(height: 34)
-                                .background(emoji == e ? Theme.soft : Palette.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        }
-                        .buttonStyle(BouncyStyle())
-                    }
-                }
+                Text("Tap to upload an icon").font(.jakarta(12)).foregroundStyle(Palette.muted)
             }
             SugarField(placeholder: "Server name", text: $name)
             SugarField(placeholder: "Description", text: $about, lines: 2...4)

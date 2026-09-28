@@ -777,7 +777,7 @@ final class AdminData {
         out += reels.map { AdminItem(collection: "Reel", label: "Reel", id: $0.str("id"), title: $0.str("caption"), owner: $0.str("user_display_name"), date: $0.str("created_date"), image: $0.str("cover_url")) }
         out += comments1.map { AdminItem(collection: "Comment", label: "Comment", id: $0.str("id"), title: $0.str("content"), owner: $0.str("user_display_name"), date: $0.str("created_date"), image: "") }
         out += comments2.map { AdminItem(collection: "CommunityComment", label: "Comment", id: $0.str("id"), title: $0.str("content"), owner: $0.str("user_display_name"), date: $0.str("created_date"), image: "") }
-        out += messages.filter { $0.str("type") != "join" }.map { AdminItem(collection: "ChannelMessage", label: "Message", id: $0.str("id"), title: $0.str("content").isEmpty ? "📷 Image" : $0.str("content"), owner: $0.str("user_display_name"), date: $0.str("created_date"), image: $0.str("image_url")) }
+        out += messages.filter { $0.str("type") != "join" }.map { AdminItem(collection: "ChannelMessage", label: "Message", id: $0.str("id"), title: $0.str("content").isEmpty ? "Image" : $0.str("content"), owner: $0.str("user_display_name"), date: $0.str("created_date"), image: $0.str("image_url")) }
         items = out.sorted { $0.date > $1.date }
     }
 }

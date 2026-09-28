@@ -11,25 +11,26 @@ struct Avatar: View {
     var size: CGFloat = 40
     var online = false
     var ring = false
+    var nitro = false
     @State private var image: UIImage?
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             Group {
-                if let shown = image ?? (url.isEmpty ? nil : MemoryImages.get(url)) {
-                    Image(uiImage: shown).resizable().scaledToFill()
+                if let shown = image ?? (url.isEmpty ? nil : (AnimatedImages.looksAnimated(url) ? AnimatedImages.cached(url, maxPixel: pixel) : MemoryImages.get(url))) {
+                    LoadedImage(image: shown)
                 } else {
                     initial
                 }
             }
             .frame(width: size, height: size)
             .clipShape(Circle())
-            .padding(ring ? max(2, size * 0.05) : 0)
+            .padding(ring || nitro ? max(2, size * 0.05) : 0)
             .background {
-                if ring { Circle().fill(Theme.gradient) }
+                if nitro { NitroRing() } else if ring { Circle().fill(Theme.gradient) }
             }
             .overlay {
-                if ring { Circle().strokeBorder(Palette.surface, lineWidth: max(1.5, size * 0.035)).padding(max(2, size * 0.05) - max(1.5, size * 0.035)) }
+                if ring || nitro { Circle().strokeBorder(Palette.surface, lineWidth: max(1.5, size * 0.035)).padding(max(2, size * 0.05) - max(1.5, size * 0.035)) }
             }
 
             if online {
@@ -41,10 +42,17 @@ struct Avatar: View {
         }
         .accessibilityHidden(true)
         .task(id: url) {
-            guard !url.isEmpty, image == nil || MemoryImages.get(url) == nil else { return }
+            guard !url.isEmpty else { return }
+            if AnimatedImages.looksAnimated(url) {
+                if let loaded = await AnimatedImages.load(url, maxPixel: pixel) { image = loaded }
+                return
+            }
+            guard image == nil || MemoryImages.get(url) == nil else { return }
             if let loaded = await ImagePipeline.shared.load(url) { image = loaded }
         }
     }
+
+    private var pixel: CGFloat { min(400, max(96, size * 3)) }
 
     private var initial: some View {
         ZStack {
@@ -141,16 +149,18 @@ struct RemoteImage: View {
     @State private var image: UIImage?
     @State private var failed = false
 
+    private var animated: Bool { AnimatedImages.looksAnimated(url) }
+
     var body: some View {
-        let shown = image ?? MemoryImages.get(url)
+        let shown = image ?? (animated ? AnimatedImages.cached(url, maxPixel: 720) : MemoryImages.get(url))
         Group {
             if let shown {
                 if contentMode == .fill {
                     Color.clear
-                        .overlay { Image(uiImage: shown).resizable().scaledToFill() }
+                        .overlay { LoadedImage(image: shown, fill: true) }
                         .clipped()
                 } else {
-                    Image(uiImage: shown).resizable().scaledToFit()
+                    LoadedImage(image: shown, fill: false)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             } else {
@@ -161,6 +171,10 @@ struct RemoteImage: View {
         }
         .task(id: url) {
             guard !url.isEmpty else { return }
+            if animated {
+                if let loaded = await AnimatedImages.load(url, maxPixel: 720) { withAnimation(.easeOut(duration: 0.2)) { image = loaded } } else { failed = true }
+                return
+            }
             if MemoryImages.get(url) != nil { image = MemoryImages.get(url); return }
             let loaded = await ImagePipeline.shared.load(url)
             if let loaded {
@@ -186,7 +200,7 @@ struct ArtImage: View {
     @State private var image: UIImage?
 
     var body: some View {
-        let shown = image ?? MemoryImages.get(url)
+        let shown = image ?? (AnimatedImages.looksAnimated(url) ? AnimatedImages.cached(url, maxPixel: 720) : MemoryImages.get(url))
         let natural: CGFloat = shown.map { $0.size.width / Swift.max(1, $0.size.height) } ?? 0.8
         let ratio: CGFloat = Swift.min(widest, Swift.max(tallest, natural))
         Color.clear
@@ -195,10 +209,10 @@ struct ArtImage: View {
             .overlay {
                 if let shown {
                     ZStack {
-                        if abs(ratio - natural) > 0.01 {
+                        if abs(ratio - natural) > 0.01 && shown.images == nil {
                             Image(uiImage: shown).resizable().scaledToFill().blur(radius: 22).opacity(0.55)
                         }
-                        Image(uiImage: shown).resizable().scaledToFit()
+                        LoadedImage(image: shown, fill: false)
                     }
                     .transition(.opacity)
                 } else {
@@ -208,6 +222,10 @@ struct ArtImage: View {
             .clipped()
             .task(id: url) {
                 guard !url.isEmpty, image == nil else { return }
+                if AnimatedImages.looksAnimated(url) {
+                    if let loaded = await AnimatedImages.load(url, maxPixel: 720) { withAnimation(.easeOut(duration: 0.2)) { image = loaded } }
+                    return
+                }
                 if let loaded = await ImagePipeline.shared.load(url) {
                     withAnimation(.easeOut(duration: 0.2)) { image = loaded }
                 }
@@ -290,5 +308,17 @@ enum Moderation {
     static func hasLink(_ text: String) -> Bool {
         let pattern = #"(https?://|www\.)\S+|\b[a-z0-9-]+\.(com|net|org|io|co|gg|ly|me|app|xyz|link|shop|site)\b"#
         return text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+}
+
+// Nitro's animated rainbow-candy ring around a profile picture.
+struct NitroRing: View {
+    @State private var spin = false
+    var body: some View {
+        Circle()
+            .fill(AngularGradient(colors: [Color(hex: 0xFF7AA2), Color(hex: 0xB19CFF), Color(hex: 0x7CBEFF), Color(hex: 0xFFD166), Color(hex: 0xFF7AA2)], center: .center))
+            .rotationEffect(.degrees(spin ? 360 : 0))
+            .shadow(color: Color(hex: 0xB19CFF).opacity(0.6), radius: 6)
+            .onAppear { withAnimation(.linear(duration: 4).repeatForever(autoreverses: false)) { spin = true } }
     }
 }

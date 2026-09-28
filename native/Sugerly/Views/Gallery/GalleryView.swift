@@ -97,7 +97,8 @@ struct GalleryView: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
                     Text("Gallery").font(.display(42)).foregroundStyle(Palette.text)
-                    Text("🎨").font(.system(size: 30)).rotationEffect(.degrees(appeared ? -8 : 8))
+                    Image(systemName: "paintpalette.fill").font(.system(size: 26, weight: .semibold)).foregroundStyle(Theme.gradient)
+                        .rotationEffect(.degrees(appeared ? -8 : 8))
                         .animation(.spring(response: 0.6, dampingFraction: 0.35).delay(0.3), value: appeared)
                 }
                 Text("\(artworks.count) artworks · \(Set(artworks.map(\.authorEmail)).count) artists")

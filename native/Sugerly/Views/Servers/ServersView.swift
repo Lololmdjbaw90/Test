@@ -8,7 +8,7 @@ enum ServerTemplate: String, CaseIterable, Identifiable {
     case art, friends, blank
     var id: String { rawValue }
     var label: String { self == .art ? "Art community" : self == .friends ? "Friends hangout" : "Start from scratch" }
-    var emoji: String { self == .art ? "🎨" : self == .friends ? "🫶" : "✨" }
+    var icon: String { self == .art ? "paintpalette.fill" : self == .friends ? "heart.circle.fill" : "sparkles" }
     var channels: [(name: String, type: String, description: String)] {
         switch self {
         case .art: return [("general", "text", "Say hi and hang out"), ("showcase", "text", "Share finished work"), ("wip-and-critique", "text", "Works in progress & friendly feedback"), ("Studio", "voice", "Draw together")]
@@ -97,11 +97,19 @@ struct ServerIcon: View {
             if !server.iconURL.isEmpty {
                 RemoteImage(url: server.iconURL)
             } else {
-                Text(server.emoji.isEmpty ? "💬" : server.emoji).font(.system(size: size * 0.48))
+                // Initials on the accent gradient (no emoji icons).
+                LinearGradient(colors: [Theme.light, Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing)
+                Text(ServerIcon.initials(server.name)).font(.display(size * 0.38)).foregroundStyle(.white)
             }
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+    }
+
+    static func initials(_ name: String) -> String {
+        let words = name.split(separator: " ").prefix(2)
+        let letters = words.compactMap { $0.first }.map { String($0).uppercased() }.joined()
+        return letters.isEmpty ? "S" : letters
     }
 }
 
@@ -241,7 +249,7 @@ struct DiscoverServers: View {
             LazyVStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Discover").font(.display(30)).foregroundStyle(Palette.text)
-                    Text("Find your people ✨").font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
+                    Label("Find your people", systemImage: "sparkles").font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
                 }
                 SearchField(text: $query, placeholder: "Search servers…")
                 if !loaded {
@@ -359,7 +367,7 @@ struct ServerPanel: View {
                 header
                 if !store.server.welcome.isEmpty {
                     HStack(spacing: 10) {
-                        Text("👋").font(.system(size: 18))
+                        Image(systemName: "hand.wave.fill").font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.gradient)
                         Text(store.server.welcome).font(.jakarta(13, .medium)).foregroundStyle(Palette.text2)
                     }
                     .padding(12)
@@ -600,13 +608,11 @@ struct CreateServerView: View {
     @State private var name = ""
     @State private var about = ""
     @State private var welcome = ""
-    @State private var emoji = "🌸"
     @State private var icon: PhotosPickerItem?
     @State private var iconImage: UIImage?
     @State private var busy = false
     @State private var error: String?
 
-    static let emojis = ["🌸", "🎨", "🫶", "✨", "🎧", "🌙", "🍓", "🦋", "🎮", "📚", "🌈", "🐱"]
 
     var body: some View {
         ComposerScaffold(title: "Create a server", actionTitle: "Create", busy: busy, canPost: !name.trimmingCharacters(in: .whitespaces).isEmpty, onClose: { dismiss() }, onPost: { Task { await create() } }) {
@@ -616,10 +622,10 @@ struct CreateServerView: View {
                     ForEach(ServerTemplate.allCases) { t in
                         Button { withAnimation(.snappy) { template = t } } label: {
                             HStack(spacing: 14) {
-                                Text(t.emoji).font(.system(size: 26)).frame(width: 50, height: 50).background(Theme.soft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                Image(systemName: t.icon).font(.system(size: 22, weight: .semibold)).foregroundStyle(Theme.gradient).frame(width: 50, height: 50).background(Theme.soft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(t.label).font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
-                                    Text(t.channels.map { $0.type == "voice" ? "🔊 \($0.name)" : "#\($0.name)" }.joined(separator: "  ·  "))
+                                    Text(t.channels.map { $0.type == "voice" ? "\($0.name) (voice)" : "#\($0.name)" }.joined(separator: "  ·  "))
                                         .font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(2).multilineTextAlignment(.leading)
                                 }
                                 Spacer()
@@ -633,11 +639,12 @@ struct CreateServerView: View {
                     }
                 }
                 Text("ICON").font(.jakarta(11, .heavy)).tracking(1.2).foregroundStyle(Palette.muted)
-                HStack(alignment: .top, spacing: 12) {
+                HStack(spacing: 14) {
                     PhotosPicker(selection: $icon, matching: .images) {
                         ZStack {
-                            RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Theme.soft)
-                            if let iconImage { Image(uiImage: iconImage).resizable().scaledToFill() } else { Text(emoji).font(.system(size: 36)) }
+                            LinearGradient(colors: [Theme.light, Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            if let iconImage { Image(uiImage: iconImage).resizable().scaledToFill() }
+                            else { Text(ServerIcon.initials(name.isEmpty ? "Server" : name)).font(.display(28)).foregroundStyle(.white) }
                         }
                         .frame(width: 76, height: 76)
                         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
@@ -646,15 +653,7 @@ struct CreateServerView: View {
                                 .frame(width: 26, height: 26).background(Theme.gradient, in: Circle()).offset(x: 4, y: 4)
                         }
                     }
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 6), spacing: 6) {
-                        ForEach(Self.emojis, id: \.self) { e in
-                            Button { emoji = e; iconImage = nil; icon = nil } label: {
-                                Text(e).font(.system(size: 22)).frame(maxWidth: .infinity).frame(height: 36)
-                                    .background(emoji == e && iconImage == nil ? Theme.soft : Palette.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            }
-                            .buttonStyle(BouncyStyle())
-                        }
-                    }
+                    Text("Upload a picture, or keep the letters from the server's name.").font(.jakarta(12)).foregroundStyle(Palette.muted)
                 }
                 SugarField(placeholder: "Server name", text: $name)
                 SugarField(placeholder: "What's it about?", text: $about, lines: 2...4)
@@ -679,7 +678,7 @@ struct CreateServerView: View {
             if let iconImage, let jpeg = ImageTools.jpeg(iconImage, maxSide: 512) {
                 iconURL = try await StorageClient.upload(jpeg, contentType: "image/jpeg", fileExtension: "jpg")
             }
-            let server = try await Servers.create(me: meProfile, name: String(name.trimmingCharacters(in: .whitespaces).prefix(40)), description: String(about.trimmingCharacters(in: .whitespacesAndNewlines).prefix(160)), emoji: emoji, iconURL: iconURL, welcome: String(welcome.trimmingCharacters(in: .whitespaces).prefix(160)), template: template)
+            let server = try await Servers.create(me: meProfile, name: String(name.trimmingCharacters(in: .whitespaces).prefix(40)), description: String(about.trimmingCharacters(in: .whitespacesAndNewlines).prefix(160)), emoji: "", iconURL: iconURL, welcome: String(welcome.trimmingCharacters(in: .whitespaces).prefix(160)), template: template)
             dismiss()
             model.showToast("\(server.name) is ready!", icon: "sparkles")
             onCreate(server)

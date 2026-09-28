@@ -70,7 +70,7 @@ struct CommissionsView: View {
                 HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Commissions").font(.display(38)).foregroundStyle(Palette.text)
-                        Text("Hire an artist you love 💸").font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
+                        Text("Hire an artist you love").font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
                     }
                     Spacer()
                     Button { creating = true } label: { Label("List", systemImage: "plus") }
@@ -442,7 +442,7 @@ struct TopArtistsView: View {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Top artists").font(.display(38)).foregroundStyle(Palette.text)
-                    Text("Most loved on Sugerly 👑").font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
+                    Text("Most loved on Sugerly").font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
                 }
                 HStack(spacing: 8) {
                     Chip(title: "All time", active: range == 0) { withAnimation(.snappy) { range = 0 } }
@@ -532,7 +532,7 @@ struct TopArtistsView: View {
 
 struct AppRelease: Identifiable {
     var id: String
-    var emoji: String
+    var icon: String
     var title: String
     var date: String
     var items: [String]
@@ -542,17 +542,17 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
-        AppRelease(id: "ios-1.4", emoji: "🎙️", title: "Servers, voice & admin", date: "2026-09-27T20:00:00Z", items: [
+        AppRelease(id: "ios-1.4", icon: "waveform.circle.fill", title: "Servers, voice & admin", date: "2026-09-27T20:00:00Z", items: [
             "Discord-style servers: a rail of your servers, channels, roles with colours and permissions, pins and reactions.",
             "Voice channels right in the app — talk with people on the app and the website.",
             "The full admin panel, commissions, top artists and a photo editor for posts.",
         ]),
-        AppRelease(id: "ios-1.3", emoji: "🎬", title: "Camera & editor", date: "2026-09-27T19:30:00Z", items: [
+        AppRelease(id: "ios-1.3", icon: "camera.aperture", title: "Camera & editor", date: "2026-09-27T19:30:00Z", items: [
             "Film in clips: pause, delete the last clip or start over, with flash, timer and flip.",
             "Text you can drag, pinch and twist, emoji stickers, filters and adjustments.",
             "Reels and Community look just like the website.",
         ]),
-        AppRelease(id: "ios-1.2", emoji: "🌸", title: "Cuter everywhere", date: "2026-09-27T19:00:00Z", items: [
+        AppRelease(id: "ios-1.2", icon: "heart.circle.fill", title: "Cuter everywhere", date: "2026-09-27T19:00:00Z", items: [
             "Gallery is a main tab, notifications pop up, a pinker look and snappier tabs.",
             "Search, People, toasts and shimmer loading.",
         ]),
@@ -564,7 +564,6 @@ struct UpdatesView: View {
     @State private var posted: [AppRelease] = []
     @State private var title = ""
     @State private var text = ""
-    @State private var emoji = "📣"
     @State private var busy = false
     @State private var appeared = false
     @AppStorage("sugerly.updatesSeen") private var seen = ""
@@ -581,7 +580,7 @@ struct UpdatesView: View {
                 if model.me?.isAdmin == true { composer }
                 ForEach(Array(all.enumerated()), id: \.element.id) { i, r in
                     HStack(alignment: .top, spacing: 12) {
-                        Text(r.emoji).font(.system(size: 22)).frame(width: 46, height: 46)
+                        Image(systemName: r.icon).font(.system(size: 19, weight: .semibold)).foregroundStyle(Theme.gradient).frame(width: 46, height: 46)
                             .background(Theme.soft, in: Circle())
                             .overlay(Circle().strokeBorder(Theme.main.opacity(0.25), lineWidth: 1))
                         VStack(alignment: .leading, spacing: 6) {
@@ -622,15 +621,6 @@ struct UpdatesView: View {
     private var composer: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("POST AN UPDATE (ADMINS)").font(.jakarta(11, .heavy)).tracking(1.2).foregroundStyle(Palette.muted)
-            HStack(spacing: 6) {
-                ForEach(["📣", "✨", "🎉", "🛠️", "🎨", "🎬", "💖", "🚀"], id: \.self) { e in
-                    Button { emoji = e } label: {
-                        Text(e).font(.system(size: 20)).frame(width: 36, height: 36)
-                            .background(emoji == e ? Theme.soft : Palette.surface2, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
-                    .buttonStyle(BouncyStyle())
-                }
-            }
             SugarField(placeholder: "Title — e.g. New stickers in Reels", text: $title)
             SugarField(placeholder: "What changed? One line per point.", text: $text, lines: 3...8)
             Button { Task { await post() } } label: {
@@ -645,7 +635,7 @@ struct UpdatesView: View {
     private func load() async {
         let docs = (try? await FS.query("AppUpdate", orderBy: "created_date", limit: 50)) ?? []
         posted = docs.map { d in
-            AppRelease(id: "post-\(d.str("id"))", emoji: d.str("emoji").isEmpty ? "📣" : d.str("emoji"), title: d.str("title"), date: d.str("created_date"),
+            AppRelease(id: "post-\(d.str("id"))", icon: "megaphone.fill", title: d.str("title"), date: d.str("created_date"),
                        items: d.str("body").split(separator: "\n").map(String.init).filter { !$0.isEmpty }, author: d.str("author_name"), docId: d.str("id"))
         }
     }
@@ -655,7 +645,7 @@ struct UpdatesView: View {
         busy = true
         defer { busy = false }
         do {
-            _ = try await FS.create("AppUpdate", ["title": title.trimmingCharacters(in: .whitespaces), "body": text.trimmingCharacters(in: .whitespacesAndNewlines), "emoji": emoji, "author_name": me.displayName])
+            _ = try await FS.create("AppUpdate", ["title": title.trimmingCharacters(in: .whitespaces), "body": text.trimmingCharacters(in: .whitespacesAndNewlines), "emoji": "", "author_name": me.displayName])
             title = ""
             text = ""
             model.showToast("Update posted", icon: "megaphone.fill")

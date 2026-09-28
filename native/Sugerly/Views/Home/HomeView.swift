@@ -380,7 +380,6 @@ struct HomeView: View {
                 Text("\(greeting),").font(.display(40)).foregroundStyle(Palette.text)
                 Text(me?.displayName ?? "").font(.display(40)).foregroundStyle(Theme.gradient)
                     .shadow(color: Theme.pink.opacity(0.25), radius: 10, y: 4)
-                    .overlay(alignment: .topTrailing) { Twinkle(size: 16).offset(x: 22, y: -6) }
             }
             Text("Here's what's happening across Sugerly today — fresh art, new tracks and friends online.")
                 .font(.jakarta(15)).foregroundStyle(Palette.text2)

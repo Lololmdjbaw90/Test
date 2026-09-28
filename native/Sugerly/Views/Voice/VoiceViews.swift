@@ -46,7 +46,7 @@ struct VoiceRoomView: View {
                 }
                 .padding(.horizontal, 16)
                 if !here && others.isEmpty {
-                    Text("Nobody's here yet — hop in and wait for friends 💕").font(.jakarta(14)).foregroundStyle(Palette.muted).padding(.top, 30)
+                    Text("Nobody's here yet — hop in and wait for friends").font(.jakarta(14)).foregroundStyle(Palette.muted).padding(.top, 30)
                 }
             }
 
