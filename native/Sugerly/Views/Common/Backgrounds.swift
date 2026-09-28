@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Animated pattern backgrounds
 
@@ -43,26 +44,118 @@ extension View {
 private struct PatternBackgroundModifier: ViewModifier {
     @AppStorage(AppBackground.storageKey) private var choice = AppBackground.dots.rawValue
     @AppStorage("sugerly.background.still") private var still = false
-
+    @Environment(\.backgroundPaused) private var paused
     @Environment(\.colorScheme) private var scheme
+    @State private var depth = ScrollDepth()
 
     func body(content: Content) -> some View {
         let kind = AppBackground(rawValue: choice) ?? .dots
         // The page itself keeps its identity whatever background is picked;
         // only the background layer is swapped.
-        content.background {
-            if kind == .off {
-                Color.clear.sugarBackground()
-            } else {
-                // A new id for each look, so a freshly picked pattern (or
-                // colour, or dark mode) starts moving again straight away.
-                PatternBackground(kind: kind, animated: !still)
-                    .id("\(kind.rawValue)-\(still)-\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)")
+        content
+            .background {
+                if kind == .off {
+                    DepthLayer(depth: depth) { GlowLayer() }.ignoresSafeArea()
+                } else {
+                    // A new id for each look, so a freshly picked pattern (or
+                    // colour, or dark mode) starts moving again straight away.
+                    DepthLayer(depth: depth) {
+                        PatternBackground(kind: kind, animated: !still && !paused)
+                            .id("\(kind.rawValue)-\(still)-\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)")
+                    }
                     .ignoresSafeArea()
                     .accessibilityHidden(true)
+                }
             }
+            .modifier(DepthTracking(depth: $depth))
+    }
+}
+
+// MARK: - 3D depth while scrolling
+
+// Nothing moves behind a sheet or menu (it would only slow down what's on top).
+private struct BackgroundPausedKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var backgroundPaused: Bool {
+        get { self[BackgroundPausedKey.self] }
+        set { self[BackgroundPausedKey.self] = newValue }
+    }
+}
+
+struct ScrollDepth: Equatable {
+    var y: CGFloat = 0
+    var tilt: Double = 0
+}
+
+// Follows the page's scroll: how far down it is, and a tilt from how fast
+// it's moving that springs back when you stop (iOS 18 and later).
+struct DepthTracking: ViewModifier {
+    @Binding var depth: ScrollDepth
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content
+                .onScrollGeometryChange(for: CGFloat.self, of: { geo in geo.contentOffset.y + geo.contentInsets.top }, action: { old, new in
+                    depth.y = new
+                    depth.tilt = max(-8, min(8, Double(new - old) * 0.45))
+                })
+                .onScrollPhaseChange { _, phase in
+                    if phase == .idle {
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.72)) { depth.tilt = 0 }
+                    }
+                }
+        } else {
+            content
         }
     }
+}
+
+// The background sits "behind" the page: it drifts up more slowly than
+// the page, sinks back a little as you go down, and leans with the
+// scroll, so pages feel layered. It's slightly bigger than the screen so no
+// edge ever shows.
+struct DepthLayer<Layer: View>: View {
+    let depth: ScrollDepth
+    @ViewBuilder var layer: Layer
+
+    var body: some View {
+        let travel = tanh(Double(depth.y) / 500)
+        layer
+            .scaleEffect(1.14 - 0.03 * CGFloat(max(0, travel)))
+            .offset(y: -44 * CGFloat(travel))
+            .rotation3DEffect(.degrees(depth.tilt), axis: (x: 1, y: 0, z: 0), perspective: 0.55)
+    }
+}
+
+// Soft accent glows (the plain page background), drawn once.
+struct GlowLayer: View {
+    var body: some View {
+        ZStack {
+            Palette.bg
+            Circle().fill(Theme.light.opacity(0.32)).frame(width: 360).blur(radius: 95).offset(x: 150, y: -300)
+            Circle().fill(Theme.lavender.opacity(0.18)).frame(width: 320).blur(radius: 95).offset(x: -170, y: 260)
+            Circle().fill(Color(hex: 0xFFD6A5).opacity(0.14)).frame(width: 240).blur(radius: 80).offset(x: 140, y: 120)
+        }
+        .drawingGroup()
+    }
+}
+
+private struct SugarBackground: ViewModifier {
+    @State private var depth = ScrollDepth()
+
+    func body(content: Content) -> some View {
+        content
+            .background { DepthLayer(depth: depth) { GlowLayer() }.ignoresSafeArea() }
+            .modifier(DepthTracking(depth: $depth))
+    }
+}
+
+extension View {
+    // Page background: warm off-white with soft accent glows, in 3D as you scroll.
+    func sugarBackground() -> some View { modifier(SugarBackground()) }
 }
 
 // Each pattern is drawn once (a little bigger than the screen) and then just
@@ -326,6 +419,10 @@ struct PatternBackground: View {
 struct BackgroundPicker: View {
     @AppStorage(AppBackground.storageKey) private var choice = AppBackground.dots.rawValue
     @AppStorage("sugerly.background.still") private var still = false
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.displayScale) private var scale
+    // Each look drawn once into a little picture (cheap to scroll past).
+    @State private var previews: [AppBackground: UIImage] = [:]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -339,9 +436,10 @@ struct BackgroundPicker: View {
                                     if kind == .off {
                                         Palette.bg
                                         Image(systemName: "circle.slash").font(.system(size: 20, weight: .bold)).foregroundStyle(Palette.muted)
+                                    } else if let image = previews[kind] {
+                                        Image(uiImage: image).resizable()
                                     } else {
-                                        // Still previews: the real one moves behind your pages.
-                                        PatternBackground(kind: kind, animated: false)
+                                        Palette.surface2
                                     }
                                 }
                                 .frame(width: 74, height: 104)
@@ -362,5 +460,18 @@ struct BackgroundPicker: View {
             }
             .tint(Theme.main)
         }
+        .task(id: "\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)") { drawPreviews() }
+    }
+
+    private func drawPreviews() {
+        var drawn: [AppBackground: UIImage] = [:]
+        for kind in AppBackground.allCases where kind != .off {
+            let renderer = ImageRenderer(content: PatternBackground(kind: kind, animated: false)
+                .frame(width: 74, height: 104)
+                .environment(\.colorScheme, scheme))
+            renderer.scale = scale
+            drawn[kind] = renderer.uiImage
+        }
+        previews = drawn
     }
 }

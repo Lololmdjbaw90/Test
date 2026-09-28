@@ -77,6 +77,12 @@ struct UserProfile: Identifiable, Hashable {
     var status: String
     var profileColor: String
     var profileEffect: String
+    // More looks: effect colour + amount, name colour, picture frame, banner pattern.
+    var effectColor = ""
+    var effectAmount = 0
+    var nameColor = ""
+    var avatarFrame = ""
+    var bannerPattern = ""
     var website: String
     var stickers: [String]
     var myGifs: [String]
@@ -89,6 +95,12 @@ struct UserProfile: Identifiable, Hashable {
     var banned: Bool
     var banReason: String
     var bannedUntil: String       // "" = until an admin lifts it
+    // Moderation: muted (can't post) until this time, and total strikes.
+    var mutedUntilMs: Double = 0
+    var modStrikes: Int = 0
+    // Invites: your code, and how many friends joined with it.
+    var inviteCode = ""
+    var invitesJoined = 0
 
     init(_ d: Doc) {
         id = d.str("id")
@@ -121,6 +133,11 @@ struct UserProfile: Identifiable, Hashable {
         status = d.str("custom_status")
         profileColor = d.str("profile_color")
         profileEffect = d.str("profile_effect")
+        effectColor = d.str("effect_color")
+        effectAmount = d.int("effect_amount")
+        nameColor = d.str("name_color")
+        avatarFrame = d.str("avatar_frame")
+        bannerPattern = d.str("banner_pattern")
         website = d.str("website")
         stickers = d.strs("stickers")
         myGifs = d.strs("my_gifs")
@@ -131,6 +148,10 @@ struct UserProfile: Identifiable, Hashable {
         banned = d.bool("banned")
         banReason = d.str("ban_reason")
         bannedUntil = d.str("banned_until")
+        mutedUntilMs = ReelText.num(d["muted_until_ms"]) ?? 0
+        modStrikes = d.int("mod_strikes")
+        inviteCode = d.str("invite_code")
+        invitesJoined = d.int("invites_joined")
     }
 
     var isBanned: Bool {

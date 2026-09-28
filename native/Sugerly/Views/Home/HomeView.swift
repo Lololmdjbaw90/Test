@@ -172,6 +172,7 @@ struct HomeView: View {
                 HomeComposerBar(compose: compose).stagger(appeared, 2)
                 quickLinks.stagger(appeared, 3)
                 ArtPromptCard(compose: compose).stagger(appeared, 4)
+                InlineExtras(part: .top).stagger(appeared, 5)
                 HappeningNow(posts: posts.posts, artworks: artworks, reels: reels, tracks: tracks, path: $path).stagger(appeared, 5)
                 featured.stagger(appeared, 6)
                 if !reels.isEmpty { reelStrip.stagger(appeared, 7) }
@@ -182,6 +183,7 @@ struct HomeView: View {
                 artists.stagger(appeared, 10)
                 friendsRow.stagger(appeared, 10)
                 yourServers.stagger(appeared, 10)
+                InlineExtras(part: .bottom).stagger(appeared, 10)
                 Label("Last activity \(Dates.ago(posts.posts.first?.created ?? ""))", systemImage: "sparkles")
                     .font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
                     .frame(maxWidth: .infinity)
@@ -189,8 +191,7 @@ struct HomeView: View {
             .padding(.horizontal, 16)
             .padding(.top, 12)
             .padding(.bottom, 30)
-            .frame(maxWidth: 760)
-            .frame(maxWidth: .infinity)
+            .sideRails(760)
         }
         .patternBackground()
         .sugarTopBar($path)

@@ -8,6 +8,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { usePeople } from "@/lib/people";
 import { SERVER_TEMPLATES, createServer, joinServer } from "@/lib/servers";
 import { toast } from "@/lib/toast";
+import { checkText } from "@/lib/moderation";
 import { splitFriendships, useFriendships } from "@/lib/social";
 import { buildTaste, suggestServers } from "@/lib/ranking";
 import { Page, PageHeader, EmptyState } from "@/components/common/Page";
@@ -31,6 +32,10 @@ function CreateServerModal({ open, onClose }) {
 
   const reset = () => { setStep(0); setForm({ name: "", description: "", icon_emoji: "🌸", welcome_message: "" }); setIconFile(null); setIconPreview(null); };
   const create = async () => {
+    for (const [text, kind] of [[form.name, "name"], [`${form.description}\n${form.welcome_message}`, "profile"]]) {
+      const mod = await checkText(text, { user, where: kind === "name" ? "server name" : "server description", kind });
+      if (!mod.safe) { toast.error(mod.reason); return; }
+    }
     setBusy(true);
     try {
       const icon_url = iconFile ? (await base44.integrations.Core.UploadFile({ file: iconFile })).file_url : "";

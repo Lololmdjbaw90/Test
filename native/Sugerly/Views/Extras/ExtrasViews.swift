@@ -381,6 +381,7 @@ struct NewCommissionView: View {
     private func publish() async {
         guard let me = model.me else { return }
         if Moderation.hasLink(title + " " + about) && !me.isAdmin { error = "Links go in the payment link box."; return }
+        guard await TextGuard.clear([title, about] + tiers.map { "\($0.name) \($0.info)" }, kind: .caption, model: model) else { return }
         busy = true
         defer { busy = false }
         do {
@@ -485,8 +486,7 @@ struct TopArtistsView: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 30)
-            .frame(maxWidth: 720)
-            .frame(maxWidth: .infinity)
+            .sideRails(720)
         }
         .overlay(alignment: .top) { ConfettiBurst(trigger: burst).frame(height: 520).allowsHitTesting(false) }
         .sugarBackground()
@@ -518,26 +518,16 @@ struct TopArtistsView: View {
         }
     }
 
-    // A big bouncing crown with a glint and sparkles circling it.
+    // A big gold crown (still: no bouncing or circling sparkles).
     private var hero: some View {
         HStack(spacing: 16) {
             ZStack {
                 Circle().fill(RadialGradient(colors: [Self.goldLight.opacity(0.55), .clear], center: .center, startRadius: 4, endRadius: 52))
                     .frame(width: 104, height: 104)
-                ForEach(0..<3, id: \.self) { i in
-                    Image(systemName: "sparkle").font(.system(size: CGFloat(10 + i * 3), weight: .bold)).foregroundStyle(Self.goldLight)
-                        .offset(x: 40)
-                        .rotationEffect(.degrees(Double(i) * 120 + (spin ? 360 : 0)))
-                }
-                .animation(.linear(duration: 7).repeatForever(autoreverses: false), value: spin)
                 Image(systemName: "crown.fill")
                     .font(.system(size: 42, weight: .bold))
                     .foregroundStyle(LinearGradient(colors: [Self.goldLight, Self.gold], startPoint: .top, endPoint: .bottom))
-                    .overlay { Glint().mask(Image(systemName: "crown.fill").font(.system(size: 42, weight: .bold))) }
                     .shadow(color: Self.gold.opacity(0.5), radius: 10, y: 4)
-                    .phaseAnimator([false, true]) { v, up in
-                        v.offset(y: up ? -7 : 2).rotationEffect(.degrees(up ? -6 : 6)).scaleEffect(up ? 1.06 : 0.97)
-                    } animation: { _ in .easeInOut(duration: 0.9) }
             }
             .frame(width: 104, height: 104)
             VStack(alignment: .leading, spacing: 4) {
@@ -572,8 +562,6 @@ struct TopArtistsView: View {
                         .overlay {
                             if rank == 1 {
                                 Circle().strokeBorder(AngularGradient(colors: [Self.goldLight, Self.gold, .white, Self.gold, Self.goldLight], center: .center), lineWidth: 4)
-                                    .rotationEffect(.degrees(spin ? 360 : 0))
-                                    .animation(.linear(duration: 3).repeatForever(autoreverses: false), value: spin)
                             } else {
                                 Circle().strokeBorder(color, lineWidth: 3)
                             }
@@ -582,12 +570,9 @@ struct TopArtistsView: View {
                     if rank == 1 {
                         Image(systemName: "crown.fill").font(.system(size: 26, weight: .bold))
                             .foregroundStyle(LinearGradient(colors: [Self.goldLight, Self.gold], startPoint: .top, endPoint: .bottom))
-                            .overlay { Glint().mask(Image(systemName: "crown.fill").font(.system(size: 26, weight: .bold))) }
                             .shadow(color: Self.gold.opacity(0.6), radius: 6)
-                            .phaseAnimator([false, true]) { v, up in
-                                v.offset(y: up ? -34 : -26).rotationEffect(.degrees(up ? -10 : 8))
-                            } animation: { _ in .easeInOut(duration: 0.8) }
-                        Twinkle(size: 13).offset(x: size * 0.55, y: size * 0.1)
+                            .offset(y: -30)
+                            .rotationEffect(.degrees(-6))
                     } else {
                         Text("\(rank)").font(.jakarta(12, .black)).foregroundStyle(.white)
                             .frame(width: 24, height: 24).background(color, in: Circle())
@@ -610,7 +595,6 @@ struct TopArtistsView: View {
                 .background {
                     UnevenRoundedRectangle(topLeadingRadius: 18, topTrailingRadius: 18, style: .continuous)
                         .fill(LinearGradient(colors: [color.opacity(0.85), color], startPoint: .top, endPoint: .bottom))
-                        .overlay { if rank == 1 { Glint().clipShape(UnevenRoundedRectangle(topLeadingRadius: 18, topTrailingRadius: 18, style: .continuous)) } }
                 }
                 .animation(.spring(response: 0.7, dampingFraction: 0.7).delay(delay), value: risen)
             }
@@ -720,6 +704,11 @@ enum AppReleases {
             "For You now also mixes in reels ranked on the server by likes, views and comments for their age.",
             "Music always restarts: after a call, a voice note, another app or the end of a song. Music and Settings scroll smoothly, and the charts load all at once.",
             "Connect Apple Music in the Music tab to play whole songs if you subscribe.",
+            "Pages open instantly (no sliding), Settings is smooth, and backgrounds feel 3D as you scroll.",
+            "Smart safety: everything you write is checked on your phone (and by AI when it's unsure), with a slow mode and cooldowns for spam.",
+            "Invite friends with your code: 400 coins for each friend who joins.",
+            "More profile looks: name colours and styles, picture frames, banner patterns, and effect colours with how many.",
+            "Sharper GIFs, see-through photos work in the editor, calmer logo and Top Artists, and fuller pages on iPad.",
         ]),
         AppRelease(id: "ios-1.7", icon: "person.2.wave.2.fill", title: "More social & smoother", date: "2026-09-28T11:00:00Z", items: [
             "Home has stories, today's art prompt, Happening now, people you might like and trending tags.",

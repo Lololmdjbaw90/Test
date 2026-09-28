@@ -16,8 +16,11 @@ export function useGifKey() {
 
 const pick = (g) => {
   const i = g.images || {};
-  const small = i.fixed_width_downsampled || i.fixed_width || i.downsized || i.original;
-  const full = i.fixed_width || i.downsized_medium || i.original;
+  const small = i.fixed_width || i.fixed_width_downsampled || i.downsized || i.original;
+  // Sent at good quality: the original when it's light, else GIPHY's medium one.
+  const light = (r, key) => r && Number(r[key] || Infinity) <= 3_500_000;
+  const full = (light(i.original, "webp_size") && i.original?.webp ? { ...i.original, url: i.original.webp } : null)
+    || (light(i.original, "size") ? i.original : null) || i.downsized_medium || i.fixed_width || i.original;
   return {
     id: g.id,
     title: g.title || "GIF",

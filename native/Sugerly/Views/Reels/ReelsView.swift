@@ -662,7 +662,7 @@ struct ReelPage: View {
         VStack(spacing: 0) {
             if showBack {
                 HStack {
-                    Button { dismiss() } label: {
+                    Button { if path.isEmpty { dismiss() } else { path.removeLast() } } label: {
                         Image(systemName: "chevron.left").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
                             .frame(width: 44, height: 44).background(.white.opacity(0.2), in: Circle())
                             .overlay(Circle().strokeBorder(.white.opacity(0.3), lineWidth: 1))

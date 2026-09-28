@@ -39,6 +39,7 @@ enum Privacy {
 
     static func setStatus(_ text: String, until: Date?, model: AppModel) async {
         let clean = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(80))
+        guard await TextGuard.clear([clean], kind: .profile, model: model) else { return }
         await save(["custom_status": clean, "custom_status_until": until.map(Dates.iso) ?? ""], model: model,
                    done: clean.isEmpty ? "Status cleared" : "Status set", icon: "bubble.left.fill")
     }

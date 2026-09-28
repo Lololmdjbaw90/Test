@@ -152,8 +152,7 @@ struct PeopleView: View {
             .padding(.horizontal, 16)
             .padding(.top, 8)
             .padding(.bottom, 30)
-            .frame(maxWidth: 680)
-            .frame(maxWidth: .infinity)
+            .sideRails(680)
         }
         .scrollDismissesKeyboard(.interactively)
         .sugarBackground()

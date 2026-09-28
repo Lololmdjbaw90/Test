@@ -336,8 +336,7 @@ struct CommunityView: View {
             .padding(.horizontal, 14)
             .padding(.top, 10)
             .padding(.bottom, 30)
-            .frame(maxWidth: 680)
-            .frame(maxWidth: .infinity)
+            .sideRails(680)
             .animation(.snappy, value: feed)
         }
         .sugarBackground()
@@ -607,7 +606,7 @@ struct PostCard: View {
         } message: { Text("This can't be undone.") }
         .sheet(isPresented: $sendSheet) {
             SendToChatsSheet(title: "Send post") { targets, note in
-                guard let me = model.me else { return }
+                guard let me = model.me, await TextGuard.clear([note], kind: .message, model: model) else { return }
                 try await ReelLinks.sendPost(post, to: targets, note: note, me: me)
             }
             .presentationDetents([.height(340)])
@@ -942,6 +941,7 @@ struct CommentsScreen<Header: View>: View {
 
     private func post(text: String, gif: String) async {
         guard let me = model.me else { return }
+        guard await TextGuard.clear([text], kind: .comment, model: model) else { return }
         sending = true
         defer { sending = false }
         let now = FS.nowISO()
@@ -1142,6 +1142,7 @@ struct NewPostView: View {
 
     private func post() async {
         guard let me = model.me else { return }
+        guard await TextGuard.clear([title, text], kind: .post, model: model) else { return }
         posting = true
         defer { posting = false }
         do {
@@ -1306,7 +1307,15 @@ enum ImageTools {
         let target = CGSize(width: floor(size.width * scale), height: floor(size.height * scale))
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
-        let resized = UIGraphicsImageRenderer(size: target, format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: target)) }
+        // JPEG can't be see-through: fill with white first so transparent
+        // pictures (PNG stickers, cut-outs) don't turn black.
+        format.opaque = true
+        format.preferredRange = .standard
+        let resized = UIGraphicsImageRenderer(size: target, format: format).image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(origin: .zero, size: target))
+            image.draw(in: CGRect(origin: .zero, size: target))
+        }
         return resized.jpegData(compressionQuality: quality)
     }
 }

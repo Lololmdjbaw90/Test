@@ -5,6 +5,7 @@ import { Check, Loader2, Music, Shield, Upload as UploadIcon, X } from "lucide-r
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { toast } from "@/lib/toast";
+import { checkText } from "@/lib/moderation";
 import { displayName } from "@/lib/format";
 import { Page, PageHeader, EmptyState } from "@/components/common/Page";
 import { Toggle } from "@/components/common/Controls";
@@ -31,6 +32,8 @@ export default function UploadPage() {
   const submit = async (e) => {
     e.preventDefault();
     if (!imgFile || !form.title.trim()) return;
+    const mod = await checkText(`${form.title}\n${form.description || ""}`, { user, where: "artwork", kind: "caption" });
+    if (!mod.safe) { toast.error(mod.reason); return; }
     setSubmitting(true);
     try {
       const { file_url } = await base44.integrations.Core.UploadFile({ file: imgFile });

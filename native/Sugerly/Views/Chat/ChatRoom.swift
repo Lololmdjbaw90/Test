@@ -106,7 +106,7 @@ struct ChatView: View {
             }
         }
         .sheet(item: $reporting) { target in ReportSheet(target: target) }
-        .sheet(isPresented: $gifs) { GifPickerSheet { url in Task { await sendMedia(url) } } }
+        .sheet(isPresented: $gifs) { GifPickerSheet { url in Task { if await TextGuard.clear([], kind: .message, model: model) { await sendMedia(url) } } } }
         .fullScreenCover(isPresented: $studio) {
             ReelStudioView(chatName: conversation.title(model)) { media in
                 Task { await sendStudio(media) }
@@ -562,6 +562,7 @@ struct ChatView: View {
     private func send() async {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, let data = payload(text: text, imageURL: "") else { return }
+        guard await TextGuard.clear([text], kind: .message, model: model) else { return }
         draft = ""
         await post(data)
     }
@@ -569,6 +570,7 @@ struct ChatView: View {
     // Photos and videos made in the in-app camera + editor.
     private func sendStudio(_ media: ChatMedia) async {
         failed = nil
+        guard await TextGuard.clear([], kind: .message, model: model) else { return }
         switch media {
         case .photos(let images):
             for (i, image) in images.enumerated() {
@@ -601,6 +603,7 @@ struct ChatView: View {
 
     private func sendMedia(_ url: String) async {
         guard let data = payload(text: "", imageURL: url) else { return }
+        guard await TextGuard.clear([], kind: .message, model: model, cooldown: false) else { return }
         await post(data)
     }
 
@@ -611,6 +614,7 @@ struct ChatView: View {
 
     private func sendVoiceNote() async {
         guard let result = recorder.stop() else { return }
+        guard await TextGuard.clear([], kind: .message, model: model) else { return }
         let (url, seconds) = result
         guard seconds >= 0.8, let data = try? Data(contentsOf: url) else { return }
         do {

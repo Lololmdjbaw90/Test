@@ -11,6 +11,7 @@ struct LoginView: View {
     @State private var error: String?
     @State private var info: String?
     @State private var legal: LegalDoc?
+    @State private var invite = ""
     @FocusState private var focus: Field?
 
     enum Field { case name, email, password }
@@ -60,6 +61,12 @@ struct LoginView: View {
                         .focused($focus, equals: .password)
                         .submitLabel(.go)
                         .onSubmit { Task { await submit() } })
+                    if register {
+                        field(icon: "gift", content: TextField("Invite code (optional)", text: $invite)
+                            .textInputAutocapitalization(.characters)
+                            .autocorrectionDisabled())
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
                 }
 
                 if register {
@@ -134,11 +141,16 @@ struct LoginView: View {
         info = nil
         if register && !agreed { withAnimation { error = "Please agree to the Terms and Community Guidelines to sign up." }; return }
         if register && name.trimmingCharacters(in: .whitespaces).isEmpty { withAnimation { error = "Pick a display name." }; return }
+        if register {
+            let check = ModEngine.analyze(name, kind: .name)
+            if check.blocked { withAnimation { error = check.reason }; return }
+        }
         busy = true
         defer { busy = false }
         do {
             if register {
                 try await model.signUp(name: name.trimmingCharacters(in: .whitespaces), email: email, password: password)
+                if !invite.trimmingCharacters(in: .whitespaces).isEmpty { await Referrals.redeem(invite, model: model) }
             } else {
                 try await model.signIn(email: email, password: password)
             }

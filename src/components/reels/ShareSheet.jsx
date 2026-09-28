@@ -5,6 +5,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { dmConversationId } from "@/lib/social";
 import { displayName, siteUrl } from "@/lib/format";
 import { toast } from "@/lib/toast";
+import { checkText } from "@/lib/moderation";
 import { feedback } from "@/lib/feedback";
 import Avatar from "@/components/common/Avatar";
 import BottomSheet from "@/components/common/BottomSheet";
@@ -49,6 +50,8 @@ export default function ShareSheet({ reel, anchorRef, me, friendEmails = [], use
 
   const send = async () => {
     if (!picked.length || sending) return;
+    const mod = await checkText(note, { user: me, where: "direct message", kind: "message" });
+    if (!mod.safe) { toast.error(mod.reason); return; }
     setSending(true);
     try {
       const base = {

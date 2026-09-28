@@ -842,7 +842,7 @@ struct ReelStudioView: View {
 
     private func openPhotos(_ images: [UIImage]) {
         guard !images.isEmpty else { return }
-        photos = images
+        photos = images.map(Self.prepare)
         previewPhotos = []
         asset = nil
         tool = .filters
@@ -1027,6 +1027,7 @@ struct ReelStudioView: View {
     private func post() async {
         guard let me = model.me else { return }
         guard !Moderation.hasLink(caption) else { error = "Links aren't allowed in captions."; return }
+        guard await TextGuard.clear([caption], kind: .caption, model: model) else { return }
         busy = true
         error = nil
         defer { busy = false }
@@ -1139,6 +1140,25 @@ struct ReelStudioView: View {
     }
 
     // Filter + text stickers drawn onto a picture.
+    // Every photo made upright, solid (see-through parts turn white, like
+    // other apps, instead of black once saved as JPEG) and no bigger than
+    // 2048 px, so it previews, filters, crops and posts the same way.
+    nonisolated static func prepare(_ image: UIImage) -> UIImage {
+        let size = image.size
+        let longest = max(size.width, size.height, 1)
+        let scale = min(1, 2048 / longest)
+        let target = CGSize(width: max(1, (size.width * scale).rounded()), height: max(1, (size.height * scale).rounded()))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        format.preferredRange = .standard
+        return UIGraphicsImageRenderer(size: target, format: format).image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(origin: .zero, size: target))
+            image.draw(in: CGRect(origin: .zero, size: target))
+        }
+    }
+
     private func bake(_ image: UIImage) -> UIImage {
         guard !look.isNeutral || !stickers.isEmpty || !strokes.isEmpty, let cg = image.cgImage else { return image }
         var ci = CIImage(cgImage: cg)

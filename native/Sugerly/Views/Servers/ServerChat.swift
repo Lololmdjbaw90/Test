@@ -285,6 +285,7 @@ struct ChannelChatView: View {
             failed = "Links aren't allowed in server chats."
             return
         }
+        guard await TextGuard.clear([text], kind: .message, model: model, cooldown: editing == nil) else { return }
         failed = nil
         draft = ""
         if let editing {
@@ -326,6 +327,7 @@ struct ChannelChatView: View {
 
     private func sendPhoto(_ item: PhotosPickerItem) async {
         defer { photo = nil }
+        guard await TextGuard.clear([], kind: .message, model: model) else { return }
         guard let meProfile = model.me,
               let raw = try? await item.loadTransferable(type: Data.self),
               let image = UIImage(data: raw), let jpeg = ImageTools.jpeg(image, maxSide: 1600) else { return }
@@ -340,6 +342,7 @@ struct ChannelChatView: View {
 
     private func sendMedia(_ url: String) async {
         guard let meProfile = model.me else { return }
+        guard await TextGuard.clear([], kind: .message, model: model) else { return }
         do {
             let doc = try await FS.create("ChannelMessage", Servers.message(channel: channel.id, server: server.id, me: meProfile, text: "", imageURL: url, reply: replyTo))
             replyTo = nil

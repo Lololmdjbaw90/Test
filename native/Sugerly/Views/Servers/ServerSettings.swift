@@ -150,6 +150,8 @@ struct ServerSettingsView: View {
     }
 
     private func saveOverview() async {
+        guard await TextGuard.clear([name], kind: .name, model: model, cooldown: false),
+              await TextGuard.clear([about, welcome], kind: .profile, model: model) else { return }
         busy = true
         defer { busy = false }
         var fields: Doc = [
@@ -370,6 +372,7 @@ struct RoleEditor: View {
     }
 
     private func save() async {
+        guard await TextGuard.clear([draft.name], kind: .name, model: model) else { return }
         busy = true
         defer { busy = false }
         let perms: [String: Any] = draft.permissions.mapValues { $0 as Any }
@@ -490,6 +493,8 @@ struct ChannelEditor: View {
     }
 
     private func save() async {
+        guard await TextGuard.clear([name], kind: .name, model: model),
+              await TextGuard.clear([about], kind: .profile, model: model, cooldown: false) else { return }
         busy = true
         defer { busy = false }
         let clean = Servers.slug(name, voice: type == "voice")

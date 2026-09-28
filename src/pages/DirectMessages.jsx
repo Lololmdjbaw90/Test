@@ -8,6 +8,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { usePeople } from "@/lib/people";
 import { useFriendships, splitFriendships, dmConversationId } from "@/lib/social";
 import { toast } from "@/lib/toast";
+import { checkText } from "@/lib/moderation";
 import { displayName, isOnline, profileLink, timeAgo } from "@/lib/format";
 import { SearchInput } from "@/components/common/Controls";
 import Modal, { useConfirm } from "@/components/common/Modal";
@@ -46,6 +47,8 @@ function NewGroupModal({ open, onClose, me, friends, onCreated }) {
   const [selected, setSelected] = useState([]);
   const [busy, setBusy] = useState(false);
   const create = async () => {
+    const mod = await checkText(name, { user: me, where: "group name", kind: "name" });
+    if (!mod.safe) { toast.error(mod.reason); return; }
     setBusy(true);
     try {
       const members = [...selected, me.email].sort();

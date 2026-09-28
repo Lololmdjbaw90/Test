@@ -677,6 +677,8 @@ struct CreateServerView: View {
 
     private func create() async {
         guard let meProfile = model.me else { return }
+        guard await TextGuard.clear([name], kind: .name, model: model),
+              await TextGuard.clear([about, welcome], kind: .profile, model: model, cooldown: false) else { return }
         busy = true
         defer { busy = false }
         do {

@@ -1,4 +1,4 @@
-import { hasLink } from "@/lib/moderation";
+import { checkText, hasLink } from "@/lib/moderation";
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
@@ -42,6 +42,10 @@ export default function OnboardingPage() {
 
   const finish = async () => {
     if (hasLink(form.bio)) { toast.error("Links aren't allowed in your bio"); return; }
+    for (const [text, kind] of [[form.display_name, "name"], [form.bio, "profile"]]) {
+      const mod = await checkText(text, { user, where: kind === "name" ? "display name" : "bio", kind, skipCooldown: true });
+      if (!mod.safe) { toast.error(mod.reason); return; }
+    }
     setSaving(true);
     try {
       let profile_picture = user?.profile_picture || "";

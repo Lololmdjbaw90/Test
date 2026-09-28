@@ -1,7 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import { redeemInvite } from "@/lib/referrals";
+import { analyze } from "@/lib/modEngine";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Eye, EyeOff, Heart, Loader2, Lock, Mail, Music2, Palette, Sparkles, UserRound, Users } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Gift, Heart, Loader2, Lock, Mail, Music2, Palette, Sparkles, UserRound, Users } from "lucide-react";
 import { base44, backendMode } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { Segmented } from "@/components/common/Controls";
@@ -52,6 +54,9 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const { checkUserAuth } = useAuth();
+  // Invite links (/Login?ref=CODE) open sign-up with the code filled in.
+  const [invite, setInvite] = useState(() => (params.get("ref") || "").toUpperCase());
+  useEffect(() => { if (params.get("ref")) setMode("register"); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const next = params.get("next") || "/";
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -67,7 +72,10 @@ export default function LoginPage() {
         toast.success("Check your inbox", { description: `We sent a reset link to ${form.email}.` });
         setMode("login");
       } else if (mode === "register") {
-        await base44.auth.register(form);
+        const checked = analyze(form.display_name, "name");
+        if (checked.blocked) { setError(checked.reason); return; }
+        const profile = await base44.auth.register(form);
+        if (invite.trim()) await redeemInvite(invite, profile);
         await checkUserAuth();
         navigate("/Onboarding", { replace: true });
       } else {
@@ -121,6 +129,12 @@ export default function LoginPage() {
                 </motion.div>
               )}
             </AnimatePresence>
+            {mode === "register" && (
+              <div className="relative">
+                <Gift className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "var(--accent-rose)" }} />
+                <input className="input pl-10 uppercase" placeholder="Invite code (optional)" value={invite} onChange={(e) => setInvite(e.target.value.toUpperCase())} autoComplete="off" />
+              </div>
+            )}
             <div className="relative">
               <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "var(--accent-rose)" }} />
               <input className="input pl-10" type="email" placeholder="Email" value={form.email} onChange={set("email")} required autoComplete="email" />

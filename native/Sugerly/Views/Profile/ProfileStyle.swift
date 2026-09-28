@@ -16,9 +16,15 @@ enum NameStyles {
         Style(id: "glow-purple", label: "Violet glow"),
         Style(id: "italic-serif", label: "Editorial"),
         Style(id: "bold-serif", label: "Rose serif"),
+        Style(id: "glow-mint", label: "Mint glow"),
+        Style(id: "glow-sky", label: "Sky glow"),
+        Style(id: "cute", label: "Cute"),
+        Style(id: "pop", label: "Pop shadow"),
         Style(id: "glow-gold", label: "Gold", premium: true),
         Style(id: "aurora", label: "Aurora", premium: true),
         Style(id: "neon", label: "Neon", premium: true),
+        Style(id: "rainbow", label: "Rainbow", premium: true),
+        Style(id: "sunset", label: "Sunset", premium: true),
     ]
 
     static func isPremium(_ id: String) -> Bool { all.first { $0.id == id }?.premium ?? false }
@@ -33,6 +39,10 @@ struct NameText: View {
     var display = false
     var nitro = true
     var color: Color = Palette.text
+    // Their chosen name colour (hex), used by the plain styles.
+    var tint = ""
+
+    private var own: Color { ProfileColors.color(tint) ?? color }
 
     private var active: String {
         let s = style.isEmpty ? "default" : style
@@ -46,7 +56,20 @@ struct NameText: View {
         case "glow-purple":
             base.foregroundStyle(Color(hex: 0xA67CF7)).shadow(color: Color(hex: 0xA67CF7).opacity(0.6), radius: size * 0.3)
         case "italic-serif":
-            Text(name).font(.system(size: size, weight: .semibold, design: .serif)).italic().foregroundStyle(color)
+            Text(name).font(.system(size: size, weight: .semibold, design: .serif)).italic().foregroundStyle(own)
+        case "glow-mint":
+            base.foregroundStyle(Color(hex: 0x2FAF8F)).shadow(color: Color(hex: 0x3FD1AB).opacity(0.6), radius: size * 0.3)
+        case "glow-sky":
+            base.foregroundStyle(Color(hex: 0x4A9BE8)).shadow(color: Color(hex: 0x7CBEFF).opacity(0.65), radius: size * 0.3)
+        case "cute":
+            Text(name).font(.cute(size * 1.1)).foregroundStyle(ProfileColors.color(tint) ?? Theme.main)
+        case "pop":
+            base.foregroundStyle(own).shadow(color: (ProfileColors.color(tint) ?? Theme.main).opacity(0.45), radius: 0, x: 2, y: 2)
+        case "rainbow":
+            base.foregroundStyle(LinearGradient(colors: [Color(hex: 0xFF7AA2), Color(hex: 0xFFB38A), Color(hex: 0xFFD166), Color(hex: 0x5EC8B8), Color(hex: 0x7CBEFF), Color(hex: 0xB19CFF)], startPoint: .leading, endPoint: .trailing))
+        case "sunset":
+            base.foregroundStyle(LinearGradient(colors: [Color(hex: 0xFF8A5C), Color(hex: 0xF25F8C), Color(hex: 0xA65CF2)], startPoint: .leading, endPoint: .trailing))
+                .shadow(color: Color(hex: 0xF25F8C).opacity(0.35), radius: size * 0.2)
         case "bold-serif":
             Text(name).font(.system(size: size, weight: .heavy, design: .serif)).foregroundStyle(Theme.main)
         case "glow-gold":
@@ -60,7 +83,7 @@ struct NameText: View {
                 .shadow(color: Color(hex: 0xEE8FAE), radius: size * 0.25)
                 .shadow(color: Color(hex: 0xD9577F), radius: size * 0.5)
         default:
-            base.foregroundStyle(color)
+            base.foregroundStyle(own)
         }
     }
 
@@ -129,15 +152,29 @@ struct ProfileEffect: Identifiable, Hashable {
         ProfileEffect(id: "snow", label: "Snow", icon: "snowflake"),
         ProfileEffect(id: "stars", label: "Stars", icon: "star.fill"),
         ProfileEffect(id: "bubbles", label: "Bubbles", icon: "circle.fill"),
+        ProfileEffect(id: "petals", label: "Petals", icon: "camera.macro"),
+        ProfileEffect(id: "paws", label: "Paws", icon: "pawprint.fill"),
+        ProfileEffect(id: "notes", label: "Music", icon: "music.note"),
+        ProfileEffect(id: "moons", label: "Moons", icon: "moon.fill"),
+        ProfileEffect(id: "leaves", label: "Leaves", icon: "leaf.fill"),
+        ProfileEffect(id: "bolts", label: "Zaps", icon: "bolt.fill"),
+        ProfileEffect(id: "clouds", label: "Clouds", icon: "cloud.fill"),
     ]
+
+    // How many float at once: few, some or lots.
+    static let amounts: [(Int, String)] = [(8, "Few"), (16, "Some"), (28, "Lots")]
 }
 
 // Little shapes floating up through a banner. They stay inside it (clipped).
 struct ProfileEffectLayer: View {
     let effect: String
+    var color = ""
+    var amount = 0
 
     private var icon: String { ProfileEffect.all.first { $0.id == effect }?.icon ?? "sparkle" }
+    private var count: Int { amount > 0 ? min(40, amount) : 16 }
     private var tint: Color {
+        if let chosen = ProfileColors.color(color) { return chosen }
         switch effect {
         case "snow": return .white
         case "stars": return Color(hex: 0xFFE08A)
@@ -151,7 +188,8 @@ struct ProfileEffectLayer: View {
             let t = timeline.date.timeIntervalSinceReferenceDate
             Canvas { context, size in
                 guard let symbol = context.resolveSymbol(id: 0) else { return }
-                for i in 0..<16 {
+                let n = count
+                for i in 0..<n {
                     let seed = Double(i) * 12.9898
                     let rx = (sin(seed) * 43758.5453).truncatingRemainder(dividingBy: 1)
                     let speed = 0.05 + abs(rx) * 0.06
@@ -159,7 +197,7 @@ struct ProfileEffectLayer: View {
                     let p = (t * speed + phase).truncatingRemainder(dividingBy: 1)
                     let fall = effect == "snow"
                     let y = fall ? p * (size.height + 30) - 15 : (1 - p) * (size.height + 30) - 15
-                    let x = (Double(i) + 0.5) / 16 * size.width + sin(t * 1.3 + seed) * 10
+                    let x = (Double(i) + 0.5) / Double(n) * size.width + sin(t * 1.3 + seed) * 10
                     let scale = 0.55 + abs(rx) * 0.7
                     let alpha = min(1, min(p, 1 - p) * 5) * 0.85
                     var c = context
@@ -174,6 +212,149 @@ struct ProfileEffectLayer: View {
                     .shadow(color: .black.opacity(0.12), radius: 2)
                     .tag(0)
             }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Picture frames + banner patterns
+
+struct AvatarFrame: Identifiable, Hashable {
+    let id: String
+    let label: String
+    let icon: String
+    var premium = false
+
+    static let all: [AvatarFrame] = [
+        AvatarFrame(id: "", label: "Classic", icon: "circle"),
+        AvatarFrame(id: "solid", label: "Colour ring", icon: "circle.circle"),
+        AvatarFrame(id: "double", label: "Double", icon: "circle.circle.fill"),
+        AvatarFrame(id: "dashed", label: "Stitched", icon: "circle.dashed"),
+        AvatarFrame(id: "glow", label: "Glow", icon: "sun.max"),
+        AvatarFrame(id: "rainbow", label: "Rainbow", icon: "rainbow", premium: true),
+        AvatarFrame(id: "hearts", label: "Hearts", icon: "heart.circle", premium: true),
+        AvatarFrame(id: "stars", label: "Stars", icon: "star.circle", premium: true),
+    ]
+
+    static func isPremium(_ id: String) -> Bool { all.first { $0.id == id }?.premium ?? false }
+}
+
+// Drawn around a profile picture (pass the picture's size).
+struct AvatarFrameView: View {
+    let frame: String
+    var color: Color = Theme.main
+    var size: CGFloat = 104
+
+    var body: some View {
+        let d = size + 14
+        ZStack {
+            switch frame {
+            case "solid":
+                Circle().strokeBorder(color, lineWidth: 4)
+            case "double":
+                Circle().strokeBorder(color, lineWidth: 3)
+                Circle().strokeBorder(color.opacity(0.45), lineWidth: 2).padding(-6)
+            case "dashed":
+                Circle().strokeBorder(color, style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [6, 5]))
+            case "glow":
+                Circle().strokeBorder(color.opacity(0.9), lineWidth: 3).shadow(color: color.opacity(0.8), radius: 10)
+            case "rainbow":
+                Circle().strokeBorder(AngularGradient(colors: [Color(hex: 0xFF7AA2), Color(hex: 0xFFD166), Color(hex: 0x5EC8B8), Color(hex: 0x7CBEFF), Color(hex: 0xB19CFF), Color(hex: 0xFF7AA2)], center: .center), lineWidth: 5)
+            case "hearts", "stars":
+                Circle().strokeBorder(color.opacity(0.35), lineWidth: 2)
+                ForEach(0..<10, id: \.self) { i in
+                    Image(systemName: frame == "hearts" ? "heart.fill" : "star.fill")
+                        .font(.system(size: 11, weight: .bold)).foregroundStyle(color)
+                        .frame(width: d, height: d, alignment: .top)
+                        .rotationEffect(.degrees(Double(i) * 36))
+                }
+            default:
+                EmptyView()
+            }
+        }
+        .frame(width: d, height: d)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+struct BannerPattern: Identifiable, Hashable {
+    let id: String
+    let label: String
+    let icon: String
+
+    static let all: [BannerPattern] = [
+        BannerPattern(id: "", label: "Plain", icon: "square"),
+        BannerPattern(id: "dots", label: "Dots", icon: "circle.grid.3x3.fill"),
+        BannerPattern(id: "stripes", label: "Stripes", icon: "line.diagonal"),
+        BannerPattern(id: "checks", label: "Checks", icon: "checkerboard.rectangle"),
+        BannerPattern(id: "hearts", label: "Hearts", icon: "heart.fill"),
+        BannerPattern(id: "stars", label: "Stars", icon: "star.fill"),
+        BannerPattern(id: "waves", label: "Waves", icon: "water.waves"),
+    ]
+}
+
+// A soft white pattern over a banner (drawn once, it doesn't move).
+struct BannerPatternView: View {
+    let pattern: String
+
+    var body: some View {
+        Canvas { ctx, size in
+            let ink = GraphicsContext.Shading.color(.white.opacity(0.22))
+            switch pattern {
+            case "dots":
+                var y: CGFloat = 10
+                var row = 0
+                while y < size.height + 20 {
+                    var x: CGFloat = row % 2 == 0 ? 10 : 24
+                    while x < size.width + 20 { ctx.fill(Path(ellipseIn: CGRect(x: x - 4, y: y - 4, width: 8, height: 8)), with: ink); x += 28 }
+                    y += 24; row += 1
+                }
+            case "stripes":
+                var x: CGFloat = -size.height
+                while x < size.width {
+                    var p = Path()
+                    p.move(to: CGPoint(x: x, y: size.height)); p.addLine(to: CGPoint(x: x + size.height, y: 0))
+                    ctx.stroke(p, with: ink, lineWidth: 10); x += 34
+                }
+            case "checks":
+                let s: CGFloat = 22
+                var y: CGFloat = 0
+                var row = 0
+                while y < size.height {
+                    var x: CGFloat = row % 2 == 0 ? 0 : s
+                    while x < size.width { ctx.fill(Path(CGRect(x: x, y: y, width: s, height: s)), with: .color(.white.opacity(0.14))); x += s * 2 }
+                    y += s; row += 1
+                }
+            case "hearts", "stars":
+                guard let symbol = ctx.resolveSymbol(id: 0) else { return }
+                var y: CGFloat = 16
+                var row = 0
+                while y < size.height + 20 {
+                    var x: CGFloat = row % 2 == 0 ? 16 : 40
+                    while x < size.width + 20 { ctx.draw(symbol, at: CGPoint(x: x, y: y)); x += 48 }
+                    y += 34; row += 1
+                }
+            case "waves":
+                var y: CGFloat = 14
+                while y < size.height + 20 {
+                    var p = Path()
+                    p.move(to: CGPoint(x: 0, y: y))
+                    var x: CGFloat = 0
+                    while x < size.width {
+                        p.addQuadCurve(to: CGPoint(x: x + 20, y: y), control: CGPoint(x: x + 10, y: y - 8))
+                        p.addQuadCurve(to: CGPoint(x: x + 40, y: y), control: CGPoint(x: x + 30, y: y + 8))
+                        x += 40
+                    }
+                    ctx.stroke(p, with: ink, lineWidth: 3); y += 26
+                }
+            default:
+                break
+            }
+        } symbols: {
+            Image(systemName: pattern == "stars" ? "star.fill" : "heart.fill")
+                .font(.system(size: 12, weight: .bold)).foregroundStyle(.white.opacity(0.28)).tag(0)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)

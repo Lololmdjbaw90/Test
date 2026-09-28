@@ -2,11 +2,14 @@ import React, { useEffect, useState } from "react";
 import { Hash, Loader2, Volume2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { toast } from "@/lib/toast";
+import { useAuth } from "@/lib/AuthContext";
+import { checkText } from "@/lib/moderation";
 import Modal from "@/components/common/Modal";
 
 export const channelSlug = (name, type) => (type === "voice" ? name.trim() : name.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9_-]/g, ""));
 
 export default function AddChannelModal({ open, communityId, channelCount = 0, defaultType = "text", onClose, onCreated }) {
+  const { user } = useAuth();
   const [name, setName] = useState("");
   const [type, setType] = useState(defaultType);
   const [description, setDescription] = useState("");
@@ -16,6 +19,8 @@ export default function AddChannelModal({ open, communityId, channelCount = 0, d
   const create = async () => {
     const clean = channelSlug(name, type);
     if (!clean) return;
+    const mod = await checkText(`${name}\n${description}`, { user, where: "channel name", kind: "name" });
+    if (!mod.safe) { toast.error(mod.reason); return; }
     setSaving(true);
     try {
       const ch = await base44.entities.ServerChannel.create({ community_id: communityId, name: clean, type, description: description.trim(), position: channelCount, allowed_roles: [] });

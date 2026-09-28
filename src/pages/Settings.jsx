@@ -1,8 +1,9 @@
-import { hasLink } from "@/lib/moderation";
+import { checkText, hasLink } from "@/lib/moderation";
+import { INVITE_REWARD, inviteCodeFor, inviteLink, inviteText } from "@/lib/referrals";
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Camera, Check, Database, Download, Smartphone, ImagePlus, Loader2, LogOut, Monitor, Moon, Palette, RotateCcw, Save, Settings as SettingsIcon, Shield, Sun, Trash2, User, Volume2 } from "lucide-react";
+import { Camera, Check, Copy, Database, Gift, Share2, Download, Smartphone, ImagePlus, Loader2, LogOut, Monitor, Moon, Palette, RotateCcw, Save, Settings as SettingsIcon, Shield, Sun, Trash2, User, Volume2 } from "lucide-react";
 import { base44, backendMode } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { ACCENTS, applyTheme } from "@/lib/theme";
@@ -27,6 +28,28 @@ const SECTIONS = [
   { id: "account", label: "Account & data", icon: Database },
   { id: "legal", label: "Help & legal", icon: Shield },
 ];
+
+// Your invite code, with copy and share.
+function InviteBox({ user }) {
+  const code = user?.invite_code || inviteCodeFor(user?.id);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(code); toast.success("Code copied"); } catch { toast(code); }
+  };
+  const share = async () => {
+    if (navigator.share) { try { await navigator.share({ title: "Sugerly", text: inviteText(code), url: inviteLink(code) }); return; } catch { return; } }
+    try { await navigator.clipboard.writeText(inviteText(code)); toast.success("Invite copied, paste it anywhere"); } catch { toast(inviteText(code)); }
+  };
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <div className="flex-1 h-12 rounded-2xl flex items-center justify-center font-mono text-xl font-extrabold tracking-[0.3em]" style={{ background: "var(--pink-soft)", color: "var(--accent-rose)", border: "1.5px dashed rgb(var(--accent-rgb) / 0.4)" }}>{code}</div>
+        <button type="button" className="icon-btn icon-btn-bordered w-12 h-12" onClick={copy} aria-label="Copy code"><Copy className="w-4 h-4" /></button>
+        <button type="button" className="btn h-12" onClick={share}><Share2 className="w-4 h-4" /> Share</button>
+      </div>
+      {user?.invites_joined > 0 && <p className="text-sm font-semibold" style={{ color: "var(--accent-rose)" }}>{user.invites_joined} friend{user.invites_joined === 1 ? "" : "s"} joined · {user.invites_joined * INVITE_REWARD} coins earned</p>}
+    </div>
+  );
+}
 
 function Section({ id, icon: Icon, title, subtitle, children }) {
   return (
@@ -78,6 +101,10 @@ export default function SettingsPage() {
   const save = async () => {
     if (!form.display_name.trim()) { toast.error("Display name can't be empty"); return; }
     if (hasLink(form.bio)) { toast.error("Links aren't allowed in your bio"); return; }
+    for (const [text, kind] of [[form.display_name, "name"], [form.bio, "profile"]]) {
+      const mod = await checkText(text, { user, where: kind === "name" ? "display name" : "bio", kind, skipCooldown: true });
+      if (!mod.safe) { toast.error(mod.reason); return; }
+    }
     setSaving(true);
     try {
       let profile_picture = picPreview ? user.profile_picture || "" : "";
@@ -191,6 +218,10 @@ export default function SettingsPage() {
               <div className="card-sm p-3.5"><Toggle checked={fb.sounds} onChange={(v) => { setFb({ sounds: v }); if (v) setTimeout(() => playSound("success"), 30); }} label="Sounds" description="Soft pops and chimes. On iPhone and iPad they stay quiet when the silent switch is on." /></div>
               <div className="card-sm p-3.5"><Toggle checked={fb.haptics} onChange={(v) => { setFb({ haptics: v }); if (v) setTimeout(() => haptic("medium"), 30); }} label="Haptics" description="Gentle vibrations in the iPhone and iPad app." /></div>
             </div>
+          </Section>
+
+          <Section id="invite" icon={Gift} title="Invite friends" subtitle={`Get ${INVITE_REWARD} coins for every friend who signs up with your code.`}>
+            <InviteBox user={user} />
           </Section>
 
           <Section id="app" icon={Smartphone} title="Get the app" subtitle="Sugerly works like a native app on your phone, tablet or computer.">

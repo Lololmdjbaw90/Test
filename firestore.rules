@@ -29,6 +29,11 @@ service cloud.firestore {
       );
     }
     // Every key the write adds, removes or changes must be in `fields`.
+    // Muted by moderation (strikes, or an admin) until muted_until_ms: no posting.
+    function mutedNow() {
+      let me = /databases/$(database)/documents/User/$(request.auth.uid);
+      return exists(me) && get(me).data.get('muted_until_ms', 0) > request.time.toMillis();
+    }
     function onlyChanged(fields) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
     }
@@ -111,7 +116,10 @@ service cloud.firestore {
             // Only admins can ban or lift a ban.
             && request.resource.data.get('banned', false) == resource.data.get('banned', false)
             && request.resource.data.get('banned_until', '') == resource.data.get('banned_until', '')
-            && request.resource.data.get('ban_reason', '') == resource.data.get('ban_reason', ''));
+            && request.resource.data.get('ban_reason', '') == resource.data.get('ban_reason', '')
+            // Strikes and mutes only go up (admins can lift them).
+            && request.resource.data.get('muted_until_ms', 0) >= resource.data.get('muted_until_ms', 0)
+            && request.resource.data.get('mod_strikes', 0) >= resource.data.get('mod_strikes', 0));
       // Admins, or the person themselves when they delete their account.
       allow delete: if isSiteOwner() || isSelf(uid) || (isAdmin() && !(resource.data.email in siteOwners()));
     }
@@ -127,21 +135,21 @@ service cloud.firestore {
 
     match /Artwork/{id} {
       allow read: if signedIn();
-      allow create: if ownsIncomingData() && freshCounters();
+      allow create: if ownsIncomingData() && freshCounters() && !mutedNow();
       allow update: if isAdmin() || ownerEdit() || likeWrite('Artwork', id);
       allow delete: if isAdmin() || ownsResource();
     }
 
     match /CommunityPost/{id} {
       allow read: if signedIn();
-      allow create: if ownsIncomingData() && freshCounters();
+      allow create: if ownsIncomingData() && freshCounters() && !mutedNow();
       allow update: if isAdmin() || ownerEdit() || likeWrite('CommunityPost', id);
       allow delete: if isAdmin() || ownsResource();
     }
 
     match /MusicReview/{id} {
       allow read: if signedIn();
-      allow create: if ownsIncomingData() && freshCounters();
+      allow create: if ownsIncomingData() && freshCounters() && !mutedNow();
       // Anyone may like, or bump the play counter by exactly one.
       allow update: if isAdmin() || ownerEdit() || likeWrite('MusicReview', id)
         || (signedIn() && onlyChanged(['plays', 'updated_date', 'updated_at']) && request.resource.data.plays == resource.data.get('plays', 0) + 1);
@@ -152,7 +160,7 @@ service cloud.firestore {
     // view counter by exactly one; authors and admins edit or delete.
     match /Reel/{id} {
       allow read: if signedIn();
-      allow create: if signedIn() && request.resource.data.user_email == ownEmail() && freshCounters();
+      allow create: if signedIn() && request.resource.data.user_email == ownEmail() && freshCounters() && !mutedNow();
       allow update: if isAdmin() || ownerEdit() || likeWrite('Reel', id)
         || (signedIn() && onlyChanged(['views', 'updated_date', 'updated_at']) && request.resource.data.views == resource.data.get('views', 0) + 1);
       allow delete: if isAdmin() || ownsResource();
@@ -166,7 +174,7 @@ service cloud.firestore {
 
     match /Comment/{id} {
       allow read: if signedIn();
-      allow create: if ownsIncomingData();
+      allow create: if ownsIncomingData() && !mutedNow();
       // Anyone signed in can like a comment (only the likes change).
       allow update: if isAdmin() || ownsResource() || (signedIn() && onlyChanged(['likes', 'updated_date', 'updated_at']) && onlySelfInLikes());
       allow delete: if isAdmin() || ownsResource();
@@ -183,7 +191,7 @@ service cloud.firestore {
     match /CommunityComment/{id} {
       allow read: if signedIn();
       // No new comments on a reel whose creator turned comments off.
-      allow create: if ownsIncomingData()
+      allow create: if ownsIncomingData() && !mutedNow()
         && (!isReelComment(request.resource.data) || reelOf(request.resource.data.post_id).data.get('comments_off', false) != true);
       allow update: if isAdmin() || ownsResource() || (signedIn() && onlyChanged(['likes', 'updated_date', 'updated_at']) && onlySelfInLikes());
       // Profile owners moderate their message board (post_id "profile_<email>");
@@ -195,13 +203,13 @@ service cloud.firestore {
 
     match /ProfileMessage/{id} {
       allow read: if signedIn();
-      allow create: if ownsIncomingData();
+      allow create: if ownsIncomingData() && !mutedNow();
       allow update, delete: if isAdmin() || ownsResource();
     }
 
     match /Commission/{id} {
       allow read: if signedIn();
-      allow create: if ownsIncomingData();
+      allow create: if ownsIncomingData() && !mutedNow();
       allow update, delete: if isAdmin() || ownsResource();
     }
 
@@ -221,7 +229,7 @@ service cloud.firestore {
 
     match /Community/{id} {
       allow read: if signedIn();
-      allow create: if signedIn() && request.resource.data.owner_email == ownEmail();
+      allow create: if signedIn() && request.resource.data.owner_email == ownEmail() && !mutedNow();
       allow update: if isAdmin()
         || resource.data.owner_email == ownEmail()
         // Joining or leaving yourself.
@@ -264,7 +272,7 @@ service cloud.firestore {
 
     match /ChannelMessage/{id} {
       allow read: if signedIn();
-      allow create: if signedIn() && request.resource.data.user_email == ownEmail() && isServerMember(request.resource.data.community_id);
+      allow create: if signedIn() && request.resource.data.user_email == ownEmail() && isServerMember(request.resource.data.community_id) && !mutedNow();
       allow update: if isAdmin()
         // Authors edit their own text (pinning needs permission).
         || (resource.data.user_email == ownEmail() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['is_pinned', 'user_email']))
@@ -296,7 +304,8 @@ service cloud.firestore {
       allow read: if signedIn() && (ownEmail() in resource.data.member_emails || isAdmin());
       allow create: if signedIn()
         && ownEmail() in request.resource.data.member_emails
-        && request.resource.data.user_email == ownEmail();
+        && request.resource.data.user_email == ownEmail()
+        && !mutedNow();
       allow update: if isAdmin()
         || (resource.data.user_email == ownEmail() && onlyChanged(['content', 'is_edited', 'read_by', 'reactions', 'updated_date', 'updated_at']))
         || (ownEmail() in resource.data.member_emails && onlyChanged(['read_by', 'reactions', 'updated_date', 'updated_at']));
@@ -344,6 +353,19 @@ service cloud.firestore {
     match /Report/{id} {
       allow create: if signedIn() && request.resource.data.reporter_email == ownEmail();
       allow read, update, delete: if isAdmin();
+    }
+
+    // Invites: one record per new account (id = the new person's uid). The
+    // inviter marks it claimed once when they collect their coins.
+    match /Referral/{id} {
+      allow read: if signedIn() && (resource.data.inviter_email == ownEmail() || resource.data.invitee_email == ownEmail() || isAdmin());
+      allow create: if signedIn() && id == request.auth.uid
+        && request.resource.data.invitee_email == ownEmail()
+        && request.resource.data.inviter_email != ownEmail()
+        && request.resource.data.claimed == false;
+      allow update: if signedIn() && resource.data.inviter_email == ownEmail() && resource.data.claimed == false
+        && request.resource.data.claimed == true && onlyChanged(['claimed', 'claimed_date']);
+      allow delete: if isAdmin();
     }
 
     match /{document=**} {

@@ -345,6 +345,7 @@ struct ReelShareSheet: View {
 
     private func send() async {
         guard let me = model.me else { return }
+        guard await TextGuard.clear([note], kind: .message, model: model) else { return }
         sending = true
         defer { sending = false }
         let chosen = targets.filter { picked.contains($0.id) }

@@ -106,6 +106,10 @@ final class AppModel {
         let searchName = (me?.displayName ?? "").lowercased()
         Task { try? await FS.update("User", uid, ["last_seen": FS.nowISO(), "search_name": searchName]) }
         Task { await loadPeople() }
+        Task {
+            await Referrals.ensureCode(self)
+            await Referrals.claim(self)
+        }
     }
 
     // A starter set of the most recently active people (not everyone: there
@@ -213,6 +217,10 @@ final class AppModel {
             "profile_effect": u.profileEffect, "website": u.website, "stickers": u.stickers, "my_gifs": u.myGifs,
             "accepted_chats": u.acceptedChats, "ignored": u.ignored, "presence": u.presence, "custom_status_until": u.statusUntil,
             "banned": u.banned, "ban_reason": u.banReason, "banned_until": u.bannedUntil,
+            "muted_until_ms": u.mutedUntilMs, "mod_strikes": u.modStrikes,
+            "invite_code": u.inviteCode, "invites_joined": u.invitesJoined,
+            "effect_color": u.effectColor, "effect_amount": u.effectAmount, "name_color": u.nameColor,
+            "avatar_frame": u.avatarFrame, "banner_pattern": u.bannerPattern,
         ]
     }
 

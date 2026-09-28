@@ -29,6 +29,7 @@ import { feedback } from "@/lib/feedback";
 import { WhatsNewPopup, UpdateReadyBar } from "@/components/layout/WhatsNew";
 import { useUnseenUpdates } from "@/lib/updates";
 import { RulesBanner } from "@/components/admin/RulesSetup";
+import { claimInvites, ensureInviteCode } from "@/lib/referrals";
 
 const FULL_HEIGHT = ["/communitychat", "/directmessages", "/reels"];
 const EXTRA_TITLES = { "/profile": "Profile", "/settings": "Settings", "/communitychat": "Server", "/upload": "Upload art" };
@@ -296,6 +297,12 @@ export default function Layout() {
 
   const { data: siteConfigs } = useLiveQuery("SiteConfig", { key: "global" }, { enabled: !!user });
   const siteConfig = siteConfigs[0];
+
+  // Invites: make sure you have a code, and collect coins for friends who joined.
+  useEffect(() => {
+    if (!user?.id) return;
+    ensureInviteCode(user).then(() => claimInvites(user, updateMe));
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Apply the user's theme + accent (falling back to the site default accent).
   useEffect(() => {

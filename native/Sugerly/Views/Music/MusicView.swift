@@ -78,8 +78,7 @@ struct MusicView: View {
             .padding(.horizontal, 16)
             .padding(.top, 8)
             .padding(.bottom, 30)
-            .frame(maxWidth: 760)
-            .frame(maxWidth: .infinity)
+            .sideRails(760)
         }
         .scrollDismissesKeyboard(.interactively)
         .sugarBackground()
@@ -340,6 +339,7 @@ struct NewTrackView: View {
 
     private func share() async {
         guard let me = model.me, let audio else { return }
+        guard await TextGuard.clear([title, genre, mood, description], kind: .caption, model: model) else { return }
         busy = true
         defer { busy = false }
         do {

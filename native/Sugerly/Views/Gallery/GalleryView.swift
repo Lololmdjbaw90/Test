@@ -493,6 +493,7 @@ struct NewArtworkView: View {
 
     private func share() async {
         guard let me = model.me, let image, let data = ImageTools.jpeg(image) else { return }
+        guard await TextGuard.clear([title, text], kind: .caption, model: model) else { return }
         busy = true
         defer { busy = false }
         do {

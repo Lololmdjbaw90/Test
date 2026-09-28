@@ -45,10 +45,24 @@ enum Giphy {
         guard let id = entry["id"] as? String,
               let images = entry["images"] as? [String: Any],
               let fixed = images["fixed_width"] as? [String: Any] else { return nil }
-        let full = (fixed["webp"] as? String) ?? (fixed["url"] as? String) ?? ""
-        guard !full.isEmpty else { return nil }
-        let small = images["fixed_width_small"] as? [String: Any]
-        let preview = (small?["webp"] as? String) ?? (small?["url"] as? String) ?? full
+        let fixedURL = (fixed["webp"] as? String) ?? (fixed["url"] as? String) ?? ""
+        guard !fixedURL.isEmpty else { return nil }
+        // What gets sent: the sharpest version that's still light enough to
+        // load quickly (the full original when it's small, else GIPHY's
+        // medium one), instead of the 200px-wide thumbnail.
+        func size(_ rendition: [String: Any]?, _ key: String) -> Int { Int(rendition?[key] as? String ?? "") ?? .max }
+        let original = images["original"] as? [String: Any]
+        let medium = images["downsized_medium"] as? [String: Any]
+        var full = fixedURL
+        if let webp = original?["webp"] as? String, size(original, "webp_size") <= 3_500_000 {
+            full = webp
+        } else if let gif = original?["url"] as? String, size(original, "size") <= 3_000_000 {
+            full = gif
+        } else if let gif = medium?["url"] as? String {
+            full = gif
+        }
+        // The grid shows the 200px version (not the tiny 100px one).
+        let preview = fixedURL
         let w = Double(fixed["width"] as? String ?? "") ?? 200
         let h = Double(fixed["height"] as? String ?? "") ?? 200
         return GifItem(id: id, url: sticker ? Media.stickerURL(full) : full, preview: preview, ratio: CGFloat(w / max(1, h)), sticker: sticker)
@@ -100,7 +114,7 @@ struct MessageMedia: View {
 
     var body: some View {
         if Media.isSticker(url) {
-            AnimatedThumb(url: url, fill: false, maxPixel: 360, maxFrames: 60)
+            AnimatedThumb(url: url, fill: false, maxPixel: 480, maxFrames: 90)
                 .frame(width: 140, height: 140)
                 .shadow(color: Palette.shadow, radius: 6, y: 3)
         } else {
@@ -218,7 +232,7 @@ struct GifPickerSheet: View {
         Button { pick(item.url) } label: {
             Color.clear
                 .aspectRatio(max(0.4, min(2.5, item.ratio)), contentMode: .fit)
-                .overlay { AnimatedThumb(url: item.preview, fill: !item.sticker, maxPixel: 200, maxFrames: 30) }
+                .overlay { AnimatedThumb(url: item.preview, fill: !item.sticker, maxPixel: 320, maxFrames: 40) }
                 .padding(item.sticker ? 6 : 0)
                 .background(Palette.surface2)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))

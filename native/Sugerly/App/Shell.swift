@@ -36,12 +36,49 @@ enum AppTab: Hashable {
 
 enum Composer: String, Identifiable { case post, artwork, reel, track; var id: String { rawValue } }
 
+// Pages open and close in place, without the sideways slide.
+extension Binding where Value == [Route] {
+    var instant: Binding<[Route]> {
+        Binding(get: { wrappedValue }, set: { next in
+            var still = Transaction()
+            still.disablesAnimations = true
+            withTransaction(still) { wrappedValue = next }
+        })
+    }
+}
+
 // Where a tap leads, shared by every tab's navigation stack.
 struct RouteView: View {
     let route: Route
     @Binding var path: [Route]
 
     var body: some View {
+        page
+            // Our own back button (and a swipe from the left edge), both
+            // instant, instead of the system one that slides.
+            .navigationBarBackButtonHidden(true)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { back() } label: {
+                        Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold))
+                    }
+                    .accessibilityLabel("Back")
+                }
+            }
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 24).onEnded { drag in
+                    if drag.startLocation.x < 28, drag.translation.width > 90, abs(drag.translation.height) < 70 { back() }
+                }
+            )
+    }
+
+    private func back() {
+        guard !path.isEmpty else { return }
+        path.removeLast()
+    }
+
+    @ViewBuilder
+    private var page: some View {
         switch route {
         case .post(let post): PostDetailView(postId: post.id, initial: post, path: $path)
         case .person(let email): PersonView(email: email, path: $path)
@@ -68,19 +105,6 @@ extension View {
         navigationDestination(for: Route.self) { route in RouteView(route: route, path: path) }
     }
 
-    // Page background: warm off-white with two soft accent glows.
-    func sugarBackground() -> some View {
-        background {
-            ZStack {
-                Palette.bg
-                Circle().fill(Theme.light.opacity(0.32)).frame(width: 360).blur(radius: 95).offset(x: 150, y: -300)
-                Circle().fill(Theme.lavender.opacity(0.18)).frame(width: 320).blur(radius: 95).offset(x: -170, y: 260)
-                Circle().fill(Color(hex: 0xFFD6A5).opacity(0.14)).frame(width: 240).blur(radius: 80).offset(x: 140, y: 120)
-            }
-            .drawingGroup()
-            .ignoresSafeArea()
-        }
-    }
 }
 
 // Presses squish a little and spring back, with a light tap (all buttons).
@@ -141,52 +165,52 @@ struct MainShell: View {
 
     private var currentPathBinding: Binding<[Route]> {
         switch tab {
-        case .home: return $homePath
-        case .community: return $communityPath
-        case .gallery: return $galleryPath
-        case .reels: return $reelsPath
-        case .chat: return $chatPath
-        case .me: return $mePath
+        case .home: return $homePath.instant
+        case .community: return $communityPath.instant
+        case .gallery: return $galleryPath.instant
+        case .reels: return $reelsPath.instant
+        case .chat: return $chatPath.instant
+        case .me: return $mePath.instant
         }
     }
 
     // The six tabs, each with its own navigation stack.
     private var tabs: some View {
         TabView(selection: $tab) {
-            NavigationStack(path: $homePath) {
-                HomeView(path: $homePath, compose: { composer = $0 }).sugarRoutes($homePath)
+            NavigationStack(path: $homePath.instant) {
+                HomeView(path: $homePath.instant, compose: { composer = $0 }).sugarRoutes($homePath.instant)
             }
             .tag(AppTab.home)
             .toolbar(.hidden, for: .tabBar)
 
-            NavigationStack(path: $communityPath) {
-                CommunityView(path: $communityPath, compose: { composer = .post }).sugarRoutes($communityPath)
+            NavigationStack(path: $communityPath.instant) {
+                CommunityView(path: $communityPath.instant, compose: { composer = .post }).sugarRoutes($communityPath.instant)
             }
             .tag(AppTab.community)
             .toolbar(.hidden, for: .tabBar)
 
-            NavigationStack(path: $galleryPath) {
-                GalleryView(path: $galleryPath, isRoot: true).sugarRoutes($galleryPath)
+            NavigationStack(path: $galleryPath.instant) {
+                GalleryView(path: $galleryPath.instant, isRoot: true).sugarRoutes($galleryPath.instant)
             }
             .tag(AppTab.gallery)
             .toolbar(.hidden, for: .tabBar)
 
-            NavigationStack(path: $reelsPath) {
-                ReelsView(visible: tab == .reels && reelsPath.isEmpty, path: $reelsPath, create: { composer = .reel }).sugarRoutes($reelsPath)
+            NavigationStack(path: $reelsPath.instant) {
+                ReelsView(visible: tab == .reels && reelsPath.isEmpty, path: $reelsPath.instant, create: { composer = .reel }).sugarRoutes($reelsPath.instant)
             }
             .tag(AppTab.reels)
             .toolbar(.hidden, for: .tabBar)
 
-            NavigationStack(path: $chatPath) {
-                ChatListView(path: $chatPath).sugarRoutes($chatPath)
+            NavigationStack(path: $chatPath.instant) {
+                ChatListView(path: $chatPath.instant).sugarRoutes($chatPath.instant)
             }
             .tag(AppTab.chat)
             .toolbar(.hidden, for: .tabBar)
 
-            NavigationStack(path: $mePath) {
-                PersonView(email: model.me?.email ?? "", path: $mePath)
-                    .sugarTopBar($mePath)
-                    .sugarRoutes($mePath)
+            NavigationStack(path: $mePath.instant) {
+                PersonView(email: model.me?.email ?? "", path: $mePath.instant)
+                    .sugarTopBar($mePath.instant)
+                    .sugarRoutes($mePath.instant)
             }
             .tag(AppTab.me)
             .toolbar(.hidden, for: .tabBar)
@@ -229,6 +253,7 @@ struct MainShell: View {
     // Tabs, tab bar, pop-ups and the shared stores.
     private var core: some View {
         tabs
+        .environment(\.backgroundPaused, menuSheet != nil || composer != nil || model.showMenu || model.showNotifications)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !barHidden {
                 VStack(spacing: 8) {

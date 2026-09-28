@@ -108,8 +108,7 @@ struct ProfileContent: View {
                 .padding(.horizontal, 16)
             }
             .padding(.bottom, 30)
-            .frame(maxWidth: 720)
-            .frame(maxWidth: .infinity)
+            .sideRails(720)
         }
         .background(alignment: .top) {
             if let accent {
@@ -138,17 +137,25 @@ struct ProfileContent: View {
                 } else {
                     RemoteImage(url: person.banner)
                 }
-                if person.isNitro && !person.profileEffect.isEmpty { ProfileEffectLayer(effect: person.profileEffect) }
+                if !person.bannerPattern.isEmpty { BannerPatternView(pattern: person.bannerPattern) }
+                if person.isNitro && !person.profileEffect.isEmpty {
+                    ProfileEffectLayer(effect: person.profileEffect, color: person.effectColor, amount: person.effectAmount)
+                }
             }
             .frame(height: 170)
             .frame(maxWidth: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
             .padding(.horizontal, 12)
 
-            Avatar(url: person.picture, name: person.displayName, size: 104, ring: true, nitro: person.isNitro,
+            Avatar(url: person.picture, name: person.displayName, size: 104, ring: person.avatarFrame.isEmpty, nitro: person.isNitro,
                    presence: isMe ? (Presence(rawValue: person.presence) ?? .online) : person.presenceNow)
                 .padding(4)
                 .background(Palette.bg, in: Circle())
+                .overlay {
+                    if !person.avatarFrame.isEmpty && (person.isNitro || !AvatarFrame.isPremium(person.avatarFrame)) {
+                        AvatarFrameView(frame: person.avatarFrame, color: accent ?? Theme.main, size: 104)
+                    }
+                }
                 .shadow(color: (accent ?? Theme.pink).opacity(0.3), radius: 16, y: 8)
                 .offset(x: 26, y: 58)
         }
@@ -172,7 +179,7 @@ struct ProfileContent: View {
         let info = LevelInfo(xp: person.xp)
         return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                NameText(name: person.displayName, style: person.nameStyle, size: 34, display: true, nitro: person.isNitro)
+                NameText(name: person.displayName, style: person.nameStyle, size: 34, display: true, nitro: person.isNitro, tint: person.nameColor)
                 if !person.pronouns.isEmpty { Text(person.pronouns).font(.jakarta(14, .semibold)).foregroundStyle(Palette.muted) }
             }
             statusBubble
@@ -461,6 +468,11 @@ struct EditProfileView: View {
     @State private var bannerColor = ""
     @State private var profileColor = ""
     @State private var effect = ""
+    @State private var effectColor = ""
+    @State private var effectAmount = 16
+    @State private var nameColor = ""
+    @State private var frame = ""
+    @State private var pattern = ""
     @State private var avatar: PendingPicture?
     @State private var banner: PendingPicture?
     @State private var removeBanner = false
@@ -489,9 +501,13 @@ struct EditProfileView: View {
             field("Interests") { SugarField(placeholder: "anime, watercolor, cats", text: $interests) }
             field("Website") { SugarField(placeholder: "yoursite.com", text: $website) }
 
+            lookPreview
             styleSection
+            colorSection("Name colour", selection: $nameColor)
             colorSection("Banner colour", selection: $bannerColor)
-            colorSection("Profile colour", selection: $profileColor)
+            colorSection("Profile colour (buttons, frame)", selection: $profileColor)
+            patternSection
+            frameSection
             effectSection
 
             if let error { Text(error).font(.jakarta(13, .semibold)).foregroundStyle(Palette.danger) }
@@ -721,6 +737,69 @@ struct EditProfileView: View {
                     }
                 }
             }
+            if !effect.isEmpty {
+                colorSection("Effect colour", selection: $effectColor)
+                Text("How many").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+                HStack(spacing: 8) {
+                    ForEach(ProfileEffect.amounts, id: \.0) { amount, label in
+                        Chip(title: label, active: effectAmount == amount) { withAnimation(.snappy) { effectAmount = amount } }
+                    }
+                }
+            }
+        }
+    }
+
+    // What your profile top will look like, as you change things.
+    private var lookPreview: some View {
+        let bannerTint = ProfileColors.color(bannerColor)
+        let accentTint = ProfileColors.color(profileColor)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Preview").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+            ZStack(alignment: .bottomLeading) {
+                ZStack {
+                    LinearGradient(colors: [bannerTint ?? Theme.light, accentTint ?? Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    if !pattern.isEmpty { BannerPatternView(pattern: pattern) }
+                    if !effect.isEmpty && nitro { ProfileEffectLayer(effect: effect, color: effectColor, amount: effectAmount) }
+                }
+                .frame(height: 110)
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                HStack(alignment: .bottom, spacing: 10) {
+                    Avatar(url: model.me?.picture ?? "", name: name, size: 58, ring: frame.isEmpty, nitro: nitro)
+                        .padding(3)
+                        .background(Palette.bg, in: Circle())
+                        .overlay { if !frame.isEmpty { AvatarFrameView(frame: frame, color: accentTint ?? Theme.main, size: 58) } }
+                    NameText(name: name.isEmpty ? "Your name" : name, style: nameStyle, size: 20, display: true, nitro: nitro, tint: nameColor)
+                        .lineLimit(1)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Palette.surface, in: Capsule())
+                }
+                .offset(x: 12, y: 30)
+            }
+            .padding(.bottom, 30)
+        }
+    }
+
+    private var patternSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Banner pattern").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+            FlowLayout(spacing: 8) {
+                ForEach(BannerPattern.all) { item in
+                    Chip(title: item.label, icon: item.icon, active: pattern == item.id) { withAnimation(.snappy) { pattern = item.id } }
+                }
+            }
+        }
+    }
+
+    private var frameSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Picture frame").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+            FlowLayout(spacing: 8) {
+                ForEach(AvatarFrame.all) { item in
+                    Chip(title: item.premium && !nitro ? "\(item.label) (Nitro)" : item.label, icon: item.icon, active: frame == item.id) {
+                        if item.premium && !nitro { shop = true } else { withAnimation(.snappy) { frame = item.id } }
+                    }
+                }
+            }
         }
     }
 
@@ -738,6 +817,11 @@ struct EditProfileView: View {
         bannerColor = me.bannerColor
         profileColor = me.profileColor
         effect = me.profileEffect
+        effectColor = me.effectColor
+        effectAmount = me.effectAmount > 0 ? me.effectAmount : 16
+        nameColor = me.nameColor
+        frame = me.avatarFrame
+        pattern = me.bannerPattern
     }
 
     private func upload(_ picture: PendingPicture, maxSide: CGFloat) async throws -> String {
@@ -754,6 +838,8 @@ struct EditProfileView: View {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { error = "Pick a display name."; return }
         guard !Moderation.hasLink(bio), !Moderation.hasLink(status) else { error = "Links aren't allowed in your bio or status — use the Website box."; return }
+        guard await TextGuard.clear([trimmed, pronouns], kind: .name, model: model, cooldown: false),
+              await TextGuard.clear([bio, status, interests], kind: .profile, model: model) else { return }
         saving = true
         defer { saving = false }
         let tags = interests.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
@@ -766,6 +852,8 @@ struct EditProfileView: View {
                 "website": website.trimmingCharacters(in: .whitespacesAndNewlines),
                 "interests": Array(tags.prefix(12)),
                 "name_style": nameStyle, "banner_color": bannerColor, "profile_color": profileColor, "profile_effect": effect,
+                "effect_color": effectColor, "effect_amount": effectAmount, "name_color": nameColor,
+                "avatar_frame": frame, "banner_pattern": pattern,
             ]
             if let avatar { fields["profile_picture"] = try await upload(avatar, maxSide: 800) }
             if let banner { fields["banner_url"] = try await upload(banner, maxSide: 1800) } else if removeBanner { fields["banner_url"] = "" }
@@ -823,6 +911,8 @@ struct SettingsView: View {
                     .sugarCard(radius: 26, padding: 16)
                 }
 
+                InviteCard()
+
                 section("Appearance", icon: "paintpalette.fill") {
                     Text("Theme").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
                     HStack(spacing: 8) {
@@ -839,7 +929,7 @@ struct SettingsView: View {
                                         .frame(width: 46, height: 46)
                                         .overlay(Circle().strokeBorder(.white, lineWidth: model.accent == accent ? 3 : 0))
                                         .overlay { if model.accent == accent { Image(systemName: "checkmark").font(.system(size: 16, weight: .black)).foregroundStyle(.white) } }
-                                        .shadow(color: accent.main.opacity(model.accent == accent ? 0.6 : 0.2), radius: model.accent == accent ? 10 : 4, y: 3)
+                                        .overlay(Circle().strokeBorder(accent.main.opacity(model.accent == accent ? 0.9 : 0), lineWidth: 2).padding(-4))
                                     Text(accent.label).font(.jakarta(11, .semibold)).foregroundStyle(Palette.text2)
                                 }
                             }
@@ -927,7 +1017,7 @@ struct SettingsView: View {
             .frame(height: 64)
             .background {
                 if active {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.gradient).shadow(color: Theme.pink.opacity(0.35), radius: 10, y: 5)
+                    RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.gradient)
                 } else {
                     RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.surface2)
                 }

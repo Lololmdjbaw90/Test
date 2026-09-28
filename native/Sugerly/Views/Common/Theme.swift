@@ -354,7 +354,6 @@ struct XPBar: View {
 // is clipped to the logo's own shape; the logo gives a little hop when tapped.
 struct BrandLogo: View {
     var height: CGFloat = 34
-    @State private var sweep: CGFloat = 0
     @State private var hop = false
 
     private var logo: some View {
@@ -362,34 +361,13 @@ struct BrandLogo: View {
     }
 
     var body: some View {
+        // Still: it only does a little hop when you tap it.
         logo
-            .overlay {
-                GeometryReader { geo in
-                    let w = geo.size.width
-                    let band = Swift.max(height * 0.8, w * 0.22)
-                    LinearGradient(colors: [.clear, .white.opacity(0.85), .clear], startPoint: .leading, endPoint: .trailing)
-                        .frame(width: band, height: geo.size.height * 1.6)
-                        .rotationEffect(.degrees(18))
-                        .position(x: -band + sweep * (w + band * 2), y: geo.size.height / 2)
-                }
-                .mask(logo)
-                .allowsHitTesting(false)
-            }
             .scaleEffect(hop ? 1.12 : 1)
             .rotationEffect(.degrees(hop ? -4 : 0))
             .onTapGesture {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.4)) { hop = true }
                 Task { try? await Task.sleep(for: .milliseconds(220)); withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) { hop = false } }
-            }
-            .task {
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .seconds(1.2))
-                    withAnimation(.easeInOut(duration: 1.1)) { sweep = 1 }
-                    try? await Task.sleep(for: .seconds(3.2))
-                    var t = Transaction()
-                    t.disablesAnimations = true
-                    withTransaction(t) { sweep = 0 }
-                }
             }
             .accessibilityLabel("Sugerly")
     }
