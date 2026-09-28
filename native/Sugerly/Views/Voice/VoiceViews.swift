@@ -52,6 +52,7 @@ struct VoiceRoomView: View {
                     if here {
                         ForEach(voice.participants) { p in
                             tile(name: p.isSelf ? "You" : p.name, picture: model.person(p.email)?.picture ?? p.picture, muted: p.muted, deafened: p.deafened, speaking: p.speaking, connecting: !p.isSelf && !p.connected, level: p.level)
+                                .transition(.scale(scale: 0.6).combined(with: .opacity))
                         }
                     } else {
                         ForEach(others) { p in
@@ -60,6 +61,7 @@ struct VoiceRoomView: View {
                     }
                 }
                 .padding(.horizontal, 16)
+                .animation(.spring(response: 0.45, dampingFraction: 0.75), value: voice.participants.map(\.id))
                 if !here && others.isEmpty {
                     Text("Nobody's here yet — hop in and wait for friends").font(.jakarta(14)).foregroundStyle(Palette.muted).padding(.top, 30)
                 }
@@ -73,6 +75,15 @@ struct VoiceRoomView: View {
                 .padding(.bottom, 20)
         }
         .frame(maxWidth: .infinity)
+        .background(alignment: .top) {
+            // A soft green glow breathes behind the room while you're connected.
+            if here {
+                Circle().fill(Palette.success.opacity(voice.participants.contains { $0.speaking } ? 0.22 : 0.1))
+                    .frame(width: 420, height: 420).blur(radius: 90).offset(y: -120)
+                    .animation(.easeInOut(duration: 0.4), value: voice.participants.contains { $0.speaking })
+                    .allowsHitTesting(false)
+            }
+        }
         .sugarBackground()
         .navigationTitle(channel.name)
         .navigationBarTitleDisplayMode(.inline)
