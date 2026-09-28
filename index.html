@@ -25,7 +25,12 @@
           var dark = t.theme === "dark" || (t.theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
           if (dark) document.documentElement.classList.add("dark");
           if (t.accent) document.documentElement.setAttribute("data-accent", t.accent);
-          var logo = /^(rose|lavender|mint|peach|sky)$/.test(t.accent || "") ? t.accent : "rose";
+          var custom = t.vars && typeof t.vars === "object";
+          if (custom) {
+            for (var k in t.vars) document.documentElement.style.setProperty(k, t.vars[k]);
+            document.documentElement.setAttribute("data-custom", "1");
+          }
+          var logo = !custom && /^(rose|lavender|mint|peach|sky)$/.test(t.accent || "") ? t.accent : "rose";
           window.__sugerlyLogo = "/brand/sugerly-logo-" + logo + "-sm.webp";
           var pre = document.createElement("link"); pre.rel = "preload"; pre.as = "image"; pre.href = window.__sugerlyLogo;
           document.head.appendChild(pre);
@@ -35,7 +40,7 @@
     <style>
       #app-loading{position:fixed;inset:0;z-index:99999;background:#fbf7f6;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;font-family:'Plus Jakarta Sans',system-ui,sans-serif;transition:opacity .45s ease}
       .dark #app-loading{background:#110a0f}
-      #app-loading img{height:72px;width:auto;animation:pulse 1.6s ease-in-out infinite}
+      #app-loading img{height:72px;width:auto;filter:var(--art-filter,none);animation:pulse 1.6s ease-in-out infinite}
       @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
     </style>
   </head>

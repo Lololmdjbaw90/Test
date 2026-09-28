@@ -55,6 +55,20 @@ export default function AdminSiteSettings() {
           ))}
         </div>
       </div>
+      <div>
+        <p className="label">App colours for everyone</p>
+        <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>Buttons, the logo and Mimi turn to these. People who picked their own colour in Settings keep theirs.</p>
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="w-12 h-12 rounded-2xl" style={{ background: form.app_primary ? `linear-gradient(135deg, ${form.app_secondary || form.app_primary}, ${form.app_primary})` : "linear-gradient(135deg,#ee8fae,#d9577f)" }} />
+          <label className="flex items-center gap-2 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+            Main <input type="color" value={form.app_primary || "#d9577f"} onChange={(e) => setForm((f) => ({ ...f, app_primary: e.target.value.toUpperCase() }))} className="w-9 h-9 rounded-xl cursor-pointer border-0 bg-transparent" />
+          </label>
+          <label className="flex items-center gap-2 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+            Sub tone <input type="color" value={form.app_secondary || "#ee8fae"} onChange={(e) => setForm((f) => ({ ...f, app_secondary: e.target.value.toUpperCase() }))} className="w-9 h-9 rounded-xl cursor-pointer border-0 bg-transparent" />
+          </label>
+          {form.app_primary && <button type="button" onClick={() => setForm((f) => ({ ...f, app_primary: "", app_secondary: "" }))} className="btn-ghost text-xs">Back to default</button>}
+        </div>
+      </div>
       <button onClick={save} disabled={saving} className="btn">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4" /> Save site settings</>}</button>
     </div>
   );

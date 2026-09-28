@@ -868,6 +868,99 @@ struct EditProfileView: View {
 
 // MARK: - Settings
 
+// Your own colours: a main colour plus a sub tone (the other end of the
+// gradient). Buttons, backgrounds, the logo and Mimi all follow.
+struct MyColorsPicker: View {
+    @Environment(AppModel.self) private var model
+    @State private var main = Color(hex: 0xD9577F)
+    @State private var sub = Color(hex: 0xEE8FAE)
+    @State private var saving = false
+
+    private var mine: (main: UInt32, light: UInt32)? { model.myColors }
+    private var inUse: Bool {
+        guard let mine else { return false }
+        return mine.main == main.rgbHex && mine.light == sub.rgbHex
+    }
+
+    // Sub tones that go with the main colour: lighter, the neighbours on
+    // the colour wheel, a soft opposite and a deeper shade.
+    private var ideas: [Color] {
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(main).getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        func tone(_ dh: CGFloat, _ ds: CGFloat, _ db: CGFloat) -> Color {
+            var hue = (h + dh).truncatingRemainder(dividingBy: 1)
+            if hue < 0 { hue += 1 }
+            return Color(hue: Double(hue), saturation: Double(max(0, min(1, s * ds))), brightness: Double(max(0, min(1, b + db))))
+        }
+        return [tone(0, 0.5, 0.15), tone(0.07, 0.8, 0.1), tone(-0.07, 0.8, 0.1), tone(0.5, 0.45, 0.12), tone(0, 1, -0.22)]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Your own colours").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2).padding(.top, 6)
+            HStack(spacing: 14) {
+                Circle().fill(LinearGradient(colors: [sub, main], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 54, height: 54)
+                    .overlay(Circle().strokeBorder(.white, lineWidth: inUse ? 3 : 0))
+                    .overlay { if inUse { Image(systemName: "checkmark").font(.system(size: 17, weight: .black)).foregroundStyle(.white) } }
+                    .overlay(Circle().strokeBorder(main.opacity(inUse ? 0.9 : 0), lineWidth: 2).padding(-4))
+                VStack(spacing: 4) {
+                    ColorPicker(selection: $main, supportsOpacity: false) { Text("Main").font(.jakarta(14, .semibold)).foregroundStyle(Palette.text) }
+                    ColorPicker(selection: $sub, supportsOpacity: false) { Text("Sub tone").font(.jakarta(14, .semibold)).foregroundStyle(Palette.text) }
+                }
+            }
+            .padding(12)
+            .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+            HStack(spacing: 8) {
+                Text("Sub tones").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
+                ForEach(0..<ideas.count, id: \.self) { i in
+                    let tone = ideas[i]
+                    Button { withAnimation(.snappy) { sub = tone } } label: {
+                        Circle().fill(tone).frame(width: 28, height: 28)
+                            .overlay(Circle().strokeBorder(.white, lineWidth: 2))
+                            .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1).padding(-1))
+                    }
+                    .buttonStyle(BouncyStyle(scale: 0.85))
+                    .accessibilityLabel("Sub tone \(i + 1)")
+                }
+            }
+
+            HStack(spacing: 10) {
+                Button { Task { await save() } } label: {
+                    Label(inUse ? "In use" : "Use my colours", systemImage: inUse ? "checkmark.circle.fill" : "paintbrush.pointed.fill")
+                }
+                .buttonStyle(GradientButtonStyle(height: 42))
+                .disabled(saving || inUse)
+                if mine != nil {
+                    Button { Task { await reset() } } label: {
+                        Text("Reset").font(.jakarta(14, .bold)).foregroundStyle(Palette.text2)
+                            .padding(.horizontal, 18).frame(height: 42)
+                            .background(Palette.surface2, in: Capsule())
+                    }
+                    .buttonStyle(BouncyStyle())
+                    .disabled(saving)
+                }
+            }
+        }
+        .onAppear {
+            if let mine { main = Color(hex: mine.main); sub = Color(hex: mine.light) } else { main = Theme.main; sub = Theme.light }
+        }
+    }
+
+    private func save() async {
+        saving = true
+        defer { saving = false }
+        try? await model.updateMe(["accent_main": SiteTheme.string(main.rgbHex), "accent_sub": SiteTheme.string(sub.rgbHex)])
+    }
+
+    private func reset() async {
+        saving = true
+        defer { saving = false }
+        try? await model.updateMe(["accent_main": "", "accent_sub": ""])
+    }
+}
+
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -923,13 +1016,14 @@ struct SettingsView: View {
                     Text("Accent colour").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2).padding(.top, 6)
                     HStack(spacing: 12) {
                         ForEach(Accent.allCases) { accent in
-                            Button { Task { try? await model.updateMe(["accent": accent.rawValue]) } } label: {
+                            let picked = model.accent == accent && model.myColors == nil
+                            Button { Task { try? await model.updateMe(["accent": accent.rawValue, "accent_main": "", "accent_sub": ""]) } } label: {
                                 VStack(spacing: 6) {
                                     Circle().fill(accent.gradient)
                                         .frame(width: 46, height: 46)
-                                        .overlay(Circle().strokeBorder(.white, lineWidth: model.accent == accent ? 3 : 0))
-                                        .overlay { if model.accent == accent { Image(systemName: "checkmark").font(.system(size: 16, weight: .black)).foregroundStyle(.white) } }
-                                        .overlay(Circle().strokeBorder(accent.main.opacity(model.accent == accent ? 0.9 : 0), lineWidth: 2).padding(-4))
+                                        .overlay(Circle().strokeBorder(.white, lineWidth: picked ? 3 : 0))
+                                        .overlay { if picked { Image(systemName: "checkmark").font(.system(size: 16, weight: .black)).foregroundStyle(.white) } }
+                                        .overlay(Circle().strokeBorder(accent.main.opacity(picked ? 0.9 : 0), lineWidth: 2).padding(-4))
                                     Text(accent.label).font(.jakarta(11, .semibold)).foregroundStyle(Palette.text2)
                                 }
                             }
@@ -937,7 +1031,8 @@ struct SettingsView: View {
                             .frame(maxWidth: .infinity)
                         }
                     }
-                    Text("The logo changes colour to match.").font(.jakarta(12)).foregroundStyle(Palette.muted)
+                    MyColorsPicker()
+                    Text("The logo and Mimi change colour to match.").font(.jakarta(12)).foregroundStyle(Palette.muted)
                     Text("Background").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2).padding(.top, 6)
                     BackgroundPicker()
                     Text("Shown behind Home. It follows your colour and dark mode.").font(.jakarta(12)).foregroundStyle(Palette.muted)

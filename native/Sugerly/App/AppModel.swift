@@ -221,7 +221,14 @@ final class AppModel {
             "invite_code": u.inviteCode, "invites_joined": u.invitesJoined,
             "effect_color": u.effectColor, "effect_amount": u.effectAmount, "name_color": u.nameColor,
             "avatar_frame": u.avatarFrame, "banner_pattern": u.bannerPattern,
+            "accent_main": u.accentMain, "accent_sub": u.accentSub,
         ]
+    }
+
+    // Your own colours from Settings (main + sub tone), if you set them.
+    var myColors: (main: UInt32, light: UInt32)? {
+        guard let me, let main = SiteTheme.hex(me.accentMain) else { return nil }
+        return (main, SiteTheme.hex(me.accentSub) ?? main)
     }
 
     func signOut() {

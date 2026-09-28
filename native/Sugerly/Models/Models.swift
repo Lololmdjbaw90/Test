@@ -61,6 +61,9 @@ struct UserProfile: Identifiable, Hashable {
     var coins: Int
     var lastSeen: String
     var accent: String
+    // Your own colours (hex): a main colour and a sub tone for the gradient.
+    var accentMain = ""
+    var accentSub = ""
     var theme: String
     var lastDailyClaim: String
     var dailyStreak: Int
@@ -118,6 +121,8 @@ struct UserProfile: Identifiable, Hashable {
         coins = d.int("coins")
         lastSeen = d.str("last_seen")
         accent = d.str("accent")
+        accentMain = d.str("accent_main")
+        accentSub = d.str("accent_sub")
         theme = d.str("theme")
         lastDailyClaim = d.str("last_daily_claim")
         dailyStreak = d.int("daily_streak")
@@ -494,6 +499,12 @@ struct Reel: Identifiable, Hashable {
     var speed: Double = 1
     var muted = false
     var mirror = false
+    // Slideshows: how long each picture shows (timeline); 3 s when not set.
+    var slideDurations: [Double] = []
+
+    func slideSeconds(_ i: Int) -> Double {
+        slideDurations.indices.contains(i) ? max(0.5, slideDurations[i]) : 3
+    }
 
     init(_ d: Doc) {
         id = d.str("id")
@@ -526,6 +537,7 @@ struct Reel: Identifiable, Hashable {
         speed = ReelText.num(edits["speed"]) ?? 1
         muted = edits["muted"] as? Bool ?? false
         mirror = edits["mirror"] as? Bool ?? false
+        slideDurations = (edits["slide_durations"] as? [Any] ?? []).compactMap { ReelText.num($0) }
         created = d.str("created_date")
     }
 

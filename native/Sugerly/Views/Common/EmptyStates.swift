@@ -12,8 +12,9 @@ struct MimiBuddy: View {
     var animated = true
     @State private var shown = false
 
-    // One drawing per accent colour.
+    // One drawing per accent colour; custom colours turn the rose one.
     static var imageName: String {
+        if Theme.custom != nil { return "MimiRose" }
         switch Theme.accent {
         case .rose: return "MimiRose"
         case .lavender: return "MimiLavender"
@@ -36,6 +37,7 @@ struct MimiBuddy: View {
                 .interpolation(.high)
                 .scaledToFit()
                 .frame(height: size)
+                .tintShift(Theme.tint)
         }
         .frame(width: size * 0.8, height: size)
         .opacity(shown || !animated ? 1 : 0)

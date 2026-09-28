@@ -67,6 +67,8 @@ struct StickerCanvas: View {
     var onTapEmpty: () -> Void
     var onSwipe: (Int) -> Void
     var onBegin: () -> Void
+    // Timeline: stickers outside their time are hidden and can't be grabbed.
+    var isShown: (TextSticker) -> Bool = { _ in true }
 
     @State private var rects: [UUID: CGRect] = [:]
     @State private var grabbed: UUID?
@@ -88,7 +90,8 @@ struct StickerCanvas: View {
                     }
                     .scaleEffect(live ? pinch * 1.04 : 1)
                     .rotationEffect(.radians(sticker.rotation + (live ? twist : 0)))
-                    .opacity(live && overTrash ? 0.45 : 1)
+                    .opacity(isShown(sticker) ? (live && overTrash ? 0.45 : 1) : 0)
+                    .animation(.easeOut(duration: 0.15), value: isShown(sticker))
                     .shadow(color: selected == sticker.id ? Theme.main.opacity(0.6) : .clear, radius: 10)
                     .position(x: sticker.x * size.width + (live ? drag.width : 0), y: sticker.y * size.height + (live ? drag.height : 0))
             }
@@ -109,7 +112,7 @@ struct StickerCanvas: View {
             }
             StickerTouchLayer(
                 hit: { hit($0) },
-                fallback: { selected ?? stickers.last?.id },
+                fallback: { selected.flatMap { id in stickers.first { $0.id == id && isShown($0) }?.id } ?? stickers.last(where: isShown)?.id },
                 onStart: { id in
                     grabbed = id
                     selected = id
@@ -145,7 +148,7 @@ struct StickerCanvas: View {
     }
 
     private func hit(_ point: CGPoint) -> UUID? {
-        for sticker in stickers.reversed() {
+        for sticker in stickers.reversed() where isShown(sticker) {
             if let rect = rects[sticker.id], rect.insetBy(dx: -22, dy: -22).contains(point) { return sticker.id }
         }
         return nil
@@ -354,7 +357,15 @@ struct StickerLabel: View {
     private var fontSize: CGFloat { width * sticker.baseSize * sticker.scale }
 
     var body: some View {
-        if let image = sticker.image {
+        if let image = sticker.image, sticker.framed {
+            let edge = fontSize * TextSticker.frameEdge
+            Image(uiImage: image).resizable().scaledToFit()
+                .frame(width: fontSize - edge * 2)
+                .clipShape(RoundedRectangle(cornerRadius: max(0, fontSize * TextSticker.frameCorner - edge), style: .continuous))
+                .padding(edge)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: fontSize * TextSticker.frameCorner, style: .continuous))
+                .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
+        } else if let image = sticker.image {
             Image(uiImage: image).resizable().scaledToFit()
                 .frame(width: fontSize)
                 .shadow(color: .black.opacity(0.25), radius: 5, y: 2)

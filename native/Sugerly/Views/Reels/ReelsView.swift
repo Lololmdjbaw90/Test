@@ -644,7 +644,7 @@ struct ReelPage: View {
             .task(id: active) {
                 // Slideshows move on by themselves, like on the website.
                 while active && !Task.isCancelled {
-                    try? await Task.sleep(for: .seconds(3))
+                    try? await Task.sleep(for: .seconds(reel.slideSeconds(slide)))
                     if active && !paused {
                         if autoScroll && slide == reel.pictures.count - 1 { onNext() }
                         withAnimation(.easeInOut) { slide = (slide + 1) % reel.pictures.count }

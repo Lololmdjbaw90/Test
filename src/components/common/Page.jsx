@@ -1,5 +1,6 @@
 import React from "react";
 import { Loader2 } from "lucide-react";
+import { MimiBunny } from "@/components/common/Brand";
 
 // Standard page container + header used by every content page.
 export function Page({ children, className = "", width = "max-w-6xl" }) {
@@ -30,14 +31,11 @@ export function PageHeader({ eyebrow, title, subtitle, icon: Icon, actions, chil
   );
 }
 
-export function EmptyState({ icon: Icon, title, text, action, className = "" }) {
+// Empty pages have Mimi, the Sugerly bunny, in your colour (like the app).
+export function EmptyState({ icon: _icon, title, text, action, className = "" }) {
   return (
     <div className={`enter flex flex-col items-center justify-center text-center py-16 px-6 gap-3 ${className}`}>
-      {Icon && (
-        <div className="anim-bob w-16 h-16 rounded-3xl flex items-center justify-center mb-1" style={{ background: "var(--pink-soft)", color: "var(--accent-rose)" }}>
-          <Icon className="w-7 h-7" />
-        </div>
-      )}
+      <MimiBunny size={112} className="mb-1" />
       <p className="font-display text-lg font-semibold" style={{ color: "var(--text-primary)" }}>{title}</p>
       {text && <p className="text-sm max-w-sm" style={{ color: "var(--text-muted)" }}>{text}</p>}
       {action && <div className="mt-2">{action}</div>}

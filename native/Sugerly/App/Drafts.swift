@@ -107,6 +107,9 @@ enum Drafts {
         var rotation: Double
         var isEmoji: Bool
         var imageFile: String?
+        var start: Double? = nil
+        var end: Double? = nil
+        var framed: Bool? = nil
     }
 
     struct Stroke: Codable {
@@ -138,6 +141,7 @@ enum Drafts {
         var stickers: [Sticker]
         var strokes: [Stroke]
         var crop: [Double]? = nil
+        var slideSeconds: [Double]? = nil
     }
 
     static func reels() -> [Reel] { list("reels", as: Reel.self).sorted { $0.saved > $1.saved } }
@@ -170,6 +174,7 @@ enum Drafts {
         var stickers: [TextSticker]
         var strokes: [DrawStroke]
         var videoCrop: CGRect? = nil
+        var slideSeconds: [Double] = []
     }
 
     @discardableResult
@@ -196,7 +201,8 @@ enum Drafts {
                 try? png.write(to: dir.appendingPathComponent(file!), options: .atomic)
             }
             stickers.append(Sticker(text: s.text, color: s.color, font: s.font.rawValue, style: s.style.rawValue, align: s.align.rawValue,
-                                    x: Double(s.x), y: Double(s.y), scale: Double(s.scale), rotation: s.rotation, isEmoji: s.isEmoji, imageFile: file))
+                                    x: Double(s.x), y: Double(s.y), scale: Double(s.scale), rotation: s.rotation, isEmoji: s.isEmoji, imageFile: file,
+                                    start: s.start, end: s.end, framed: s.framed))
         }
         let strokes = state.strokes.map { s in
             Stroke(points: s.points.map { [Double($0.x), Double($0.y)] }, color: s.color, width: Double(s.width), neon: s.neon)
@@ -209,7 +215,8 @@ enum Drafts {
                          soundURL: state.sound?.audioURL ?? "", soundCover: state.sound?.coverURL ?? "",
                          soundVolume: state.soundVolume, originalVolume: state.originalVolume,
                          videoFile: videoFile, photoCount: state.photos.count, stickers: stickers, strokes: strokes,
-                         crop: state.videoCrop.map { [Double($0.minX), Double($0.minY), Double($0.width), Double($0.height)] })
+                         crop: state.videoCrop.map { [Double($0.minX), Double($0.minY), Double($0.width), Double($0.height)] },
+                         slideSeconds: state.slideSeconds.isEmpty ? nil : state.slideSeconds)
         write(draft, kind: "reels", id: id)
         return id
     }
@@ -223,7 +230,8 @@ enum Drafts {
         let stickers = d.stickers.map { s in
             TextSticker(text: s.text, color: s.color, font: StickerFont(rawValue: s.font) ?? .bubbly, style: StickerStyle(rawValue: s.style) ?? .label,
                         align: NSTextAlignment(rawValue: s.align) ?? .center, x: CGFloat(s.x), y: CGFloat(s.y), scale: CGFloat(s.scale),
-                        rotation: s.rotation, isEmoji: s.isEmoji, image: s.imageFile.flatMap { image("reels", d.id, $0) })
+                        rotation: s.rotation, isEmoji: s.isEmoji, image: s.imageFile.flatMap { image("reels", d.id, $0) },
+                        start: s.start ?? 0, end: s.end, framed: s.framed ?? false)
         }
         let strokes = d.strokes.map { s in
             DrawStroke(points: s.points.map { CGPoint(x: $0.first ?? 0, y: $0.count > 1 ? $0[1] : 0) }, color: s.color, width: CGFloat(s.width), neon: s.neon)

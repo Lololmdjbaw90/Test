@@ -13,6 +13,7 @@ on:
   push:
     paths:
       - "scripts/rank.mjs"
+      - "scripts/firebase-key.mjs"
       - ".github/workflows/rank.yml"
 
 concurrency:
@@ -25,21 +26,23 @@ jobs:
     timeout-minutes: 20
     env:
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+      FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
     steps:
       - name: Needs the FIREBASE_SERVICE_ACCOUNT secret
-        if: env.FIREBASE_SERVICE_ACCOUNT == ''
+        if: env.FIREBASE_SERVICE_ACCOUNT == '' && env.FIREBASE_PRIVATE_KEY == ''
         run: echo "::warning title=Ranking skipped::Add the FIREBASE_SERVICE_ACCOUNT secret (see .github/workflows/firebase-rules.yml)."
 
       - uses: actions/checkout@v4
-        if: env.FIREBASE_SERVICE_ACCOUNT != ''
+        if: env.FIREBASE_SERVICE_ACCOUNT != '' || env.FIREBASE_PRIVATE_KEY != ''
 
       - uses: actions/setup-node@v4
-        if: env.FIREBASE_SERVICE_ACCOUNT != ''
+        if: env.FIREBASE_SERVICE_ACCOUNT != '' || env.FIREBASE_PRIVATE_KEY != ''
         with:
           node-version: 22
 
       - name: Rank and count
-        if: env.FIREBASE_SERVICE_ACCOUNT != ''
+        if: env.FIREBASE_SERVICE_ACCOUNT != '' || env.FIREBASE_PRIVATE_KEY != ''
         run: |
           npm install --no-save --no-package-lock firebase-admin@13
           node scripts/rank.mjs

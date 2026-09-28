@@ -7,13 +7,27 @@ export const APP_NAME = "Sugerly";
 // The wordmark comes in one color per accent (Settings → Appearance);
 // Rose (pink) is the default. Width / height of each file after trimming.
 const LOGO_RATIO = { rose: 1.978, lavender: 1.995, mint: 2.023, peach: 1.983, sky: 2.019 };
+// With a custom colour (yours or the admin's) it's the rose logo, turned to
+// that colour by the --art-filter the theme code sets.
 const currentAccent = () => {
-  const a = typeof document !== "undefined" ? document.documentElement.getAttribute("data-accent") : "";
-  return LOGO_RATIO[a] ? a : "rose";
+  if (typeof document === "undefined") return "rose";
+  const root = document.documentElement;
+  const a = root.getAttribute("data-accent");
+  return root.hasAttribute("data-custom") || !LOGO_RATIO[a] ? "rose" : a;
 };
+const ART_FILTER = "var(--art-filter, none)";
 
-// Follows the accent live (the theme code sets data-accent on <html>).
-// Switches only once the new logo is decoded, so it never blinks or flickers.
+// Mimi, the Sugerly bunny: one drawing per accent, like the logo.
+export function MimiBunny({ size = 120, className = "" }) {
+  const accent = useAccent();
+  return (
+    <span className={`relative inline-flex justify-center mimi-in ${className}`} style={{ width: size * 0.8, height: size }} aria-hidden="true">
+      <span className="absolute rounded-[50%]" style={{ width: size * 0.47, height: size * 0.07, bottom: 0, background: "rgb(var(--accent-rgb) / 0.14)" }} />
+      <img src={`/brand/mimi-${accent}.webp`} alt="" draggable={false} decoding="async" className="relative select-none" style={{ height: size, width: "auto", filter: ART_FILTER }} />
+    </span>
+  );
+}
+
 const decoded = new Set();
 function whenReady(accent) {
   const url = `/brand/sugerly-logo-${accent}-sm.webp`;
@@ -30,6 +44,8 @@ function warmLogos() {
   (window.requestIdleCallback || ((f) => setTimeout(f, 1500)))(run);
 }
 
+// Follows the accent live (the theme code sets data-accent on <html>).
+// Switches only once the new logo is decoded, so it never blinks or flickers.
 export function useAccent() {
   const [accent, setAccent] = useState(currentAccent);
   useEffect(() => {
@@ -41,7 +57,7 @@ export function useAccent() {
       latest = next;
       whenReady(next).then(() => { if (latest === next) setAccent(next); });
     });
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-accent"] });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-accent", "data-custom"] });
     return () => mo.disconnect();
   }, []);
   return accent;
@@ -64,7 +80,7 @@ export function BrandLogo({ height = 40, className = "", style, shine = false })
       width={width}
       height={height}
       className={`select-none ${shine ? "" : className}`}
-      style={{ height, width, ...(shine ? {} : style) }}
+      style={{ height, width, filter: ART_FILTER, ...(shine ? {} : style) }}
     />
   );
   if (!shine) return img;

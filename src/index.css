@@ -492,6 +492,9 @@
   .enter { animation: enter-up 420ms cubic-bezier(.2,.8,.2,1) backwards; animation-delay: var(--d, 0ms); }
   .enter-side { animation: enter-side 380ms cubic-bezier(.2,.8,.2,1) backwards; animation-delay: var(--d, 0ms); }
   .enter-pop { animation: enter-pop 360ms cubic-bezier(.2,.8,.2,1) backwards; animation-delay: var(--d, 0ms); }
+  /* Mimi stands still and just fades in. */
+  .mimi-in { animation: mimi-in 450ms ease-out backwards; }
+  @keyframes mimi-in { from { opacity: 0; } }
   .enter-fade { animation: fade-in 220ms ease backwards; animation-delay: var(--d, 0ms); }
   .page-enter { animation: enter-up 300ms cubic-bezier(.2,.8,.2,1) backwards; --enter-y: 10px; }
   /* App-style screen changes (transform + opacity only, so they stay smooth). */

@@ -1,12 +1,12 @@
 import { checkText, hasLink } from "@/lib/moderation";
 import { INVITE_REWARD, inviteCodeFor, inviteLink, inviteText } from "@/lib/referrals";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Camera, Check, Copy, Database, Gift, Share2, Download, Smartphone, ImagePlus, Loader2, LogOut, Monitor, Moon, Palette, RotateCcw, Save, Settings as SettingsIcon, Shield, Sun, Trash2, User, Volume2 } from "lucide-react";
 import { base44, backendMode } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
-import { ACCENTS, applyTheme } from "@/lib/theme";
+import { ACCENTS, applyTheme, subToneIdeas } from "@/lib/theme";
 import { toast } from "@/lib/toast";
 import { displayName, profileLink } from "@/lib/format";
 import { Page, PageHeader } from "@/components/common/Page";
@@ -63,6 +63,50 @@ function Section({ id, icon: Icon, title, subtitle, children }) {
       </div>
       {children}
     </section>
+  );
+}
+
+// Your own colours: a main colour plus a sub tone (the other end of the
+// gradient). Buttons, backgrounds, the logo and Mimi all follow.
+function MyColors({ user, updateMe }) {
+  const [main, setMain] = useState(user?.accent_main || "#d9577f");
+  const [sub, setSub] = useState(user?.accent_sub || user?.accent_main || "#ee8fae");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (user?.accent_main) { setMain(user.accent_main); setSub(user.accent_sub || user.accent_main); }
+  }, [user?.accent_main, user?.accent_sub]);
+  const inUse = !!user?.accent_main && user.accent_main.toLowerCase() === main.toLowerCase() && (user.accent_sub || user.accent_main).toLowerCase() === sub.toLowerCase();
+  const ideas = useMemo(() => subToneIdeas(main), [main]);
+  const save = async (patch) => {
+    setSaving(true);
+    try { await updateMe(patch); } catch (e) { toast.error(e?.message || "Could not save your colours."); }
+    setSaving(false);
+  };
+  return (
+    <div className="space-y-3">
+      <p className="label">Your own colours</p>
+      <div className="card-sm p-3.5 flex flex-wrap items-center gap-4">
+        <span className="w-14 h-14 rounded-full flex items-center justify-center text-white flex-shrink-0" style={{ background: `linear-gradient(135deg, ${sub}, ${main})`, boxShadow: inUse ? `0 0 0 3px var(--surface), 0 0 0 5px ${main}` : "var(--shadow-sm)" }}>{inUse && <Check className="w-5 h-5" />}</span>
+        <label className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+          Main <input type="color" value={main} onChange={(e) => setMain(e.target.value)} className="w-10 h-10 rounded-xl cursor-pointer border-0 bg-transparent" aria-label="Main colour" />
+        </label>
+        <label className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+          Sub tone <input type="color" value={sub} onChange={(e) => setSub(e.target.value)} className="w-10 h-10 rounded-xl cursor-pointer border-0 bg-transparent" aria-label="Sub tone" />
+        </label>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Sub tones</span>
+        {ideas.map((c, i) => (
+          <button key={c + i} type="button" onClick={() => setSub(c)} className="w-7 h-7 rounded-full" style={{ background: c, boxShadow: "0 0 0 2px var(--surface), 0 0 0 3px var(--border-c)" }} aria-label={`Sub tone ${i + 1}`} />
+        ))}
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <button type="button" disabled={saving || inUse} onClick={() => save({ accent_main: main.toUpperCase(), accent_sub: sub.toUpperCase() })} className="btn">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Check className="w-4 h-4" /> {inUse ? "In use" : "Use my colours"}</>}
+        </button>
+        {user?.accent_main && <button type="button" disabled={saving} onClick={() => save({ accent_main: "", accent_sub: "" })} className="btn-ghost">Reset</button>}
+      </div>
+    </div>
   );
 }
 
@@ -205,12 +249,14 @@ export default function SettingsPage() {
             <p className="label">Accent color</p>
             <div className="flex flex-wrap gap-4">
               {ACCENTS.map((a) => (
-                <motion.button key={a.id} whileHover={{ y: -3 }} whileTap={{ scale: 0.9 }} onClick={() => setAppearance({ accent: a.id })} className="flex flex-col items-center gap-1.5" aria-pressed={form.accent === a.id} aria-label={`${a.label} accent`}>
-                  <span className="w-12 h-12 rounded-2xl flex items-center justify-center text-white" style={{ background: a.swatch, boxShadow: form.accent === a.id ? "0 0 0 3px var(--surface), 0 0 0 5px rgb(var(--accent-rgb))" : "var(--shadow-sm)" }}>{form.accent === a.id && <Check className="w-5 h-5" />}</span>
+                <motion.button key={a.id} whileHover={{ y: -3 }} whileTap={{ scale: 0.9 }} onClick={() => setAppearance({ accent: a.id, accent_main: "", accent_sub: "" })} className="flex flex-col items-center gap-1.5" aria-pressed={form.accent === a.id && !user?.accent_main} aria-label={`${a.label} accent`}>
+                  <span className="w-12 h-12 rounded-2xl flex items-center justify-center text-white" style={{ background: a.swatch, boxShadow: form.accent === a.id && !user?.accent_main ? "0 0 0 3px var(--surface), 0 0 0 5px rgb(var(--accent-rgb))" : "var(--shadow-sm)" }}>{form.accent === a.id && !user?.accent_main && <Check className="w-5 h-5" />}</span>
                   <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>{a.label}</span>
                 </motion.button>
               ))}
             </div>
+            <MyColors user={user} updateMe={updateMe} />
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>The logo and Mimi change colour to match.</p>
           </Section>
 
           <Section id="feedback" icon={Volume2} title="Sounds & haptics" subtitle="Little taps and sounds when you like, save, send and get notified. Saved on this device.">

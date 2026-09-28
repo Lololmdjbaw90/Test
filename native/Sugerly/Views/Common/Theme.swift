@@ -18,6 +18,13 @@ extension Color {
     static func dynamic(light: UInt32, dark: UInt32) -> Color {
         Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: dark) : UIColor(hex: light) })
     }
+    // 0xRRGGBB, for saving a picked colour.
+    var rgbHex: UInt32 {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a)
+        func byte(_ v: CGFloat) -> UInt32 { UInt32((max(0, min(1, v)) * 255).rounded()) }
+        return (byte(r) << 16) | (byte(g) << 8) | byte(b)
+    }
 }
 
 enum Palette {
@@ -94,6 +101,35 @@ enum Theme {
     static let lavender = Color(hex: 0xB19CFF)
     static let background = Palette.bg
     static let card = Palette.surface
+    // Mimi and the logo: with a custom colour they use the rose drawings,
+    // turned to the custom hue; otherwise the drawing for your accent.
+    static var logoName: String { custom == nil ? accent.logo : Accent.rose.logo }
+    static var tint: TintShift { custom.map { TintShift(from: 0xD9577F, to: $0.main) } ?? .none }
+}
+
+// Turns the rose artwork (logo, Mimi) to any colour: rotates the hue from
+// rose to the target and matches how strong the colour is. White and the
+// dark outlines stay as they are.
+struct TintShift: Equatable {
+    var hue: Double = 0
+    var saturation: Double = 1
+    static let none = TintShift()
+
+    init() {}
+    init(from base: UInt32, to target: UInt32) {
+        var h0: CGFloat = 0, s0: CGFloat = 0, b0: CGFloat = 0, a0: CGFloat = 0
+        var h1: CGFloat = 0, s1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
+        UIColor(hex: base).getHue(&h0, saturation: &s0, brightness: &b0, alpha: &a0)
+        UIColor(hex: target).getHue(&h1, saturation: &s1, brightness: &b1, alpha: &a1)
+        hue = Double(h1 - h0) * 360
+        saturation = min(1.5, max(0, Double(s1 / max(s0, 0.01))))
+    }
+}
+
+extension View {
+    func tintShift(_ t: TintShift) -> some View {
+        hueRotation(.degrees(t.hue)).saturation(t.saturation)
+    }
 }
 
 // MARK: - Fonts
@@ -357,7 +393,7 @@ struct BrandLogo: View {
     @State private var hop = false
 
     private var logo: some View {
-        Image(Theme.accent.logo).resizable().scaledToFit().frame(height: height)
+        Image(Theme.logoName).resizable().scaledToFit().frame(height: height).tintShift(Theme.tint)
     }
 
     var body: some View {

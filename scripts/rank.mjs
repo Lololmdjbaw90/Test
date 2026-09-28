@@ -15,10 +15,11 @@
 import { cert, initializeApp } from "firebase-admin/app";
 import { FieldPath, getFirestore } from "firebase-admin/firestore";
 import { getSecurityRules } from "firebase-admin/security-rules";
+import { readKey } from "./firebase-key.mjs";
 
 let key;
-try { key = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || ""); } catch {
-  console.error("FIREBASE_SERVICE_ACCOUNT isn't valid JSON.");
+try { key = readKey(); } catch (e) {
+  console.error(e.message);
   process.exit(1);
 }
 initializeApp({ credential: cert(key), projectId: key.project_id });

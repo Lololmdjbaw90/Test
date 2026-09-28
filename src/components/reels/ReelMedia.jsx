@@ -34,7 +34,9 @@ function syncStickers(layer, t) {
 const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, soundOn, speedBoost = 1, onProgress, onLoop, onBlocked, onBuffering }, ref) {
   const edits = reel.edits || {};
   const src = useMediaSrc(near ? reel.media_url : "");
-  const cover = useMediaSrc(reel.cover_url || (reel.kind === "photo" ? reel.media_url : ""));
+  // Photo reels ("image" from the iPhone app, "photo" from here).
+  const isPhoto = reel.kind === "photo" || reel.kind === "image";
+  const cover = useMediaSrc(reel.cover_url || (isPhoto ? reel.media_url : ""));
   const [musicUrl, setMusicUrl] = useState(reel.music_url || "");
   useEffect(() => {
     const id = String(reel.music_source || "").startsWith("deezer:") ? reel.music_source.slice(7) : "";
@@ -44,8 +46,22 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
     return () => { alive = false; };
   }, [reel.music_source, near]);
   const music = useMediaSrc(near ? musicUrl : "");
-  const slides = reel.kind === "photo" && (reel.media_urls || []).length > 1 ? reel.media_urls : null;
-  const photoTotal = photoLength(slides?.length || 1);
+  const slides = isPhoto && (reel.media_urls || []).length > 1 ? reel.media_urls : null;
+  // Each slide shows for its own length (set on the app's timeline), 3 s by default.
+  const slideStarts = useMemo(() => {
+    const out = [0];
+    (slides || []).forEach((_, i) => {
+      const s = Number(edits.slide_durations?.[i]);
+      out.push(out[i] + (s > 0 ? s : SLIDE_SECONDS));
+    });
+    return out;
+  }, [slides, edits.slide_durations]);
+  const photoTotal = slides ? slideStarts[slideStarts.length - 1] : photoLength(1);
+  const slideAt = (t) => {
+    let i = 0;
+    while (i < slideStarts.length - 2 && t >= slideStarts[i + 1]) i += 1;
+    return i;
+  };
   const [slide, setSlide] = useState(0);
   const slideRef = useRef(0);
   const trackRef = useRef(null);
@@ -63,7 +79,7 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
     if (i === slideRef.current) return;
     slideRef.current = i;
     setSlide(i);
-    elapsed.current = i * SLIDE_SECONDS; // a swipe moves the timer along
+    elapsed.current = slideStarts[i] ?? i * SLIDE_SECONDS; // a swipe moves the timer along
   };
   const videoRef = useRef(null);
   const audioRef = useRef(null);
@@ -163,7 +179,7 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
 
   // Photos: a timer drives the progress bar, stickers and the loop.
   useEffect(() => {
-    if (reel.kind !== "photo" || !active || paused) return undefined;
+    if (!isPhoto || !active || paused) return undefined;
     let last = performance.now();
     let raf;
     const tick = (now) => {
@@ -171,7 +187,7 @@ const ReelMedia = forwardRef(function ReelMedia({ reel, active, near, paused, so
       last = now;
       if (elapsed.current >= photoTotal) { elapsed.current = 0; cb.current.onLoop?.(); if (slides) goToSlide(0); else setCycle((c) => c + 1); }
       if (slides) {
-        const i = Math.min(slides.length - 1, Math.floor(elapsed.current / SLIDE_SECONDS));
+        const i = slideAt(elapsed.current);
         if (i !== slideRef.current) goToSlide(i);
       }
       cb.current.onProgress?.(elapsed.current / photoTotal);

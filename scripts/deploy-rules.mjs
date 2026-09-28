@@ -8,11 +8,11 @@
 import { readFileSync } from "node:fs";
 import { cert, initializeApp } from "firebase-admin/app";
 import { getSecurityRules } from "firebase-admin/security-rules";
+import { readKey } from "./firebase-key.mjs";
 
-const raw = process.env.FIREBASE_SERVICE_ACCOUNT || "";
 let key;
-try { key = JSON.parse(raw); } catch {
-  console.error("FIREBASE_SERVICE_ACCOUNT isn't valid JSON. Paste the whole key file (it starts with { and ends with }).");
+try { key = readKey(); } catch (e) {
+  console.error(e.message);
   process.exit(1);
 }
 const env = Object.fromEntries(readFileSync(".env", "utf8").split("\n").filter((l) => /^\w+=/.test(l)).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1).trim()]));

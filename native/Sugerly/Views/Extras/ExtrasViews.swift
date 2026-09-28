@@ -690,6 +690,12 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-1.9", icon: "film.stack", title: "Timeline editor & your colours", date: "2026-09-28T22:00:00Z", items: [
+            "A timeline in the reel editor: scrub the film strip, and every text, sticker and photo gets a bar you drag to choose when it shows.",
+            "Photo overlays: put pictures on top of your video or slideshow, with a cute white edge.",
+            "Slideshows: make each photo longer or shorter, move it or remove it, right on the timeline.",
+            "Your own colours in Settings: a main colour and a sub tone. The logo and Mimi turn to match any colour.",
+        ]),
         AppRelease(id: "ios-1.8", icon: "lock.shield.fill", title: "Status, requests & privacy", date: "2026-09-28T13:00:00Z", items: [
             "Set your status like Discord: Online, Idle, Do not disturb or Invisible, plus a custom status that can clear itself.",
             "Messages from people you aren't friends with arrive as requests you can accept, decline or block.",

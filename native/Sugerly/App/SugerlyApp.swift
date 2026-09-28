@@ -33,14 +33,17 @@ struct RootView: View {
 
     @State private var colorFlash = false
 
-    // The admin's site colours apply unless you picked your own accent.
+    // Your own colours win; then the admin's site colours, unless you
+    // picked one of the preset accents.
     private var themeKey: String {
-        "\(model.accent.rawValue)-\(site.primary.map(String.init) ?? "none")-\(site.secondary.map(String.init) ?? "none")"
+        "\(model.accent.rawValue)-\(site.primary.map(String.init) ?? "none")-\(site.secondary.map(String.init) ?? "none")-\(model.me?.accentMain ?? "")-\(model.me?.accentSub ?? "")"
     }
 
     private func applyTheme(animated: Bool) {
         let custom: (main: UInt32, light: UInt32)?
-        if model.accent == .rose, let main = site.primary {
+        if let mine = model.myColors {
+            custom = mine
+        } else if model.accent == .rose, let main = site.primary {
             custom = (main, site.secondary ?? main)
         } else {
             custom = nil

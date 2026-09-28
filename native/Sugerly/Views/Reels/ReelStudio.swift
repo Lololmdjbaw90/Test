@@ -138,8 +138,9 @@ enum StickerStyle: String, CaseIterable {
     case plain = "Plain", label = "Label", outline = "Outline", glow = "Glow"
 }
 
-// Text (or an emoji) on the video: where it sits (0…1 of the frame), size,
-// turn, colour, font and style.
+// Text (or an emoji, a sticker or a photo) on the video: where it sits (0…1
+// of the frame), size, turn, colour, font and style, and when it shows on the
+// timeline (seconds from the start of the reel; no end = to the end).
 struct TextSticker: Identifiable, Equatable {
     var id = UUID()
     var text: String
@@ -153,13 +154,25 @@ struct TextSticker: Identifiable, Equatable {
     var rotation: Double = 0 // radians
     var isEmoji = false
     var image: UIImage? = nil    // picture stickers (vector, your own, GIPHY)
+    var start: Double = 0
+    var end: Double? = nil
+    var framed = false           // photo overlays: rounded with a white edge
 
     func uiFont(size: CGFloat) -> UIFont {
         if isEmoji { return .systemFont(ofSize: size) }
         return UIFont(name: font.uiName, size: size) ?? .boldSystemFont(ofSize: size)
     }
 
-    var baseSize: CGFloat { image != nil ? 0.3 : isEmoji ? 0.16 : 0.075 }
+    var baseSize: CGFloat { image != nil ? (framed ? 0.45 : 0.3) : isEmoji ? 0.16 : 0.075 }
+
+    // Timing on the timeline.
+    var isTimed: Bool { start > 0.01 || end != nil }
+    func shows(at t: Double) -> Bool { t >= start - 0.01 && (end.map { t < $0 } ?? true) }
+    func overlaps(_ from: Double, _ to: Double) -> Bool { start < to - 0.01 && (end.map { $0 > from + 0.01 } ?? true) }
+
+    // Photo overlay edge, as parts of the overlay's width.
+    static let frameEdge: CGFloat = 0.03
+    static let frameCorner: CGFloat = 0.07
 
     // Text colour and label colour for the chosen style.
     var inkColor: UInt32 {
@@ -171,9 +184,22 @@ struct TextSticker: Identifiable, Equatable {
     func render(width: CGFloat) -> UIImage {
         let size = width * baseSize * scale
         if let image {
-            let h = size * image.size.height / max(1, image.size.width)
             let format = UIGraphicsImageRendererFormat.default()
             format.scale = 1
+            if framed {
+                let edge = size * Self.frameEdge
+                let inner = size - edge * 2
+                let innerH = inner * image.size.height / max(1, image.size.width)
+                let box = CGSize(width: ceil(size), height: ceil(innerH + edge * 2))
+                return UIGraphicsImageRenderer(size: box, format: format).image { _ in
+                    UIColor.white.setFill()
+                    UIBezierPath(roundedRect: CGRect(origin: .zero, size: box), cornerRadius: size * Self.frameCorner).fill()
+                    let photo = CGRect(x: edge, y: edge, width: inner, height: innerH)
+                    UIBezierPath(roundedRect: photo, cornerRadius: max(0, size * Self.frameCorner - edge)).addClip()
+                    image.draw(in: photo)
+                }
+            }
+            let h = size * image.size.height / max(1, image.size.width)
             return UIGraphicsImageRenderer(size: CGSize(width: ceil(size), height: ceil(h)), format: format).image { _ in
                 image.draw(in: CGRect(x: 0, y: 0, width: size, height: h))
             }
@@ -257,10 +283,17 @@ struct PickedMovie: Transferable {
 
 // Holds what the export needs while the video is rendered frame by frame.
 final class RenderBox: @unchecked Sendable {
+    struct Timed {
+        let image: CIImage
+        let start: Double
+        let end: Double?
+    }
     var look = ReelLook()
     var crop: CGRect?
     var scale: CGFloat = 1
     var overlays: [CIImage] = []
+    var timed: [Timed] = []     // overlays that show only part of the time
+    var trimStart: Double = 0
 }
 
 // MARK: - Reel Studio
@@ -316,12 +349,24 @@ struct ReelStudioView: View {
     @State private var penColor: UInt32 = 0xFFFFFF
     @State private var penWidth: CGFloat = 0.012
     @State private var penNeon = false
+    // timeline
+    @State private var playhead: Double = 0         // seconds from the start of the reel
+    @State private var isPlaying = false
+    @State private var slideSeconds: [Double] = []  // how long each photo shows
+    @State private var slideTask: Task<Void, Never>?
+    @State private var timelineThumbs: [UIImage] = []
+    @State private var timelineThumbKey = ""
+    @State private var selectedOverlay: UUID?
+    @State private var selectedSlide: Int?
+    @State private var overlayItem: PhotosPickerItem?
+    @State private var resumeAfterScrub = false
 
     enum EditTool: String, CaseIterable {
-        case trim = "Trim", crop = "Crop", filters = "Filters", adjust = "Adjust", text = "Text", stickers = "Stickers", draw = "Draw", sound = "Sound"
+        case trim = "Trim", timeline = "Timeline", crop = "Crop", filters = "Filters", adjust = "Adjust", text = "Text", stickers = "Stickers", draw = "Draw", sound = "Sound"
         var icon: String {
             switch self {
             case .trim: return "scissors"
+            case .timeline: return "film.stack"
             case .crop: return "crop"
             case .filters: return "camera.filters"
             case .adjust: return "slider.horizontal.3"
@@ -333,7 +378,7 @@ struct ReelStudioView: View {
         }
     }
 
-    struct Snapshot { var look: ReelLook; var stickers: [TextSticker]; var strokes: [DrawStroke] = []; var photos: [UIImage] = []; var videoCrop: CGRect? = nil }
+    struct Snapshot { var look: ReelLook; var stickers: [TextSticker]; var strokes: [DrawStroke] = []; var photos: [UIImage] = []; var videoCrop: CGRect? = nil; var slideSeconds: [Double] = [] }
     @State private var videoCrop: CGRect?
     @State private var cropJob: EditorCrop?
     @State private var editingText: TextSticker?
@@ -391,6 +436,14 @@ struct ReelStudioView: View {
             .presentationCornerRadius(30)
         }
         .onChange(of: items) { _, list in Task { await loadPicked(list) } }
+        .onChange(of: overlayItem) { _, item in
+            guard let item else { return }
+            Task {
+                defer { overlayItem = nil }
+                guard let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) else { return }
+                addPhotoOverlay(Self.overlayPicture(image))
+            }
+        }
         .onChange(of: look) { _, _ in applyPreviewFilter() }
         .fullScreenCover(item: $cropJob) { job in
             ImageCropper(image: job.image, circle: false, aspect: 9 / 16, choices: CropAspect.editor, title: "Move and pinch to crop", onDone: { rect in
@@ -492,17 +545,18 @@ struct ReelStudioView: View {
                     DrawingLayer(strokes: strokes, current: drawing)
                         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                     StickerCanvas(stickers: $stickers, size: geo.size, onEdit: { sticker in
+                        selectedOverlay = sticker.id
                         guard sticker.image == nil else { return }
                         checkpoint()
                         editingText = sticker
                     }, onTapEmpty: {
-                        if asset != nil {
-                            if player.timeControlStatus == .playing { player.pause(); soundPlayer?.pause() } else { player.play(); soundPlayer?.play() }
-                        }
+                        togglePlay()
                     }, onSwipe: { step in
                         guard !photos.isEmpty else { return }
                         withAnimation(.snappy) { slide = min(photos.count - 1, max(0, slide + step)) }
-                    }, onBegin: { checkpoint() })
+                        let b = ReelTimeline.bounds(slideSeconds)
+                        if b.indices.contains(slide) { playhead = b[slide] }
+                    }, onBegin: { checkpoint() }, isShown: { overlayShown($0) })
                     if tool == .draw {
                         DrawCapture(strokes: $strokes, current: $drawing, color: penColor, width: penWidth, neon: penNeon) { checkpoint() }
                     }
@@ -513,7 +567,7 @@ struct ReelStudioView: View {
             .padding(.horizontal, 16)
 
             toolPanel
-                .frame(height: 118)
+                .frame(height: tool == .timeline ? 236 : 118)
                 .animation(.snappy, value: tool)
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -522,6 +576,7 @@ struct ReelStudioView: View {
                         Button {
                             withAnimation(.snappy) { tool = t }
                             if t == .text { checkpoint(); editingText = TextSticker(text: "") }
+                            if t == .timeline { Task { await refreshTimelineThumbs() } }
                             if t == .sound && sound == nil { choosingSound = true }
                         } label: {
                             VStack(spacing: 4) {
@@ -587,6 +642,25 @@ struct ReelStudioView: View {
                 TrimBar(thumbs: thumbs, duration: duration, start: $trimStart, end: $trimEnd) { player.seek(to: CMTime(seconds: trimStart, preferredTimescale: 600)) }
                     .padding(.horizontal, 16)
             }
+        case .timeline:
+            ReelTimeline(length: timelineLength, playhead: playhead, playing: isPlaying,
+                         thumbs: timelineThumbs.isEmpty ? thumbs : timelineThumbs,
+                         slides: asset == nil ? (previewPhotos.count == photos.count ? previewPhotos : photos) : [],
+                         slideSeconds: $slideSeconds, stickers: $stickers,
+                         selected: $selectedOverlay, selectedSlide: $selectedSlide, photoItem: $overlayItem,
+                         onSeek: { seek(to: $0) },
+                         onScrub: { began in scrubbing(began) },
+                         onTogglePlay: { togglePlay() },
+                         onAddText: {
+                             checkpoint()
+                             let timing = newOverlayTiming()
+                             editingText = TextSticker(text: "", start: timing.start, end: timing.end)
+                         },
+                         onAddSticker: { withAnimation(.snappy) { tool = .stickers } },
+                         onEditText: { sticker in checkpoint(); editingText = sticker },
+                         onCheckpoint: { checkpoint() },
+                         onMoveSlide: { moveSlide($0, $1) },
+                         onDeleteSlide: { deleteSlide($0) })
         case .filters:
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
@@ -716,7 +790,7 @@ struct ReelStudioView: View {
     }
 
     private func checkpoint() {
-        history.append(Snapshot(look: look, stickers: stickers, strokes: strokes, photos: photos, videoCrop: videoCrop))
+        history.append(Snapshot(look: look, stickers: stickers, strokes: strokes, photos: photos, videoCrop: videoCrop, slideSeconds: slideSeconds))
         if history.count > 40 { history.removeFirst() }
     }
 
@@ -727,9 +801,15 @@ struct ReelStudioView: View {
             stickers = last.stickers
             strokes = last.strokes
         }
-        let cropChanged = last.videoCrop != videoCrop || (asset == nil && last.photos.count == photos.count && !zip(last.photos, photos).allSatisfy { $0 === $1 })
+        let photosChanged = asset == nil && !last.photos.isEmpty && (last.photos.count != photos.count || !zip(last.photos, photos).allSatisfy { $0 === $1 })
+        let cropChanged = last.videoCrop != videoCrop || photosChanged
         videoCrop = last.videoCrop
-        if asset == nil && !last.photos.isEmpty { photos = last.photos }
+        if asset == nil && !last.photos.isEmpty {
+            photos = last.photos
+            if last.slideSeconds.count == last.photos.count { slideSeconds = last.slideSeconds }
+            slide = min(slide, max(0, photos.count - 1))
+            selectedSlide = nil
+        }
         if cropChanged { applyPreviewFilter() }
     }
 
@@ -737,7 +817,7 @@ struct ReelStudioView: View {
 
     private var postScreen: some View {
         VStack(spacing: 16) {
-            topBar(title: "Post", back: { withAnimation { step = .edit }; player.play() }, next: nil)
+            topBar(title: "Post", back: { withAnimation { step = .edit }; if asset != nil { startPlayback() } }, next: nil)
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .top, spacing: 14) {
@@ -843,8 +923,13 @@ struct ReelStudioView: View {
     private func openPhotos(_ images: [UIImage]) {
         guard !images.isEmpty else { return }
         photos = images.map(Self.prepare)
+        slideSeconds = Array(repeating: 3, count: photos.count)
         previewPhotos = []
         asset = nil
+        slide = 0
+        playhead = 0
+        selectedOverlay = nil
+        selectedSlide = nil
         tool = .filters
         applyPreviewFilter()
         withAnimation { step = .edit }
@@ -855,7 +940,7 @@ struct ReelStudioView: View {
 
     private func startCrop() async {
         if let asset {
-            player.pause()
+            pausePlayback()
             let generator = AVAssetImageGenerator(asset: asset)
             generator.appliesPreferredTrackTransform = true
             generator.maximumSize = CGSize(width: 1400, height: 1400)
@@ -884,7 +969,8 @@ struct ReelStudioView: View {
         let state = Drafts.ReelState(caption: caption, allowComments: allowComments, look: look,
                                      trimStart: trimStart, trimEnd: trimEnd, sound: sound, soundVolume: soundVolume,
                                      originalVolume: originalVolume, video: asset != nil ? videoURL : nil,
-                                     photos: asset == nil ? photos : [], cover: thumbs.first, stickers: stickers, strokes: strokes, videoCrop: videoCrop)
+                                     photos: asset == nil ? photos : [], cover: thumbs.first, stickers: stickers, strokes: strokes, videoCrop: videoCrop,
+                                     slideSeconds: asset == nil ? slideSeconds : [])
         draftId = Drafts.saveReel(id: draftId, state)
         drafts = Drafts.reels()
         model.showToast("Saved to drafts", icon: "tray.and.arrow.down.fill")
@@ -906,6 +992,7 @@ struct ReelStudioView: View {
             let pics = Drafts.reelPhotos(d)
             guard !pics.isEmpty else { error = "That draft is empty."; return }
             openPhotos(pics)
+            if let secs = d.slideSeconds, secs.count == photos.count { slideSeconds = secs }
         }
         look = restored.look
         stickers = restored.stickers
@@ -928,12 +1015,19 @@ struct ReelStudioView: View {
         trimStart = 0
         trimEnd = min(seconds, 60)
         photos = []
+        slideSeconds = []
+        playhead = 0
+        selectedOverlay = nil
+        selectedSlide = nil
+        timelineThumbs = []
+        timelineThumbKey = ""
         tool = .trim
         let item = AVPlayerItem(asset: a)
         player.replaceCurrentItem(with: item)
         applyPreviewFilter()
         loopPreview()
         player.play()
+        isPlaying = true
         withAnimation { step = .edit }
         if sound != nil { startSound() }
         await makeThumbs(a, seconds: seconds)
@@ -980,6 +1074,14 @@ struct ReelStudioView: View {
                     player.seek(to: CMTime(seconds: trimStart, preferredTimescale: 600))
                     soundPlayer?.seek(to: .zero)
                 }
+                let playingNow = player.rate != 0
+                if playingNow != isPlaying { isPlaying = playingNow }
+                // The playhead only needs to move for the timeline and for
+                // overlays that come and go.
+                if tool == .timeline || stickers.contains(where: { $0.isTimed }) {
+                    let at = min(max(0, time.seconds - trimStart), timelineLength)
+                    if abs(at - playhead) > 0.02 { playhead = at }
+                }
             }
         }
     }
@@ -995,10 +1097,13 @@ struct ReelStudioView: View {
     }
 
     private func resetToPick() {
-        player.pause()
-        soundPlayer?.pause()
+        pausePlayback()
         asset = nil
         photos = []
+        slideSeconds = []
+        playhead = 0
+        selectedOverlay = nil
+        selectedSlide = nil
         stickers = []
         strokes = []
         sound = nil
@@ -1012,14 +1117,193 @@ struct ReelStudioView: View {
     }
 
     private func goToPost() {
-        player.pause()
+        pausePlayback()
+        selectedOverlay = nil
         withAnimation { step = .post }
     }
 
     private func teardown() {
+        slideTask?.cancel()
         player.pause()
         soundPlayer?.pause()
         if let timeObserver { player.removeTimeObserver(timeObserver) }
+    }
+
+    // MARK: timeline
+
+    private var timelineLength: Double {
+        asset != nil ? max(0.1, trimEnd - trimStart) : max(0.1, slideSeconds.reduce(0, +))
+    }
+
+    // Overlays show only in their time: on a video at the playhead, on a
+    // slideshow on the slides they cover.
+    private func overlayShown(_ s: TextSticker) -> Bool {
+        if asset != nil { return s.shows(at: playhead) }
+        let b = ReelTimeline.bounds(slideSeconds)
+        guard slideSeconds.count == photos.count, b.count > slide + 1 else { return true }
+        return s.overlaps(b[slide], b[slide + 1])
+    }
+
+    private func slideIndex(at t: Double) -> Int {
+        let b = ReelTimeline.bounds(slideSeconds)
+        let i = b.lastIndex(where: { $0 <= t + 0.001 }) ?? 0
+        return max(0, min(photos.count - 1, i))
+    }
+
+    private func seek(to t: Double) {
+        let t = min(max(0, t), timelineLength)
+        playhead = t
+        if asset != nil {
+            player.seek(to: CMTime(seconds: trimStart + t, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        } else {
+            let i = slideIndex(at: t)
+            if i != slide { slide = i }
+        }
+        soundPlayer?.seek(to: CMTime(seconds: t, preferredTimescale: 600))
+    }
+
+    private func scrubbing(_ began: Bool) {
+        if began {
+            resumeAfterScrub = isPlaying
+            if isPlaying { pausePlayback() }
+        } else if resumeAfterScrub {
+            resumeAfterScrub = false
+            startPlayback()
+        }
+    }
+
+    private func togglePlay() {
+        if isPlaying { pausePlayback() } else { startPlayback() }
+    }
+
+    private func startPlayback() {
+        if asset != nil {
+            player.play()
+            soundPlayer?.play()
+            isPlaying = true
+        } else if !photos.isEmpty {
+            playSlides()
+        }
+    }
+
+    private func pausePlayback() {
+        isPlaying = false
+        slideTask?.cancel()
+        slideTask = nil
+        player.pause()
+        soundPlayer?.pause()
+    }
+
+    // Slideshows play by themselves: each photo for its own length.
+    private func playSlides() {
+        slideTask?.cancel()
+        isPlaying = true
+        if playhead >= timelineLength - 0.05 { seek(to: 0) }
+        soundPlayer?.play()
+        slideTask = Task {
+            var last = Date()
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(100))
+                if Task.isCancelled { break }
+                let now = Date()
+                var next = playhead + now.timeIntervalSince(last)
+                last = now
+                if next >= timelineLength {
+                    next = 0
+                    soundPlayer?.seek(to: .zero)
+                }
+                playhead = next
+                let i = slideIndex(at: next)
+                if i != slide { withAnimation(.easeInOut(duration: 0.3)) { slide = i } }
+            }
+        }
+    }
+
+    // New overlays from the timeline: 3 seconds from the playhead, or the
+    // slide you're on.
+    private func newOverlayTiming() -> (start: Double, end: Double?) {
+        if asset == nil {
+            let b = ReelTimeline.bounds(slideSeconds)
+            guard slideSeconds.count == photos.count, b.count > slide + 1 else { return (0, nil) }
+            let end = b[slide + 1]
+            return (b[slide], end >= (b.last ?? 0) - 0.01 ? nil : end)
+        }
+        let length = timelineLength
+        let start = max(0, min(playhead, length - 3))
+        let end = start + 3
+        return (start, end >= length - 0.05 ? nil : end)
+    }
+
+    private func addPhotoOverlay(_ image: UIImage) {
+        checkpoint()
+        let timing = newOverlayTiming()
+        let overlay = TextSticker(text: "", x: 0.5, y: 0.42, image: image, start: timing.start, end: timing.end, framed: true)
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { stickers.append(overlay) }
+        selectedOverlay = overlay.id
+        selectedSlide = nil
+    }
+
+    // Photos on top of the reel: upright and no bigger than they need to be
+    // (see-through parts stay see-through).
+    nonisolated static func overlayPicture(_ image: UIImage) -> UIImage {
+        let longest = max(image.size.width, image.size.height, 1)
+        let scale = min(1, 1200 / longest)
+        let target = CGSize(width: max(1, (image.size.width * scale).rounded()), height: max(1, (image.size.height * scale).rounded()))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.preferredRange = .standard
+        return UIGraphicsImageRenderer(size: target, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: target))
+        }
+    }
+
+    private func moveSlide(_ i: Int, _ j: Int) {
+        guard photos.indices.contains(i), photos.indices.contains(j), slideSeconds.count == photos.count else { return }
+        checkpoint()
+        let old = ReelTimeline.bounds(slideSeconds)
+        withAnimation(.snappy) {
+            photos.swapAt(i, j)
+            if previewPhotos.count == photos.count { previewPhotos.swapAt(i, j) }
+            slideSeconds.swapAt(i, j)
+            ReelTimeline.remap(&stickers, from: old, to: ReelTimeline.bounds(slideSeconds))
+        }
+        selectedSlide = j
+        slide = j
+        playhead = ReelTimeline.bounds(slideSeconds)[j]
+    }
+
+    private func deleteSlide(_ i: Int) {
+        guard photos.count > 1, photos.indices.contains(i), slideSeconds.count == photos.count else { return }
+        checkpoint()
+        let b = ReelTimeline.bounds(slideSeconds)
+        let newLength = (b.last ?? 0) - slideSeconds[i]
+        withAnimation(.snappy) {
+            photos.remove(at: i)
+            if previewPhotos.count == photos.count + 1 { previewPhotos.remove(at: i) }
+            slideSeconds.remove(at: i)
+            ReelTimeline.removeSlide(&stickers, from: b[i], to: b[i + 1], newLength: newLength)
+        }
+        selectedSlide = nil
+        slide = min(slide, photos.count - 1)
+        playhead = ReelTimeline.bounds(slideSeconds)[slide]
+    }
+
+    // Film strip of just the trimmed part, for the timeline.
+    private func refreshTimelineThumbs() async {
+        guard let asset else { return }
+        let key = "\(Int(trimStart * 10))-\(Int(trimEnd * 10))"
+        guard key != timelineThumbKey else { return }
+        timelineThumbKey = key
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 160, height: 160)
+        let count = 10
+        var out: [UIImage] = []
+        for i in 0..<count {
+            let t = trimStart + (trimEnd - trimStart) * (Double(i) + 0.5) / Double(count)
+            if let result = try? await generator.image(at: CMTime(seconds: t, preferredTimescale: 600)) { out.append(UIImage(cgImage: result.image)) }
+        }
+        if key == timelineThumbKey { timelineThumbs = out }
     }
 
     // MARK: export + post
@@ -1051,25 +1335,29 @@ struct ReelStudioView: View {
                 length = trimEnd - trimStart
             } else {
                 status = "Uploading pictures…"
-                for photo in photos {
-                    let baked = bake(photo)
+                for (i, photo) in photos.enumerated() {
+                    let baked = bake(photo, slide: i)
                     if let jpeg = ImageTools.jpeg(baked, maxSide: 1600) {
                         mediaURLs.append(try await StorageClient.upload(jpeg, contentType: "image/jpeg", fileExtension: "jpg"))
                     }
                 }
                 mediaURL = mediaURLs.first ?? ""
                 coverURL = mediaURL
-                length = Double(photos.count * 3)
+                length = slideSeconds.count == photos.count ? slideSeconds.reduce(0, +) : Double(photos.count * 3)
             }
             status = "Posting…"
             let now = FS.nowISO()
             var source = ""
             if let sound, sound.id.hasPrefix("deezer_") { source = "deezer:" + sound.id.replacingOccurrences(of: "deezer_", with: "") }
+            var edits: [String: Any] = [:]
+            if asset == nil, slideSeconds.count == photos.count, slideSeconds.contains(where: { abs($0 - 3) > 0.01 }) {
+                edits["slide_durations"] = slideSeconds
+            }
             let doc: Doc = [
                 "kind": kind, "media_url": mediaURL, "media_urls": mediaURLs.count > 1 ? mediaURLs : [String](),
                 "cover_url": coverURL, "caption": caption.trimmingCharacters(in: .whitespacesAndNewlines),
                 "music_title": sound?.title ?? "", "music_artist": sound?.artist ?? "", "music_url": sound?.audioURL ?? "",
-                "music_source": source, "duration": (length * 10).rounded() / 10, "edits": [String: Any](),
+                "music_source": source, "duration": (length * 10).rounded() / 10, "edits": edits,
                 "comments_off": !allowComments, "likes": [String](), "views": 0,
                 "user_email": me.email, "user_display_name": me.displayName, "user_profile_picture": me.picture,
                 "created_by": me.email, "created_date": now, "updated_date": now,
@@ -1120,7 +1408,7 @@ struct ReelStudioView: View {
             } else {
                 guard !photos.isEmpty else { return }
                 status = "Getting your photos ready…"
-                onChatSend(.photos(photos.map { bake($0) }))
+                onChatSend(.photos(photos.enumerated().map { bake($1, slide: $0) }))
             }
             teardown()
             dismiss()
@@ -1136,7 +1424,7 @@ struct ReelStudioView: View {
         guard let result = try? await generator.image(at: CMTime(seconds: trimStart + 0.1, preferredTimescale: 600)) else { return nil }
         var frame = UIImage(cgImage: result.image)
         if let videoCrop { frame = Cropping.crop(frame, videoCrop, maxSide: 1920) }
-        return bake(frame)
+        return bake(frame, at: 0.1)
     }
 
     // Filter + text stickers drawn onto a picture.
@@ -1159,48 +1447,68 @@ struct ReelStudioView: View {
         }
     }
 
-    private func bake(_ image: UIImage) -> UIImage {
+    // With a slide, only the overlays timed onto that slide; with a time,
+    // only the ones showing then.
+    private func bake(_ image: UIImage, slide: Int? = nil, at time: Double? = nil) -> UIImage {
         guard !look.isNeutral || !stickers.isEmpty || !strokes.isEmpty, let cg = image.cgImage else { return image }
+        let showing = overlayFilter(slide: slide, at: time)
         var ci = CIImage(cgImage: cg)
         ci = look.apply(ci)
-        for overlay in overlayImages(width: ci.extent.width, height: ci.extent.height) { ci = overlay.composited(over: ci) }
+        for overlay in overlayImages(width: ci.extent.width, height: ci.extent.height, showing: showing) { ci = overlay.composited(over: ci) }
         let context = CIContext()
         guard let out = context.createCGImage(ci, from: ci.extent) else { return image }
         return UIImage(cgImage: out)
     }
 
-    private func overlayImages(width: CGFloat, height: CGFloat) -> [CIImage] {
-        var out: [CIImage] = []
-        if let doodle = Doodle.render(strokes, size: CGSize(width: width, height: height))?.cgImage {
-            out.append(CIImage(cgImage: doodle))
+    private func overlayFilter(slide: Int?, at time: Double?) -> (TextSticker) -> Bool {
+        if let slide {
+            let b = ReelTimeline.bounds(slideSeconds)
+            guard slideSeconds.count == photos.count, b.count > slide + 1 else { return { _ in true } }
+            let from = b[slide], to = b[slide + 1]
+            return { $0.overlaps(from, to) }
         }
-        return out + stickerImages(width: width, height: height)
+        if let time { return { $0.shows(at: time) } }
+        return { _ in true }
     }
 
-    private func stickerImages(width: CGFloat, height: CGFloat) -> [CIImage] {
-        stickers.filter { !$0.text.isEmpty || $0.image != nil }.compactMap { sticker in
-            guard let cg = sticker.render(width: width).cgImage else { return nil }
-            let img = CIImage(cgImage: cg)
-            let w = img.extent.width, h = img.extent.height
-            // Centre on the origin, turn (Core Image's y axis points up, so
-            // the angle flips), then move into place.
-            let centred = CGAffineTransform(translationX: -w / 2, y: -h / 2)
-            let turned = centred.concatenating(CGAffineTransform(rotationAngle: -CGFloat(sticker.rotation)))
-            let placed = turned.concatenating(CGAffineTransform(translationX: sticker.x * width, y: (1 - sticker.y) * height))
-            return img.transformed(by: placed)
-        }
+    private func overlayImages(width: CGFloat, height: CGFloat, showing: (TextSticker) -> Bool = { _ in true }) -> [CIImage] {
+        var out: [CIImage] = []
+        if let doodle = doodleImage(width: width, height: height) { out.append(doodle) }
+        return out + stickers.filter(showing).compactMap { stickerImage($0, width: width, height: height) }
+    }
+
+    private func doodleImage(width: CGFloat, height: CGFloat) -> CIImage? {
+        Doodle.render(strokes, size: CGSize(width: width, height: height))?.cgImage.map { CIImage(cgImage: $0) }
+    }
+
+    private func stickerImage(_ sticker: TextSticker, width: CGFloat, height: CGFloat) -> CIImage? {
+        guard !sticker.text.isEmpty || sticker.image != nil, let cg = sticker.render(width: width).cgImage else { return nil }
+        let img = CIImage(cgImage: cg)
+        let w = img.extent.width, h = img.extent.height
+        // Centre on the origin, turn (Core Image's y axis points up, so
+        // the angle flips), then move into place.
+        let centred = CGAffineTransform(translationX: -w / 2, y: -h / 2)
+        let turned = centred.concatenating(CGAffineTransform(rotationAngle: -CGFloat(sticker.rotation)))
+        let placed = turned.concatenating(CGAffineTransform(translationX: sticker.x * width, y: (1 - sticker.y) * height))
+        return img.transformed(by: placed)
     }
 
     private func exportVideo(_ asset: AVURLAsset) async throws -> URL {
         let box = RenderBox()
         box.look = look
         box.crop = videoCrop
+        box.trimStart = trimStart
         let composition = AVMutableVideoComposition(asset: asset) { request in
             var img = request.sourceImage
             if let crop = box.crop { img = VideoCrop.cut(img, crop) }
             if box.scale < 1 { img = img.transformed(by: CGAffineTransform(scaleX: box.scale, y: box.scale)) }
             img = box.look.apply(img)
             for overlay in box.overlays { img = overlay.composited(over: img) }
+            // Timeline overlays: only while they're meant to show.
+            let t = request.compositionTime.seconds - box.trimStart
+            for item in box.timed where t >= item.start - 0.01 && (item.end.map { t < $0 } ?? true) {
+                img = item.image.composited(over: img)
+            }
             request.finish(with: img, context: nil)
         }
         let full = composition.renderSize
@@ -1209,7 +1517,10 @@ struct ReelStudioView: View {
         box.scale = scale
         let size = CGSize(width: max(2, (natural.width * scale / 2).rounded() * 2), height: max(2, (natural.height * scale / 2).rounded() * 2))
         composition.renderSize = size
-        box.overlays = overlayImages(width: size.width, height: size.height)
+        box.overlays = doodleImage(width: size.width, height: size.height).map { [$0] } ?? []
+        box.timed = stickers.compactMap { s in
+            stickerImage(s, width: size.width, height: size.height).map { RenderBox.Timed(image: $0, start: s.start, end: s.end) }
+        }
 
         let out = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
         guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else {

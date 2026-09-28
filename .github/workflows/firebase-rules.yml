@@ -6,6 +6,9 @@
 # (GitHub → Settings → Secrets and variables → Actions → New repository
 # secret) containing the whole JSON key from Firebase console → Project
 # settings → Service accounts → Generate new private key.
+# If the whole file won't paste, use two smaller secrets instead:
+# FIREBASE_CLIENT_EMAIL (the "client_email" value) and FIREBASE_PRIVATE_KEY
+# (the "private_key" value, from -----BEGIN to END PRIVATE KEY-----).
 # Then re-run this workflow (or push any change to the rules).
 name: Publish Firebase rules
 
@@ -18,6 +21,7 @@ on:
       - "firestore.indexes.json"
       - "scripts/deploy-rules.mjs"
       - "scripts/rank.mjs"
+      - "scripts/firebase-key.mjs"
       - ".github/workflows/firebase-rules.yml"
 
 concurrency:
@@ -30,22 +34,24 @@ jobs:
     timeout-minutes: 10
     env:
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+      FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
     steps:
       - name: Needs the FIREBASE_SERVICE_ACCOUNT secret
-        if: env.FIREBASE_SERVICE_ACCOUNT == ''
+        if: env.FIREBASE_SERVICE_ACCOUNT == '' && env.FIREBASE_PRIVATE_KEY == ''
         run: |
           echo "::warning title=Rules not published::Add the FIREBASE_SERVICE_ACCOUNT secret (see the top of .github/workflows/firebase-rules.yml), then re-run this workflow."
 
       - uses: actions/checkout@v4
-        if: env.FIREBASE_SERVICE_ACCOUNT != ''
+        if: env.FIREBASE_SERVICE_ACCOUNT != '' || env.FIREBASE_PRIVATE_KEY != ''
 
       - uses: actions/setup-node@v4
-        if: env.FIREBASE_SERVICE_ACCOUNT != ''
+        if: env.FIREBASE_SERVICE_ACCOUNT != '' || env.FIREBASE_PRIVATE_KEY != ''
         with:
           node-version: 22
 
       - name: Publish Firestore and Storage rules
-        if: env.FIREBASE_SERVICE_ACCOUNT != ''
+        if: env.FIREBASE_SERVICE_ACCOUNT != '' || env.FIREBASE_PRIVATE_KEY != ''
         run: |
           npm install --no-save --no-package-lock firebase-admin@13
           node scripts/deploy-rules.mjs
@@ -53,18 +59,18 @@ jobs:
       # Indexes make some lists (channels, messages, reels) load without errors.
       # This needs more permissions than the rules, so it may be skipped.
       - name: Publish Firestore indexes
-        if: env.FIREBASE_SERVICE_ACCOUNT != ''
+        if: env.FIREBASE_SERVICE_ACCOUNT != '' || env.FIREBASE_PRIVATE_KEY != ''
         continue-on-error: true
         run: |
-          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/key.json"
+          node scripts/firebase-key.mjs > "$RUNNER_TEMP/key.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/key.json"
-          PROJECT=$(node -p "JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT).project_id")
+          PROJECT=$(node -p "JSON.parse(require('fs').readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'utf8')).project_id")
           npx --yes firebase-tools@14 deploy --only firestore:indexes --project "$PROJECT" --non-interactive
           rm -f "$RUNNER_TEMP/key.json"
 
       # With the rules live, move old likes into the Like table and rank
       # reels right away (the hourly job keeps it going; see rank.yml).
       - name: Move likes and rank
-        if: env.FIREBASE_SERVICE_ACCOUNT != ''
+        if: env.FIREBASE_SERVICE_ACCOUNT != '' || env.FIREBASE_PRIVATE_KEY != ''
         continue-on-error: true
         run: node scripts/rank.mjs

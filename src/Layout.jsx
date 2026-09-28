@@ -20,7 +20,7 @@ import NotificationBell from "@/components/notifications/NotificationBell";
 import Avatar from "@/components/common/Avatar";
 import { useAuth } from "@/lib/AuthContext";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { applyTheme } from "@/lib/theme";
+import { applyTheme, resolveCustom } from "@/lib/theme";
 import { toast } from "@/lib/toast";
 import { displayName, profileLink } from "@/lib/format";
 import { messagePreview } from "@/lib/calls";
@@ -304,12 +304,14 @@ export default function Layout() {
     ensureInviteCode(user).then(() => claimInvites(user, updateMe));
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Apply the user's theme + accent (falling back to the site default accent).
+  // Apply the user's theme + accent (falling back to the site default accent),
+  // and custom colours: yours from Settings, else the admin's app colours.
   useEffect(() => {
     if (!user) return;
-    applyTheme({ theme: user.theme || "light", accent: user.accent || siteConfig?.default_accent || "rose" });
+    const accent = user.accent || siteConfig?.default_accent || "rose";
+    applyTheme({ theme: user.theme || "light", accent, custom: resolveCustom({ ...user, accent }, siteConfig) });
     setIsDark(document.documentElement.classList.contains("dark"));
-  }, [user?.theme, user?.accent, siteConfig?.default_accent]);
+  }, [user?.theme, user?.accent, user?.accent_main, user?.accent_sub, siteConfig?.default_accent, siteConfig?.app_primary, siteConfig?.app_secondary]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Unread DM + pending friend request badges, with a toast for new messages.
   const onDmsPage = location.pathname.toLowerCase() === "/directmessages";
