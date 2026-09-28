@@ -718,6 +718,8 @@ enum AppReleases {
             "Everything else loads in pages too (Community, Gallery, profiles, notifications). Search, follower counts, likes and views now run on the server.",
             "Likes have no limit anymore: each like is its own record with a count kept by the database, on the app and the website.",
             "For You now also mixes in reels ranked on the server by likes, views and comments for their age.",
+            "Music always restarts: after a call, a voice note, another app or the end of a song. Music and Settings scroll smoothly, and the charts load all at once.",
+            "Connect Apple Music in the Music tab to play whole songs if you subscribe.",
         ]),
         AppRelease(id: "ios-1.7", icon: "person.2.wave.2.fill", title: "More social & smoother", date: "2026-09-28T11:00:00Z", items: [
             "Home has stories, today's art prompt, Happening now, people you might like and trending tags.",

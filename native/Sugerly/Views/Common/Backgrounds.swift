@@ -340,7 +340,8 @@ struct BackgroundPicker: View {
                                         Palette.bg
                                         Image(systemName: "circle.slash").font(.system(size: 20, weight: .bold)).foregroundStyle(Palette.muted)
                                     } else {
-                                        PatternBackground(kind: kind, animated: on && !still)
+                                        // Still previews: the real one moves behind your pages.
+                                        PatternBackground(kind: kind, animated: false)
                                     }
                                 }
                                 .frame(width: 74, height: 104)

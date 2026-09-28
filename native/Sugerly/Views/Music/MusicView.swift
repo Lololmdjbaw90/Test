@@ -18,7 +18,7 @@ enum Deezer {
             guard let id = t["id"], let preview = t["preview"] as? String, !preview.isEmpty else { return nil }
             let artist = (t["artist"] as? [String: Any])?["name"] as? String ?? ""
             let album = t["album"] as? [String: Any] ?? [:]
-            let cover = album["cover_big"] as? String ?? album["cover_medium"] as? String ?? ""
+            let cover = album["cover_medium"] as? String ?? album["cover_big"] as? String ?? ""
             let title = t["title_short"] as? String ?? t["title"] as? String ?? ""
             return Track(id: "deezer_\(id)", title: title, artist: artist, audioURL: preview, coverURL: cover, external: URL(string: t["link"] as? String ?? ""))
         }
@@ -36,10 +36,10 @@ struct MusicView: View {
     @State private var charts: [Track] = []
     @State private var genre = 0
     @State private var query = ""
-    @State private var chartsMore = false
     @State private var chartsLoading = true
     @State private var chartsError = false
-    @State private var shownUploads = 20
+    @State private var showAllUploads = false
+    @State private var apple = AppleMusic.shared
     @State private var fullFor: Track?
     @State private var uploading = false
 
@@ -57,13 +57,19 @@ struct MusicView: View {
                         .accessibilityLabel("Share a track")
                 }
                 if let pick = tracks.first { hero(pick) }
+                appleMusicCard
                 chartsSection
                 if !tracks.isEmpty {
                     SectionHeader(icon: "music.note.list", title: "All tracks")
+                    // Everything is already loaded: nothing pops in while you scroll.
                     VStack(spacing: 4) {
-                        ForEach(tracks.prefix(shownUploads)) { t in TrackRow(track: t, list: tracks) }
-                        if shownUploads < tracks.count {
-                            Color.clear.frame(height: 1).onAppear { shownUploads += 20 }
+                        ForEach(showAllUploads ? tracks : Array(tracks.prefix(30))) { t in TrackRow(track: t, list: tracks) }
+                        if !showAllUploads && tracks.count > 30 {
+                            Button { showAllUploads = true } label: {
+                                Text("Show all \(tracks.count) tracks").font(.jakarta(14, .bold)).foregroundStyle(Theme.main)
+                                    .frame(maxWidth: .infinity).frame(height: 44)
+                            }
+                            .buttonStyle(BouncyStyle(scale: 0.97))
                         }
                     }
                     .sugarCard(radius: 26, padding: 8)
@@ -82,9 +88,9 @@ struct MusicView: View {
         .task { await loadUploads() }
         .task(id: "\(genre)|\(query)") {
             if !query.isEmpty { try? await Task.sleep(for: .milliseconds(350)) }
-            await loadCharts(reset: true)
+            await loadCharts()
         }
-        .sheet(item: $fullFor) { t in FullSongSheet(track: t).presentationDetents([.height(360)]).presentationCornerRadius(32) }
+        .sheet(item: $fullFor) { t in FullSongSheet(track: t).presentationDetents([.height(AppleMusic.shared.canPlayFull ? 440 : 360)]).presentationCornerRadius(32) }
         .fullScreenCover(isPresented: $uploading) { NewTrackView() }
     }
 
@@ -111,12 +117,8 @@ struct MusicView: View {
         }
         .padding(18)
         .background {
-            ZStack {
-                Theme.gradient
-                RemoteImage(url: t.coverURL).blur(radius: 40).opacity(0.35)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-            .shadow(color: Theme.pink.opacity(0.4), radius: 20, y: 10)
+            RoundedRectangle(cornerRadius: 30, style: .continuous).fill(Theme.gradient)
+                .shadow(color: Theme.pink.opacity(0.35), radius: 16, y: 8)
         }
     }
 
@@ -149,10 +151,6 @@ struct MusicView: View {
                 ForEach(Array(charts.enumerated()), id: \.element.id) { i, t in
                     TrackRow(track: t, list: charts, rank: i + 1) { fullFor = t }
                 }
-                if chartsMore {
-                    ProgressView().frame(maxWidth: .infinity).padding(12)
-                        .onAppear { Task { await loadCharts(reset: false) } }
-                }
             }
             .sugarCard(radius: 26, padding: 8)
             Text("Previews by Deezer · tap Full for the whole song").font(.jakarta(11)).foregroundStyle(Palette.muted)
@@ -161,25 +159,61 @@ struct MusicView: View {
 
     private func loadUploads() async {
         guard let docs = try? await FS.query("MusicReview", orderBy: "created_date", limit: 300) else { return }
-        tracks = docs.map(Track.init).filter { !$0.audioURL.isEmpty }
+        let list = docs.map(Track.init).filter { !$0.audioURL.isEmpty }
+        await Self.prefetch(list.prefix(30).map(\.coverURL))
+        tracks = list
     }
 
-    private func loadCharts(reset: Bool) async {
-        if reset { chartsLoading = true; chartsError = false }
+    // The whole chart in one go (covers fetched before it shows), so nothing
+    // loads in while you scroll.
+    private func loadCharts() async {
+        chartsLoading = true
+        chartsError = false
         defer { chartsLoading = false }
         do {
-            let result = try await Deezer.page(genre: genre, query: query, index: reset ? 0 : charts.count)
-            if reset {
-                charts = result.tracks
-            } else {
-                let known = Set(charts.map(\.id))
-                charts += result.tracks.filter { !known.contains($0.id) }
-            }
-            chartsMore = result.more && !result.tracks.isEmpty
+            let result = try await Deezer.page(genre: genre, query: query, index: 0, limit: 50)
+            await Self.prefetch(result.tracks.map(\.coverURL))
+            charts = result.tracks
         } catch {
-            if reset { chartsError = true; charts = [] }
-            chartsMore = false
+            if !Task.isCancelled { chartsError = true; charts = [] }
         }
+    }
+
+    private static func prefetch(_ urls: [String]) async {
+        await withTaskGroup(of: Void.self) { group in
+            for url in urls where !url.isEmpty && MemoryImages.get(url) == nil {
+                group.addTask { _ = await ImagePipeline.shared.load(url) }
+            }
+        }
+    }
+
+    private var appleMusicCard: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "music.note")
+                .font(.system(size: 20, weight: .heavy)).foregroundStyle(.white)
+                .frame(width: 46, height: 46)
+                .background(Color(hex: 0xFA2D48), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Apple Music").font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
+                Text(apple.nowPlaying.map { "Playing \($0)" } ?? apple.summary)
+                    .font(.jakarta(12)).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 4)
+            if apple.nowPlaying != nil {
+                Button { apple.stop() } label: { Image(systemName: "stop.fill").frame(width: 38, height: 38) }
+                    .buttonStyle(BouncyStyle()).foregroundStyle(Theme.main)
+                    .accessibilityLabel("Stop Apple Music")
+            } else if !apple.isConnected {
+                Button { Task { await apple.connect() } } label: {
+                    Text(apple.state == .connecting ? "…" : "Connect").font(.jakarta(13, .heavy)).foregroundStyle(.white)
+                        .padding(.horizontal, 14).frame(height: 34)
+                        .background(Color(hex: 0xFA2D48), in: Capsule())
+                }
+                .buttonStyle(BouncyStyle())
+                .disabled(apple.state == .connecting)
+            }
+        }
+        .sugarCard(radius: 22, padding: 12)
     }
 }
 
@@ -187,6 +221,10 @@ struct FullSongSheet: View {
     let track: Track
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
+    @Environment(Player.self) private var player
+    @State private var apple = AppleMusic.shared
+    @State private var appleError: String?
+    @State private var starting = false
 
     private var query: String { "\(track.artist) \(track.title)" }
     private var apps: [(String, UInt32, URL?)] {
@@ -210,6 +248,25 @@ struct FullSongSheet: View {
                 }
             }
             .padding(.top, 24)
+            if apple.canPlayFull {
+                Button {
+                    Task {
+                        starting = true
+                        player.pause()
+                        appleError = await apple.playFull(title: track.title, artist: track.artist)
+                        starting = false
+                        if appleError == nil { dismiss() }
+                    }
+                } label: {
+                    Label(starting ? "Starting…" : "Play the whole song here", systemImage: "play.fill")
+                        .font(.jakarta(15, .bold)).foregroundStyle(.white)
+                        .frame(maxWidth: .infinity).frame(height: 50)
+                        .background(Color(hex: 0xFA2D48), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
+                .buttonStyle(BouncyStyle())
+                .disabled(starting)
+                if let appleError { Text(appleError).font(.jakarta(12, .semibold)).foregroundStyle(Palette.danger) }
+            }
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                 ForEach(apps, id: \.0) { name, color, url in
                     Button { if let url { openURL(url) }; dismiss() } label: {

@@ -131,17 +131,21 @@ struct SugarCard: ViewModifier {
     @Environment(\.colorScheme) private var scheme
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        // The shadow belongs to the card's shape only (not everything inside
+        // it), so long cards scroll smoothly.
         content
             .padding(padding)
-            .background { shape.fill(Palette.surface) }
+            .background {
+                shape.fill(Palette.surface)
+                    .shadow(color: Palette.shadow, radius: 2, y: 1)
+                    .shadow(color: Theme.main.opacity(scheme == .dark ? 0.0 : 0.06), radius: 18, y: 8)
+            }
             .overlay {
                 shape.strokeBorder(
                     LinearGradient(colors: [Color.white.opacity(scheme == .dark ? 0.08 : 0.9), Palette.border], startPoint: .top, endPoint: .bottom),
                     lineWidth: 1
                 )
             }
-            .shadow(color: Palette.shadow, radius: 2, y: 1)
-            .shadow(color: Theme.main.opacity(scheme == .dark ? 0.0 : 0.06), radius: 18, y: 8)
     }
 }
 
@@ -153,9 +157,8 @@ extension View {
     func glassPill(cornerRadius: CGFloat = 30) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         return self
-            .background(Palette.surface, in: shape)
+            .background { shape.fill(Palette.surface).shadow(color: Theme.main.opacity(0.2), radius: 16, y: 8) }
             .overlay(shape.strokeBorder(Theme.light.opacity(0.55), lineWidth: 1.2))
-            .shadow(color: Theme.main.opacity(0.2), radius: 16, y: 8)
     }
 
     // Text filled with the accent gradient.

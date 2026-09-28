@@ -14,23 +14,33 @@ final class Player {
     var time: Double = 0
     var duration: Double = 0
 
-    private var player: AVPlayer?
-    private var timeObserver: Any?
-    private var endObserver: NSObjectProtocol?
+    @ObservationIgnored private var player: AVPlayer?
+    @ObservationIgnored private var timeObserver: Any?
+    @ObservationIgnored private var endObserver: NSObjectProtocol?
+    @ObservationIgnored private var statusWatch: NSKeyValueObservation?
+    @ObservationIgnored private var itemWatch: NSKeyValueObservation?
+    @ObservationIgnored private var interruptions: NSObjectProtocol?
+    @ObservationIgnored private var resumeAfterInterruption = false
+    @ObservationIgnored private var refreshed: Set<String> = []
 
     func isCurrent(_ t: Track) -> Bool { track?.id == t.id }
     func isPlaying(_ t: Track) -> Bool { isCurrent(t) && playing }
 
     func play(_ t: Track, in list: [Track]) {
-        if isCurrent(t) { toggle(); return }
         queue = list
+        if isCurrent(t), player != nil { toggle(); return }
         start(t)
+    }
+
+    private func activateSession() {
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+        try? AVAudioSession.sharedInstance().setActive(true)
     }
 
     private func start(_ t: Track) {
         guard let url = URL(string: t.audioURL), !t.audioURL.isEmpty else { return }
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
-        try? AVAudioSession.sharedInstance().setActive(true)
+        AppleMusic.shared.stop()
+        activateSession()
         teardown()
         let item = AVPlayerItem(url: url)
         let p = AVPlayer(playerItem: item)
@@ -48,29 +58,101 @@ final class Player {
         endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.next() }
         }
+        // The button always shows what's really happening (iOS can pause us
+        // for a call, another app or a video with sound).
+        statusWatch = p.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
+            let status = player.timeControlStatus
+            Task { @MainActor in self?.playing = status != .paused }
+        }
+        // Chart previews are links that expire: fetch a fresh one and retry.
+        itemWatch = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+            guard item.status == .failed else { return }
+            Task { @MainActor in await self?.recover(t) }
+        }
+        watchInterruptions()
         p.play()
         playing = true
         updateNowPlaying()
         setupRemote()
     }
 
-    func toggle() {
+    private func recover(_ t: Track) async {
+        guard isCurrent(t), t.id.hasPrefix("deezer_"), !refreshed.contains(t.id) else { pause(); return }
+        refreshed.insert(t.id)
+        let id = t.id.replacingOccurrences(of: "deezer_", with: "")
+        guard let json = try? await HTTP.json(URL(string: "https://api.deezer.com/track/\(id)")!) as? [String: Any],
+              let preview = json["preview"] as? String, !preview.isEmpty else { pause(); return }
+        var fresh = t
+        fresh.audioURL = preview
+        if let i = queue.firstIndex(where: { $0.id == t.id }) { queue[i] = fresh }
+        start(fresh)
+    }
+
+    private func watchInterruptions() {
+        guard interruptions == nil else { return }
+        interruptions = NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
+            let info = note.userInfo ?? [:]
+            let type = (info[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init(rawValue:))
+            let options = AVAudioSession.InterruptionOptions(rawValue: info[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0)
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if type == .began {
+                    self.resumeAfterInterruption = self.playing
+                    self.playing = false
+                } else if type == .ended, options.contains(.shouldResume), self.resumeAfterInterruption {
+                    self.resumeAfterInterruption = false
+                    self.resume()
+                }
+            }
+        }
+    }
+
+    // Plays from where it is, or from the start if the song had finished.
+    private func resume() {
         guard let player else { return }
-        if playing { player.pause() } else { player.play() }
-        playing.toggle()
+        activateSession()
+        AppleMusic.shared.stop()
+        let at = player.currentTime().seconds
+        let total = player.currentItem?.duration.seconds ?? duration
+        if total.isFinite, total > 0, at.isFinite, at >= total - 0.3 {
+            player.seek(to: .zero)
+            time = 0
+        }
+        player.play()
+        playing = true
         updateNowPlaying()
     }
 
+    func toggle() {
+        guard player != nil else {
+            if let track { start(track) }
+            return
+        }
+        if playing { pause() } else { resume() }
+    }
+
     func next() {
-        guard let t = track, let i = queue.firstIndex(where: { $0.id == t.id }) else { pause(); return }
+        guard let t = track, let i = queue.firstIndex(where: { $0.id == t.id }) else { finish(); return }
         let rest = queue[(i + 1)...].filter { !$0.audioURL.isEmpty }
-        if let n = rest.first { start(n) } else { pause(); player?.seek(to: .zero) }
+        if let n = rest.first { start(n) } else { finish() }
+    }
+
+    // End of the list: stop at the start of the song, ready to play again.
+    private func finish() {
+        pause()
+        player?.seek(to: .zero)
+        time = 0
     }
 
     func previous() {
-        guard let t = track, let i = queue.firstIndex(where: { $0.id == t.id }) else { return }
-        if time > 3 || i == 0 { seek(0); return }
-        start(queue[i - 1])
+        guard let t = track else { return }
+        let i = queue.firstIndex(where: { $0.id == t.id })
+        if time > 3 || i == nil || i == 0 {
+            seek(0)
+            if !playing { resume() }
+            return
+        }
+        start(queue[i! - 1])
     }
 
     func seek(_ seconds: Double) {
@@ -95,6 +177,10 @@ final class Player {
         player?.pause()
         if let timeObserver { player?.removeTimeObserver(timeObserver) }
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        statusWatch?.invalidate()
+        itemWatch?.invalidate()
+        statusWatch = nil
+        itemWatch = nil
         timeObserver = nil
         endObserver = nil
         player = nil
@@ -111,7 +197,7 @@ final class Player {
         ]
     }
 
-    private var remoteReady = false
+    @ObservationIgnored private var remoteReady = false
     private func setupRemote() {
         guard !remoteReady else { return }
         remoteReady = true

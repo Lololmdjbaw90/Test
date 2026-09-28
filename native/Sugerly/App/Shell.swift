@@ -34,52 +34,6 @@ enum AppTab: Hashable {
     }
 }
 
-// The page-switch shine: two crisp white glossy bars (a wide one and a thin
-// one) that sweep over the whole screen the way you're going, gone in about
-// half a second.
-struct PageShine: View {
-    let trigger: Int
-    var forward = true
-
-    struct Sweep { var p: CGFloat = 1 }
-
-    var body: some View {
-        GeometryReader { geo in
-            let w: CGFloat = geo.size.width
-            let h: CGFloat = geo.size.height
-            let wide: CGFloat = max(90, w * 0.3)
-            let thin: CGFloat = max(18, w * 0.07)
-            let gap: CGFloat = max(14, w * 0.05)
-            let group: CGFloat = wide + gap + thin
-            let tall: CGFloat = h * 1.3
-            let radians: CGFloat = CGFloat(16 * Double.pi / 180)
-            let half: CGFloat = (group * cos(radians) + tall * sin(radians)) / 2
-            let travel: CGFloat = w + half * 2
-            Color.clear
-                .keyframeAnimator(initialValue: Sweep(), trigger: trigger) { content, v in
-                    content.overlay {
-                        HStack(spacing: gap) {
-                            Rectangle().fill(Color.white.opacity(0.88)).frame(width: wide)
-                            Rectangle().fill(Color.white.opacity(0.7)).frame(width: thin)
-                        }
-                        .frame(width: group, height: tall)
-                        .scaleEffect(x: forward ? 1 : -1)
-                        .rotationEffect(.degrees(forward ? 16 : -16))
-                        .position(x: forward ? v.p * travel - half : w + half - v.p * travel, y: h / 2)
-                    }
-                } keyframes: { _ in
-                    KeyframeTrack(\.p) {
-                        MoveKeyframe(0)
-                        CubicKeyframe(1, duration: 0.5)
-                    }
-                }
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-}
-
 enum Composer: String, Identifiable { case post, artwork, reel, track; var id: String { rawValue } }
 
 // Where a tap leads, shared by every tab's navigation stack.
@@ -171,8 +125,6 @@ struct MainShell: View {
     @State private var composer: Composer?
     @State private var typing = false
     @State private var dailyShown = false
-    @State private var shineTick = 0
-    @State private var shineForward = true
     @State private var menuSheet: MenuSheet?
 
     private var currentPath: [Route] {
@@ -277,14 +229,6 @@ struct MainShell: View {
     // Tabs, tab bar, pop-ups and the shared stores.
     private var core: some View {
         tabs
-        .onChange(of: tab) { old, new in
-            shineForward = new.order >= old.order
-            shineTick += 1
-        }
-        .onChange(of: currentPath.count) { old, new in
-            shineForward = new >= old
-            shineTick += 1
-        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !barHidden {
                 VStack(spacing: 8) {
@@ -297,8 +241,6 @@ struct MainShell: View {
             }
         }
         .overlay { ZStack { popups } }
-        // A big white shine sweeps over the whole screen when you switch pages.
-        .overlay { PageShine(trigger: shineTick, forward: shineForward) }
         .sheet(item: $menuSheet) { sheet in menuSheetView(sheet) }
         .onChange(of: model.tabRequest) { _, next in
             guard let next else { return }
