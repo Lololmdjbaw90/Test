@@ -1,24 +1,9 @@
-import { base44 } from "@/api/base44Client";
-import { sendModerationStrike } from "@/utils/discordWebhook";
-
-// Runs user text through the moderation integration (the local word filter,
-// or an LLM if one is wired up). Returns { safe, reason }.
-export async function checkText(text, { user, where } = {}) {
-  const clean = String(text || "").trim();
-  if (!clean) return { safe: true, reason: "" };
-  try {
-    const result = await base44.integrations.Core.InvokeLLM({
-      prompt: `Content moderator. JSON only. Is this message safe? Text: "${clean}". Flag hate speech, explicit NSFW, violence. {"safe":true/false,"reason":""}`,
-      response_json_schema: { type: "object", properties: { safe: { type: "boolean" }, reason: { type: "string" } } },
-    });
-    if (result && result.safe === false) {
-      sendModerationStrike({ userEmail: user?.email, displayName: user?.display_name, reason: `${result.reason || "Blocked"}${where ? ` (${where})` : ""}`, content: clean });
-      return { safe: false, reason: result.reason || "That message isn't allowed here." };
-    }
-  } catch { /* fail open: moderation is best-effort */ }
-  return { safe: true, reason: "" };
+import policy from './moderationLexicon.json';
+import {analyzeText} from './modEngine.js';
+export {hasLink} from './modEngine.js';
+// Submission preflight. The central write gate owns cooldowns and strikes.
+// Content stays on-device; rejected private text is never sent to a webhook.
+export async function checkText(text, {where} = {}) {
+ const result=analyzeText(text,policy,where || '');
+ return result.needsReview ? {...result,safe:false,reason:'This wording could target someone. Please rephrase it.'} : result;
 }
-
-// Links aren't allowed in reel captions or bios (spam and scam protection).
-const LINK = /(https?:\/\/|www\.|\b[a-z0-9-]{2,}\.(com|net|org|io|gg|co|me|ly|xyz|app|dev|tv|link|site|shop|info|biz|ru|to|cc|us|uk|it|de|fr|es)\b|discord\.gg|t\.me\/)/i;
-export const hasLink = (text) => LINK.test(String(text || ""));

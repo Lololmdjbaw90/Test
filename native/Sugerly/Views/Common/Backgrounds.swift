@@ -36,7 +36,7 @@ enum AppBackground: String, CaseIterable, Identifiable {
 extension View {
     // Home and the menu use this instead of the plain background.
     func patternBackground() -> some View {
-        modifier(PatternBackgroundModifier())
+        modifier(ScrollDepth()).modifier(PatternBackgroundModifier())
     }
 }
 
@@ -74,6 +74,8 @@ struct PatternBackground: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var go = false
+    @Environment(\.ambientPaused) private var paused
+    @Environment(\.scenePhase) private var scene
 
     private struct Colors {
         var dark: Bool
@@ -110,6 +112,9 @@ struct PatternBackground: View {
         .background(Palette.bg)
         .onAppear { start() }
         .onDisappear { go = false }
+        .onChange(of: paused) { _, _ in go = false; start() }
+        .onChange(of: scene) { _, _ in go = false; start() }
+        .onChange(of: reduceMotion) { _, _ in go = false; start() }
         .onChange(of: animated) { _, _ in go = false; start() }
         .onChange(of: kind) { _, _ in go = false; start() }
     }
@@ -117,7 +122,7 @@ struct PatternBackground: View {
     // Starts the loop on the next frame, so the first (still) frame is drawn
     // and the move from there is animated.
     private func start() {
-        guard animated && !reduceMotion else { return }
+        guard animated && !reduceMotion && !paused && scene == .active else { return }
         DispatchQueue.main.async { go = true }
     }
 
@@ -333,7 +338,7 @@ struct BackgroundPicker: View {
                 HStack(spacing: 10) {
                     ForEach(AppBackground.allCases) { kind in
                         let on = choice == kind.rawValue
-                        Button { withAnimation(.snappy) { choice = kind.rawValue } } label: {
+                        Button { choice = kind.rawValue } label: {
                             VStack(spacing: 6) {
                                 ZStack {
                                     if kind == .off {
@@ -341,7 +346,7 @@ struct BackgroundPicker: View {
                                         Image(systemName: "circle.slash").font(.system(size: 20, weight: .bold)).foregroundStyle(Palette.muted)
                                     } else {
                                         // Still previews: the real one moves behind your pages.
-                                        PatternBackground(kind: kind, animated: false)
+                                        PatternThumbnail(kind: kind)
                                     }
                                 }
                                 .frame(width: 74, height: 104)

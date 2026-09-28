@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "fields": {
+    "User": [
+      "display_name",
+      "full_name",
+      "bio",
+      "custom_status",
+      "status_text"
+    ],
+    "CommunityPost": [
+      "title",
+      "content",
+      "description"
+    ],
+    "Artwork": [
+      "title",
+      "description"
+    ],
+    "Comment": [
+      "content"
+    ],
+    "CommunityComment": [
+      "content"
+    ],
+    "DirectMessage": [
+      "content",
+      "group_name"
+    ],
+    "ChannelMessage": [
+      "content"
+    ],
+    "Reel": [
+      "caption"
+    ],
+    "MusicReview": [
+      "title",
+      "description",
+      "ai_review"
+    ],
+    "Community": [
+      "name",
+      "description",
+      "welcome_message"
+    ],
+    "ServerChannel": [
+      "name",
+      "description",
+      "topic"
+    ],
+    "ServerRole": [
+      "name"
+    ],
+    "Commission": [
+      "title",
+      "description",
+      "requirements"
+    ],
+    "Challenge": [
+      "title",
+      "description"
+    ],
+    "DailyPrompt": [
+      "title",
+      "description",
+      "prompt"
+    ],
+    "ServerMember": [
+      "nickname"
+    ],
+    "SiteConfig": [
+      "announcement",
+      "welcome_message",
+      "daily_prompt",
+      "challenge_title",
+      "challenge_description"
+    ]
+  },
+  "rules": [
+    {
+      "category": "hate",
+      "pattern": "\\b(nigger|nigga|faggot|fag|kike|negro di merda)\\b",
+      "reason": "Hateful slurs aren't allowed."
+    },
+    {
+      "category": "harassment",
+      "pattern": "\\b(kys|kill yourself|go die|ammazzati|suicidati)\\b",
+      "reason": "Don't encourage someone to harm themselves."
+    },
+    {
+      "category": "harassment",
+      "pattern": "\\b(f+u+c+k+ (you|u)|vaffanculo|you (are|re) (so )?(stupid|ugly|worthless)|ur (ugly|stupid)|sei (proprio )?(stupido|inutile))\\b",
+      "reason": "Please rewrite this without attacking someone."
+    },
+    {
+      "category": "threat",
+      "pattern": "\\b(im gonna (find you and )?(kill|hurt|stab|rape) (you|u)|i (will|am going to|m gonna|m going to|gonna) (find you and )?(kill|hurt|stab|rape) (you|u)|i know where (you|u) live|ti ammazzo|ti uccido)\\b",
+      "reason": "Threats against people aren't allowed."
+    },
+    {
+      "category": "sexual",
+      "pattern": "\\b(send (me )?nudes|send (me )?naked (pics|pictures)|child porn|sexual (photos|pictures) of (kids|children)|mandami (foto )?nudi)\\b",
+      "reason": "Sexual solicitation and exploitation aren't allowed."
+    },
+    {
+      "category": "scam",
+      "pattern": "\\b(free (robux|nitro)|give me your password|send (me )?your password|seed phrase|recovery phrase)\\b",
+      "reason": "Scams and requests for account secrets aren't allowed."
+    }
+  ],
+  "reviewPattern": "\\b(idiot|bitch|pussy|shoot you|beat you|hate (all|every)|nudes|porn)\\b",
+  "benignPattern": "\\b(shoot you (a|an|the) (message|email|text)|beat you (at|in) (mario kart|chess|a game|the game|football)|fat cat|stupid (game|homework))\\b",
+  "supportPattern": "\\b(i (want to die|feel suicidal|need help)|voglio morire|ho bisogno di aiuto)\\b",
+  "cooldowns": {
+    "message": 1200,
+    "comment": 2500,
+    "post": 5000,
+    "profile": 1500
+  },
+  "maxLength": 12000
+}

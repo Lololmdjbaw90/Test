@@ -1,3 +1,4 @@
+import { guardTextWrite } from '../lib/contentGate.js';
 // Local, in-browser backend.
 // -----------------------------------------------------------------------------
 // Implements the same `base44` API as the Firebase backend against the
@@ -251,6 +252,7 @@ function makeEntity(name) {
     async create(data) {
       const me = requireAuthSync();
       if (!canCreate(me, name, data)) throw new Error("permission_denied");
+      await guardTextWrite(name, data, {user:me.id, create:true});
       const arr = loadCollection(name);
       const record = { id: uid(), created_date: nowISO(), updated_date: nowISO(), created_by: me.email, ...data };
       arr.push(record);
@@ -264,6 +266,7 @@ function makeEntity(name) {
       if (i === -1) return null;
       const me = requireAuthSync();
       if (!canUpdate(me, name, arr[i], data)) throw new Error("permission_denied");
+      await guardTextWrite(name, data, {user:me.id});
       arr[i] = { ...arr[i], ...data, updated_date: nowISO() };
       saveCollection(name, arr);
       publish(name, { type: "update", id, data: arr[i] });
@@ -366,6 +369,7 @@ const auth = {
     return withOwnerRole(publicUser({ ...u, ...(record || {}) }));
   },
   async register({ email, password, display_name, full_name }) {
+    await guardTextWrite('User', {display_name,full_name}, {user:'signup:'+String(email).toLowerCase()});
     await ensureDefaultAdminAccount();
     email = normalizeEmail(email);
     if (!email || !password || password.length < 6) throw new Error("Email and a 6+ character password are required.");
@@ -396,6 +400,7 @@ const auth = {
   },
   async updateMe(data) {
     const current = requireAuthSync();
+    await guardTextWrite('User', data, {user:current.id});
     const safeData = { ...data };
     ["role", "email", "id", "password_hash", "password_salt"].forEach((k) => delete safeData[k]);
     const updated = { ...current, ...safeData, updated_date: nowISO() };

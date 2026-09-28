@@ -1,3 +1,4 @@
+import { guardTextWrite } from '../lib/contentGate.js';
 // Firebase backend for Sugerly.
 // -----------------------------------------------------------------------------
 // Same `base44` API shape as the local backend, backed by:
@@ -256,6 +257,7 @@ export function createFirebaseClient() {
       },
       async create(data) {
         const me = await requireFirebaseUser();
+        await guardTextWrite(name, data, {user: me.uid, create:true});
         const payload = cleanObject({
           created_date: nowISO(),
           updated_date: nowISO(),
@@ -268,7 +270,8 @@ export function createFirebaseClient() {
         return { id: refDoc.id, ...withoutSentinels(payload) };
       },
       async update(id, data) {
-        await requireFirebaseUser();
+        const me = await requireFirebaseUser();
+        await guardTextWrite(name, data, {user: me.uid});
         const refDoc = doc(db, name, id);
         const payload = cleanObject({ ...data, updated_date: nowISO(), updated_at: serverTimestamp() });
         await updateDoc(refDoc, payload).catch((e) => { throw friendlyWriteError(e); });
@@ -352,6 +355,7 @@ export function createFirebaseClient() {
   const auth = {
     async me() { return currentUser(); },
     async register({ email, password, display_name, full_name }) {
+    await guardTextWrite('User', {display_name,full_name}, {user:'signup:'+String(email).toLowerCase()});
       email = normalizeEmail(email);
       if (!email || !password || password.length < 6) throw new Error("Email and a 6+ character password are required.");
       const cred = await createUserWithEmailAndPassword(authSdk, email, password).catch((e) => { throw friendlyAuthError(e); });
@@ -369,6 +373,7 @@ export function createFirebaseClient() {
     },
     async updateMe(data) {
       const me = await currentUser();
+      await guardTextWrite('User', data, {user:me.id});
       const safeData = cleanObject({ ...data });
       ["role", "email", "id"].forEach((k) => delete safeData[k]);
       const next = { ...safeData, updated_date: nowISO() };

@@ -305,6 +305,7 @@ enum FS {
 
     @discardableResult
     static func create(_ collection: String, _ data: Doc, id: String? = nil) async throws -> Doc {
+        try await ContentGate.shared.authorize(collection, data, create: true)
         var comps = URLComponents(string: "\(base)/\(collection)")!
         if let id { comps.queryItems = [URLQueryItem(name: "documentId", value: id)] }
         // Same bookkeeping fields the website adds to every new record.
@@ -321,6 +322,7 @@ enum FS {
 
     // Changes only the given fields (the rest of the document stays as it is).
     static func update(_ collection: String, _ id: String, _ data: Doc) async throws {
+        try await ContentGate.shared.authorize(collection, data, create: false)
         var comps = URLComponents(string: "\(base)/\(collection)/\(path(id))")!
         comps.queryItems = data.keys.sorted().map { URLQueryItem(name: "updateMask.fieldPaths", value: $0) } + [URLQueryItem(name: "currentDocument.exists", value: "true")]
         let fields: [String: Any] = data.mapValues { encode($0) }
@@ -349,6 +351,13 @@ enum FS {
     }
 
     static func commit(_ writes: [Write]) async throws {
+        for write in writes {
+            switch write {
+            case .create(let collection, _, let data): try await ContentGate.shared.authorize(collection, data, create: true)
+            case .change(let collection, _, _, let set): try await ContentGate.shared.authorize(collection, set, create: false)
+            case .delete: break
+            }
+        }
         let body: [[String: Any]] = writes.map { write in
             switch write {
             case .create(let collection, let id, let data):

@@ -73,11 +73,9 @@ extension View {
         background {
             ZStack {
                 Palette.bg
-                Circle().fill(Theme.light.opacity(0.32)).frame(width: 360).blur(radius: 95).offset(x: 150, y: -300)
-                Circle().fill(Theme.lavender.opacity(0.18)).frame(width: 320).blur(radius: 95).offset(x: -170, y: 260)
-                Circle().fill(Color(hex: 0xFFD6A5).opacity(0.14)).frame(width: 240).blur(radius: 80).offset(x: 140, y: 120)
+                RadialGradient(colors: [Theme.light.opacity(0.25), .clear], center: .topTrailing, startRadius: 10, endRadius: 400)
+                RadialGradient(colors: [Theme.lavender.opacity(0.15), .clear], center: .bottomLeading, startRadius: 10, endRadius: 400)
             }
-            .drawingGroup()
             .ignoresSafeArea()
         }
     }
@@ -156,30 +154,35 @@ struct MainShell: View {
             NavigationStack(path: $homePath) {
                 HomeView(path: $homePath, compose: { composer = $0 }).sugarRoutes($homePath)
             }
+            .transaction(value: homePath) { $0.disablesAnimations = true }
             .tag(AppTab.home)
             .toolbar(.hidden, for: .tabBar)
 
             NavigationStack(path: $communityPath) {
                 CommunityView(path: $communityPath, compose: { composer = .post }).sugarRoutes($communityPath)
             }
+            .transaction(value: communityPath) { $0.disablesAnimations = true }
             .tag(AppTab.community)
             .toolbar(.hidden, for: .tabBar)
 
             NavigationStack(path: $galleryPath) {
                 GalleryView(path: $galleryPath, isRoot: true).sugarRoutes($galleryPath)
             }
+            .transaction(value: galleryPath) { $0.disablesAnimations = true }
             .tag(AppTab.gallery)
             .toolbar(.hidden, for: .tabBar)
 
             NavigationStack(path: $reelsPath) {
                 ReelsView(visible: tab == .reels && reelsPath.isEmpty, path: $reelsPath, create: { composer = .reel }).sugarRoutes($reelsPath)
             }
+            .transaction(value: reelsPath) { $0.disablesAnimations = true }
             .tag(AppTab.reels)
             .toolbar(.hidden, for: .tabBar)
 
             NavigationStack(path: $chatPath) {
                 ChatListView(path: $chatPath).sugarRoutes($chatPath)
             }
+            .transaction(value: chatPath) { $0.disablesAnimations = true }
             .tag(AppTab.chat)
             .toolbar(.hidden, for: .tabBar)
 
@@ -188,6 +191,7 @@ struct MainShell: View {
                     .sugarTopBar($mePath)
                     .sugarRoutes($mePath)
             }
+            .transaction(value: mePath) { $0.disablesAnimations = true }
             .tag(AppTab.me)
             .toolbar(.hidden, for: .tabBar)
         }
@@ -229,6 +233,7 @@ struct MainShell: View {
     // Tabs, tab bar, pop-ups and the shared stores.
     private var core: some View {
         tabs
+            .environment(\.ambientPaused, model.showMenu || model.showNotifications || menuSheet != nil || creating || composer != nil || dailyShown)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !barHidden {
                 VStack(spacing: 8) {

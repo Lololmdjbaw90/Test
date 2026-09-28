@@ -794,7 +794,7 @@ struct SettingsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            LazyVStack(alignment: .leading, spacing: 18) {
                 HStack {
                     Text("Settings").font(.display(34)).foregroundStyle(Palette.text)
                     Spacer()

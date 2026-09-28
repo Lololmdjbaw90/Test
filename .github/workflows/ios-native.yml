@@ -8,6 +8,9 @@ on:
   push:
     paths:
       - "native/**"
+      - "src/lib/moderationLexicon.json"
+      - "scripts/*moderation*"
+      - "scripts/test-native-policy.mjs"
       - ".github/workflows/ios-native.yml"
 
 jobs:
@@ -16,6 +19,12 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+
+      - name: Test shared moderation policy
+        run: |
+          node scripts/sync-moderation.mjs --check
+          node scripts/test-moderation.mjs
+          node scripts/test-native-policy.mjs
 
       - name: Use the newest Xcode
         run: |

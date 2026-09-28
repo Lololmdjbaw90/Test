@@ -1,3 +1,4 @@
+import ScrollDepthBackground from "@/components/common/ScrollDepthBackground";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useNavigationType, useOutlet } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
@@ -282,7 +283,7 @@ function usePageMotion(location) {
 export default function Layout() {
   const location = useLocation();
   const outlet = useOutlet();
-  const pageMotion = usePageMotion(location);
+  const pageMotion = "";
   const { user, isAdmin, updateMe } = useAuth();
   const mainRef = useRef(null);
   const [collapsedPref, setCollapsed] = useState(() => { try { return localStorage.getItem("mimilocks:__sidebar") === "collapsed"; } catch { return false; } });
@@ -372,6 +373,7 @@ export default function Layout() {
         <AnnouncementBar config={siteConfig} />
         <VoiceDock />
         {!fullHeight && <TopBar onSearch={() => setPaletteOpen(true)} user={user} badges={badges} isDark={isDark} onToggleTheme={toggleTheme} />}
+        <ScrollDepthBackground scrollRef={mainRef} route={location.pathname} disabled={fullHeight} />
         <main ref={mainRef} id="main" className={`flex-1 min-h-0 relative ${fullHeight ? `overflow-hidden ${chatPage
             ? (hideMobileNav ? "pb-[var(--mini-h,0px)]" : "pb-[calc(72px+env(safe-area-inset-bottom)+var(--mini-h,0px))] desk:pb-[var(--mini-h,0px)]")
             : (hideMobileNav ? "" : "pb-[calc(72px+env(safe-area-inset-bottom))] desk:pb-0")}` : "overflow-y-auto overflow-x-hidden scroll"}`}>

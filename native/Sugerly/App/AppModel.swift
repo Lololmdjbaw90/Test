@@ -55,6 +55,8 @@ final class AppModel {
     }
 
     func signUp(name: String, email: String, password: String) async throws {
+        let verdict = ContentPolicy.analyze(name, field: "display_name")
+        guard verdict.reason.isEmpty && !verdict.review else { throw APIError(message: verdict.reason.isEmpty ? "Please choose a different display name." : verdict.reason) }
         try await auth.signUp(email: email, password: password, name: name)
         try await loadProfile(newName: name)
         phase = entryPhase
