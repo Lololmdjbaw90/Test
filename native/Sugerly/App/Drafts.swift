@@ -7,9 +7,34 @@ import UIKit
 // the picture / video and every edit (filters, crop, text, stickers,
 // drawing, sound, trim), so you can pick up where you left off.
 enum Drafts {
+    // Each account has its own drafts folder, so a new account never sees
+    // another account's unfinished posts.
+    nonisolated(unsafe) static var owner = "guest"
+
     private static var root: URL {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        return docs.appendingPathComponent("Drafts", isDirectory: true)
+        return docs.appendingPathComponent("Drafts", isDirectory: true).appendingPathComponent(owner, isDirectory: true)
+    }
+
+    // Drafts from before accounts had their own folders go to whoever is
+    // signed in when the app first updates (once).
+    static func adoptLegacy() {
+        let fm = FileManager.default
+        let base = fm.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Drafts", isDirectory: true)
+        for kind in ["posts", "reels"] {
+            let old = base.appendingPathComponent(kind, isDirectory: true)
+            guard fm.fileExists(atPath: old.path) else { continue }
+            let target = root.appendingPathComponent(kind, isDirectory: true)
+            try? fm.createDirectory(at: root, withIntermediateDirectories: true)
+            if fm.fileExists(atPath: target.path) {
+                for id in (try? fm.contentsOfDirectory(atPath: old.path)) ?? [] {
+                    try? fm.moveItem(at: old.appendingPathComponent(id), to: target.appendingPathComponent(id))
+                }
+                try? fm.removeItem(at: old)
+            } else {
+                try? fm.moveItem(at: old, to: target)
+            }
+        }
     }
 
     private static func folder(_ kind: String, _ id: String) -> URL {

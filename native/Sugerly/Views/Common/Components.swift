@@ -12,12 +12,18 @@ struct Avatar: View {
     var online = false
     var ring = false
     var nitro = false
+    // Idle / do-not-disturb badge instead of the plain green dot.
+    var presence: Presence? = nil
     @State private var image: UIImage?
+    // Which picture `image` belongs to, so a changed (or removed) picture never
+    // keeps showing the old one.
+    @State private var imageURL = ""
 
     var body: some View {
+        let own = imageURL == url ? image : nil
         ZStack(alignment: .bottomTrailing) {
             Group {
-                if let shown = image ?? (url.isEmpty ? nil : (AnimatedImages.looksAnimated(url) ? AnimatedImages.cached(url, maxPixel: pixel) : MemoryImages.get(url))) {
+                if let shown = own ?? (url.isEmpty ? nil : (AnimatedImages.looksAnimated(url) ? AnimatedImages.cached(url, maxPixel: pixel) : MemoryImages.get(url))) {
                     LoadedImage(image: shown)
                 } else {
                     initial
@@ -33,7 +39,10 @@ struct Avatar: View {
                 if ring || nitro { Circle().strokeBorder(Palette.surface, lineWidth: max(1.5, size * 0.035)).padding(max(2, size * 0.05) - max(1.5, size * 0.035)) }
             }
 
-            if online {
+            if let presence, presence != .offline {
+                PresenceDot(presence: presence, size: max(11, size * 0.3))
+                    .overlay(Circle().strokeBorder(Palette.surface, lineWidth: max(1.5, size * 0.04)))
+            } else if online {
                 Circle().fill(Palette.success)
                     .frame(width: max(9, size * 0.27), height: max(9, size * 0.27))
                     .overlay(Circle().strokeBorder(Palette.surface, lineWidth: max(2, size * 0.05)))
@@ -42,13 +51,15 @@ struct Avatar: View {
         }
         .accessibilityHidden(true)
         .task(id: url) {
+            if imageURL != url { image = nil; imageURL = url }
             guard !url.isEmpty else { return }
-            if AnimatedImages.looksAnimated(url) {
-                if let loaded = await AnimatedImages.load(url, maxPixel: pixel) { image = loaded }
+            let target = url
+            if AnimatedImages.looksAnimated(target) {
+                if let loaded = await AnimatedImages.load(target, maxPixel: pixel), target == url { image = loaded }
                 return
             }
-            guard image == nil || MemoryImages.get(url) == nil else { return }
-            if let loaded = await ImagePipeline.shared.load(url) { image = loaded }
+            guard image == nil || MemoryImages.get(target) == nil else { return }
+            if let loaded = await ImagePipeline.shared.load(target), target == url { image = loaded }
         }
     }
 

@@ -74,6 +74,11 @@ struct UserProfile: Identifiable, Hashable {
     var website: String
     var stickers: [String]
     var myGifs: [String]
+    // Privacy and presence (app extras, like Discord)
+    var acceptedChats: [String]   // people whose message requests you accepted
+    var ignored: [String]         // muted: no notifications, their chats and posts tucked away
+    var presence: String          // online, idle, dnd or invisible
+    var statusUntil: String       // when the custom status clears ("" = never)
 
     init(_ d: Doc) {
         id = d.str("id")
@@ -109,6 +114,10 @@ struct UserProfile: Identifiable, Hashable {
         website = d.str("website")
         stickers = d.strs("stickers")
         myGifs = d.strs("my_gifs")
+        acceptedChats = d.strs("accepted_chats").map { $0.lowercased() }
+        ignored = d.strs("ignored").map { $0.lowercased() }
+        presence = d.str("presence")
+        statusUntil = d.str("custom_status_until")
     }
 
     // MimiNitro: active and not expired (same rule as the website).
@@ -119,11 +128,65 @@ struct UserProfile: Identifiable, Hashable {
     }
 
     var isAdmin: Bool { role == "admin" || FirebaseConfig.siteOwners.contains(email) }
-    var isOnline: Bool {
-        guard let seen = Dates.parse(lastSeen) else { return false }
-        return Date().timeIntervalSince(seen) < 5 * 60
+
+    // What others see: invisible (or away from the app) shows as offline.
+    var presenceNow: Presence {
+        guard presence != "invisible", let seen = Dates.parse(lastSeen), Date().timeIntervalSince(seen) < 5 * 60 else { return .offline }
+        return Presence(rawValue: presence) ?? .online
+    }
+    var isOnline: Bool { presenceNow != .offline }
+
+    // The custom status, unless it has expired.
+    var activeStatus: String {
+        guard !status.isEmpty else { return "" }
+        if let until = Dates.parse(statusUntil), until < Date() { return "" }
+        return status
     }
     var level: Int { LevelInfo(xp: xp).level }
+}
+
+// Discord-style presence.
+enum Presence: String, CaseIterable, Identifiable {
+    case online, idle, dnd, invisible, offline
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .online: return "Online"
+        case .idle: return "Idle"
+        case .dnd: return "Do not disturb"
+        case .invisible: return "Invisible"
+        case .offline: return "Offline"
+        }
+    }
+
+    var hint: String {
+        switch self {
+        case .online: return "People can see you're around"
+        case .idle: return "Shows you're away for a bit"
+        case .dnd: return "No notifications, and people see you're busy"
+        case .invisible: return "Look offline, but use everything as normal"
+        case .offline: return ""
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .online: return "circle.fill"
+        case .idle: return "moon.fill"
+        case .dnd: return "minus.circle.fill"
+        case .invisible, .offline: return "circle.dashed"
+        }
+    }
+
+    var color: UInt32 {
+        switch self {
+        case .online: return 0x17A673
+        case .idle: return 0xF0A020
+        case .dnd: return 0xE5484D
+        case .invisible, .offline: return 0x9A8A93
+        }
+    }
 }
 
 struct Post: Identifiable, Hashable {

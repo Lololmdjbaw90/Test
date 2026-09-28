@@ -67,7 +67,8 @@ struct RootView: View {
             case .signedOut:
                 LoginView().transition(.opacity)
             case .signedIn:
-                MainShell().transition(.opacity)
+                // A fresh shell per account: no pages, chats or players carry over.
+                MainShell().id(model.me?.id ?? "").transition(.opacity)
             case .offline(let message):
                 VStack(spacing: 16) {
                     Image(systemName: "wifi.slash")

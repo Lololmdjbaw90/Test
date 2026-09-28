@@ -269,6 +269,7 @@ struct MainShell: View {
         switch sheet {
         case .settings: SettingsView()
         case .shop: NitroShopView()
+        case .status: StatusSheet().presentationCornerRadius(30)
         case .legal(let doc): LegalView(doc: doc)
         }
     }
@@ -349,6 +350,12 @@ struct MainShell: View {
         .task {
             calls.attach(voice: voice)
         }
+        // Signing out: stop the music and leave any call.
+        .onReceive(NotificationCenter.default.publisher(for: AppModel.signingOut)) { _ in
+            player.pause()
+            if calls.current != nil { Task { await calls.hangUp() } }
+            if voice.room != nil { Task { await voice.leave(silent: true) } }
+        }
         .task(id: model.me?.email) {
             if let me = model.me { await calls.watch(me: me) }
         }
@@ -391,6 +398,12 @@ struct MainShell: View {
                 await chats.refresh(me: me)
                 if tick % 6 == 0 { await notes.refresh(me: me) }
                 Alerts.shared.following = model.me?.following ?? []
+                let muted = Set((model.me?.ignored ?? []) + (model.me?.blocked ?? []))
+                Alerts.shared.muted = muted
+                chats.muted = muted
+                Alerts.shared.doNotDisturb = model.me?.presence == "dnd"
+                // Stay "online" for others while the app is open.
+                if tick % 8 == 0, let uid = model.me?.id { Task { try? await FS.update("User", uid, ["last_seen": FS.nowISO()]) } }
                 if tick % 2 == 0 { await Alerts.shared.check() }
                 Alerts.shared.setBadge(chats.unread + notes.unread)
                 WidgetBridge.update(model: model, unreadDMs: chats.unread, unreadAlerts: notes.unread)
@@ -602,7 +615,8 @@ struct TopBar: View {
             .buttonStyle(BouncyStyle())
             .accessibilityLabel("Notifications")
             Button { withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) { model.showMenu = true } } label: {
-                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 38, ring: true)
+                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 38, ring: true,
+                       presence: Presence(rawValue: model.me?.presence ?? "") ?? .online)
                     .shadow(color: Theme.pink.opacity(0.3), radius: 6, y: 3)
             }
             .buttonStyle(BouncyStyle())

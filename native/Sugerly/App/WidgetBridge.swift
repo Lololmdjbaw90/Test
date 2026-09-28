@@ -31,6 +31,13 @@ enum WidgetBridge {
 
     static func reload() { WidgetCenter.shared.reloadAllTimelines() }
 
+    // Signed out: the widgets go back to their empty look.
+    static func clear() {
+        last = nil
+        defaults?.removeObject(forKey: "snapshot")
+        reload()
+    }
+
     static func save(_ snapshot: Snapshot) {
         guard snapshot != last, let defaults, let data = try? JSONEncoder().encode(snapshot) else { return }
         last = snapshot

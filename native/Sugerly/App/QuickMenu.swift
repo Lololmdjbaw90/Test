@@ -1,11 +1,12 @@
 import SwiftUI
 
 enum MenuSheet: Identifiable {
-    case settings, shop, legal(LegalDoc)
+    case settings, shop, status, legal(LegalDoc)
     var id: String {
         switch self {
         case .settings: return "settings"
         case .shop: return "shop"
+        case .status: return "status"
         case .legal(let doc): return "legal-" + doc.rawValue
         }
     }
@@ -124,7 +125,7 @@ struct QuickMenu: View {
         return Button { go(.person(me.email)) } label: {
             VStack(spacing: 10) {
                 HStack(spacing: 12) {
-                    Avatar(url: me.picture, name: me.displayName, size: 50, ring: true)
+                    Avatar(url: me.picture, name: me.displayName, size: 50, ring: true, presence: Presence(rawValue: me.presence) ?? .online)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(me.displayName).font(.jakarta(17, .heavy)).foregroundStyle(Palette.text).lineLimit(1)
                         Text("Lv. \(info.level) · \(info.title)").font(.jakarta(12, .bold)).foregroundStyle(info.color)
@@ -132,6 +133,18 @@ struct QuickMenu: View {
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.right").font(.system(size: 12, weight: .heavy)).foregroundStyle(Palette.muted)
                 }
+                Button { open(.status) } label: {
+                    HStack(spacing: 8) {
+                        PresenceDot(presence: Presence(rawValue: me.presence) ?? .online, size: 14)
+                        Text(me.activeStatus.isEmpty ? (Presence(rawValue: me.presence) ?? .online).label + " · set a status" : me.activeStatus)
+                            .font(.jakarta(12, .semibold)).foregroundStyle(Palette.text2).lineLimit(1)
+                        Spacer(minLength: 0)
+                        Image(systemName: "pencil").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.muted)
+                    }
+                    .padding(.horizontal, 10).frame(height: 32)
+                    .background(Palette.surface, in: Capsule())
+                }
+                .buttonStyle(BouncyStyle(scale: 0.97))
                 HStack(spacing: 6) {
                     stat("\(me.coins)", "Coins", "circle.hexagongrid.fill", Color(hex: 0xF0A020))
                     stat("\(me.dailyStreak)", "Streak", "flame.fill", Color(hex: 0xF08A20))

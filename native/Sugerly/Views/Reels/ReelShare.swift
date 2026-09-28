@@ -95,13 +95,14 @@ struct ShareTarget: Identifiable, Hashable {
         let me = model.me?.email ?? ""
         var out: [ShareTarget] = []
         var seen = Set<String>()
-        for c in chats.conversations.prefix(20) {
+        // Only chats you can actually write in (no pending requests), and friends.
+        for c in chats.conversations.prefix(30) where DMRules.state(c, model: model, chats: chats) == .open {
             let t = c.isGroup
                 ? ShareTarget(id: c.id, name: c.title(model), picture: "", isGroup: true, members: c.members)
                 : ShareTarget(id: "dm:" + (c.others(me).first ?? me), name: c.title(model), picture: c.picture(model), isGroup: false, members: c.members.isEmpty ? [me] : c.members)
             if seen.insert(t.id).inserted { out.append(t) }
         }
-        for email in model.me?.following ?? [] where !seen.contains("dm:" + email) {
+        for email in model.me?.following ?? [] where !seen.contains("dm:" + email) && DMRules.friends(model, email) {
             guard let p = model.person(email) else { continue }
             seen.insert("dm:" + email)
             out.append(ShareTarget(id: "dm:" + email, name: p.displayName, picture: p.picture, isGroup: false, members: [me, email]))

@@ -16,6 +16,12 @@ final class ChatStore {
     private var processed = Set<String>() // message ids already counted
 
     var unread: Int { conversations.reduce(0) { $0 + $1.unread } }
+    // Conversations where someone else has written / where you have written
+    // (for message requests).
+    private(set) var heard = Set<String>()
+    private(set) var wrote = Set<String>()
+    // People you ignore: their messages don't count as unread.
+    var muted = Set<String>()
 
     // Closed DMs hide from the list until a new message comes in (like Discord).
     private(set) var closed: [String: String] = (UserDefaults.standard.dictionary(forKey: "sugerly.closedDMs") as? [String: String]) ?? [:]
@@ -60,7 +66,8 @@ final class ChatStore {
             processed.insert(m.id)
             var c = byId[m.conversationId] ?? Conversation(id: m.conversationId, members: m.members, isGroup: m.isGroup, groupName: m.groupName, last: nil, unread: 0)
             if (c.last?.created ?? "") <= m.created { c.last = m }
-            if m.authorEmail != me && !m.readBy.contains(me) { c.unread += 1 }
+            if m.kind != "call" { if m.authorEmail == me { wrote.insert(m.conversationId) } else { heard.insert(m.conversationId) } }
+            if m.authorEmail != me && !m.readBy.contains(me) && !muted.contains(m.authorEmail) { c.unread += 1 }
             if c.members.isEmpty { c.members = m.members }
             byId[m.conversationId] = c
             if m.created > newest { newest = m.created }
@@ -108,15 +115,32 @@ struct ChatListView: View {
     @State private var search = ""
     @State private var starting = false
     @State private var appeared = false
+    @State private var showRequests = false
+    @State private var showIgnored = false
     @AppStorage("sugerly.chat.section") private var section = 0
 
-    private var shown: [Conversation] {
+    private var visible: [Conversation] {
         let blocked = Set(model.me?.blocked ?? [])
         let me = model.me?.email ?? ""
         return store.conversations.filter { c in
             (c.isGroup || !c.others(me).contains(where: blocked.contains)) &&
                 (search.isEmpty ? !store.isClosed(c) : c.title(model).localizedCaseInsensitiveContains(search))
         }
+    }
+
+    private func isIgnored(_ c: Conversation) -> Bool {
+        guard !c.isGroup, let other = c.others(model.me?.email ?? "").first else { return false }
+        return model.me?.ignored.contains(other) ?? false
+    }
+
+    // Message requests from people you aren't friends with yet.
+    private var requests: [Conversation] {
+        visible.filter { !isIgnored($0) && DMRules.state($0, model: model, chats: store) == .requestReceived }
+    }
+    private var ignoredChats: [Conversation] { visible.filter(isIgnored) }
+    private var shown: [Conversation] {
+        let tucked = Set(requests.map(\.id)).union(ignoredChats.map(\.id))
+        return visible.filter { !tucked.contains($0.id) }
     }
 
     var body: some View {
@@ -203,6 +227,10 @@ struct ChatListView: View {
                     }
                 }
 
+                if search.isEmpty && !requests.isEmpty {
+                    tuckedSection(title: "Message requests", icon: "envelope.badge.fill", list: requests, open: $showRequests,
+                                  note: "People you aren't friends with yet. Open one to accept or decline.")
+                }
                 ForEach(Array(shown.enumerated()), id: \.element.id) { i, c in
                     Button { path.append(.chat(c)) } label: { ConversationRow(conversation: c) }
                         .buttonStyle(BouncyStyle(scale: 0.97))
@@ -217,12 +245,49 @@ struct ChatListView: View {
                         }
                         .transition(.asymmetric(insertion: .opacity, removal: .move(edge: .leading).combined(with: .opacity)))
                 }
+                if search.isEmpty && !ignoredChats.isEmpty {
+                    tuckedSection(title: "Ignored", icon: "bell.slash.fill", list: ignoredChats, open: $showIgnored,
+                                  note: "Chats with people you ignore. They can't ping you.")
+                }
                 let hidden = store.conversations.filter { store.isClosed($0) }.count
                 if search.isEmpty && hidden > 0 {
                     Label("\(hidden) closed chat\(hidden == 1 ? "" : "s") — search a name to open one again", systemImage: "eye.slash")
                         .font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
                         .frame(maxWidth: .infinity).padding(.top, 8)
                 }
+    }
+}
+
+extension ChatListView {
+    // A folded group of chats (requests, ignored) that opens with a tap.
+    func tuckedSection(title: String, icon: String, list: [Conversation], open: Binding<Bool>, note: String) -> some View {
+        VStack(spacing: 8) {
+            Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { open.wrappedValue.toggle() } } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: icon).font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                        .frame(width: 44, height: 44).background(Theme.gradient, in: Circle())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title).font(.jakarta(15, .heavy)).foregroundStyle(Palette.text)
+                        Text(note).font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(2)
+                    }
+                    Spacer(minLength: 0)
+                    Text("\(list.count)").font(.jakarta(12, .heavy)).foregroundStyle(.white)
+                        .frame(minWidth: 22, minHeight: 22).background(Theme.main, in: Capsule())
+                    Image(systemName: "chevron.down").font(.system(size: 12, weight: .heavy)).foregroundStyle(Palette.muted)
+                        .rotationEffect(.degrees(open.wrappedValue ? 180 : 0))
+                }
+                .sugarCard(radius: 22, padding: 10)
+            }
+            .buttonStyle(BouncyStyle(scale: 0.98))
+            if open.wrappedValue {
+                ForEach(list) { c in
+                    Button { path.append(.chat(c)) } label: { ConversationRow(conversation: c) }
+                        .buttonStyle(BouncyStyle(scale: 0.97))
+                        .padding(.leading, 14)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+        }
     }
 }
 

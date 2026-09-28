@@ -14,6 +14,11 @@ struct NotificationsPopup: View {
     private let filters: [(String, String, String)] = [("all", "All", "sparkles"), ("like", "Likes", "heart.fill"), ("comment", "Comments", "bubble.left.fill"), ("follow", "Follows", "person.fill.badge.plus"), ("mention", "Mentions", "at")]
 
     private var shown: [AppNotification] {
+        let hidden = Set((model.me?.ignored ?? []) + (model.me?.blocked ?? []))
+        return byType.filter { !hidden.contains($0.fromEmail) }
+    }
+
+    private var byType: [AppNotification] {
         switch filter {
         case "like": return notes.items.filter { $0.type == "like" }
         case "comment": return notes.items.filter { $0.type == "comment" || $0.type == "reply" }

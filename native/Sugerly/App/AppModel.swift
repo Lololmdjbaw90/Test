@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SwiftUI
+import UIKit
 
 // The signed-in person and everything shared across tabs.
 @MainActor
@@ -62,6 +63,8 @@ final class AppModel {
     // Loads User/<uid>, creating it the same way the website does on first login.
     func loadProfile(newName: String? = nil) async throws {
         guard let uid = auth.uid else { throw APIError(message: "Please log in again.", status: 401) }
+        Drafts.owner = uid
+        Drafts.adoptLegacy()
         let email = (auth.email ?? "").lowercased()
         if let doc = try await FS.get("User", uid) {
             me = UserProfile(doc)
@@ -130,20 +133,53 @@ final class AppModel {
             "nitro_active": u.nitroActive, "nitro_until": u.nitroUntil, "name_style": u.nameStyle, "banner_color": u.bannerColor,
             "interests": u.interests, "pronouns": u.pronouns, "custom_status": u.status, "profile_color": u.profileColor,
             "profile_effect": u.profileEffect, "website": u.website, "stickers": u.stickers, "my_gifs": u.myGifs,
+            "accepted_chats": u.acceptedChats, "ignored": u.ignored, "presence": u.presence, "custom_status_until": u.statusUntil,
         ]
     }
 
     func signOut() {
         auth.signOut()
+        resetForNextAccount()
+        phase = .signedOut
+    }
+
+    // Everything tied to the account that just left: close every page and
+    // pop-up, and forget what this phone remembered for them, so the next
+    // account starts fresh.
+    static let signingOut = Notification.Name("sugerly.signingOut")
+
+    private func resetForNextAccount() {
+        NotificationCenter.default.post(name: Self.signingOut, object: nil)
         me = nil
         people = [:]
-        phase = .signedOut
+        toast = nil
+        showNotifications = false
+        showMenu = false
+        tabRequest = nil
+        soundRequest = nil
+        Drafts.owner = "guest"
+        let defaults = UserDefaults.standard
+        for key in ["sugerly.closedDMs", "sugerly.storiesSeen", "sugerly.recentSearches", "sugerly.reelbrain.v1",
+                    "sugerly.name", "sugerly.chat.section", "sugerly.dismissedAnnouncement"] {
+            defaults.removeObject(forKey: key)
+        }
+        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix("sugerly.alerts.since.") {
+            defaults.removeObject(forKey: key)
+        }
+        WidgetBridge.clear()
+        Alerts.shared.setBadge(0)
+        // Sheets and full-screen pages are shown by UIKit; close them all.
+        for scene in UIApplication.shared.connectedScenes {
+            for window in (scene as? UIWindowScene)?.windows ?? [] {
+                window.rootViewController?.dismiss(animated: false)
+            }
+        }
     }
 
     func deleteAccount() async throws {
         if let me { try? await FS.delete("User", me.id) }
         try await auth.deleteAccount()
-        self.me = nil
+        resetForNextAccount()
         phase = .signedOut
     }
 }

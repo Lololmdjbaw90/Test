@@ -130,7 +130,7 @@ struct CommunityView: View {
 
     private var visible: [Post] {
         guard let me = model.me else { return [] }
-        let blocked = Set(me.blocked)
+        let blocked = Set(me.blocked + me.ignored)
         var all = store.posts.filter { !blocked.contains($0.authorEmail) }
         if let tag { all = all.filter { Hashtags.find($0.title + " " + $0.text).contains(tag) } }
         let following = Set(me.following)

@@ -32,6 +32,10 @@ struct PersonView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button { reporting = ReportSheet.Target(id: person.email, type: "user", ownerEmail: person.email, preview: person.displayName, link: "/Profile?email=\(person.email)") } label: { Label("Report", systemImage: "flag") }
+                        let ignoring = model.me?.ignored.contains(person.email) ?? false
+                        Button { Task { await Privacy.setIgnored(person.email, !ignoring, model: model) } } label: {
+                            Label(ignoring ? "Stop ignoring" : "Ignore", systemImage: ignoring ? "bell.fill" : "bell.slash.fill")
+                        }
                         Button(role: .destructive) { confirmBlock = true } label: { Label(isBlocked ? "Unblock" : "Block", systemImage: "hand.raised") }
                     } label: { Image(systemName: "ellipsis") }
                 }
@@ -79,6 +83,7 @@ struct ProfileContent: View {
     @State private var settings = false
     @State private var shop = false
     @State private var appeared = false
+    @State private var statusSheet = false
 
     private var following: Bool { model.me?.following.contains(person.email) ?? false }
     private var followers: Int { model.people.values.filter { $0.following.contains(person.email) }.count }
@@ -118,6 +123,7 @@ struct ProfileContent: View {
         .sheet(isPresented: $editing) { EditProfileView() }
         .sheet(isPresented: $settings) { SettingsView() }
         .sheet(isPresented: $shop) { NitroShopView() }
+        .sheet(isPresented: $statusSheet) { StatusSheet().presentationCornerRadius(30) }
     }
 
     private var banner: some View {
@@ -137,7 +143,8 @@ struct ProfileContent: View {
             .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
             .padding(.horizontal, 12)
 
-            Avatar(url: person.picture, name: person.displayName, size: 104, online: person.isOnline && !isMe, ring: true, nitro: person.isNitro)
+            Avatar(url: person.picture, name: person.displayName, size: 104, ring: true, nitro: person.isNitro,
+                   presence: isMe ? (Presence(rawValue: person.presence) ?? .online) : person.presenceNow)
                 .padding(4)
                 .background(Palette.bg, in: Circle())
                 .shadow(color: (accent ?? Theme.pink).opacity(0.3), radius: 16, y: 8)
@@ -166,13 +173,7 @@ struct ProfileContent: View {
                 NameText(name: person.displayName, style: person.nameStyle, size: 34, display: true, nitro: person.isNitro)
                 if !person.pronouns.isEmpty { Text(person.pronouns).font(.jakarta(14, .semibold)).foregroundStyle(Palette.muted) }
             }
-            if !person.status.isEmpty {
-                Label(person.status, systemImage: "bubble.left.fill")
-                    .font(.jakarta(13, .semibold)).foregroundStyle(Palette.text2)
-                    .padding(.horizontal, 12).padding(.vertical, 7)
-                    .background(Palette.surface, in: Capsule())
-                    .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
-            }
+            statusBubble
             FlowLayout(spacing: 8) {
                 if person.isNitro { NitroBadge() }
                 if person.isAdmin {
@@ -209,6 +210,28 @@ struct ProfileContent: View {
                         .font(.jakarta(13, .bold)).foregroundStyle(accent ?? Theme.main).lineLimit(1)
                 }
             }
+        }
+    }
+
+    // Presence + custom status, like Discord. Tap your own to change it.
+    @ViewBuilder private var statusBubble: some View {
+        let presence: Presence = isMe ? (Presence(rawValue: person.presence) ?? .online) : person.presenceNow
+        let text = person.activeStatus
+        if isMe || !text.isEmpty || presence != .offline {
+            Button { if isMe { statusSheet = true } } label: {
+                HStack(spacing: 8) {
+                    PresenceDot(presence: presence == .offline && isMe ? .online : presence, size: 14)
+                    Text(text.isEmpty ? (isMe ? "Set a status" : presence.label) : text)
+                        .font(.jakarta(13, .semibold)).foregroundStyle(text.isEmpty && isMe ? Palette.muted : Palette.text2)
+                        .lineLimit(2).multilineTextAlignment(.leading)
+                    if isMe { Image(systemName: "pencil").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.muted) }
+                }
+                .padding(.horizontal, 12).padding(.vertical, 7)
+                .background(Palette.surface, in: Capsule())
+                .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
+            }
+            .buttonStyle(BouncyStyle(scale: 0.97))
+            .allowsHitTesting(isMe)
         }
     }
 
@@ -741,6 +764,8 @@ struct SettingsView: View {
     @State private var error: String?
     @AppStorage("sugerly.haptics") private var haptics = true
     @AppStorage(TapSound.settingKey) private var clickSounds = true
+    @State private var statusSheet = false
+    @State private var peopleList: PeopleListSheet.Kind?
 
     var body: some View {
         ScrollView {
@@ -813,6 +838,17 @@ struct SettingsView: View {
                     toggleRow("Click sounds", "A soft pop when you tap buttons (quiet when your phone is on silent)", isOn: $clickSounds)
                 }
 
+                section("Privacy & status", icon: "lock.shield.fill") {
+                    row(statusLine, icon: "bubble.left.fill") { statusSheet = true }
+                    toggleRow("Show when I'm online", "Off makes you look offline (invisible), like Discord", isOn: Binding(
+                        get: { model.me?.presence != "invisible" },
+                        set: { on in Task { await Privacy.setPresence(on ? .online : .invisible, model: model) } }))
+                    row("Blocked people (\(model.me?.blocked.count ?? 0))", icon: "hand.raised.fill") { peopleList = .blocked }
+                    row("Ignored people (\(model.me?.ignored.count ?? 0))", icon: "bell.slash.fill") { peopleList = .ignored }
+                    Text("Only friends (people who follow you back) can call you or send voice messages. Anyone else's first message arrives as a request.")
+                        .font(.jakarta(12)).foregroundStyle(Palette.muted)
+                }
+
                 section("Help & legal", icon: "questionmark.circle.fill") {
                     ForEach(LegalDoc.allCases) { doc in
                         row(doc.title, icon: doc == .terms ? "doc.text.fill" : doc == .privacy ? "lock.fill" : "heart.text.square.fill") { legal = doc }
@@ -832,6 +868,8 @@ struct SettingsView: View {
             .padding(.bottom, 30)
         }
         .sugarBackground()
+        .sheet(isPresented: $statusSheet) { StatusSheet().presentationCornerRadius(30) }
+        .sheet(item: $peopleList) { kind in PeopleListSheet(kind: kind).presentationCornerRadius(30) }
         .sheet(item: $legal) { doc in LegalView(doc: doc) }
         .confirmationDialog("Delete your account?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete account", role: .destructive) { Task { await deleteAccount() } }
@@ -886,6 +924,13 @@ struct SettingsView: View {
             .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(BouncyStyle(scale: 0.97))
+    }
+
+    private var statusLine: String {
+        guard let me = model.me else { return "Status" }
+        let presence = Presence(rawValue: me.presence) ?? .online
+        let text = me.activeStatus
+        return text.isEmpty ? "Status: \(presence.label)" : "\(presence.label) · \(text)"
     }
 
     private func toggleRow(_ title: String, _ sub: String, isOn: Binding<Bool>) -> some View {

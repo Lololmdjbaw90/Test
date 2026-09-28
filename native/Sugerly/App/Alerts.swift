@@ -48,6 +48,9 @@ final class Alerts: NSObject, UNUserNotificationCenterDelegate {
     @ObservationIgnored var openConversation: String?
     @ObservationIgnored var openChannel: String?
     @ObservationIgnored var following: [String] = []
+    // People you ignore or block never ping you; Do not disturb silences everything.
+    @ObservationIgnored var muted = Set<String>()
+    @ObservationIgnored var doNotDisturb = false
 
     @ObservationIgnored private var serverIds: [String] = []
     @ObservationIgnored private var serverNames: [String: String] = [:]
@@ -123,7 +126,7 @@ final class Alerts: NSObject, UNUserNotificationCenterDelegate {
         guard let docs = try? await FS.query("DirectMessage", [.contains("member_emails", me), .after("created_date", from)], orderBy: "created_date", limit: 30) else { return }
         let messages = docs.map(Message.init).sorted { $0.created < $1.created }
         if let newest = messages.last?.created { mark(.dms, newest) }
-        let fresh = messages.filter { $0.authorEmail != me && !$0.readBy.contains(me) && $0.conversationId != openConversation }
+        let fresh = messages.filter { $0.authorEmail != me && !$0.readBy.contains(me) && $0.conversationId != openConversation && !muted.contains($0.authorEmail) }
         for m in fresh.suffix(5) {
             let title = m.isGroup && !m.groupName.isEmpty ? "\(m.authorName) · \(m.groupName)" : m.authorName
             post(id: "dm-\(m.id)", title: title, body: m.text.isEmpty ? Media.label(m.imageURL) : m.text, thread: m.conversationId, kind: "dm", target: m.conversationId)
@@ -145,7 +148,7 @@ final class Alerts: NSObject, UNUserNotificationCenterDelegate {
         let mine = Set(serverIds)
         let messages = docs.map(ChannelMessage.init).sorted { $0.created < $1.created }
         if let newest = messages.last?.created { mark(.servers, newest) }
-        let fresh = messages.filter { mine.contains($0.serverId) && $0.authorEmail != me && $0.channelId != openChannel && $0.kind != "join" }
+        let fresh = messages.filter { mine.contains($0.serverId) && $0.authorEmail != me && $0.channelId != openChannel && $0.kind != "join" && !muted.contains($0.authorEmail) }
         let name = (UserDefaults.standard.string(forKey: "sugerly.name") ?? "").lowercased().replacingOccurrences(of: " ", with: "")
         // Mentions first, then the latest few.
         let mentions = fresh.filter { !name.isEmpty && $0.text.lowercased().replacingOccurrences(of: " ", with: "").contains("@\(name)") }
@@ -170,7 +173,7 @@ final class Alerts: NSObject, UNUserNotificationCenterDelegate {
         guard let docs = try? await FS.query("Notification", [.equals("to_email", me), .after("created_date", from)], orderBy: "created_date", limit: 20) else { return }
         let items = docs.map(AppNotification.init).sorted { $0.created < $1.created }
         if let newest = items.last?.created { mark(.social, newest) }
-        for n in items.filter({ !$0.read }).suffix(5) {
+        for n in items.filter({ !$0.read && !muted.contains($0.fromEmail) }).suffix(5) {
             // Server mentions already arrive as server messages.
             if n.type == "mention" && Kind.servers.enabled { continue }
             let kind = n.link.contains("Reels") ? "reels" : "social"
@@ -194,6 +197,7 @@ final class Alerts: NSObject, UNUserNotificationCenterDelegate {
     }
 
     private func post(id: String, title: String, subtitle: String = "", body: String, thread: String, kind: String, target: String) {
+        guard !doNotDisturb else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         if !subtitle.isEmpty { content.subtitle = subtitle }

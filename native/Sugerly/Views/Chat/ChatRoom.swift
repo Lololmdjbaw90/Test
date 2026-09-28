@@ -31,6 +31,14 @@ struct ChatView: View {
     private var me: String { model.me?.email ?? "" }
     private var members: [String] { conversation.members.isEmpty ? [me] : conversation.members }
     private var other: UserProfile? { conversation.others(me).first.flatMap { model.person($0) } }
+    private var otherEmail: String { conversation.others(me).first ?? "" }
+    private var dmState: DMRules.State { DMRules.state(conversation, model: model, chats: chats, messages: messages) }
+    private var canCall: Bool { DMRules.canCall(conversation, model: model) }
+
+    private func startCall() {
+        guard canCall else { model.showToast(DMRules.friendsOnly, icon: "person.2.fill", error: true); return }
+        Task { await calls.start(conversation, model: model) }
+    }
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -58,20 +66,30 @@ struct ChatView: View {
             }
         }
         .background(ChatWallpaper().ignoresSafeArea())
-        .safeAreaInset(edge: .bottom, spacing: 0) { composer }
+        .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) { header }
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button {
-                    if voice.room?.isCall == true { calls.showScreen = true } else { Task { await calls.start(conversation, model: model) } }
-                } label: { Image(systemName: "phone.fill") }
+                    if voice.room?.isCall == true { calls.showScreen = true } else { startCall() }
+                } label: { Image(systemName: "phone.fill").opacity(canCall ? 1 : 0.35) }
                 .accessibilityLabel(conversation.isGroup ? "Group call" : "Voice call")
                 Menu {
                     Button(role: .destructive) {
                         chats.close(conversation.id)
                         dismissChat()
                     } label: { Label(conversation.isGroup ? "Hide chat" : "Close DM", systemImage: "xmark.circle") }
+                    if !conversation.isGroup && !otherEmail.isEmpty {
+                        let ignoring = model.me?.ignored.contains(otherEmail) ?? false
+                        Button { Task { await Privacy.setIgnored(otherEmail, !ignoring, model: model) } } label: {
+                            Label(ignoring ? "Stop ignoring" : "Ignore", systemImage: ignoring ? "bell.fill" : "bell.slash.fill")
+                        }
+                        let blocked = model.me?.blocked.contains(otherEmail) ?? false
+                        Button(role: .destructive) { Task { await Privacy.setBlocked(otherEmail, !blocked, model: model) } } label: {
+                            Label(blocked ? "Unblock" : "Block", systemImage: "hand.raised.fill")
+                        }
+                    }
                 } label: { Image(systemName: "ellipsis.circle") }
             }
         }
@@ -102,7 +120,7 @@ struct ChatView: View {
     private var header: some View {
         NavigationLink(value: conversation.isGroup ? nil : conversation.others(me).first.map { Route.person($0) }) {
             HStack(spacing: 10) {
-                Avatar(url: conversation.picture(model), name: conversation.title(model), size: 36, online: other?.isOnline ?? false, nitro: other?.isNitro ?? false)
+                Avatar(url: conversation.picture(model), name: conversation.title(model), size: 36, nitro: other?.isNitro ?? false, presence: other?.presenceNow)
                 VStack(alignment: .leading, spacing: 0) {
                     Text(conversation.title(model)).font(.jakarta(15, .bold)).foregroundStyle(Palette.text).lineLimit(1)
                     Text(status).font(.jakarta(11, .semibold)).foregroundStyle(other?.isOnline == true ? Palette.success : Palette.muted).lineLimit(1)
@@ -118,7 +136,9 @@ struct ChatView: View {
             return (["You"] + names).joined(separator: ", ")
         }
         guard let other else { return "tap for profile" }
-        if other.isOnline { return "online" }
+        if !other.activeStatus.isEmpty && other.isOnline { return other.activeStatus }
+        if other.isOnline { return other.presenceNow == .online ? "online" : other.presenceNow.label.lowercased() }
+        if other.presence == "invisible" { return "offline" }
         guard let seen = Dates.parse(other.lastSeen) else { return "tap for profile" }
         let time = seen.formatted(date: .omitted, time: .shortened)
         if Calendar.current.isDateInToday(seen) { return "last seen today at \(time)" }
@@ -147,7 +167,7 @@ struct ChatView: View {
     @ViewBuilder
     private func row(_ message: Message, previous: Message?) -> some View {
         if message.kind == "call" {
-            CallMessageRow(message: message, me: me) { Task { await calls.start(conversation, model: model) } }
+            CallMessageRow(message: message, me: me) { startCall() }
                 .padding(.vertical, 6)
         } else {
             let mine = message.authorEmail == me
@@ -186,8 +206,76 @@ struct ChatView: View {
 
     // MARK: composer
 
+    // Composer, or a request / blocked card when you can't chat (yet).
+    @ViewBuilder
+    private var bottomBar: some View {
+        switch dmState {
+        case .open, .new:
+            composer
+        case .requestSent:
+            gateCard(icon: "paperplane.fill", title: "Message request sent", text: "You can keep chatting once \(conversation.title(model)) accepts.") { EmptyView() }
+        case .requestReceived:
+            gateCard(icon: "envelope.open.fill", title: "\(conversation.title(model)) wants to message you", text: "Accept to chat. They won't know if you decline.") {
+                HStack(spacing: 8) {
+                    Button { Task { await Privacy.accept(otherEmail, model: model) } } label: { Text("Accept").frame(maxWidth: .infinity) }
+                        .buttonStyle(GradientButtonStyle(height: 42))
+                    Button {
+                        chats.close(conversation.id)
+                        dismissChat()
+                    } label: { Text("Decline").frame(maxWidth: .infinity) }
+                        .buttonStyle(OutlineButtonStyle(height: 42, fullWidth: true))
+                    Button { Task { await Privacy.setBlocked(otherEmail, true, model: model); dismissChat() } } label: {
+                        Image(systemName: "hand.raised.fill").font(.system(size: 15, weight: .bold)).foregroundStyle(Palette.danger)
+                            .frame(width: 42, height: 42).background(Palette.danger.opacity(0.1), in: Circle())
+                    }
+                    .buttonStyle(BouncyStyle())
+                    .accessibilityLabel("Block")
+                }
+            }
+        case .blocked:
+            gateCard(icon: "hand.raised.fill", title: "You blocked \(conversation.title(model))", text: "Unblock them to chat again.") {
+                Button { Task { await Privacy.setBlocked(otherEmail, false, model: model) } } label: { Text("Unblock").frame(maxWidth: .infinity) }
+                    .buttonStyle(OutlineButtonStyle(height: 42, fullWidth: true))
+            }
+        case .blockedMe:
+            gateCard(icon: "lock.fill", title: "You can't message \(conversation.title(model))", text: "They aren't taking messages from you.") { EmptyView() }
+        }
+    }
+
+    private func gateCard<Actions: View>(icon: String, title: String, text: String, @ViewBuilder actions: () -> Actions) -> some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 12) {
+                Image(systemName: icon).font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                    .frame(width: 40, height: 40).background(Theme.gradient, in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.jakarta(15, .heavy)).foregroundStyle(Palette.text).lineLimit(2)
+                    Text(text).font(.jakarta(12, .medium)).foregroundStyle(Palette.muted).lineLimit(2)
+                }
+                Spacer(minLength: 0)
+            }
+            actions()
+        }
+        .padding(14)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background {
+            Palette.bg.opacity(0.96)
+                .overlay(alignment: .top) { Rectangle().fill(Palette.border).frame(height: 0.5) }
+                .ignoresSafeArea(edges: .bottom)
+        }
+    }
+
     private var composer: some View {
         VStack(spacing: 6) {
+            if dmState == .new {
+                Label("Your first message is a request. \(conversation.title(model)) can accept it to chat.", systemImage: "envelope.fill")
+                    .font(.jakarta(12, .semibold)).foregroundStyle(Palette.text2)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.soft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
             if let failed { Text(failed).font(.jakarta(12, .semibold)).foregroundStyle(Palette.danger) }
             if let replyTo { replyBar(replyTo).transition(.move(edge: .bottom).combined(with: .opacity)) }
             if recorder.recording {
@@ -229,7 +317,9 @@ struct ChatView: View {
 
                     let hasText = !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     Button {
-                        if hasText { Task { await send() } } else { Task { await startRecording() } }
+                        if hasText { Task { await send() } }
+                        else if canCall { Task { await startRecording() } }
+                        else { model.showToast(DMRules.friendsOnly, icon: "person.2.fill", error: true) }
                     } label: {
                         Image(systemName: hasText ? "paperplane.fill" : "mic.fill")
                             .font(.system(size: 18, weight: .bold)).foregroundStyle(.white)

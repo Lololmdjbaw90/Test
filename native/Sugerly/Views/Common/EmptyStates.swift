@@ -2,8 +2,7 @@ import SwiftUI
 
 // Empty states with a little character instead of a stock icon: Mimi, the
 // Sugerly bunny (hand-drawn art in every accent colour, so she matches
-// yours), on a sketchbook card with a dashed edge. She hops, sways or droops
-// with the mood.
+// yours), on a sketchbook card with a dashed edge.
 
 struct MimiBuddy: View {
     enum Mood { case happy, sleepy, sad }
@@ -11,6 +10,7 @@ struct MimiBuddy: View {
     var mood: Mood = .happy
     var size: CGFloat = 110
     var animated = true
+    @State private var shown = false
 
     // One drawing per accent colour.
     static var imageName: String {
@@ -23,6 +23,7 @@ struct MimiBuddy: View {
         }
     }
 
+    // She stands still and just fades in.
     var body: some View {
         let s = size / 110
         ZStack {
@@ -30,50 +31,17 @@ struct MimiBuddy: View {
             Ellipse().fill(Theme.main.opacity(0.14))
                 .frame(width: 52 * s, height: 8 * s)
                 .offset(y: size * 0.5 - 3 * s)
-            bunny(s)
+            Image(Self.imageName)
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .frame(height: size)
         }
         .frame(width: size * 0.8, height: size)
+        .opacity(shown || !animated ? 1 : 0)
+        .onAppear { withAnimation(.easeOut(duration: 0.45)) { shown = true } }
+        .onDisappear { shown = false }
         .accessibilityHidden(true)
-    }
-
-    private func bunny(_ s: CGFloat) -> some View {
-        Image(Self.imageName)
-            .resizable()
-            .interpolation(.high)
-            .scaledToFit()
-            .frame(height: size)
-            .saturation(mood == .sad ? 0.8 : 1)
-            // happy: a little hop and squish; sleepy: a slow sway; sad: a droop
-            .phaseAnimator(animated ? [0, 1, 2] : [0]) { v, k in
-                v.scaleEffect(x: stretch(k), y: 2 - stretch(k), anchor: .bottom)
-                    .offset(y: lift(k) * s)
-                    .rotationEffect(.degrees(rotation(k)), anchor: .bottom)
-            } animation: { k in
-                switch mood {
-                case .happy: return k == 1 ? .easeOut(duration: 0.28) : k == 2 ? .easeIn(duration: 0.22) : .spring(response: 0.4, dampingFraction: 0.5).delay(1.6)
-                case .sleepy: return .easeInOut(duration: 1.8)
-                case .sad: return .easeInOut(duration: 2.2)
-                }
-            }
-    }
-
-    private func stretch(_ k: Int) -> CGFloat { mood == .happy && k == 2 ? 1.05 : 1 }
-
-    private func lift(_ k: Int) -> CGFloat {
-        guard k == 1 else { return 0 }
-        switch mood {
-        case .happy: return -7
-        case .sleepy: return -2
-        case .sad: return 0
-        }
-    }
-
-    private func rotation(_ k: Int) -> Double {
-        switch mood {
-        case .happy: return k == 1 ? -4 : 0
-        case .sleepy: return k == 1 ? -3 : k == 2 ? 3 : 0
-        case .sad: return k == 1 ? 5 : 3
-        }
     }
 }
 

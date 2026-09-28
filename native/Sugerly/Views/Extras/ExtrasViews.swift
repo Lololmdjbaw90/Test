@@ -706,6 +706,13 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-1.8", icon: "lock.shield.fill", title: "Status, requests & privacy", date: "2026-09-28T13:00:00Z", items: [
+            "Set your status like Discord: Online, Idle, Do not disturb or Invisible, plus a custom status that can clear itself.",
+            "Messages from people you aren't friends with arrive as requests you can accept, decline or block.",
+            "Calls and voice messages are for friends (people who follow each other).",
+            "Ignore people to stop hearing from them, or block them. Manage both in Settings → Privacy & status.",
+            "Logging out closes everything, and a new account starts completely fresh.",
+        ]),
         AppRelease(id: "ios-1.7", icon: "person.2.wave.2.fill", title: "More social & smoother", date: "2026-09-28T11:00:00Z", items: [
             "Home has stories, today's art prompt, Happening now, people you might like and trending tags.",
             "Community has a weekly challenge, top creators this week and you can send posts to chats.",
