@@ -155,6 +155,7 @@ struct HomeView: View {
     @State private var reels: [Reel] = []
     @State private var loaded = false
     @State private var appeared = false
+    @State private var tagSearch: String?
     @AppStorage("sugerly.dismissedAnnouncement") private var dismissedAnnouncement = ""
 
     private var greeting: String {
@@ -166,15 +167,21 @@ struct HomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
                 announcementBanner
-                hero.stagger(appeared, 0)
-                quickLinks.stagger(appeared, 1)
-                featured.stagger(appeared, 2)
-                if !reels.isEmpty { reelStrip.stagger(appeared, 3) }
-                community.stagger(appeared, 4)
-                freshTracks.stagger(appeared, 5)
-                artists.stagger(appeared, 6)
-                friendsRow.stagger(appeared, 7)
-                yourServers.stagger(appeared, 8)
+                StoriesRow(reels: reels, path: $path, compose: compose).stagger(appeared, 0)
+                hero.stagger(appeared, 1)
+                HomeComposerBar(compose: compose).stagger(appeared, 2)
+                quickLinks.stagger(appeared, 3)
+                ArtPromptCard(compose: compose).stagger(appeared, 4)
+                HappeningNow(posts: posts.posts, artworks: artworks, reels: reels, tracks: tracks, path: $path).stagger(appeared, 5)
+                featured.stagger(appeared, 6)
+                if !reels.isEmpty { reelStrip.stagger(appeared, 7) }
+                SuggestedPeople(path: $path).stagger(appeared, 8)
+                community.stagger(appeared, 9)
+                TrendingTags(posts: posts.posts, reels: reels) { tagSearch = $0 }.stagger(appeared, 10)
+                freshTracks.stagger(appeared, 10)
+                artists.stagger(appeared, 10)
+                friendsRow.stagger(appeared, 10)
+                yourServers.stagger(appeared, 10)
                 Label("Last activity \(Dates.ago(posts.posts.first?.created ?? ""))", systemImage: "sparkles")
                     .font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
                     .frame(maxWidth: .infinity)
@@ -190,18 +197,28 @@ struct HomeView: View {
         .refreshable { await load() }
         .task { await load() }
         .onAppear { withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) { appeared = true } }
+        .sheet(item: Binding(get: { tagSearch.map { TagQuery(id: $0) } }, set: { tagSearch = $0?.id })) { tag in
+            SearchView(go: { route in
+                tagSearch = nil
+                path.append(route)
+            }, initial: tag.id)
+            .presentationCornerRadius(34)
+        }
     }
+
+    struct TagQuery: Identifiable { var id: String }
 
     private func load() async {
         async let art = try? FS.query("Artwork", orderBy: "created_date", limit: 40)
         async let music = try? FS.query("MusicReview", orderBy: "created_date", limit: 8)
         async let serverDocs = try? FS.query("Community", orderBy: "created_date", limit: 60)
-        async let reelDocs = try? FS.query("Reel", orderBy: "created_date", limit: 12)
+        async let reelDocs = try? FS.query("Reel", orderBy: "created_date", limit: 30)
         if posts.posts.isEmpty { await posts.load() }
         artworks = (await art ?? []).map(Artwork.init)
         tracks = (await music ?? []).map(Track.init)
         servers = (await serverDocs ?? []).map(Server.init)
         reels = (await reelDocs ?? []).map(Reel.init)
+        if model.people.isEmpty { await model.loadPeople() }
         loaded = true
     }
 
@@ -380,12 +397,11 @@ struct HomeView: View {
                 Text("\(greeting),").font(.display(40)).foregroundStyle(Palette.text)
                 Text(me?.displayName ?? "").font(.display(40)).foregroundStyle(Theme.gradient)
                     .shadow(color: Theme.pink.opacity(0.25), radius: 10, y: 4)
+                    .overlay(alignment: .topTrailing) { Twinkle(size: 14).offset(x: 22, y: -2) }
             }
             Text("Here's what's happening across Sugerly today — fresh art, new tracks and friends online.")
                 .font(.jakarta(15)).foregroundStyle(Palette.text2)
             DailyRewardButton()
-            Button { compose(.post) } label: { Label("Share something", systemImage: "photo.on.rectangle.angled") }
-                .buttonStyle(OutlineButtonStyle())
             HStack(spacing: 10) {
                 stat("\(info.level)", "LEVEL", info.title, info.color)
                 stat(Self.compact(me?.coins ?? 0), "COINS", "MimiCoins", Palette.text)

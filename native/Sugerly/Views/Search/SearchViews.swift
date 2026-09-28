@@ -206,6 +206,7 @@ struct SearchField: View {
 
 struct SearchView: View {
     var go: (Route) -> Void
+    var initial = ""
     @Environment(AppModel.self) private var model
     @Environment(PostsStore.self) private var posts
     @Environment(\.dismiss) private var dismiss
@@ -319,6 +320,7 @@ struct SearchView: View {
             .scrollDismissesKeyboard(.interactively)
         }
         .sugarBackground()
+        .onAppear { if !initial.isEmpty && query.isEmpty { query = initial } }
         .task {
             async let art = try? FS.query("Artwork", orderBy: "created_date", limit: 200)
             async let srv = try? FS.query("Community", orderBy: "created_date", limit: 150)

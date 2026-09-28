@@ -125,6 +125,8 @@ struct CommunityView: View {
     @State private var dismissed = Set<String>()
     @State private var searching = false
     @State private var appeared = false
+    @State private var pulse = false
+    @Namespace private var feedPill
 
     private var visible: [Post] {
         guard let me = model.me else { return [] }
@@ -175,6 +177,57 @@ struct CommunityView: View {
         return Array(out.prefix(14))
     }
 
+    // Most-liked people this week.
+    private var topCreators: [(String, Int)] {
+        let weekAgo = Dates.iso(Date().addingTimeInterval(-7 * 86400))
+        var likes: [String: Int] = [:]
+        for p in store.posts where p.created > weekAgo { likes[p.authorEmail, default: 0] += p.likes.count }
+        return likes.filter { $0.value > 0 && model.person($0.key) != nil }
+            .sorted { $0.value > $1.value }.prefix(8).map { ($0.key, $0.value) }
+    }
+
+    private var creatorsRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Top creators this week", systemImage: "crown.fill").font(.jakarta(16, .heavy)).foregroundStyle(Palette.text)
+                    .labelStyle(TintedIconLabel(tint: Color(hex: 0xF0A020)))
+                Spacer()
+                Button { path.append(.topArtists) } label: {
+                    HStack(spacing: 3) { Text("Board"); Image(systemName: "chevron.right").font(.system(size: 10, weight: .heavy)) }
+                        .font(.jakarta(13, .bold)).foregroundStyle(Theme.main)
+                }
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 14) {
+                    ForEach(Array(topCreators.enumerated()), id: \.element.0) { i, entry in
+                        let person = model.person(entry.0)
+                        Button { path.append(.person(entry.0)) } label: {
+                            VStack(spacing: 5) {
+                                Avatar(url: person?.picture ?? "", name: person?.displayName ?? "", size: 54, online: person?.isOnline ?? false)
+                                    .padding(3)
+                                    .overlay(Circle().strokeBorder(i == 0 ? Color(hex: 0xF0A020) : i == 1 ? Color(hex: 0x94A3B8) : i == 2 ? Color(hex: 0xC2773A) : Palette.border, lineWidth: i < 3 ? 2.5 : 1.5))
+                                    .overlay(alignment: .top) {
+                                        if i == 0 {
+                                            Image(systemName: "crown.fill").font(.system(size: 15, weight: .bold)).foregroundStyle(Color(hex: 0xF0A020))
+                                                .offset(y: -13)
+                                                .phaseAnimator([false, true]) { v, up in v.offset(y: up ? -3 : 0).rotationEffect(.degrees(up ? -8 : 8)) } animation: { _ in .easeInOut(duration: 0.9) }
+                                        }
+                                    }
+                                Text(person?.displayName ?? "").font(.jakarta(11, .bold)).foregroundStyle(Palette.text).lineLimit(1)
+                                Label("\(entry.1)", systemImage: "heart.fill").font(.jakarta(10, .heavy)).foregroundStyle(Theme.main)
+                            }
+                            .frame(width: 70)
+                        }
+                        .buttonStyle(BouncyStyle(scale: 0.92))
+                    }
+                }
+                .padding(.top, 12).padding(.horizontal, 2)
+            }
+            .scrollClipDisabled()
+        }
+        .sugarCard(radius: 26, padding: 14)
+    }
+
     private var suggestions: [UserProfile] {
         guard let me = model.me else { return [] }
         let following = Set(me.following)
@@ -191,6 +244,11 @@ struct CommunityView: View {
                 header.stagger(appeared, 0)
                 stories.stagger(appeared, 1)
                 composerCard.stagger(appeared, 2)
+                WeeklyChallengeCard(posts: store.posts, active: tag == WeeklyChallengeCard.current.tag, compose: compose) { t in
+                    withAnimation(.snappy) { tag = tag == t ? nil : t; feed = .latest }
+                }
+                .stagger(appeared, 3)
+                if !topCreators.isEmpty { creatorsRow.stagger(appeared, 4) }
                 Section {
                     if !trending.isEmpty {
                         ScrollView(.horizontal, showsIndicators: false) {
@@ -253,9 +311,15 @@ struct CommunityView: View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Community").font(.display(38)).foregroundStyle(Palette.text)
-                Label("\(store.posts.count) posts · friendly & moderated", systemImage: "checkmark.shield")
-                    .font(.jakarta(14, .medium)).foregroundStyle(Palette.muted)
-                    .labelStyle(TintedIconLabel(tint: Palette.success))
+                HStack(spacing: 7) {
+                    Circle().fill(Palette.success).frame(width: 8, height: 8)
+                        .overlay(Circle().stroke(Palette.success.opacity(0.5), lineWidth: 2).scaleEffect(pulse ? 2.4 : 1).opacity(pulse ? 0 : 1))
+                        .animation(.easeOut(duration: 1.4).repeatForever(autoreverses: false), value: pulse)
+                    Text("\(model.people.values.filter(\.isOnline).count) online · \(store.posts.count) posts")
+                        .font(.jakarta(14, .medium)).foregroundStyle(Palette.muted)
+                        .contentTransition(.numericText())
+                }
+                .onAppear { pulse = true }
             }
             Spacer()
             squareButton("magnifyingglass") { searching = true }
@@ -292,7 +356,7 @@ struct CommunityView: View {
 
     private func chip(_ f: Feed, _ icon: String) -> some View {
         let active = feed == f
-        return Button { withAnimation(.snappy) { feed = f } } label: {
+        return Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) { feed = f } } label: {
             HStack(spacing: 7) {
                 Image(systemName: icon).font(.system(size: 15, weight: .semibold))
                 Text(f.rawValue).font(.jakarta(15, .bold))
@@ -305,6 +369,7 @@ struct CommunityView: View {
                     Capsule().fill(Theme.gradient)
                         .overlay(Capsule().fill(LinearGradient(colors: [.white.opacity(0.25), .clear], startPoint: .top, endPoint: .center)).padding(1))
                         .shadow(color: Theme.main.opacity(0.35), radius: 8, y: 3)
+                        .matchedGeometryEffect(id: "feed", in: feedPill)
                 }
             }
             .contentShape(Capsule())
@@ -449,6 +514,7 @@ struct PostCard: View {
     @Environment(PostsStore.self) private var store
     @State private var heart = false
     @State private var confirmDelete = false
+    @State private var sendSheet = false
 
     private var me: String { model.me?.email ?? "" }
     private var liked: Bool { post.likes.contains(me) }
@@ -518,6 +584,14 @@ struct PostCard: View {
                 }
             }
         } message: { Text("This can't be undone.") }
+        .sheet(isPresented: $sendSheet) {
+            SendToChatsSheet(title: "Send post") { targets, note in
+                guard let me = model.me else { return }
+                try await ReelLinks.sendPost(post, to: targets, note: note, me: me)
+            }
+            .presentationDetents([.height(340)])
+            .presentationCornerRadius(30)
+        }
     }
 
     private var header: some View {
@@ -567,12 +641,23 @@ struct PostCard: View {
         ArtImage(url: post.imageURL, tallest: 0.7)
             .background(Palette.surface2)
             .overlay {
-                Image(systemName: "heart.fill")
-                    .font(.system(size: 96))
-                    .foregroundStyle(Theme.gradient)
-                    .shadow(color: Theme.pink.opacity(0.6), radius: 20)
-                    .scaleEffect(heart ? 1 : 0.3)
-                    .opacity(heart ? 1 : 0)
+                ZStack {
+                    ForEach(0..<6, id: \.self) { i in
+                        let angle = Double(i) / 6 * 2 * .pi - .pi / 2
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 20))
+                            .foregroundStyle(Theme.light)
+                            .offset(x: heart ? cos(angle) * 110 : 0, y: heart ? sin(angle) * 110 : 0)
+                            .scaleEffect(heart ? 1 : 0.2)
+                            .opacity(heart ? 0.9 : 0)
+                    }
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 96))
+                        .foregroundStyle(Theme.gradient)
+                        .shadow(color: Theme.pink.opacity(0.6), radius: 20)
+                        .scaleEffect(heart ? 1 : 0.3)
+                        .opacity(heart ? 1 : 0)
+                }
             }
             .contentShape(Rectangle())
             .onTapGesture(count: 2) { doubleTapLike() }
@@ -597,6 +682,10 @@ struct PostCard: View {
                     Text("\(store.commentCounts[post.id] ?? 0)").font(.jakarta(17, .semibold)).foregroundStyle(Palette.text2)
                 }
             }
+            Button { sendSheet = true } label: {
+                Image(systemName: "paperplane").foregroundStyle(Palette.text2)
+            }
+            .accessibilityLabel("Send to a chat")
             ShareLink(item: ReelLinks.post(post.id), subject: Text("Sugerly"), message: Text(post.title.isEmpty ? post.text : post.title)) {
                 Image(systemName: "square.and.arrow.up").foregroundStyle(Palette.text2)
             }

@@ -20,7 +20,25 @@ enum Route: Hashable {
     case voice(Server, ServerChannel)
 }
 
-enum AppTab: Hashable { case home, community, gallery, reels, chat, me }
+enum AppTab: Hashable {
+    case home, community, gallery, reels, chat, me
+    var order: Int {
+        switch self {
+        case .home: 0
+        case .community: 1
+        case .gallery: 2
+        case .reels: 3
+        case .chat: 4
+        case .me: 5
+        }
+    }
+}
+
+struct TabSlide {
+    var x: CGFloat = 0
+    var opacity: Double = 1
+    var scale: CGFloat = 1
+}
 
 enum Composer: String, Identifiable { case post, artwork, reel, track; var id: String { rawValue } }
 
@@ -105,6 +123,8 @@ struct MainShell: View {
     @State private var composer: Composer?
     @State private var typing = false
     @State private var dailyShown = false
+    @State private var slideTick = 0
+    @State private var slideEdge: CGFloat = 1
 
     private var currentPath: [Route] {
         switch tab {
@@ -168,6 +188,27 @@ struct MainShell: View {
             }
             .tag(AppTab.me)
             .toolbar(.hidden, for: .tabBar)
+        }
+        // A quick, springy slide toward the tab you picked.
+        .keyframeAnimator(initialValue: TabSlide(), trigger: slideTick) { content, v in
+            content.offset(x: v.x).opacity(v.opacity).scaleEffect(v.scale, anchor: .bottom)
+        } keyframes: { _ in
+            KeyframeTrack(\.x) {
+                MoveKeyframe(34 * slideEdge)
+                SpringKeyframe(0, duration: 0.42, spring: .snappy)
+            }
+            KeyframeTrack(\.opacity) {
+                MoveKeyframe(0.35)
+                LinearKeyframe(1, duration: 0.2)
+            }
+            KeyframeTrack(\.scale) {
+                MoveKeyframe(0.985)
+                SpringKeyframe(1, duration: 0.4)
+            }
+        }
+        .onChange(of: tab) { old, new in
+            slideEdge = new.order >= old.order ? 1 : -1
+            slideTick += 1
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !barHidden {

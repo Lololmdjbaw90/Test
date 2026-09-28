@@ -14,19 +14,33 @@ enum ReelLinks {
     @MainActor
     static func send(_ reel: Reel, to targets: [ShareTarget], note: String, me: UserProfile) async throws {
         let link = url(reel).absoluteString
-        let now = FS.nowISO()
         let shared: [String: Any] = [
             "id": reel.id, "cover_url": reel.coverURL.isEmpty ? (reel.isVideo ? "" : reel.pictures.first ?? "") : reel.coverURL,
             "caption": String(reel.caption.prefix(120)), "by": reel.authorName,
         ]
         let content = [note.trimmingCharacters(in: .whitespacesAndNewlines), "\u{1F3AC} \(reel.authorName)'s reel: \(link)"].filter { !$0.isEmpty }.joined(separator: "\n")
+        try await deliver(content, extra: ["shared_reel": shared], to: targets, me: me)
+    }
+
+    // Sends a community post into chats as a link message.
+    @MainActor
+    static func sendPost(_ post: Post, to targets: [ShareTarget], note: String, me: UserProfile) async throws {
+        let link = self.post(post.id).absoluteString
+        let content = [note.trimmingCharacters(in: .whitespacesAndNewlines), "\(post.authorName)'s post: \(link)"].filter { !$0.isEmpty }.joined(separator: "\n")
+        try await deliver(content, extra: [:], to: targets, me: me)
+    }
+
+    @MainActor
+    private static func deliver(_ content: String, extra: Doc, to targets: [ShareTarget], me: UserProfile) async throws {
+        let now = FS.nowISO()
         for target in targets {
             var doc: Doc = [
-                "content": content, "image_url": "", "shared_reel": shared,
+                "content": content, "image_url": "",
                 "user_email": me.email, "user_display_name": me.displayName, "user_profile_picture": me.picture,
                 "read_by": [me.email], "reactions": [String: Any](), "is_edited": false,
                 "created_by": me.email, "created_date": now, "updated_date": now,
             ]
+            for (k, v) in extra { doc[k] = v }
             if target.isGroup {
                 doc["conversation_id"] = target.id
                 doc["conversation_type"] = "group"
@@ -74,6 +88,119 @@ struct ShareTarget: Identifiable, Hashable {
     var picture: String
     var isGroup: Bool
     var members: [String]
+
+    // Your recent chats, then people you follow.
+    @MainActor
+    static func all(_ model: AppModel, _ chats: ChatStore) -> [ShareTarget] {
+        let me = model.me?.email ?? ""
+        var out: [ShareTarget] = []
+        var seen = Set<String>()
+        for c in chats.conversations.prefix(20) {
+            let t = c.isGroup
+                ? ShareTarget(id: c.id, name: c.title(model), picture: "", isGroup: true, members: c.members)
+                : ShareTarget(id: "dm:" + (c.others(me).first ?? me), name: c.title(model), picture: c.picture(model), isGroup: false, members: c.members.isEmpty ? [me] : c.members)
+            if seen.insert(t.id).inserted { out.append(t) }
+        }
+        for email in model.me?.following ?? [] where !seen.contains("dm:" + email) {
+            guard let p = model.person(email) else { continue }
+            seen.insert("dm:" + email)
+            out.append(ShareTarget(id: "dm:" + email, name: p.displayName, picture: p.picture, isGroup: false, members: [me, email]))
+        }
+        return out
+    }
+}
+
+// A small "Send to" sheet for posts and art.
+struct SendToChatsSheet: View {
+    var title = "Send to"
+    var send: ([ShareTarget], String) async throws -> Void
+    @Environment(AppModel.self) private var model
+    @Environment(ChatStore.self) private var chats
+    @Environment(\.dismiss) private var dismiss
+    @State private var picked: Set<String> = []
+    @State private var note = ""
+    @State private var sending = false
+    @State private var query = ""
+
+    private var targets: [ShareTarget] {
+        let all = ShareTarget.all(model, chats)
+        let q = query.trimmingCharacters(in: .whitespaces)
+        return q.isEmpty ? all : all.filter { $0.name.localizedCaseInsensitiveContains(q) }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Capsule().fill(Palette.borderStrong).frame(width: 40, height: 5).frame(maxWidth: .infinity).padding(.top, 8)
+            HStack {
+                Text(title).font(.jakarta(17, .heavy)).foregroundStyle(Palette.text)
+                Spacer()
+                Image(systemName: "paperplane.fill").font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.main)
+            }
+            .padding(.horizontal, 18)
+            SearchField(text: $query, placeholder: "Search chats and friends").padding(.horizontal, 18)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 14) {
+                    if targets.isEmpty {
+                        Text("Follow people or start a chat to send things to them.").font(.jakarta(13)).foregroundStyle(Palette.muted)
+                    }
+                    ForEach(targets) { t in
+                        let on = picked.contains(t.id)
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                if on { picked.remove(t.id) } else { picked.insert(t.id) }
+                            }
+                        } label: {
+                            VStack(spacing: 6) {
+                                ZStack(alignment: .bottomTrailing) {
+                                    Avatar(url: t.picture, name: t.name, size: 58)
+                                        .overlay(Circle().strokeBorder(on ? Theme.main : .clear, lineWidth: 3))
+                                        .scaleEffect(on ? 0.94 : 1)
+                                    if on {
+                                        Image(systemName: "checkmark").font(.system(size: 11, weight: .heavy)).foregroundStyle(.white)
+                                            .frame(width: 22, height: 22).background(Theme.gradient, in: Circle())
+                                            .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
+                                            .transition(.scale.combined(with: .opacity))
+                                    }
+                                }
+                                Text(t.name).font(.jakarta(11, .semibold)).foregroundStyle(Palette.text).lineLimit(1).frame(width: 66)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 18)
+            }
+            .sensoryFeedback(.selection, trigger: picked)
+            HStack(spacing: 10) {
+                TextField("Write a message…", text: $note).font(.jakarta(15))
+                    .padding(.horizontal, 14).frame(height: 44)
+                    .background(Palette.surface2, in: Capsule())
+                Button { Task { await go() } } label: {
+                    if sending { ProgressView().tint(.white) } else { Text(picked.count > 1 ? "Send (\(picked.count))" : "Send") }
+                }
+                .buttonStyle(GradientButtonStyle(height: 44, fullWidth: false))
+                .disabled(sending || picked.isEmpty)
+                .opacity(picked.isEmpty ? 0.5 : 1)
+            }
+            .padding(.horizontal, 18)
+            Spacer(minLength: 0)
+        }
+        .background(Palette.bg)
+    }
+
+    private func go() async {
+        let chosen = ShareTarget.all(model, chats).filter { picked.contains($0.id) }
+        guard !chosen.isEmpty else { return }
+        sending = true
+        defer { sending = false }
+        do {
+            try await send(chosen, note)
+            model.showToast(chosen.count == 1 ? "Sent to \(chosen[0].name)" : "Sent to \(chosen.count) chats", icon: "paperplane.fill")
+            dismiss()
+        } catch {
+            model.showToast("Couldn't send — \(error.localizedDescription)", icon: "exclamationmark.triangle", error: true)
+        }
+    }
 }
 
 struct ReelShareSheet: View {
@@ -95,23 +222,7 @@ struct ReelShareSheet: View {
     @State private var sending = false
     @State private var saving = false
 
-    private var targets: [ShareTarget] {
-        let me = model.me?.email ?? ""
-        var out: [ShareTarget] = []
-        var seen = Set<String>()
-        for c in chats.conversations.prefix(20) {
-            let t = c.isGroup
-                ? ShareTarget(id: c.id, name: c.title(model), picture: "", isGroup: true, members: c.members)
-                : ShareTarget(id: "dm:" + (c.others(me).first ?? me), name: c.title(model), picture: c.picture(model), isGroup: false, members: c.members.isEmpty ? [me] : c.members)
-            if seen.insert(t.id).inserted { out.append(t) }
-        }
-        for email in model.me?.following ?? [] where !seen.contains("dm:" + email) {
-            guard let p = model.person(email) else { continue }
-            seen.insert("dm:" + email)
-            out.append(ShareTarget(id: "dm:" + email, name: p.displayName, picture: p.picture, isGroup: false, members: [me, email]))
-        }
-        return out
-    }
+    private var targets: [ShareTarget] { ShareTarget.all(model, chats) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {

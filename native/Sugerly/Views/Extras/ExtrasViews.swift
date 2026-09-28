@@ -421,9 +421,18 @@ struct TopArtistsView: View {
     @Environment(PostsStore.self) private var posts
     @State private var artworks: [Artwork] = []
     @State private var appeared = false
+    @State private var risen = false
+    @State private var spin = false
+    @State private var burst = 0
     @State private var range = 0
+    @Namespace private var chip
 
     struct RankEntry: Hashable { var email: String; var likes: Int; var works: Int }
+
+    private static let gold = Color(hex: 0xF0A020)
+    private static let goldLight = Color(hex: 0xFFD166)
+    private static let silver = Color(hex: 0x94A3B8)
+    private static let bronze = Color(hex: 0xC2773A)
 
     private var ranking: [RankEntry] {
         let since = range == 0 ? "" : Dates.iso(Date().addingTimeInterval(range == 1 ? -7 * 86_400 : -30 * 86_400))
@@ -438,37 +447,38 @@ struct TopArtistsView: View {
 
     var body: some View {
         let list = ranking
+        let top = max(1, list.first?.likes ?? 1)
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Top artists").font(.display(38)).foregroundStyle(Palette.text)
-                    Text("Most loved on Sugerly").font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
+                hero.stagger(appeared, 0)
+                HStack(spacing: 6) {
+                    ForEach(Array(["All time", "This week", "This month"].enumerated()), id: \.offset) { i, title in
+                        let on = range == i
+                        Button { pick(i) } label: {
+                            Text(title).font(.jakarta(13, .bold))
+                                .foregroundStyle(on ? .white : Palette.text2)
+                                .padding(.horizontal, 14).frame(height: 36)
+                                .background {
+                                    if on { Capsule().fill(LinearGradient(colors: [Self.goldLight, Self.gold], startPoint: .topLeading, endPoint: .bottomTrailing)).matchedGeometryEffect(id: "range", in: chip) }
+                                    else { Capsule().fill(Palette.surface) }
+                                }
+                                .overlay(Capsule().strokeBorder(on ? Color.clear : Palette.border, lineWidth: 1))
+                        }
+                        .buttonStyle(BouncyStyle(scale: 0.94))
+                    }
                 }
-                HStack(spacing: 8) {
-                    Chip(title: "All time", active: range == 0) { withAnimation(.snappy) { range = 0 } }
-                    Chip(title: "This week", active: range == 1) { withAnimation(.snappy) { range = 1 } }
-                    Chip(title: "This month", active: range == 2) { withAnimation(.snappy) { range = 2 } }
+                .sensoryFeedback(.selection, trigger: range)
+                .stagger(appeared, 1)
+                if list.count >= 3 { podium(Array(list.prefix(3))).stagger(appeared, 2) }
+                if let me = model.me?.email, let mine = list.firstIndex(where: { $0.email == me }) {
+                    yourSpot(list, mine).stagger(appeared, 3)
                 }
-                if list.count >= 3 { podium(Array(list.prefix(3))).stagger(appeared, 0) }
                 VStack(spacing: 8) {
                     ForEach(Array(list.enumerated()).dropFirst(list.count >= 3 ? 3 : 0), id: \.element.email) { i, entry in
-                        let person = model.person(entry.email)
-                        Button { path.append(.person(entry.email)) } label: {
-                            HStack(spacing: 12) {
-                                Text("\(i + 1)").font(.display(20)).foregroundStyle(Palette.muted).frame(width: 30)
-                                Avatar(url: person?.picture ?? "", name: person?.displayName ?? "", size: 44, online: person?.isOnline ?? false)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(person?.displayName ?? "").font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
-                                    Text("\(entry.works) works").font(.jakarta(11)).foregroundStyle(Palette.muted)
-                                }
-                                Spacer()
-                                Label("\(entry.likes)", systemImage: "heart.fill").font(.jakarta(13, .heavy)).foregroundStyle(Theme.main)
-                                FollowButton(email: entry.email, compact: true)
-                            }
-                            .sugarCard(radius: 20, padding: 10)
-                        }
-                        .buttonStyle(BouncyStyle(scale: 0.98))
-                        .stagger(appeared, i)
+                        row(entry, rank: i + 1, top: top)
+                            .opacity(risen ? 1 : 0)
+                            .offset(x: risen ? 0 : 70)
+                            .animation(.spring(response: 0.55, dampingFraction: 0.78).delay(0.5 + Double(min(i, 14)) * 0.05), value: risen)
                     }
                 }
                 if list.isEmpty { EmptyCard(icon: "crown.fill", title: "No artists yet", text: "Post art to get on the board!") }
@@ -478,53 +488,199 @@ struct TopArtistsView: View {
             .frame(maxWidth: 720)
             .frame(maxWidth: .infinity)
         }
+        .overlay(alignment: .top) { ConfettiBurst(trigger: burst).frame(height: 520).allowsHitTesting(false) }
         .sugarBackground()
         .navigationTitle("Top artists")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             if posts.posts.isEmpty { await posts.load() }
             artworks = ((try? await FS.query("Artwork", orderBy: "created_date", limit: 200)) ?? []).map(Artwork.init)
+            try? await Task.sleep(for: .milliseconds(150))
+            risen = true
+            burst += 1
         }
-        .onAppear { appeared = true }
+        .onAppear {
+            appeared = true
+            spin = true
+            if !artworks.isEmpty || !posts.posts.isEmpty { risen = true }
+        }
+    }
+
+    private func pick(_ i: Int) {
+        guard range != i else { return }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { range = i }
+        // Replay the podium rise for the new board.
+        risen = false
+        Task {
+            try? await Task.sleep(for: .milliseconds(60))
+            risen = true
+            burst += 1
+        }
+    }
+
+    // A big bouncing crown with a glint and sparkles circling it.
+    private var hero: some View {
+        HStack(spacing: 16) {
+            ZStack {
+                Circle().fill(RadialGradient(colors: [Self.goldLight.opacity(0.55), .clear], center: .center, startRadius: 4, endRadius: 52))
+                    .frame(width: 104, height: 104)
+                ForEach(0..<3, id: \.self) { i in
+                    Image(systemName: "sparkle").font(.system(size: CGFloat(10 + i * 3), weight: .bold)).foregroundStyle(Self.goldLight)
+                        .offset(x: 40)
+                        .rotationEffect(.degrees(Double(i) * 120 + (spin ? 360 : 0)))
+                }
+                .animation(.linear(duration: 7).repeatForever(autoreverses: false), value: spin)
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 42, weight: .bold))
+                    .foregroundStyle(LinearGradient(colors: [Self.goldLight, Self.gold], startPoint: .top, endPoint: .bottom))
+                    .overlay { Glint().mask(Image(systemName: "crown.fill").font(.system(size: 42, weight: .bold))) }
+                    .shadow(color: Self.gold.opacity(0.5), radius: 10, y: 4)
+                    .phaseAnimator([false, true]) { v, up in
+                        v.offset(y: up ? -7 : 2).rotationEffect(.degrees(up ? -6 : 6)).scaleEffect(up ? 1.06 : 0.97)
+                    } animation: { _ in .easeInOut(duration: 0.9) }
+            }
+            .frame(width: 104, height: 104)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Top artists").font(.display(36))
+                    .foregroundStyle(LinearGradient(colors: [Self.gold, Theme.main], startPoint: .leading, endPoint: .trailing))
+                Text("The most loved artists on Sugerly. Post, get likes, climb the board!").font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
+            }
+        }
+        .padding(.top, 6)
     }
 
     private func podium(_ top: [RankEntry]) -> some View {
         HStack(alignment: .bottom, spacing: 10) {
-            place(top[1], rank: 2, height: 110, color: Color(hex: 0x94A3B8))
-            place(top[0], rank: 1, height: 150, color: Color(hex: 0xF0A020))
-            place(top[2], rank: 3, height: 90, color: Color(hex: 0xC2773A))
+            place(top[1], rank: 2, height: 112, color: Self.silver, delay: 0.15)
+            place(top[0], rank: 1, height: 156, color: Self.gold, delay: 0.3)
+            place(top[2], rank: 3, height: 90, color: Self.bronze, delay: 0)
         }
-        .padding(.top, 20)
+        .padding(.top, 30)
+        .padding(12)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
     }
 
-    private func place(_ entry: RankEntry, rank: Int, height: CGFloat, color: Color) -> some View {
+    private func place(_ entry: RankEntry, rank: Int, height: CGFloat, color: Color, delay: Double) -> some View {
         let person = model.person(entry.email)
+        let size: CGFloat = rank == 1 ? 78 : 62
         return Button { path.append(.person(entry.email)) } label: {
             VStack(spacing: 8) {
                 ZStack(alignment: .top) {
-                    Avatar(url: person?.picture ?? "", name: person?.displayName ?? "", size: rank == 1 ? 76 : 62)
-                        .padding(3)
-                        .overlay(Circle().strokeBorder(color, lineWidth: 3))
-                        .shadow(color: color.opacity(0.5), radius: 10)
+                    Avatar(url: person?.picture ?? "", name: person?.displayName ?? "", size: size)
+                        .padding(4)
+                        .overlay {
+                            if rank == 1 {
+                                Circle().strokeBorder(AngularGradient(colors: [Self.goldLight, Self.gold, .white, Self.gold, Self.goldLight], center: .center), lineWidth: 4)
+                                    .rotationEffect(.degrees(spin ? 360 : 0))
+                                    .animation(.linear(duration: 3).repeatForever(autoreverses: false), value: spin)
+                            } else {
+                                Circle().strokeBorder(color, lineWidth: 3)
+                            }
+                        }
+                        .shadow(color: color.opacity(0.55), radius: rank == 1 ? 16 : 8)
                     if rank == 1 {
-                        Image(systemName: "crown.fill").font(.system(size: 22)).foregroundStyle(color)
-                            .offset(y: -24)
-                            .rotationEffect(.degrees(appeared ? -8 : 8))
-                            .animation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true), value: appeared)
+                        Image(systemName: "crown.fill").font(.system(size: 26, weight: .bold))
+                            .foregroundStyle(LinearGradient(colors: [Self.goldLight, Self.gold], startPoint: .top, endPoint: .bottom))
+                            .overlay { Glint().mask(Image(systemName: "crown.fill").font(.system(size: 26, weight: .bold))) }
+                            .shadow(color: Self.gold.opacity(0.6), radius: 6)
+                            .phaseAnimator([false, true]) { v, up in
+                                v.offset(y: up ? -34 : -26).rotationEffect(.degrees(up ? -10 : 8))
+                            } animation: { _ in .easeInOut(duration: 0.8) }
+                        Twinkle(size: 13).offset(x: size * 0.55, y: size * 0.1)
+                    } else {
+                        Text("\(rank)").font(.jakarta(12, .black)).foregroundStyle(.white)
+                            .frame(width: 24, height: 24).background(color, in: Circle())
+                            .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
+                            .offset(x: size * 0.36, y: size * 0.72)
                     }
                 }
+                .scaleEffect(risen ? 1 : 0.3)
+                .opacity(risen ? 1 : 0)
+                .animation(.spring(response: 0.5, dampingFraction: 0.55).delay(delay + 0.35), value: risen)
                 Text(person?.displayName ?? "").font(.jakarta(13, .heavy)).foregroundStyle(Palette.text).lineLimit(1)
                 VStack(spacing: 2) {
-                    Text("\(rank)").font(.display(30)).foregroundStyle(.white)
-                    Label("\(entry.likes)", systemImage: "heart.fill").font(.jakarta(11, .heavy)).foregroundStyle(.white.opacity(0.9))
+                    Text("\(rank)").font(.display(rank == 1 ? 36 : 28)).foregroundStyle(.white)
+                    Label("\(entry.likes)", systemImage: "heart.fill").font(.jakarta(11, .heavy)).foregroundStyle(.white.opacity(0.92))
                 }
+                .opacity(risen ? 1 : 0)
                 .frame(maxWidth: .infinity)
-                .frame(height: height)
-                .background(LinearGradient(colors: [color.opacity(0.9), color], startPoint: .top, endPoint: .bottom), in: UnevenRoundedRectangle(topLeadingRadius: 18, topTrailingRadius: 18, style: .continuous))
+                .frame(height: risen ? height : 14, alignment: .top)
+                .padding(.top, 4)
+                .background {
+                    UnevenRoundedRectangle(topLeadingRadius: 18, topTrailingRadius: 18, style: .continuous)
+                        .fill(LinearGradient(colors: [color.opacity(0.85), color], startPoint: .top, endPoint: .bottom))
+                        .overlay { if rank == 1 { Glint().clipShape(UnevenRoundedRectangle(topLeadingRadius: 18, topTrailingRadius: 18, style: .continuous)) } }
+                }
+                .animation(.spring(response: 0.7, dampingFraction: 0.7).delay(delay), value: risen)
             }
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(BouncyStyle(scale: 0.96))
+    }
+
+    // Where you are on the board and how far to the next spot.
+    private func yourSpot(_ list: [RankEntry], _ index: Int) -> some View {
+        let entry = list[index]
+        let gap = index > 0 ? list[index - 1].likes - entry.likes + 1 : 0
+        return HStack(spacing: 12) {
+            Text("#\(index + 1)").font(.display(26)).foregroundStyle(.white)
+                .frame(width: 58, height: 58)
+                .background(Theme.gradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Your spot").font(.jakarta(15, .heavy)).foregroundStyle(Palette.text)
+                Text(index == 0 ? "You're the top artist. Keep that crown!" : "\(gap) more like\(gap == 1 ? "" : "s") to reach #\(index)")
+                    .font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
+            }
+            Spacer()
+            Label("\(entry.likes)", systemImage: "heart.fill").font(.jakarta(14, .heavy)).foregroundStyle(Theme.main)
+        }
+        .sugarCard(radius: 22, padding: 12)
+    }
+
+    private func row(_ entry: RankEntry, rank: Int, top: Int) -> some View {
+        let person = model.person(entry.email)
+        let share = CGFloat(entry.likes) / CGFloat(top)
+        return Button { path.append(.person(entry.email)) } label: {
+            HStack(spacing: 12) {
+                Text("\(rank)").font(.display(20)).foregroundStyle(rank <= 10 ? Theme.main : Palette.muted).frame(width: 30)
+                Avatar(url: person?.picture ?? "", name: person?.displayName ?? "", size: 44, online: person?.isOnline ?? false)
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 6) {
+                        Text(person?.displayName ?? "").font(.jakarta(15, .bold)).foregroundStyle(Palette.text).lineLimit(1)
+                        Text("\(entry.works) works").font(.jakarta(11)).foregroundStyle(Palette.muted)
+                    }
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Palette.surface2)
+                            Capsule().fill(Theme.gradient).frame(width: max(6, geo.size.width * (risen ? share : 0)))
+                                .animation(.spring(response: 0.9, dampingFraction: 0.8).delay(0.6 + Double(min(rank, 14)) * 0.05), value: risen)
+                        }
+                    }
+                    .frame(height: 6)
+                }
+                Label("\(entry.likes)", systemImage: "heart.fill").font(.jakarta(13, .heavy)).foregroundStyle(Theme.main)
+                FollowButton(email: entry.email, compact: true)
+            }
+            .sugarCard(radius: 20, padding: 10)
+        }
+        .buttonStyle(BouncyStyle(scale: 0.98))
+    }
+}
+
+// A soft white glint that sweeps across now and then, like the logo shine.
+struct Glint: View {
+    var body: some View {
+        GeometryReader { geo in
+            LinearGradient(colors: [.clear, .white.opacity(0.75), .clear], startPoint: .leading, endPoint: .trailing)
+                .frame(width: max(12, geo.size.width * 0.45))
+                .rotationEffect(.degrees(20))
+                .phaseAnimator([false, true]) { v, go in
+                    v.offset(x: go ? geo.size.width * 1.4 : -geo.size.width * 0.6)
+                } animation: { go in go ? .easeInOut(duration: 0.9).delay(1.6) : .linear(duration: 0) }
+        }
+        .blendMode(.plusLighter)
+        .allowsHitTesting(false)
     }
 }
 
