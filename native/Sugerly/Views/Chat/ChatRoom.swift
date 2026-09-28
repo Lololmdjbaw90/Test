@@ -27,6 +27,8 @@ struct ChatView: View {
     @State private var recorder = VoiceNoteRecorder()
     @State private var studio = false
     @State private var uploading: String?
+    @State private var hasOlder = false
+    @State private var loadingOlder = false
     @FocusState private var typing: Bool
 
     private var me: String { model.me?.email ?? "" }
@@ -45,6 +47,15 @@ struct ChatView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 2) {
+                    // Scrolling up to the top loads the next older page.
+                    if loaded && hasOlder {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small).tint(Theme.main)
+                            Text("Loading earlier messages").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
+                        }
+                        .frame(maxWidth: .infinity).padding(.vertical, 12)
+                        .onAppear { Task { await loadOlder(proxy) } }
+                    }
                     if loaded && messages.isEmpty { emptyState }
                     ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
                         let previous = index > 0 ? messages[index - 1] : nil
@@ -113,7 +124,10 @@ struct ChatView: View {
             if Alerts.shared.openConversation == conversation.id { Alerts.shared.openConversation = nil }
             recorder.cancel()
         }
-        .task { await poll() }
+        .task {
+            restoreCache()
+            await poll()
+        }
     }
 
     // MARK: header
@@ -429,22 +443,43 @@ struct ChatView: View {
         }
     }
 
+    // Open instantly from what's saved on the phone, then only ask for newer.
+    private func restoreCache() {
+        guard messages.isEmpty else { return }
+        let cached = ChatCache.messages(conversation.id)
+        guard !cached.isEmpty else { return }
+        messages = cached
+        hasOlder = true
+        loaded = true
+    }
+
     private func load() async {
         guard !me.isEmpty else { return }
         var filters: [FS.Filter] = [.equals("conversation_id", conversation.id), .contains("member_emails", me)]
         let newest = messages.last(where: { !$0.pending })?.created ?? ""
-        if loaded, !newest.isEmpty { filters.append(.after("created_date", ChatStore.minus(newest, seconds: 60))) }
-        guard let docs = try? await FS.query("DirectMessage", filters, orderBy: "created_date", limit: loaded ? 100 : 200) else {
+        let incremental = loaded && !newest.isEmpty
+        if incremental { filters.append(.after("created_date", ChatStore.minus(newest, seconds: 60))) }
+        let page = incremental ? 100 : 200
+        guard let docs = try? await FS.query("DirectMessage", filters, orderBy: "created_date", limit: page) else {
             loaded = true
             return
         }
         let incoming = docs.map(Message.init)
         let known = Set(messages.map(\.id))
         let fresh = incoming.filter { !known.contains($0.id) }.sorted { $0.created < $1.created }
-        if !fresh.isEmpty || !loaded {
+        if incremental && docs.count >= page {
+            // A lot happened while you were away: start from the newest page
+            // (older ones load as you scroll up).
+            let pending = messages.filter(\.pending)
+            messages = (incoming + pending).sorted { $0.created < $1.created }
+            hasOlder = true
+            ChatCache.save(conversation.id, messages)
+        } else if !fresh.isEmpty || !loaded {
+            if !loaded { hasOlder = docs.count >= page }
             withAnimation(loaded ? .snappy : nil) {
                 messages = (messages + fresh).sorted { $0.created < $1.created }
             }
+            ChatCache.save(conversation.id, messages)
         }
         // Read ticks turn blue when the other side reads.
         for m in incoming where known.contains(m.id) {
@@ -455,6 +490,23 @@ struct ChatView: View {
         }
         loaded = true
         markRead(messages)
+    }
+
+    // The page before the oldest message on screen, keeping your place.
+    private func loadOlder(_ proxy: ScrollViewProxy) async {
+        guard !loadingOlder, let oldest = messages.first(where: { !$0.pending }) else { return }
+        loadingOlder = true
+        defer { loadingOlder = false }
+        let filters: [FS.Filter] = [.equals("conversation_id", conversation.id), .contains("member_emails", me), .before("created_date", oldest.created)]
+        guard let docs = try? await FS.query("DirectMessage", filters, orderBy: "created_date", limit: 100) else { return }
+        hasOlder = docs.count >= 100
+        let known = Set(messages.map(\.id))
+        let page = docs.map(Message.init).filter { !known.contains($0.id) }
+        guard !page.isEmpty else { return }
+        var still = Transaction()
+        still.disablesAnimations = true
+        withTransaction(still) { messages = (page + messages).sorted { $0.created < $1.created } }
+        DispatchQueue.main.async { proxy.scrollTo(oldest.id, anchor: .top) }
     }
 
     private func markRead(_ list: [Message]) {
@@ -573,6 +625,7 @@ struct ChatView: View {
 
     private func delete(_ message: Message) {
         withAnimation { messages.removeAll { $0.id == message.id } }
+        ChatCache.save(conversation.id, messages)
         Task { try? await FS.delete("DirectMessage", message.id) }
     }
 }
@@ -1088,8 +1141,21 @@ enum VoiceNoteCache {
         try? FileManager.default.copyItem(at: local, to: file(for: url))
     }
 
+    // Keep the cache small: only the most recent notes stay on the phone.
+    nonisolated(unsafe) private static var pruned = false
+    private static func pruneOnce() {
+        guard !pruned else { return }
+        pruned = true
+        let fm = FileManager.default
+        let files = (try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        guard files.count > 300 else { return }
+        let dated = files.map { ($0, (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast) }
+        for (file, _) in dated.sorted(by: { $0.1 > $1.1 }).dropFirst(300) { try? fm.removeItem(at: file) }
+    }
+
     @discardableResult
     static func fetch(_ url: String) async -> URL? {
+        pruneOnce()
         if let hit = local(url) { return hit }
         guard let link = URL(string: url), let (temp, response) = try? await URLSession.shared.download(from: link),
               (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true else { return nil }

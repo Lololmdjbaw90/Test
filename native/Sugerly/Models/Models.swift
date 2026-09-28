@@ -289,6 +289,20 @@ struct Message: Identifiable, Hashable {
         var by: String
     }
 
+    // Back to a document (for the on-phone chat cache).
+    var cacheDoc: Doc {
+        var d: Doc = [
+            "id": id, "conversation_id": conversationId, "conversation_type": isGroup ? "group" : "dm", "group_name": groupName,
+            "content": text, "image_url": imageURL, "user_email": authorEmail, "user_display_name": authorName,
+            "user_profile_picture": authorPicture, "member_emails": members, "read_by": readBy, "created_date": created,
+            "is_edited": edited, "reactions": reactions, "type": kind, "call_outcome": callOutcome, "call_duration": callDuration,
+            "reply_to_id": replyId, "reply_to_preview": replyPreview, "reply_to_name": replyName,
+            "audio_url": audioURL, "audio_duration": audioSeconds, "video_url": videoURL,
+        ]
+        if let r = sharedReel { d["shared_reel"] = ["id": r.id, "cover_url": r.cover, "caption": r.caption, "by": r.by] }
+        return d
+    }
+
     // The words to show (the website puts the reel link on its own line).
     var displayText: String {
         guard sharedReel != nil else { return text }

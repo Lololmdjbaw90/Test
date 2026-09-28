@@ -203,6 +203,34 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "CommunityComment",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "post_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_date",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "Comment",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "artwork_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_date",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

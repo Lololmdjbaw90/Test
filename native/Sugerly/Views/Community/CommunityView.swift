@@ -766,7 +766,11 @@ struct CommentsScreen<Header: View>: View {
     @State private var sending = false
     @State private var reporting: ReportSheet.Target?
     @State private var gifs = false
+    @State private var hasOlder = false
+    @State private var loadingOlder = false
     @FocusState private var typing: Bool
+
+    private static var pageSize: Int { 300 }
 
     struct Thread: Identifiable {
         let parent: Comment
@@ -774,19 +778,35 @@ struct CommentsScreen<Header: View>: View {
         var id: String { parent.id }
     }
 
+    // Grouped in one pass, so thousands of comments stay quick.
     private var threads: [Thread] {
         let blocked = Set(model.me?.blocked ?? [])
         let visible = comments.filter { !blocked.contains($0.authorEmail) }
-        return visible.filter { $0.parentId.isEmpty }.map { parent in Thread(parent: parent, replies: visible.filter { $0.parentId == parent.id }) }
+        var replies: [String: [Comment]] = [:]
+        for c in visible where !c.parentId.isEmpty { replies[c.parentId, default: []].append(c) }
+        return visible.filter { $0.parentId.isEmpty }.map { Thread(parent: $0, replies: replies[$0.id] ?? []) }
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 header()
-                Text(comments.isEmpty ? "No comments yet" : "\(comments.count) comment\(comments.count == 1 ? "" : "s")")
+                Text(comments.isEmpty ? "No comments yet" : "\(comments.count)\(hasOlder ? "+" : "") comment\(comments.count == 1 ? "" : "s")")
                     .font(.display(22)).foregroundStyle(Palette.text).padding(.horizontal, 4)
-                VStack(alignment: .leading, spacing: 16) {
+                if hasOlder {
+                    Button { Task { await loadOlder() } } label: {
+                        HStack(spacing: 8) {
+                            if loadingOlder { ProgressView().controlSize(.small).tint(Theme.main) } else { Image(systemName: "arrow.up.circle.fill") }
+                            Text("Load earlier comments")
+                        }
+                        .font(.jakarta(13, .bold)).foregroundStyle(Theme.main)
+                        .padding(.horizontal, 14).frame(height: 36)
+                        .background(Theme.soft, in: Capsule())
+                    }
+                    .buttonStyle(BouncyStyle(scale: 0.95))
+                    .disabled(loadingOlder)
+                }
+                LazyVStack(alignment: .leading, spacing: 16) {
                     ForEach(threads) { thread in
                         CommentRow(comment: thread.parent, onReply: { reply(to: thread.parent) }, onReport: { report(thread.parent) }, onDelete: { delete(thread.parent) }, onLike: { like(thread.parent) })
                         ForEach(thread.replies) { r in
@@ -844,9 +864,26 @@ struct CommentsScreen<Header: View>: View {
         }
     }
 
+    // The newest page of comments; older ones load on request, so a post
+    // with a huge thread never downloads it all at once.
     private func load() async {
-        guard let docs = try? await FS.query(collection, [.equals(field, targetId)]) else { return }
-        withAnimation(.snappy) { comments = docs.map(Comment.init).sorted { $0.created < $1.created } }
+        guard let docs = try? await FS.query(collection, [.equals(field, targetId)], orderBy: "created_date", limit: Self.pageSize) else { return }
+        let fresh = docs.map(Comment.init)
+        let cutoff = fresh.map(\.created).min() ?? ""
+        let older = comments.filter { $0.created < cutoff }
+        if comments.isEmpty { hasOlder = docs.count >= Self.pageSize }
+        withAnimation(.snappy) { comments = (older + fresh).sorted { $0.created < $1.created } }
+    }
+
+    private func loadOlder() async {
+        guard let oldest = comments.first?.created, !loadingOlder else { return }
+        loadingOlder = true
+        defer { loadingOlder = false }
+        guard let docs = try? await FS.query(collection, [.equals(field, targetId), .before("created_date", oldest)], orderBy: "created_date", limit: Self.pageSize) else { return }
+        hasOlder = docs.count >= Self.pageSize
+        let known = Set(comments.map(\.id))
+        let page = docs.map(Comment.init).filter { !known.contains($0.id) }
+        withAnimation(.snappy) { comments = (page + comments).sorted { $0.created < $1.created } }
     }
 
     private func reply(to comment: Comment) {

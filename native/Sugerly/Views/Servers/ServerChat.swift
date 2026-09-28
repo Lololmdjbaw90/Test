@@ -16,6 +16,8 @@ struct ChannelChatView: View {
     @State private var photo: PhotosPickerItem?
     @State private var gifs = false
     @State private var loaded = false
+    @State private var hasOlder = false
+    @State private var loadingOlder = false
     @State private var failed: String?
     @State private var reporting: ReportSheet.Target?
     @State private var pinsShown = false
@@ -51,6 +53,14 @@ struct ChannelChatView: View {
                         .padding(.vertical, 20)
                     } else {
                         ForEach(0..<6, id: \.self) { _ in SkeletonRow() }
+                    }
+                    if loaded && hasOlder {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small).tint(Theme.main)
+                            Text("Loading earlier messages").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
+                        }
+                        .frame(maxWidth: .infinity).padding(.vertical, 12)
+                        .onAppear { Task { await loadOlder(proxy) } }
                     }
                     ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
                         let previous = index > 0 ? messages[index - 1] : nil
@@ -225,22 +235,47 @@ struct ChannelChatView: View {
         let newest = messages.last(where: { !$0.pending })?.created ?? ""
         let incremental = loaded && !full && !newest.isEmpty
         if incremental { filters.append(.after("created_date", ChatStore.minus(newest, seconds: 60))) }
-        guard let docs = try? await FS.query("ChannelMessage", filters, orderBy: "created_date", limit: incremental ? 60 : 150) else {
+        let page = incremental ? 60 : 150
+        guard let docs = try? await FS.query("ChannelMessage", filters, orderBy: "created_date", limit: page) else {
             loaded = true
             return
         }
         let blocked = Set(model.me?.blocked ?? [])
         let incoming = docs.map(ChannelMessage.init).filter { !blocked.contains($0.authorEmail) }
-        if incremental {
+        if !loaded { hasOlder = docs.count >= page }
+        if incremental && docs.count < page {
             let known = Set(messages.map(\.id))
             let fresh = incoming.filter { !known.contains($0.id) }
             if !fresh.isEmpty { withAnimation(.snappy) { messages = (messages + fresh).sorted { $0.created < $1.created } } }
         } else {
+            // Refresh the newest page (edits, reactions, pins, deletions) but
+            // keep any older history you've already scrolled back to.
+            let cutoff = docs.map { $0.str("created_date") }.filter { !$0.isEmpty }.min() ?? ""
+            let older = messages.filter { !$0.pending && !cutoff.isEmpty && $0.created < cutoff }
             let pending = messages.filter(\.pending)
-            let next = (incoming + pending).sorted { $0.created < $1.created }
+            let next = (older + incoming + pending).sorted { $0.created < $1.created }
+            if incremental { hasOlder = true }
             if next != messages { withAnimation(loaded ? .snappy : nil) { messages = next } }
         }
         loaded = true
+    }
+
+    // The page before the oldest message on screen, keeping your place.
+    private func loadOlder(_ proxy: ScrollViewProxy) async {
+        guard !loadingOlder, let oldest = messages.first(where: { !$0.pending }) else { return }
+        loadingOlder = true
+        defer { loadingOlder = false }
+        let filters: [FS.Filter] = [.equals("channel_id", channel.id), .before("created_date", oldest.created)]
+        guard let docs = try? await FS.query("ChannelMessage", filters, orderBy: "created_date", limit: 100) else { return }
+        hasOlder = docs.count >= 100
+        let blocked = Set(model.me?.blocked ?? [])
+        let known = Set(messages.map(\.id))
+        let page = docs.map(ChannelMessage.init).filter { !known.contains($0.id) && !blocked.contains($0.authorEmail) }
+        guard !page.isEmpty else { return }
+        var still = Transaction()
+        still.disablesAnimations = true
+        withTransaction(still) { messages = (page + messages).sorted { $0.created < $1.created } }
+        DispatchQueue.main.async { proxy.scrollTo(oldest.id, anchor: .top) }
     }
 
     private func send() async {

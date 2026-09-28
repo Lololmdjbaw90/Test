@@ -149,6 +149,7 @@ struct ReelsView: View {
     @State private var cursor: String?
     @State private var exhausted = false
     @State private var loadingMore = false
+    @State private var pageCount = 0
     // Pull down on the first reel to refresh (like TikTok).
     @State private var pull: CGFloat = 0
     @State private var armed = false
@@ -404,22 +405,41 @@ struct ReelsView: View {
         return ((try? await FS.query("Reel", [.equals("user_email", email)], limit: 4)) ?? []).map(Reel.init)
     }
 
+    // Next page. Most pages continue down the timeline; every third one also
+    // dives to a random point in the past, so with millions of reels the feed
+    // still surfaces older gems instead of only the newest.
     private func loadMore() async {
-        guard !loadingMore, !exhausted, let cursor else { return }
+        guard !loadingMore else { return }
         loadingMore = true
         defer { loadingMore = false }
-        guard let docs = try? await FS.query("Reel", [.before("created_date", cursor)], orderBy: "created_date", limit: Self.pageSize) else { return }
-        let page = docs.map(Reel.init)
-        self.cursor = page.map(\.created).filter { !$0.isEmpty }.min() ?? cursor
-        exhausted = docs.count < Self.pageSize
+        pageCount += 1
+        var page: [Reel] = []
+        if pageCount % 3 == 0 {
+            let dive = Self.randomPoint(before: cursor)
+            page = ((try? await FS.query("Reel", [.before("created_date", dive)], orderBy: "created_date", limit: 12)) ?? []).map(Reel.init)
+        }
+        if !exhausted, let cursor, let docs = try? await FS.query("Reel", [.before("created_date", cursor)], orderBy: "created_date", limit: Self.pageSize) {
+            let timeline = docs.map(Reel.init)
+            self.cursor = timeline.map(\.created).filter { !$0.isEmpty }.min() ?? cursor
+            exhausted = docs.count < Self.pageSize
+            page += timeline
+        }
         let known = Set(reels.map(\.id))
-        let fresh = page.filter { !known.contains($0.id) }
+        var seenIds = Set<String>()
+        let fresh = page.filter { !known.contains($0.id) && seenIds.insert($0.id).inserted }
         guard !fresh.isEmpty else { return }
         let ranked = await ReelBrain.shared.rank(fresh, me: model.me?.email ?? "", following: Set(model.me?.following ?? []), recent: reels.suffix(2).map(\.authorEmail))
         reels += ranked
     }
 
     nonisolated(unsafe) private static var cache: [Reel]?
+
+    // A random moment within the year before the given time.
+    private static func randomPoint(before cursor: String?) -> String {
+        let end = Dates.parse(cursor ?? "") ?? Date()
+        let start = end.addingTimeInterval(-365 * 86_400)
+        return Dates.iso(Date(timeIntervalSince1970: Double.random(in: start.timeIntervalSince1970...end.timeIntervalSince1970)))
+    }
 }
 
 // One reel filling the screen.
@@ -848,7 +868,7 @@ struct ReelPage: View {
     }
 
     private func refreshComments() async {
-        let docs = (try? await FS.query("CommunityComment", [.equals("post_id", "reel_\(reel.id)")], limit: 200)) ?? []
+        let docs = (try? await FS.query("CommunityComment", [.equals("post_id", "reel_\(reel.id)")], orderBy: "created_date", limit: 200)) ?? []
         commentCount = docs.count
     }
 

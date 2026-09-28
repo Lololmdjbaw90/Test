@@ -330,7 +330,10 @@ enum FS {
             missingIndex.insert(collection)
             let simple = filters.filter { $0.op == "EQUAL" || $0.op == "ARRAY_CONTAINS" }
             let ranges = filters.filter { $0.op == "GREATER_THAN" || $0.op == "LESS_THAN" }
-            var docs = try await runQuery(collection, simple, orderBy: nil, descending: descending, limit: nil)
+            // Never download a whole collection (it could hold millions of
+            // rows): cap the fallback at a generous multiple of what was asked.
+            let cap = min(5000, max((limit ?? 100) * 20, 1000))
+            var docs = try await runQuery(collection, simple, orderBy: nil, descending: descending, limit: cap)
             for range in ranges {
                 let edge = range.value as? String ?? ""
                 docs = docs.filter { range.op == "LESS_THAN" ? $0.str(range.field) < edge : $0.str(range.field) > edge }

@@ -43,23 +43,71 @@ final class ChatStore {
         UserDefaults.standard.set(closed, forKey: "sugerly.closedDMs")
     }
 
+    // Older chats (beyond the newest messages) load as you scroll the list.
+    var hasOlder = false
+    var loadingOlder = false
+    private var oldestFetched = ""
+    private var restored = false
+
     func refresh(me: String) async {
         guard !me.isEmpty else { return }
-        if !loaded { loading = true }
+        restore()
+        if !loaded && conversations.isEmpty { loading = true }
         defer { loading = false }
         do {
             var filters: [FS.Filter] = [.contains("member_emails", me)]
             if loaded, !newest.isEmpty { filters.append(.after("created_date", Self.minus(newest, seconds: 60))) }
             let docs = try await FS.query("DirectMessage", filters, orderBy: "created_date", limit: loaded ? 100 : 300)
-            merge(docs.map(Message.init), me: me)
+            let batch = docs.map(Message.init)
+            if !loaded {
+                hasOlder = docs.count >= 300
+                oldestFetched = batch.map(\.created).filter { !$0.isEmpty }.min() ?? ""
+            }
+            merge(batch, me: me)
             loaded = true
             error = nil
+            if !batch.isEmpty { persist() }
         } catch {
-            if !loaded { self.error = error.localizedDescription }
+            if !loaded && conversations.isEmpty { self.error = error.localizedDescription }
         }
     }
 
-    private func merge(_ messages: [Message], me: String) {
+    func loadOlder(me: String) async {
+        guard hasOlder, !loadingOlder, !oldestFetched.isEmpty, !me.isEmpty else { return }
+        loadingOlder = true
+        defer { loadingOlder = false }
+        guard let docs = try? await FS.query("DirectMessage", [.contains("member_emails", me), .before("created_date", oldestFetched)], orderBy: "created_date", limit: 300) else { return }
+        let batch = docs.map(Message.init)
+        hasOlder = docs.count >= 300
+        oldestFetched = batch.map(\.created).filter { !$0.isEmpty }.min() ?? oldestFetched
+        merge(batch, me: me, countUnread: false)
+        persist()
+    }
+
+    // The chat list saved on the phone, so it shows instantly and old chats
+    // never fall off it.
+    private func restore() {
+        guard !restored else { return }
+        restored = true
+        guard conversations.isEmpty else { return }
+        let saved: [Conversation] = ChatCache.read("list").compactMap { d in
+            guard let id = d["id"] as? String else { return nil }
+            let last = (d["last"] as? [String: Any]).map(Message.init)
+            return Conversation(id: id, members: d.strs("members"), isGroup: d.bool("group"), groupName: d.str("name"), last: last, unread: 0)
+        }
+        conversations = saved.sorted { ($0.last?.created ?? "") > ($1.last?.created ?? "") }
+    }
+
+    private func persist() {
+        let list: [Doc] = conversations.prefix(1000).map { c in
+            var d: Doc = ["id": c.id, "members": c.members, "group": c.isGroup, "name": c.groupName]
+            if let last = c.last { d["last"] = last.cacheDoc }
+            return d
+        }
+        ChatCache.write("list", list)
+    }
+
+    private func merge(_ messages: [Message], me: String, countUnread: Bool = true) {
         var byId = Dictionary(uniqueKeysWithValues: conversations.map { ($0.id, $0) })
         // Oldest first, so the newest message ends up as "last".
         for m in messages.sorted(by: { $0.created < $1.created }) where !processed.contains(m.id) {
@@ -67,7 +115,7 @@ final class ChatStore {
             var c = byId[m.conversationId] ?? Conversation(id: m.conversationId, members: m.members, isGroup: m.isGroup, groupName: m.groupName, last: nil, unread: 0)
             if (c.last?.created ?? "") <= m.created { c.last = m }
             if m.kind != "call" { if m.authorEmail == me { wrote.insert(m.conversationId) } else { heard.insert(m.conversationId) } }
-            if m.authorEmail != me && !m.readBy.contains(me) && !muted.contains(m.authorEmail) { c.unread += 1 }
+            if countUnread && m.authorEmail != me && !m.readBy.contains(me) && !muted.contains(m.authorEmail) { c.unread += 1 }
             if c.members.isEmpty { c.members = m.members }
             byId[m.conversationId] = c
             if m.created > newest { newest = m.created }
@@ -248,6 +296,14 @@ struct ChatListView: View {
                 if search.isEmpty && !ignoredChats.isEmpty {
                     tuckedSection(title: "Ignored", icon: "bell.slash.fill", list: ignoredChats, open: $showIgnored,
                                   note: "Chats with people you ignore. They can't ping you.")
+                }
+                if search.isEmpty && store.hasOlder {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small).tint(Theme.main)
+                        Text("Loading older chats").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
+                    }
+                    .frame(maxWidth: .infinity).padding(.vertical, 12)
+                    .onAppear { Task { await store.loadOlder(me: model.me?.email ?? "") } }
                 }
                 let hidden = store.conversations.filter { store.isClosed($0) }.count
                 if search.isEmpty && hidden > 0 {

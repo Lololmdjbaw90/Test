@@ -714,6 +714,7 @@ enum AppReleases {
             "Logging out closes everything, and a new account starts completely fresh.",
             "Voice messages play instantly, and photos and videos in chats go through the in-app camera and editor.",
             "Pull down on the first reel to refresh the feed, like TikTok. GIFs show up in comments again.",
+            "Built for huge amounts: chats keep every old conversation, scroll up to load older messages (DMs and servers), comments load in pages, and For You also digs up older reels.",
         ]),
         AppRelease(id: "ios-1.7", icon: "person.2.wave.2.fill", title: "More social & smoother", date: "2026-09-28T11:00:00Z", items: [
             "Home has stories, today's art prompt, Happening now, people you might like and trending tags.",
