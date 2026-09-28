@@ -44,11 +44,14 @@ struct PageShine: View {
 
     var body: some View {
         GeometryReader { geo in
-            let w = geo.size.width, h = geo.size.height
-            let band = w * 0.7
-            let angle = 16.0
-            let tall = h * 1.25
-            let half = (band * cos(angle * .pi / 180) + tall * sin(angle * .pi / 180)) / 2
+            let w: CGFloat = geo.size.width
+            let h: CGFloat = geo.size.height
+            let band: CGFloat = w * 0.7
+            let angle: Double = 16
+            let tall: CGFloat = h * 1.25
+            let radians: CGFloat = CGFloat(angle * Double.pi / 180)
+            let half: CGFloat = (band * cos(radians) + tall * sin(radians)) / 2
+            let travel: CGFloat = w + half * 2
             Color.clear
                 .keyframeAnimator(initialValue: Sweep(), trigger: trigger) { content, v in
                     content
@@ -66,7 +69,7 @@ struct PageShine: View {
                             ], startPoint: .leading, endPoint: .trailing)
                             .frame(width: band, height: tall)
                             .rotationEffect(.degrees(forward ? angle : -angle))
-                            .position(x: forward ? -half + v.p * (w + half * 2) : w + half - v.p * (w + half * 2), y: h / 2)
+                            .position(x: forward ? v.p * travel - half : w + half - v.p * travel, y: h / 2)
                         }
                 } keyframes: { _ in
                     KeyframeTrack(\.p) {
@@ -195,7 +198,8 @@ struct MainShell: View {
         }
     }
 
-    var body: some View {
+    // The six tabs, each with its own navigation stack.
+    private var tabs: some View {
         TabView(selection: $tab) {
             NavigationStack(path: $homePath) {
                 HomeView(path: $homePath, compose: { composer = $0 }).sugarRoutes($homePath)
@@ -235,6 +239,43 @@ struct MainShell: View {
             .tag(AppTab.me)
             .toolbar(.hidden, for: .tabBar)
         }
+    }
+
+    // Pop-ups over everything: notifications and the quick menu.
+    @ViewBuilder
+    private var popups: some View {
+        if model.showNotifications {
+            NotificationsPopup(path: currentPathBinding) {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { model.showNotifications = false }
+            }
+            .transition(.opacity)
+            .zIndex(5)
+        }
+        if model.showMenu {
+            QuickMenu(close: closeMenu, go: { route in
+                closeMenu()
+                currentPathBinding.wrappedValue.append(route)
+            }, open: { sheet in
+                closeMenu()
+                menuSheet = sheet
+            })
+            .transition(.opacity)
+            .zIndex(6)
+        }
+    }
+
+    @ViewBuilder
+    private func menuSheetView(_ sheet: MenuSheet) -> some View {
+        switch sheet {
+        case .settings: SettingsView()
+        case .shop: NitroShopView()
+        case .legal(let doc): LegalView(doc: doc)
+        }
+    }
+
+    // Tabs, tab bar, pop-ups and the shared stores.
+    private var core: some View {
+        tabs
         // A big white shine sweeps across whenever you switch pages.
         .overlay { PageShine(trigger: shineTick, forward: shineForward) }
         .onChange(of: tab) { old, new in
@@ -256,35 +297,8 @@ struct MainShell: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .overlay {
-            if model.showNotifications {
-                NotificationsPopup(path: currentPathBinding) {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { model.showNotifications = false }
-                }
-                .transition(.opacity)
-                .zIndex(5)
-            }
-        }
-        .overlay {
-            if model.showMenu {
-                QuickMenu(close: closeMenu, go: { route in
-                    closeMenu()
-                    currentPathBinding.wrappedValue.append(route)
-                }, open: { sheet in
-                    closeMenu()
-                    menuSheet = sheet
-                })
-                .transition(.opacity)
-                .zIndex(6)
-            }
-        }
-        .sheet(item: $menuSheet) { sheet in
-            switch sheet {
-            case .settings: SettingsView()
-            case .shop: NitroShopView()
-            case .legal(let doc): LegalView(doc: doc)
-            }
-        }
+        .overlay { ZStack { popups } }
+        .sheet(item: $menuSheet) { sheet in menuSheetView(sheet) }
         .onChange(of: model.tabRequest) { _, next in
             guard let next else { return }
             tab = next
@@ -316,6 +330,10 @@ struct MainShell: View {
         .environment(notes)
         .environment(voice)
         .environment(calls)
+    }
+
+    var body: some View {
+        core
         .overlay(alignment: .top) {
             if let incoming = calls.incoming {
                 IncomingCallBanner(call: incoming)
@@ -385,11 +403,11 @@ struct MainShell: View {
 }
 
 extension MainShell {
-    // Opens the place a notification or widget points at.
-    private func closeMenu() {
+    fileprivate func closeMenu() {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) { model.showMenu = false }
     }
 
+    // Opens the place a notification or widget points at.
     func open(_ kind: String, _ target: String) async {
         switch kind {
         case "dm", "chat":
