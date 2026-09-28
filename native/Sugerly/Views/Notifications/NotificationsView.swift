@@ -98,7 +98,7 @@ struct NotificationsPopup: View {
                         VStack(spacing: 6) {
                             MimiBuddy(icon: "bell.fill", mood: .sleepy, size: 84)
                             Text("All quiet here").font(.display(22)).foregroundStyle(Palette.text)
-                            Doodle.squiggle.stroke(Theme.main.opacity(0.55), style: StrokeStyle(lineWidth: 2.2, lineCap: .round)).frame(width: 54, height: 7)
+                            Doodles.squiggle.stroke(Theme.main.opacity(0.55), style: StrokeStyle(lineWidth: 2.2, lineCap: .round)).frame(width: 54, height: 7)
                             Text(filter == "all" ? "When someone likes, follows, comments or mentions you, it pops up here." : "Nothing like this yet.")
                                 .font(.jakarta(13)).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
                         }

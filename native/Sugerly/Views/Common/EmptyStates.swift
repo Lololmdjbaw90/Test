@@ -123,16 +123,16 @@ struct MimiBuddy: View {
     // Hand-drawn little sparkles and a heart around Mimi.
     private func doodles(_ s: CGFloat) -> some View {
         ZStack {
-            Doodle.sparkle
+            Doodles.sparkle
                 .stroke(Theme.main.opacity(0.7), style: StrokeStyle(lineWidth: 2 * s, lineCap: .round, lineJoin: .round))
                 .frame(width: 16 * s, height: 16 * s)
                 .offset(x: -62 * s, y: -30 * s)
                 .phaseAnimator(animated ? [0.6, 1.0] : [1.0]) { v, k in v.scaleEffect(k).opacity(k) } animation: { _ in .easeInOut(duration: 0.9) }
-            Doodle.sparkle
+            Doodles.sparkle
                 .stroke(Color(hex: 0xF0A020).opacity(0.75), style: StrokeStyle(lineWidth: 1.8 * s, lineCap: .round, lineJoin: .round))
                 .frame(width: 11 * s, height: 11 * s)
                 .offset(x: 64 * s, y: -40 * s)
-            Doodle.heart
+            Doodles.heart
                 .stroke(Theme.main.opacity(0.55), style: StrokeStyle(lineWidth: 1.8 * s, lineCap: .round, lineJoin: .round))
                 .frame(width: 13 * s, height: 12 * s)
                 .rotationEffect(.degrees(-14))
@@ -152,7 +152,7 @@ struct SmileArc: Shape {
     }
 }
 
-enum Doodle {
+enum Doodles {
     // A four-point sparkle with slightly curved sides, like a pen doodle.
     static let sparkle = DoodleShape { r in
         var p = Path()
@@ -217,7 +217,7 @@ struct EmptyCard: View {
             MimiBuddy(icon: icon, mood: face, size: compact ? 80 : 104, animated: animated)
                 .padding(.bottom, 2)
             Text(title).font(.display(compact ? 21 : 25)).foregroundStyle(Palette.text).multilineTextAlignment(.center)
-            Doodle.squiggle
+            Doodles.squiggle
                 .stroke(Theme.main.opacity(0.55), style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
                 .frame(width: compact ? 54 : 70, height: 7)
             Text(text).font(.jakarta(14)).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
