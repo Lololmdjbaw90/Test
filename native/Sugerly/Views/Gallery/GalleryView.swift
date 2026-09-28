@@ -502,7 +502,7 @@ struct NewArtworkView: View {
                 "title": title.trimmingCharacters(in: .whitespaces), "description": text, "image_url": url, "medium": medium,
                 "year": "\(Calendar.current.component(.year, from: Date()))", "is_featured": false,
                 "user_email": me.email, "user_display_name": me.displayName, "user_profile_picture": me.picture,
-                "likes": [String](), "like_count": 0, "created_by": me.email, "created_date": now, "updated_date": now,
+                "likes": [String](), "created_by": me.email, "created_date": now, "updated_date": now,
             ]
             try await FS.create("Artwork", doc)
             try? await model.updateMe(["xp": me.xp + 25, "coins": me.coins + 5])

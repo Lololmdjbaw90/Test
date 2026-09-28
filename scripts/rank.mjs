@@ -14,6 +14,7 @@
 // Locally: FIREBASE_SERVICE_ACCOUNT="$(cat key.json)" node scripts/rank.mjs
 import { cert, initializeApp } from "firebase-admin/app";
 import { FieldPath, getFirestore } from "firebase-admin/firestore";
+import { getSecurityRules } from "firebase-admin/security-rules";
 
 let key;
 try { key = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || ""); } catch {
@@ -102,8 +103,10 @@ async function moveDoc(coll, snap) {
 
 async function moveLikes(coll) {
   const key = `likes_moved_${coll}`;
-  if (state[key] === "done") return;
-  while (budgetLeft()) {
+  const sinceKey = `likes_since_${coll}`;
+  // Anything created after the full pass began is picked up by date below.
+  if (!state[sinceKey]) state[sinceKey] = new Date(Date.now() - 3_600_000).toISOString();
+  while (state[key] !== "done" && budgetLeft()) {
     let q = db.collection(coll).orderBy(FieldPath.documentId()).limit(200);
     if (state[key]) q = q.startAfter(state[key]);
     const page = await q.get();
@@ -116,8 +119,31 @@ async function moveLikes(coll) {
     }
     await persist();
   }
+  // New things since then (apps create them without a like_count).
+  while (state[key] === "done" && budgetLeft()) {
+    const page = await db.collection(coll).where("created_date", ">", state[sinceKey]).orderBy("created_date").limit(200).get();
+    reads += Math.max(page.size, 1);
+    for (const snap of page.docs) {
+      if (!budgetLeft()) break;
+      await moveDoc(coll, snap);
+      state[sinceKey] = String(snap.get("created_date"));
+    }
+    if (page.size < 200) break;
+  }
   await persist();
-  console.log(`${coll}: likes ${state[key] === "done" ? "all in the Like table" : `moved up to ${state[key]}`}`);
+  console.log(`${coll}: likes ${state[key] === "done" ? `in the Like table (new up to ${state[sinceKey]})` : `moved up to ${state[key]}`}`);
+}
+
+// The apps only use the Like table once a thing has a like_count, and that
+// only works once the live rules know about Like records.
+async function likeRulesLive() {
+  try {
+    const ruleset = await getSecurityRules().getFirestoreRuleset();
+    return ruleset.source.some((file) => file.content.includes("match /Like/{id}"));
+  } catch (e) {
+    console.warn(`Couldn't read the live rules (${e.message}).`);
+    return false;
+  }
 }
 
 // ---- 2. Scores -------------------------------------------------------------
@@ -198,7 +224,11 @@ async function rescore(coll, extra) {
   console.log(`${coll}: scored ${seen.size} (${reads} reads, ${writes} writes so far)`);
 }
 
-for (const coll of LIKED) await moveLikes(coll);
+if (await likeRulesLive()) {
+  for (const coll of LIKED) await moveLikes(coll);
+} else {
+  console.log("The live Firestore rules don't have the Like table yet: publish firestore.rules (the Publish Firebase rules workflow) first. Likes stay as lists until then.");
+}
 const commented = await newlyCommented();
 for (const coll of Object.keys(RANKED)) await rescore(coll, commented[coll]);
 // Only move past these comments once every post they touched is scored.

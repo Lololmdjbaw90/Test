@@ -44,7 +44,7 @@ function UploadModal({ open, onClose }) {
       if (!mod.safe) { toast.error("Upload blocked", { description: mod.reason }); setSubmitting(false); return; }
       const music_url = (await base44.integrations.Core.UploadFile({ file })).file_url;
       const cover_url = cover ? (await base44.integrations.Core.UploadFile({ file: cover })).file_url : "";
-      await base44.entities.MusicReview.create({ ...form, title, music_url, cover_url, identified_song: "", user_email: user.email, user_display_name: displayName(user), user_profile_picture: user.profile_picture || "", likes: [], like_count: 0 });
+      await base44.entities.MusicReview.create({ ...form, title, music_url, cover_url, identified_song: "", user_email: user.email, user_display_name: displayName(user), user_profile_picture: user.profile_picture || "", likes: [] });
       await updateMe({ xp: (user.xp || 0) + 15 }).catch(() => {});
       toast.success("Track shared!", { description: "+15 XP" });
       setFile(null); setCover(null); setCoverPreview(null); setForm({ title: "", genre: "Lo-fi", mood: "Chill", ai_review: "" });

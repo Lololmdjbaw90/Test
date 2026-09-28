@@ -40,7 +40,7 @@ export default function PostComposer({ autoOpen = false }) {
       // The chosen filter is drawn into the photo before it's uploaded.
       const file = img && filter !== "none" && img.type !== "image/gif" ? await bakePhoto(img, { filter, max: 2048 }) : img;
       const image_url = file ? (await base44.integrations.Core.UploadFile({ file })).file_url : "";
-      await base44.entities.CommunityPost.create({ title: title.trim(), description: desc.trim(), image_url, user_email: user.email, user_display_name: displayName(user), user_profile_picture: user.profile_picture || "", likes: [], like_count: 0 });
+      await base44.entities.CommunityPost.create({ title: title.trim(), description: desc.trim(), image_url, user_email: user.email, user_display_name: displayName(user), user_profile_picture: user.profile_picture || "", likes: [] });
       await updateMe({ xp: (user.xp || 0) + 20, coins: (user.coins || 0) + 5 }).catch(() => {});
       toast.success("Posted!", { description: "+20 XP · +5 coins" });
       reset();

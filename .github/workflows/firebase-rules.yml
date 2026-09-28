@@ -17,6 +17,7 @@ on:
       - "storage.rules"
       - "firestore.indexes.json"
       - "scripts/deploy-rules.mjs"
+      - "scripts/rank.mjs"
       - ".github/workflows/firebase-rules.yml"
 
 concurrency:
@@ -60,3 +61,10 @@ jobs:
           PROJECT=$(node -p "JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT).project_id")
           npx --yes firebase-tools@14 deploy --only firestore:indexes --project "$PROJECT" --non-interactive
           rm -f "$RUNNER_TEMP/key.json"
+
+      # With the rules live, move old likes into the Like table and rank
+      # reels right away (the hourly job keeps it going; see rank.yml).
+      - name: Move likes and rank
+        if: env.FIREBASE_SERVICE_ACCOUNT != ''
+        continue-on-error: true
+        run: node scripts/rank.mjs

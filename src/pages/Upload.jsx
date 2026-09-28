@@ -36,7 +36,7 @@ export default function UploadPage() {
       const { file_url } = await base44.integrations.Core.UploadFile({ file: imgFile });
       let music_url = "";
       if (musicFile) music_url = (await base44.integrations.Core.UploadFile({ file: musicFile })).file_url;
-      const art = await base44.entities.Artwork.create({ ...form, title: form.title.trim(), image_url: file_url, music_url, likes: [], like_count: 0, user_email: user.email, user_display_name: displayName(user), user_profile_picture: user.profile_picture || "" });
+      const art = await base44.entities.Artwork.create({ ...form, title: form.title.trim(), image_url: file_url, music_url, likes: [], user_email: user.email, user_display_name: displayName(user), user_profile_picture: user.profile_picture || "" });
       base44.entities.Log.create({ action: "artwork_added", details: `Added: "${form.title.trim()}"`, user_email: user.email }).catch(() => {});
       setDone(true);
       toast.success("Artwork published");

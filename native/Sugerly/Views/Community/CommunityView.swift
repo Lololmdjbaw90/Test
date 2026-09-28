@@ -1153,7 +1153,7 @@ struct NewPostView: View {
             let data: Doc = [
                 "title": title.trimmingCharacters(in: .whitespaces), "description": text.trimmingCharacters(in: .whitespacesAndNewlines),
                 "image_url": imageURL, "user_email": me.email, "user_display_name": me.displayName,
-                "user_profile_picture": me.picture, "likes": [String](), "like_count": 0, "created_by": me.email,
+                "user_profile_picture": me.picture, "likes": [String](), "created_by": me.email,
                 "created_date": now, "updated_date": now,
             ]
             try await FS.create("CommunityPost", data)

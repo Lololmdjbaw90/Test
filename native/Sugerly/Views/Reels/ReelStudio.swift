@@ -1069,7 +1069,7 @@ struct ReelStudioView: View {
                 "cover_url": coverURL, "caption": caption.trimmingCharacters(in: .whitespacesAndNewlines),
                 "music_title": sound?.title ?? "", "music_artist": sound?.artist ?? "", "music_url": sound?.audioURL ?? "",
                 "music_source": source, "duration": (length * 10).rounded() / 10, "edits": [String: Any](),
-                "comments_off": !allowComments, "likes": [String](), "like_count": 0, "views": 0,
+                "comments_off": !allowComments, "likes": [String](), "views": 0,
                 "user_email": me.email, "user_display_name": me.displayName, "user_profile_picture": me.picture,
                 "created_by": me.email, "created_date": now, "updated_date": now,
             ]
