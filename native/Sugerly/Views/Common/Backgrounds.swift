@@ -44,13 +44,20 @@ private struct PatternBackgroundModifier: ViewModifier {
     @AppStorage(AppBackground.storageKey) private var choice = AppBackground.dots.rawValue
     @AppStorage("sugerly.background.still") private var still = false
 
+    @Environment(\.colorScheme) private var scheme
+
     func body(content: Content) -> some View {
         let kind = AppBackground(rawValue: choice) ?? .dots
-        if kind == .off {
-            content.sugarBackground()
-        } else {
-            content.background {
+        // The page itself keeps its identity whatever background is picked;
+        // only the background layer is swapped.
+        content.background {
+            if kind == .off {
+                Color.clear.sugarBackground()
+            } else {
+                // A new id for each look, so a freshly picked pattern (or
+                // colour, or dark mode) starts moving again straight away.
                 PatternBackground(kind: kind, animated: !still)
+                    .id("\(kind.rawValue)-\(still)-\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)")
                     .ignoresSafeArea()
                     .accessibilityHidden(true)
             }
@@ -101,9 +108,17 @@ struct PatternBackground: View {
             .clipped()
         }
         .background(Palette.bg)
-        .onAppear { go = animated && !reduceMotion }
+        .onAppear { start() }
         .onDisappear { go = false }
-        .onChange(of: animated) { _, now in go = now && !reduceMotion }
+        .onChange(of: animated) { _, _ in go = false; start() }
+        .onChange(of: kind) { _, _ in go = false; start() }
+    }
+
+    // Starts the loop on the next frame, so the first (still) frame is drawn
+    // and the move from there is animated.
+    private func start() {
+        guard animated && !reduceMotion else { return }
+        DispatchQueue.main.async { go = true }
     }
 
     private func sliding(dx: CGFloat, dy: CGFloat, duration: Double, size: CGSize, draw: @escaping (inout GraphicsContext, CGSize) -> Void) -> some View {

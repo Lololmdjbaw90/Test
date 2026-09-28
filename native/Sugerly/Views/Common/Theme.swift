@@ -198,6 +198,7 @@ private struct GradientButtonBody: View {
             .opacity(enabled ? 1 : 0.6)
             .scaleEffect(configuration.isPressed ? 0.95 : 1)
             .animation(.spring(response: 0.25, dampingFraction: 0.6), value: configuration.isPressed)
+            .clickSound(configuration.isPressed)
     }
 }
 
@@ -216,6 +217,7 @@ struct OutlineButtonStyle: ButtonStyle {
             .shadow(color: Palette.shadow, radius: 6, y: 2)
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
             .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+            .clickSound(configuration.isPressed)
     }
 }
 

@@ -34,117 +34,49 @@ enum AppTab: Hashable {
     }
 }
 
-// The page-switch shine: a wide, soft white band that sweeps over the page
-// (the way you're going) and is gone in about half a second.
+// The page-switch shine: two crisp white glossy bars (a wide one and a thin
+// one) that sweep over the whole screen the way you're going, gone in about
+// half a second.
 struct PageShine: View {
     let trigger: Int
     var forward = true
 
-    struct Sweep { var p: CGFloat = 1; var glow: Double = 0 }
+    struct Sweep { var p: CGFloat = 1 }
 
     var body: some View {
         GeometryReader { geo in
             let w: CGFloat = geo.size.width
             let h: CGFloat = geo.size.height
-            let band: CGFloat = w * 0.7
-            let angle: Double = 16
-            let tall: CGFloat = h * 1.25
-            let radians: CGFloat = CGFloat(angle * Double.pi / 180)
-            let half: CGFloat = (band * cos(radians) + tall * sin(radians)) / 2
+            let wide: CGFloat = max(90, w * 0.3)
+            let thin: CGFloat = max(18, w * 0.07)
+            let gap: CGFloat = max(14, w * 0.05)
+            let group: CGFloat = wide + gap + thin
+            let tall: CGFloat = h * 1.3
+            let radians: CGFloat = CGFloat(16 * Double.pi / 180)
+            let half: CGFloat = (group * cos(radians) + tall * sin(radians)) / 2
             let travel: CGFloat = w + half * 2
             Color.clear
                 .keyframeAnimator(initialValue: Sweep(), trigger: trigger) { content, v in
-                    content
-                        .overlay {
-                            // soft whole-page glow under the band
-                            Color.white.opacity(v.glow)
+                    content.overlay {
+                        HStack(spacing: gap) {
+                            Rectangle().fill(Color.white.opacity(0.88)).frame(width: wide)
+                            Rectangle().fill(Color.white.opacity(0.7)).frame(width: thin)
                         }
-                        .overlay {
-                            LinearGradient(stops: [
-                                .init(color: .white.opacity(0), location: 0),
-                                .init(color: .white.opacity(0.55), location: 0.3),
-                                .init(color: .white.opacity(0.95), location: 0.5),
-                                .init(color: .white.opacity(0.55), location: 0.7),
-                                .init(color: .white.opacity(0), location: 1),
-                            ], startPoint: .leading, endPoint: .trailing)
-                            .frame(width: band, height: tall)
-                            .rotationEffect(.degrees(forward ? angle : -angle))
-                            .position(x: forward ? v.p * travel - half : w + half - v.p * travel, y: h / 2)
-                        }
+                        .frame(width: group, height: tall)
+                        .scaleEffect(x: forward ? 1 : -1)
+                        .rotationEffect(.degrees(forward ? 16 : -16))
+                        .position(x: forward ? v.p * travel - half : w + half - v.p * travel, y: h / 2)
+                    }
                 } keyframes: { _ in
                     KeyframeTrack(\.p) {
                         MoveKeyframe(0)
-                        CubicKeyframe(1, duration: 0.55)
-                    }
-                    KeyframeTrack(\.glow) {
-                        MoveKeyframe(0)
-                        LinearKeyframe(0.14, duration: 0.12)
-                        LinearKeyframe(0, duration: 0.4)
+                        CubicKeyframe(1, duration: 0.5)
                     }
                 }
         }
+        .ignoresSafeArea()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-    }
-}
-
-enum Composer: String, Identifiable { case post, artwork, reel, track; var id: String { rawValue } }
-
-// Where a tap leads, shared by every tab's navigation stack.
-struct RouteView: View {
-    let route: Route
-    @Binding var path: [Route]
-
-    var body: some View {
-        switch route {
-        case .post(let post): PostDetailView(postId: post.id, initial: post, path: $path)
-        case .person(let email): PersonView(email: email, path: $path)
-        case .chat(let conversation): ChatView(conversation: conversation)
-        case .artwork(let artwork): ArtworkDetailView(artwork: artwork, path: $path)
-        case .reel(let reel): SingleReelView(reel: reel, path: $path)
-        case .gallery: GalleryView(path: $path)
-        case .music: MusicView(path: $path)
-        case .admin: AdminView()
-        case .servers: ServerHubView(path: $path).navigationTitle("Servers").navigationBarTitleDisplayMode(.inline).sugarBackground()
-        case .people: PeopleView(path: $path)
-        case .commissions: CommissionsView(path: $path)
-        case .topArtists: TopArtistsView(path: $path)
-        case .updates: UpdatesView()
-        case .server(let server): ServerHubView(path: $path, initial: server).navigationTitle(server.name).navigationBarTitleDisplayMode(.inline).sugarBackground()
-        case .channel(let server, let channel): ChannelChatView(server: server, channel: channel)
-        case .voice(let server, let channel): VoiceRoomView(server: server, channel: channel)
-        }
-    }
-}
-
-extension View {
-    func sugarRoutes(_ path: Binding<[Route]>) -> some View {
-        navigationDestination(for: Route.self) { route in RouteView(route: route, path: path) }
-    }
-
-    // Page background: warm off-white with two soft accent glows.
-    func sugarBackground() -> some View {
-        background {
-            ZStack {
-                Palette.bg
-                Circle().fill(Theme.light.opacity(0.32)).frame(width: 360).blur(radius: 95).offset(x: 150, y: -300)
-                Circle().fill(Theme.lavender.opacity(0.18)).frame(width: 320).blur(radius: 95).offset(x: -170, y: 260)
-                Circle().fill(Color(hex: 0xFFD6A5).opacity(0.14)).frame(width: 240).blur(radius: 80).offset(x: 140, y: 120)
-            }
-            .drawingGroup()
-            .ignoresSafeArea()
-        }
-    }
-}
-
-// Presses squish a little and spring back, with a light tap (all buttons).
-struct BouncyStyle: ButtonStyle {
-    var scale: CGFloat = 0.93
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? scale : 1)
-            .brightness(configuration.isPressed ? -0.03 : 0)
-            .animation(.spring(response: 0.28, dampingFraction: 0.55), value: configuration.isPressed)
     }
 }
 
@@ -276,8 +208,6 @@ struct MainShell: View {
     // Tabs, tab bar, pop-ups and the shared stores.
     private var core: some View {
         tabs
-        // A big white shine sweeps across whenever you switch pages.
-        .overlay { PageShine(trigger: shineTick, forward: shineForward) }
         .onChange(of: tab) { old, new in
             shineForward = new.order >= old.order
             shineTick += 1
@@ -298,6 +228,8 @@ struct MainShell: View {
             }
         }
         .overlay { ZStack { popups } }
+        // A big white shine sweeps over the whole screen when you switch pages.
+        .overlay { PageShine(trigger: shineTick, forward: shineForward) }
         .sheet(item: $menuSheet) { sheet in menuSheetView(sheet) }
         .onChange(of: model.tabRequest) { _, next in
             guard let next else { return }

@@ -64,7 +64,11 @@ struct GalleryView: View {
                         VStack(spacing: 12) { SkeletonBlock(height: 180, radius: 22); SkeletonBlock(height: 240, radius: 22) }
                     }
                 } else if shown.isEmpty {
-                    EmptyCard(icon: "paintpalette.fill", title: sort == .saved ? "Nothing saved yet" : "No artworks here", text: sort == .saved ? "Tap the bookmark on any artwork to keep it." : "Add the first one!")
+                    if sort == .saved {
+                        EmptyCard(icon: "bookmark.fill", title: "Nothing saved yet", text: "Tap the bookmark on a drawing you love and it'll wait for you here.")
+                    } else {
+                        EmptyCard(icon: "paintpalette.fill", title: "The wall is empty", text: "No drawings here yet. Hang the first one up!", actionTitle: "Upload a drawing") { adding = true }
+                    }
                 }
                 // Two staggered columns, like a pinboard.
                 HStack(alignment: .top, spacing: 12) {

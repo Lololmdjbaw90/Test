@@ -275,9 +275,10 @@ struct CommunityView: View {
                     if store.loading && store.posts.isEmpty {
                         ForEach(0..<3, id: \.self) { i in SkeletonCard(media: i != 1) }
                     } else if visible.isEmpty {
-                        EmptyCard(icon: feed == .saved ? "bookmark.fill" : "sparkles",
-                                  title: feed == .saved ? "No saved posts" : feed == .following ? "Nothing from people you follow" : "Nothing here yet",
-                                  text: feed == .saved ? "Tap the bookmark on any post to keep it here." : "Be the first to share something!")
+                        EmptyCard(icon: feed == .saved ? "bookmark.fill" : "photo.on.rectangle.angled",
+                                  title: feed == .saved ? "No saved posts" : feed == .following ? "It's quiet over here" : "Nothing here yet",
+                                  text: feed == .saved ? "Tap the bookmark on a post and it'll wait for you here." : feed == .following ? "The people you follow haven't posted yet. Follow a few more artists?" : "No posts yet. Yours could be the first!",
+                                  actionTitle: feed == .saved ? nil : "Share a post", action: feed == .saved ? nil : compose)
                     }
 
                     ForEach(Array(visible.enumerated()), id: \.element.id) { index, post in
@@ -476,30 +477,6 @@ struct TintedIconLabel: LabelStyle {
             configuration.icon.foregroundStyle(tint)
             configuration.title
         }
-    }
-}
-
-struct EmptyCard: View {
-    let icon: String
-    let title: String
-    let text: String
-    var animated = true
-    var body: some View {
-        VStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 26, weight: .bold)).foregroundStyle(.white)
-                .frame(width: 64, height: 64)
-                .background(Theme.gradient, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .shadow(color: Theme.pink.opacity(0.4), radius: 12, y: 6)
-                .phaseAnimator(animated ? [false, true] : [false]) { view, up in
-                    view.offset(y: up ? -5 : 0).rotationEffect(.degrees(up ? -4 : 3))
-                } animation: { _ in .easeInOut(duration: 1.3) }
-            Text(title).font(.display(24)).foregroundStyle(Palette.text).multilineTextAlignment(.center)
-            Text(text).font(.jakarta(14)).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(28)
-        .sugarCard(radius: 28)
     }
 }
 

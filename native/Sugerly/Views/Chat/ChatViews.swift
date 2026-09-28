@@ -196,7 +196,11 @@ struct ChatListView: View {
                 } else if let error = store.error, store.conversations.isEmpty {
                     EmptyCard(icon: "wifi.exclamationmark", title: "Couldn't load chats", text: error)
                 } else if shown.isEmpty {
-                    EmptyCard(icon: "bubble.left.and.bubble.right.fill", title: search.isEmpty ? "No messages yet" : "No chats found", text: search.isEmpty ? "Tap New to start a chat with someone on Sugerly." : "Try another name.")
+                    if search.isEmpty {
+                        EmptyCard(icon: "bubble.left.and.bubble.right.fill", title: "No chats yet", text: "Say hi to someone! Your chats and group chats live here.", actionTitle: "Start a chat") { starting = true }
+                    } else {
+                        EmptyCard(icon: "magnifyingglass", title: "No chats found", text: "No one by that name. Try another?")
+                    }
                 }
 
                 ForEach(Array(shown.enumerated()), id: \.element.id) { i, c in

@@ -95,13 +95,14 @@ struct NotificationsPopup: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     if shown.isEmpty {
-                        VStack(spacing: 8) {
-                            Image(systemName: "bell.badge.fill").font(.system(size: 26, weight: .bold)).foregroundStyle(.white)
-                                .frame(width: 58, height: 58).background(Theme.gradient, in: Circle())
-                            Text("All caught up").font(.display(22)).foregroundStyle(Palette.text)
-                            Text("Likes, follows, comments and mentions show up here.").font(.jakarta(13)).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
+                        VStack(spacing: 6) {
+                            MimiBuddy(icon: "bell.fill", mood: .sleepy, size: 84)
+                            Text("All quiet here").font(.display(22)).foregroundStyle(Palette.text)
+                            Doodle.squiggle.stroke(Theme.main.opacity(0.55), style: StrokeStyle(lineWidth: 2.2, lineCap: .round)).frame(width: 54, height: 7)
+                            Text(filter == "all" ? "When someone likes, follows, comments or mentions you, it pops up here." : "Nothing like this yet.")
+                                .font(.jakarta(13)).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
                         }
-                        .frame(maxWidth: .infinity).padding(.vertical, 30).padding(.horizontal, 20)
+                        .frame(maxWidth: .infinity).padding(.vertical, 24).padding(.horizontal, 20)
                     }
                     ForEach(Array(groups.enumerated()), id: \.element.0) { gi, group in
                         Text(group.0).font(.jakarta(12, .heavy)).foregroundStyle(Palette.muted)

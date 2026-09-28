@@ -740,6 +740,7 @@ struct SettingsView: View {
     @State private var deleting = false
     @State private var error: String?
     @AppStorage("sugerly.haptics") private var haptics = true
+    @AppStorage(TapSound.settingKey) private var clickSounds = true
 
     var body: some View {
         ScrollView {
@@ -799,7 +800,7 @@ struct SettingsView: View {
                     Text("The logo changes colour to match.").font(.jakarta(12)).foregroundStyle(Palette.muted)
                     Text("Background").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2).padding(.top, 6)
                     BackgroundPicker()
-                    Text("Shown on Home and the menu. It follows your colour and dark mode.").font(.jakarta(12)).foregroundStyle(Palette.muted)
+                    Text("Shown behind Home. It follows your colour and dark mode.").font(.jakarta(12)).foregroundStyle(Palette.muted)
                 }
 
                 section("Notifications", icon: "bell.badge.fill") {
@@ -809,6 +810,7 @@ struct SettingsView: View {
 
                 section("Sounds & haptics", icon: "hand.tap.fill") {
                     toggleRow("Haptics", "Little taps when you like, send and switch tabs", isOn: $haptics)
+                    toggleRow("Click sounds", "A soft pop when you tap buttons (quiet when your phone is on silent)", isOn: $clickSounds)
                 }
 
                 section("Help & legal", icon: "questionmark.circle.fill") {

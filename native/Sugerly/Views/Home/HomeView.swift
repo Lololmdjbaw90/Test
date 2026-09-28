@@ -320,13 +320,7 @@ struct HomeView: View {
         return VStack(alignment: .leading, spacing: 14) {
             SectionHeader(icon: "person.2.fill", title: "Friends") { path.append(.people) }
             if friends.isEmpty {
-                VStack(spacing: 10) {
-                    Text("Follow people back to become friends and see who's around.").font(.jakarta(14)).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
-                    Button { path.append(.people) } label: { Label("Find people", systemImage: "sparkles") }
-                        .buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
-                }
-                .frame(maxWidth: .infinity)
-                .sugarCard(radius: 24, padding: 20)
+                EmptyCard(icon: "person.2.fill", title: "No friends yet", text: "When you and someone follow each other, you become friends and they show up here.", actionTitle: "Find people", action: { path.append(.people) }, compact: true)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 16) {
@@ -355,13 +349,7 @@ struct HomeView: View {
         return VStack(alignment: .leading, spacing: 14) {
             SectionHeader(icon: "server.rack", title: "Your servers") { path.append(.servers) }
             if mine.isEmpty {
-                VStack(spacing: 10) {
-                    Text("Join a server to chat with the community.").font(.jakarta(14)).foregroundStyle(Palette.muted)
-                    Button { path.append(.servers) } label: { Label("Explore servers", systemImage: "bubble.left.and.bubble.right.fill") }
-                        .buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
-                }
-                .frame(maxWidth: .infinity)
-                .sugarCard(radius: 24, padding: 20)
+                EmptyCard(icon: "bubble.left.and.bubble.right.fill", title: "No servers yet", text: "Servers are group chats with channels and voice rooms. Join one to hang out.", actionTitle: "Explore servers", action: { path.append(.servers) }, compact: true)
             } else {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                     ForEach(Array(mine)) { server in
@@ -481,8 +469,11 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 14) {
             SectionHeader(icon: "flame.fill", title: "For you in the community")
             if communityPicks.isEmpty {
-                Text(loaded ? "Nothing new yet — share something!" : "Loading…").font(.jakarta(14)).foregroundStyle(Palette.muted)
-                    .frame(maxWidth: .infinity).sugarCard(radius: 24, padding: 20)
+                if loaded {
+                    EmptyCard(icon: "photo.on.rectangle.angled", title: "Nothing new yet", text: "Be the first to share something today.", actionTitle: "Share a post", action: { compose(.post) }, compact: true)
+                } else {
+                    SkeletonBlock(height: 160, radius: 24)
+                }
             }
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                 ForEach(communityPicks) { post in
