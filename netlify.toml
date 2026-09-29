@@ -2,6 +2,13 @@
   command = "npm run build"
   publish = "dist"
 
+# The card payment server (Stripe): netlify/functions/*.mjs, reached at
+# /.netlify/functions/<name>. Set here so it deploys whatever the site's
+# settings say.
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
 # The site is the full Sugerly app: on iPhone, Safari → Share → "Add to
 # Home Screen" installs it for free. To show only Help & legal instead
 # (e.g. once Sugerly is on the App Store), add:

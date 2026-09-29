@@ -216,7 +216,8 @@ enum Payments {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
         guard (200..<300).contains(status) else {
-            if status == 404 { throw APIError(message: "Card payments aren't switched on yet. Ask the Sugerly team.", status: status) }
+            // A 404 without our JSON means the payment server isn't deployed at all.
+            if status == 404 && json["error"] == nil { throw APIError(message: "Card payments aren't switched on yet (the payment server isn't deployed). Ask the Sugerly team.", status: status) }
             throw APIError(message: json["error"] as? String ?? "Payments aren't available right now (\(status)).", status: status)
         }
         return json

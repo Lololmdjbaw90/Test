@@ -23,7 +23,8 @@ export async function callPayments(name, body) {
     body: JSON.stringify(body || {}),
   });
   const data = await res.json().catch(() => ({}));
-  if (res.status === 404) throw new Error("Card payments aren't switched on yet. Ask the Sugerly team.");
+  // A 404 without our JSON means the payment server isn't deployed at all.
+  if (res.status === 404 && !data.error) throw new Error("Card payments aren't switched on yet (the payment server isn't deployed). Ask the Sugerly team.");
   if (!res.ok) throw new Error(data.error || `Payments aren't available right now (${res.status}).`);
   return data;
 }
