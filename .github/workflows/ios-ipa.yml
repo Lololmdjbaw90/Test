@@ -10,20 +10,9 @@
 name: Build iOS app (.ipa)
 
 on:
+  # The old web-based (Capacitor) app. The real app is native/ now, so this
+  # only runs by hand (Actions → Run workflow) to save Mac build minutes.
   workflow_dispatch:
-  # Any change to the app itself produces a fresh .ipa.
-  push:
-    paths:
-      - ".github/workflows/ios-ipa.yml"
-      - "ios/**"
-      - "capacitor.config.json"
-      - "src/**"
-      - "public/**"
-      - "index.html"
-      - "package.json"
-      - "package-lock.json"
-      - "vite.config.js"
-      - ".env"
 
 jobs:
   ipa:

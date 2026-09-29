@@ -5,7 +5,11 @@ name: Build native iOS app (.ipa)
 
 on:
   workflow_dispatch:
+  # One build per change: the working branch only (main gets the same
+  # commits, and a second Mac build would just use up minutes).
   push:
+    branches:
+      - "claude/**"
     paths:
       - "native/**"
       - ".github/workflows/ios-native.yml"
