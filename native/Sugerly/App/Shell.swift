@@ -482,7 +482,7 @@ struct SugarTabBar: View {
         HStack(spacing: 0) {
             item(.home, "Home", "house", "house.fill")
             item(.community, "Community", "person.2", "person.2.fill")
-            item(.gallery, "Gallery", "paintpalette", "paintpalette.fill")
+            item(.gallery, "Fan Art", "paintpalette", "paintpalette.fill")
             Button {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.55)) { plusSpin.toggle() }
                 onCreate()
@@ -676,7 +676,7 @@ struct CreateSheet: View {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                 tile(.reel, "Create a reel", "Film or pick a video", "video.fill", [Color(hex: 0xFF7AA2), Color(hex: 0xD9577F)])
                 tile(.post, "Post", "Share with the community", "text.bubble.fill", [Color(hex: 0xB19CFF), Color(hex: 0x7C5CF0)])
-                tile(.artwork, "Artwork", "Add to the gallery", "paintpalette.fill", [Color(hex: 0xFFAA80), Color(hex: 0xEE6E40)])
+                tile(.artwork, "Fan art", "Hang it on the wall", "paintpalette.fill", [Color(hex: 0xFFAA80), Color(hex: 0xEE6E40)])
                 tile(.track, "Track", "Share your music", "music.note", [Color(hex: 0x7CBEFF), Color(hex: 0x2F80E0)])
             }
             Spacer(minLength: 0)

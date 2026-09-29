@@ -162,9 +162,12 @@ struct PeopleView: View {
                         EmptyCard(icon: "person.2.fill", title: "No one here yet", text: query.isEmpty ? "Try another tab." : "Try another name.")
                     }
                 }
-                ForEach(Array(shown.prefix(150).enumerated()), id: \.element.id) { i, person in
-                    PersonRow(person: person) { path.append(.person(person.email)) }
-                        .stagger(appeared, i)
+                // Round tiles in a grid instead of long rows.
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 12)], spacing: 12) {
+                    ForEach(Array(shown.prefix(150).enumerated()), id: \.element.id) { i, person in
+                        PersonBubble(person: person) { path.append(.person(person.email)) }
+                            .stagger(appeared, i)
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -180,6 +183,49 @@ struct PeopleView: View {
         .task { if model.people.isEmpty { await model.loadPeople() } }
         .task(id: "\(filter)|\(query)") { await fetchForTab() }
         .onAppear { appeared = true }
+    }
+}
+
+// A round, friendly card for one person: big picture, name, level and a
+// follow button.
+struct PersonBubble: View {
+    let person: UserProfile
+    var open: () -> Void
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let info = LevelInfo(xp: person.xp)
+        let followsYou = person.following.contains(model.me?.email ?? "")
+        VStack(spacing: 10) {
+            Button(action: open) {
+                VStack(spacing: 8) {
+                    Avatar(url: person.picture, name: person.displayName, size: 78, online: person.isOnline, ring: person.isOnline,
+                           presence: person.isOnline ? person.presenceNow : nil)
+                        .padding(4)
+                        .background(Circle().fill(Theme.soft))
+                    HStack(spacing: 4) {
+                        Text(person.displayName).font(.jakarta(15, .heavy)).foregroundStyle(Palette.text).lineLimit(1)
+                        if person.isAdmin {
+                            Image(systemName: "checkmark.seal.fill").font(.system(size: 11)).foregroundStyle(Theme.gradient)
+                        }
+                    }
+                    Text("Lv. \(info.level) · \(info.title)").font(.jakarta(11, .bold)).foregroundStyle(info.color).lineLimit(1)
+                    Text(followsYou ? "Follows you" : (person.bio.isEmpty ? " " : person.bio))
+                        .font(.jakarta(11, followsYou ? .semibold : .regular)).foregroundStyle(Palette.muted)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(BouncyStyle(scale: 0.96))
+            FollowButton(email: person.email, compact: true)
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 16)
+        .padding(.bottom, 14)
+        .frame(maxWidth: .infinity)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 32, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 32, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
     }
 }
 

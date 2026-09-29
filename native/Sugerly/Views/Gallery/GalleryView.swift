@@ -53,7 +53,7 @@ struct GalleryView: View {
         let content = ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 header.stagger(appeared, 0)
-                SearchField(text: $query, placeholder: "Search art or artists…").stagger(appeared, 1)
+                SearchField(text: $query, placeholder: "Search fan art or artists…").stagger(appeared, 1)
                 chips.stagger(appeared, 2)
                 if query.isEmpty && medium == "all" && sort == .newest {
                     if let spot = spotlight { spotlightCard(spot).stagger(appeared, 3) }
@@ -69,7 +69,7 @@ struct GalleryView: View {
                     if sort == .saved {
                         EmptyCard(icon: "bookmark.fill", title: "Nothing saved yet", text: "Tap the bookmark on a drawing you love and it'll wait for you here.")
                     } else {
-                        EmptyCard(icon: "paintpalette.fill", title: "The wall is empty", text: "No drawings here yet. Hang the first one up!", actionTitle: "Upload a drawing") { adding = true }
+                        EmptyCard(icon: "paintpalette.fill", title: "The fan art wall is empty", text: "No fan art here yet. Hang the first piece up!", actionTitle: "Share fan art") { adding = true }
                     }
                 }
                 // Two staggered columns, like a pinboard.
@@ -95,26 +95,68 @@ struct GalleryView: View {
         if isRoot {
             content.sugarTopBar($path)
         } else {
-            content.navigationTitle("Gallery").navigationBarTitleDisplayMode(.inline)
+            content.navigationTitle("Fan Art").navigationBarTitleDisplayMode(.inline)
         }
     }
 
+    // The fan art wall: what this page is, a few numbers, and a big button
+    // to hang your own piece.
     private var header: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text("Gallery").font(.display(42)).foregroundStyle(Palette.text)
-                    Image(systemName: "paintpalette.fill").font(.system(size: 26, weight: .semibold)).foregroundStyle(Theme.gradient)
-                        .rotationEffect(.degrees(appeared ? -8 : 8))
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles").font(.system(size: 11, weight: .heavy))
+                Text("FAN ART GALLERY").font(.jakarta(11, .heavy)).tracking(1.2)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10).frame(height: 26)
+            .background(.white.opacity(0.22), in: Capsule())
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    Text("Fan Art").font(.display(44)).foregroundStyle(.white)
+                    Image(systemName: "paintpalette.fill").font(.system(size: 28, weight: .semibold)).foregroundStyle(.white)
+                        .rotationEffect(.degrees(appeared ? -10 : 10))
                         .animation(.spring(response: 0.6, dampingFraction: 0.35).delay(0.3), value: appeared)
                 }
-                Text("\(artworks.count) artworks · \(Set(artworks.map(\.authorEmail)).count) artists")
-                    .font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
+                Text("Drawings made by fans in the Sugerly community. Love them, save them, and hang up your own.")
+                    .font(.jakarta(14, .semibold)).foregroundStyle(.white.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer()
-            Button { adding = true } label: { Label("Add", systemImage: "plus") }
-                .buttonStyle(GradientButtonStyle(height: 44, fullWidth: false))
+            HStack(spacing: 8) {
+                stat("\(artworks.count)", "pieces", "photo.stack.fill")
+                stat("\(Set(artworks.map(\.authorEmail)).count)", "artists", "person.2.fill")
+                stat("\(artworks.reduce(0) { $0 + $1.likeTotal })", "hearts", "heart.fill")
+            }
+            Button { adding = true } label: {
+                Label("Share your fan art", systemImage: "plus")
+                    .font(.jakarta(15, .bold)).foregroundStyle(Theme.main)
+                    .frame(maxWidth: .infinity).frame(height: 48)
+                    .background(.white, in: Capsule())
+            }
+            .buttonStyle(BouncyStyle(scale: 0.96))
         }
+        .padding(18)
+        .background {
+            RoundedRectangle(cornerRadius: 30, style: .continuous).fill(Theme.gradient)
+                .overlay(alignment: .topTrailing) {
+                    Circle().fill(.white.opacity(0.12)).frame(width: 160).offset(x: 50, y: -60)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+                .shadow(color: Theme.main.opacity(0.3), radius: 16, y: 8)
+        }
+    }
+
+    private func stat(_ value: String, _ label: String, _ icon: String) -> some View {
+        VStack(spacing: 2) {
+            HStack(spacing: 4) {
+                Image(systemName: icon).font(.system(size: 11, weight: .bold))
+                Text(value).font(.jakarta(16, .heavy)).contentTransition(.numericText())
+            }
+            Text(label).font(.jakarta(11, .semibold)).opacity(0.85)
+        }
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var chips: some View {
@@ -236,7 +278,7 @@ struct GalleryView: View {
         Task {
             do {
                 try await LikeBook.shared.write(before, liking: liking, me: me.email, owner: art.authorEmail)
-                if liking { Notify.send(to: art.authorEmail, from: me, type: "like", message: "\(me.displayName) loved your artwork", link: "/Gallery?art=\(art.id)") }
+                if liking { Notify.send(to: art.authorEmail, from: me, type: "like", message: "\(me.displayName) loved your fan art", link: "/Gallery?art=\(art.id)") }
             } catch {
                 if let j = artworks.firstIndex(where: { $0.id == art.id }) { artworks[j].restoreLikes(from: before) }
             }
@@ -486,7 +528,7 @@ struct NewArtworkView: View {
     @State private var error: String?
 
     var body: some View {
-        ComposerScaffold(title: "New artwork", actionTitle: "Share", busy: busy, canPost: image != nil && !title.trimmingCharacters(in: .whitespaces).isEmpty, onClose: { dismiss() }, onPost: { Task { await share() } }) {
+        ComposerScaffold(title: "New fan art", actionTitle: "Share", busy: busy, canPost: image != nil && !title.trimmingCharacters(in: .whitespaces).isEmpty, onClose: { dismiss() }, onPost: { Task { await share() } }) {
             PhotoPickerCard(item: $item, image: $image)
             SugarField(placeholder: "Title", text: $title)
             SugarField(placeholder: "Tell people about it (optional)", text: $text, lines: 3...6)
@@ -519,7 +561,7 @@ struct NewArtworkView: View {
             try await FS.create("Artwork", doc)
             try? await model.addToMe(["xp": 25, "coins": 5])
             dismiss()
-            model.showToast("Added to the gallery · +25 XP", icon: "paintpalette.fill")
+            model.showToast("Added to the fan art wall · +25 XP", icon: "paintpalette.fill")
         } catch {
             self.error = error.localizedDescription
         }
