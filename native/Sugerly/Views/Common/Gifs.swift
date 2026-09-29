@@ -212,6 +212,7 @@ struct GifPickerSheet: View {
             } else if items.isEmpty {
                 Text("Nothing found — try another word").font(.jakarta(14, .semibold)).foregroundStyle(Palette.muted).padding(30)
             }
+            Text("POWERED BY GIPHY").font(.jakarta(10, .heavy)).tracking(0.6).foregroundStyle(Palette.muted).padding(.vertical, 6)
             Color.clear.frame(height: 1).onAppear { Task { await more() } }
             Text("Powered by GIPHY").font(.jakarta(11, .bold)).foregroundStyle(Palette.muted).padding(.bottom, 20)
         }

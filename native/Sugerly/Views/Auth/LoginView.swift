@@ -71,7 +71,7 @@ struct LoginView: View {
 
                 if register {
                     Toggle(isOn: $agreed) {
-                        (Text("I agree to the ") + Text("Terms").bold() + Text(" and ") + Text("Community Guidelines").bold())
+                        (Text("I'm at least 13 and I agree to the ") + Text("Terms").bold() + Text(" and ") + Text("Community Guidelines").bold() + Text(", and I've read the ") + Text("Privacy Policy").bold())
                             .font(.jakarta(13))
                     }
                     .toggleStyle(.switch)
@@ -171,7 +171,7 @@ struct LoginView: View {
     }
 }
 
-// MARK: - Terms, Privacy, Guidelines (same text as the website)
+// MARK: - Terms, Privacy, Guidelines (same text as the website, src/pages/Legal.jsx)
 
 enum LegalDoc: String, Identifiable, CaseIterable {
     case terms, privacy, guidelines
@@ -186,29 +186,45 @@ enum LegalDoc: String, Identifiable, CaseIterable {
     var sections: [(String, String)] {
         switch self {
         case .terms: return [
-            ("Agreeing to these terms", "By creating an account or using Sugerly you agree to these Terms, our Privacy Policy and our Community Guidelines. If you don't agree, please don't use Sugerly."),
-            ("Who can use Sugerly", "You must be at least 13 years old (or the minimum age for online services in your country, if higher). If you're under 18, you need permission from a parent or guardian. You're responsible for your account and for keeping your password safe."),
-            ("Your content", "You own the art, music, reels, posts, comments and messages you share. By posting them, you give Sugerly a worldwide, non-exclusive, royalty-free licence to host, store, show and share them inside Sugerly so the service can work. This licence ends when you delete the content or your account. Only post things you have the right to share."),
-            ("Zero tolerance for objectionable content and abusive users", "There is no place on Sugerly for objectionable content or abusive behaviour. You must not post or send anything that is illegal, hateful, harassing, sexually explicit, violent, or that sexualises minors; that bullies or threatens others; that is spam or a scam; or that infringes someone else's rights. You can report any post, comment, message or person, and block anyone. We review reports within 24 hours and remove content that breaks these rules and suspend or ban the accounts that posted it."),
-            ("Coins, levels and rewards", "Coins, XP and levels are just for fun inside Sugerly. They have no money value and can't be sold or exchanged for money."),
-            ("Ending your account", "You can delete your account at any time in Settings. We may suspend or remove accounts that break these Terms."),
-            ("No warranty", "Sugerly is provided \"as is\". We work hard to keep it running and safe, but we can't promise it will always be available or error-free."),
+            ("Agreeing to these terms", "By creating an account or using Sugerly (the app and the website) you agree to these Terms, our Privacy Policy and our Community Guidelines. If you don't agree, please don't use Sugerly."),
+            ("Who can use Sugerly", "You must be at least 13 years old (or the minimum age for online services in your country, if higher). If you're under 18, you need permission from a parent or guardian, and a parent must agree before you buy a commission. You're responsible for your account and for keeping your password safe."),
+            ("Your content", "You own the art, music, reels, posts, comments and messages you share. By posting them, you give Sugerly a worldwide, non-exclusive, royalty-free licence to host, store, show and share them inside Sugerly so the service can work (for example to show your reel in the feed). This licence ends when you delete the content or your account, except for copies other people already shared with you or that we must keep by law. Only post things you have the right to share."),
+            ("Zero tolerance for objectionable content and abusive users", "There is no place on Sugerly for objectionable content or abusive behaviour. You must not post or send anything that is illegal, hateful, harassing, sexually explicit, violent, or that sexualises minors; that bullies or threatens others; that is spam or a scam; or that infringes someone else's rights. You can report any post, reel, comment, message or person, and block anyone. We review reports within 24 hours and will remove content that breaks these rules and suspend or ban the accounts that posted it."),
+            ("Safety tools", "Every post, reel, comment, message and profile has Report, and you can Block people from their profile. Blocked people can't message you, call you or see your posts. Captions, comments and messages are checked automatically for harmful words, and unclear cases can get a second check by AI (see the Privacy Policy)."),
+            ("Commissions", "Artists can offer commissions: custom art made on request. The deal is between the buyer and the artist. The artist agrees to make what was described at the agreed price, and the buyer pays through Sugerly. Card payments are processed by Stripe; Sugerly never sees your full card number. Sugerly keeps a small service fee (shown to artists in their shop) and pays the rest to the artist after the buyer approves the finished art. Artists keep the copyright of their art; the buyer gets a personal, non-commercial licence to use what they commissioned unless the artist agrees otherwise. Artists are responsible for their own taxes. Never agree to pay outside Sugerly: we can't protect those payments."),
+            ("Cancellations and refunds", "You can cancel for free before you pay. After paying, you can ask for a refund until you approve the art; our team looks at every request and refunds the full amount to your card when the artist didn't deliver what was agreed. Because commissions are made to your personal request, the 14-day right of withdrawal doesn't apply once the artist has started, where the law allows this. This doesn't affect your other rights as a consumer."),
+            ("Music, GIFs and AI", "Song previews come from Deezer and GIFs from GIPHY. If you connect Apple Music, whole songs play through your own Apple Music subscription. All of these belong to their owners and are only played inside Sugerly. Where offered, \"Write with AI\" uses Google's Gemini (through Firebase) to suggest captions from your picture; suggestions can be wrong, so check them before posting."),
+            ("Coins, levels, rewards and MimiPlus", "Coins, XP, levels and MimiPlus are just for fun inside Sugerly. Coins are earned (daily rewards, invites, posting) and can't be bought, sold or exchanged for money, and MimiPlus is unlocked with coins only. They may change."),
+            ("Ending your account", "You can delete your account at any time in Settings. We may suspend or remove accounts that break these Terms. Open commissions are cancelled or refunded as described above."),
+            ("No warranty", "Sugerly is provided \"as is\". We work hard to keep it running and safe, but we can't promise it will always be available or error-free. To the extent the law allows, we aren't liable for indirect or consequential losses. Nothing in these Terms limits rights you have by law as a consumer."),
+            ("Apple", "If you use the iPhone or iPad app, these Terms are between you and Sugerly, not Apple. Apple isn't responsible for the app, its content, support or any claims about it, and Apple and its subsidiaries may enforce these Terms as third-party beneficiaries."),
+            ("Changes", "We may update these Terms. If the changes are important we'll tell you in the app (What's new). Using Sugerly after that means you accept the new Terms."),
+            ("Contact", "Questions or requests? Use Contact us in the app (Settings → Help & legal) or on the Help page of the website. We usually reply within 2 days."),
         ]
         case .privacy: return [
-            ("What we collect", "Account details you give us: email address, display name, profile picture and bio. What you create: posts, comments, messages, likes, follows and reports. We don't collect your location, contacts or advertising identifiers, and we don't track you across other apps or websites."),
-            ("How we use it", "To run Sugerly: show your profile and content, deliver messages, keep the community safe and fix problems. We don't sell your personal data and we don't show ads."),
-            ("Services we use", "Google Firebase (accounts, database and file storage). It processes data under its own privacy policy."),
-            ("Who can see what", "Your profile, posts and comments are visible to other Sugerly users. Direct messages are visible only to the people in them (and to moderators when a message is reported)."),
-            ("How long we keep it", "As long as your account exists. When you delete your account, your profile is deleted from our database."),
-            ("Your rights", "You can see and edit your profile in the app and delete your account in Settings. Depending on where you live you may have more rights (for example under the GDPR)."),
-            ("Children", "Sugerly isn't for children under 13 and we don't knowingly collect their data."),
+            ("What we collect", "Account details you give us: email address, display name, profile picture, banner and bio. What you create: artworks, posts, reels, music, comments, messages, likes, follows and reports. If you use commissions: your orders, prices and payment status (card details go straight to Stripe; we never see or store your full card number). Artists can add a PayPal email for payouts, which only admins can see. We don't collect your location, contacts or advertising identifiers, and we don't track you across other apps or websites."),
+            ("Camera, microphone and face filters", "Camera and microphone are used only while you record a reel, take a photo, send a voice note or join a call. Face filters find your face on your device to place the effect; no face data is stored or sent anywhere."),
+            ("On your device only", "What you watch in Reels (watch time, skips) is used to personalise your feed and stays on your device. Your theme, sounds and haptics settings are also stored on your device."),
+            ("How we use it", "To run Sugerly: show your profile and content, deliver messages and notifications, recommend posts and reels, handle commissions and payouts, keep the community safe (moderation, reports, blocking) and fix problems. We don't sell your personal data and we don't show ads."),
+            ("Safety checks with AI", "What you write is first checked on your device. If a caption, comment or message looks unclear, only its text (not your name or email) may be sent to Google's Gemini through Firebase AI Logic for a second opinion on whether it breaks the rules."),
+            ("Services we use", "Google Firebase (accounts, database, file storage and hosting); Google Gemini through Firebase AI Logic (the safety checks above, and \"Write with AI\" when you tap it: the picture and your draft are sent to suggest captions); Stripe (card payments); PayPal (artist payouts); Apple Music (only if you connect it: Apple handles your subscription and we don't get your Apple ID); GIPHY (GIF search); Deezer (song previews); and, for calls, direct peer-to-peer connections between the people in the call. Each processes data under its own privacy policy. Some are based in the United States and protect transfers with the safeguards the law requires, such as standard contractual clauses."),
+            ("Why we can use it (EU and UK)", "To provide Sugerly under our Terms (contract); to keep it safe and prevent abuse and fraud (legitimate interests); with your permission for camera, microphone, photos and Apple Music, which you can withdraw any time in iOS Settings (consent); and to keep payment records (legal obligation)."),
+            ("Who can see what", "Your profile, posts, reels, artworks and comments are visible to other Sugerly users. Direct messages and group chats are visible only to the people in them (and to moderators when a message is reported). Commission orders are visible to the buyer, the artist and admins. Admins can see content and reports to keep Sugerly safe."),
+            ("How long we keep it", "As long as your account exists. When you delete your account, your profile and content are deleted from our database; backups are cleared within 30 days. Payment records are kept as long as tax and accounting laws require, and reports may be kept longer when needed for safety or the law."),
+            ("Your rights", "You can see and edit your profile in Settings and delete your account there; on the website you can also download a copy of your data (Settings → Account & data). Depending on where you live (for example the EU/UK under the GDPR, or California) you may also have rights to access, correct, delete or move your data and to object to processing, and you can complain to your data protection authority. Contact us to use them."),
+            ("Children", "Sugerly isn't for children under 13 and we don't knowingly collect their data. If you believe a child under 13 has an account, contact us and we'll delete it."),
+            ("Security", "Data is sent over encrypted connections and protected by Firebase security rules that only let people read and change what they're allowed to. Only our payment server can mark an order as paid."),
+            ("Changes", "We'll tell you in the app if this policy changes in an important way."),
+            ("Contact", "Questions or requests? Use Contact us in the app (Settings → Help & legal) or on the Help page of the website. We usually reply within 2 days."),
         ]
         case .guidelines: return [
             ("Be kind", "Sugerly is a friendly place for artists. Give feedback kindly, celebrate each other's work, and never bully, harass or threaten anyone."),
-            ("Post your own work", "Share art and music you made or have the right to share. Credit collaborators and references."),
+            ("Post your own work", "Share art, music and reels you made or have the right to share. Credit collaborators and references. Don't trace or repost other people's work as your own."),
             ("Keep it safe for everyone", "No nudity or sexual content, no gore or glorified violence, no hate speech, no self-harm encouragement, no illegal goods, and nothing that sexualises minors — ever."),
-            ("No spam, scams or links", "Don't spam, sell followers, impersonate others, or post scam links. Links aren't allowed in bios."),
-            ("If you see something", "Use Report on the post, comment, message or profile, and Block anyone you don't want to hear from. Our moderators review reports within 24 hours."),
+            ("No spam, scams or links", "Don't spam, sell followers, impersonate others, or post scam links. Links aren't allowed in reel captions or bios."),
+            ("Fair commissions", "Only offer what you can make, be honest about prices and timing, deliver your own work, and keep all payments inside Sugerly."),
+            ("Protect privacy", "Don't share other people's personal information (addresses, phone numbers, private photos) without permission."),
+            ("If you see something", "Use Report on the post, reel, comment, message or profile, and Block anyone you don't want to hear from. Our moderators review reports within 24 hours and remove content and accounts that break these rules."),
         ]
         }
     }
@@ -230,6 +246,60 @@ struct LegalView: View {
             .navigationTitle(doc.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+    }
+}
+
+// Contact the Sugerly team. Lands in Admin → Reports as a "support" request
+// (same as the website's Help page); the team answers by direct message.
+struct ContactUsSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var text = ""
+    @State private var sending = false
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("How can we help?", text: $text, axis: .vertical)
+                        .lineLimit(5...10)
+                } footer: {
+                    Text("Questions, problems, account or privacy requests. We'll reply with a message in Sugerly, usually within 2 days.")
+                }
+                if let error { Section { Text(error).foregroundStyle(.red) } }
+            }
+            .navigationTitle("Contact us")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(sending ? "Sending…" : "Send") { Task { await send() } }
+                        .disabled(sending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+
+    private func send() async {
+        guard let me = model.me else { return }
+        sending = true
+        defer { sending = false }
+        let now = FS.nowISO()
+        let request: Doc = [
+            "target_type": "support", "target_id": me.email, "target_owner_email": me.email, "target_preview": "",
+            "link": "/Profile?email=\(me.email.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? me.email)",
+            "reason": "Support request", "details": String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1000)),
+            "reporter_email": me.email, "reporter_name": me.displayName, "status": "open",
+            "created_by": me.email, "created_date": now, "updated_date": now,
+        ]
+        do {
+            try await FS.create("Report", request)
+            dismiss()
+            model.showToast("Sent! We'll reply in your messages", icon: "paperplane.fill")
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 }

@@ -1,6 +1,7 @@
 // Safety tools: reporting, blocking and account deletion.
 // (Also what the App Store asks of apps with user-generated content.)
 import { useMemo } from "react";
+import { deleteDoc, doc } from "firebase/firestore";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { displayName } from "@/lib/format";
@@ -74,6 +75,8 @@ export async function deleteMyAccount(me, password, onProgress = () => {}) {
   await remove("CommunityPost", await mine("CommunityPost", { user_email: me.email }));
   await remove("MusicReview", await mine("MusicReview", { user_email: me.email }));
   await remove("Commission", await mine("Commission", { artist_email: me.email }));
+  await remove("Reel", await mine("Reel", { user_email: me.email }));
+  await remove("Artwork", await mine("Artwork", { created_by: me.email }));
 
   onProgress("Removing your comments and messages…");
   await remove("CommunityComment", await mine("CommunityComment", { user_email: me.email }));
@@ -95,6 +98,9 @@ export async function deleteMyAccount(me, password, onProgress = () => {}) {
   await Promise.all(groups.map((g) => (g.owner_email === me.email
     ? E.GroupChat.delete(g.id)
     : E.GroupChat.update(g.id, { member_emails: g.member_emails.filter((e) => e !== me.email), member_display_names: Object.fromEntries(Object.entries(g.member_display_names || {}).filter(([e]) => e !== me.email)) })).catch(() => {})));
+
+  const db = base44.firebase?.db;
+  if (db && me.id) await deleteDoc(doc(db, "PayoutInfo", me.id)).catch(() => {});
 
   onProgress("Deleting your account…");
   await base44.auth.deleteAccount();

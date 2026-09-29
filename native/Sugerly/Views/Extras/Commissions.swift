@@ -679,7 +679,7 @@ struct EarningsCard: View {
                 cell(Money.format(ready, currency), "To be paid", 0x17A673)
                 cell(Money.format(paidOut, currency), "Paid out", 0x86707C)
             }
-            Text("Buyers pay by card. When they approve your art, Sugerly pays you out (minus a small fee) to your payout details below.")
+            Text("Buyers pay by card. When they approve your art, Sugerly pays you out (minus Sugerly's \(Int(SiteTheme.shared.commissionFee))% fee) to your payout details below.")
                 .font(.jakarta(12)).foregroundStyle(Palette.muted)
         }
         .padding(16)
@@ -1866,7 +1866,7 @@ struct NewCommissionView: View {
                 .tint(Theme.main)
                 .padding(12)
                 .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                Label("Buyers pay by card through Stripe. You get paid out after they approve your art, minus a small Sugerly fee. Add your payout details in My shop.", systemImage: "banknote")
+                Label("Buyers pay by card through Stripe. You get paid out after they approve your art, minus Sugerly's \(Int(SiteTheme.shared.commissionFee))% fee. Add your payout details in My shop.", systemImage: "banknote")
                     .font(.jakarta(12)).foregroundStyle(Palette.muted)
                 if let error { Text(error).font(.jakarta(13, .semibold)).foregroundStyle(Palette.danger) }
             }

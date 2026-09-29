@@ -63,7 +63,7 @@ struct AdminUserSheet: View {
                 Text(u.email).font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(1)
                 HStack(spacing: 6) {
                     pill("\(u.coins) coins", icon: "circle.hexagongrid.fill", color: Color(hex: 0xF0A020))
-                    if u.isNitro { pill("Nitro", icon: "sparkles", color: Color(hex: 0x8B5CF6)) }
+                    if u.isNitro { pill("MimiPlus", icon: "sparkles", color: Color(hex: 0x8B5CF6)) }
                     if u.isBanned { pill("Banned", icon: "hand.raised.fill", color: Palette.danger) }
                 }
             }
@@ -106,14 +106,14 @@ struct AdminUserSheet: View {
     }
 
     private func nitro(_ u: UserProfile) -> some View {
-        box("MimiNitro", icon: "sparkles") {
+        box("MimiPlus", icon: "sparkles") {
             if u.isNitro {
                 if let until = Dates.parse(u.nitroUntil) {
                     Text("Active until \(until.formatted(date: .abbreviated, time: .omitted))").font(.jakarta(13)).foregroundStyle(Palette.muted)
                 } else {
                     Text("Active").font(.jakarta(13)).foregroundStyle(Palette.muted)
                 }
-                Button(role: .destructive) { Task { await setNitro(days: nil) } } label: { Label("Remove Nitro", systemImage: "xmark.circle.fill").frame(maxWidth: .infinity) }
+                Button(role: .destructive) { Task { await setNitro(days: nil) } } label: { Label("Remove MimiPlus", systemImage: "xmark.circle.fill").frame(maxWidth: .infinity) }
                     .buttonStyle(OutlineButtonStyle(height: 44, fullWidth: true))
             } else {
                 Text("No membership right now.").font(.jakarta(13)).foregroundStyle(Palette.muted)
@@ -171,10 +171,10 @@ struct AdminUserSheet: View {
             let base = u.isNitro ? (Dates.parse(u.nitroUntil) ?? Date()) : Date()
             let until = Dates.iso(max(base, Date()).addingTimeInterval(Double(days) * 86_400))
             await apply(u, ["nitro_active": true, "nitro_until": until], log: "nitro_give", detail: "\(u.email) +\(days)d",
-                        toast: "Gave \(days == 365 ? "1 year" : "\(days) days") of Nitro", notify: "An admin gave you MimiNitro!")
+                        toast: "Gave \(days == 365 ? "1 year" : "\(days) days") of MimiPlus", notify: "An admin gave you MimiPlus!")
         } else {
             await apply(u, ["nitro_active": false, "nitro_until": ""], log: "nitro_remove", detail: u.email,
-                        toast: "Nitro removed", notify: "Your MimiNitro membership was removed by an admin.")
+                        toast: "MimiPlus removed", notify: "Your MimiPlus membership was removed by an admin.")
         }
     }
 

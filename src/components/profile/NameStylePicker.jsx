@@ -27,7 +27,7 @@ export default function NameStylePicker({ currentStyle, name, onSave }) {
   const ref = useRef(null);
   const nitro = isNitro(user);
   const pick = async (style) => {
-    if (style.premium && !nitro) { toast("MimiNitro style", { description: "Get Nitro from the shop on your profile to unlock this.", icon: <Sparkles className="w-5 h-5" /> }); return; }
+    if (style.premium && !nitro) { toast("MimiPlus style", { description: "Get MimiPlus from the shop on your profile to unlock this.", icon: <Sparkles className="w-5 h-5" /> }); return; }
     try {
       await updateMe({ name_style: style.id });
       onSave?.(style.id);

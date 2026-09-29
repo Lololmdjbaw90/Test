@@ -34,7 +34,7 @@ export default function GifSetupCard() {
         <span className="w-10 h-8 rounded-lg flex items-center justify-center text-[11px] font-black text-white" style={{ background: "var(--accent-grad)" }}>GIF</span>
         <div className="flex-1 min-w-0">
           <p className="font-display text-lg" style={{ color: "var(--text-primary)" }}>GIFs</p>
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>{envKey || config?.giphy_key ? "GIF search is on in comments, DMs and server chats." : "Add a free GIPHY key to search GIFs in comments, DMs and server chats, like Discord."}</p>
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>{envKey || config?.giphy_key ? "GIF search is on in comments, DMs and server chats." : "Add a free GIPHY key to search GIFs in comments, DMs and server chats."}</p>
         </div>
         {(envKey || config?.giphy_key) && <CheckCircle2 className="w-6 h-6 flex-shrink-0" style={{ color: "var(--success)" }} />}
       </div>

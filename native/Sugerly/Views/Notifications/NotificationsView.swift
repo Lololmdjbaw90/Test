@@ -540,7 +540,7 @@ struct AdminView: View {
                         model.people = map
                     }
                 }
-            Text("\(model.people.values.filter { rank($0) < 2 }.count) admins · Tap a name to give coins, Nitro or ban. \(owner ? "The shield makes or removes admins." : "")")
+            Text("\(model.people.values.filter { rank($0) < 2 }.count) admins · Tap a name to give coins, MimiPlus or ban. \(owner ? "The shield makes or removes admins." : "")")
                 .font(.jakarta(12)).foregroundStyle(Palette.muted)
             ForEach(Array(list.prefix(200))) { u in
                 HStack(spacing: 12) {
@@ -556,7 +556,7 @@ struct AdminView: View {
                                         .padding(.horizontal, 6).padding(.vertical, 2).background(Palette.danger, in: Capsule())
                                 }
                             }
-                            Text("\(u.email) · \(u.coins) coins\(u.isNitro ? " · Nitro" : "")").font(.jakarta(11)).foregroundStyle(Palette.muted).lineLimit(1)
+                            Text("\(u.email) · \(u.coins) coins\(u.isNitro ? " · MimiPlus" : "")").font(.jakarta(11)).foregroundStyle(Palette.muted).lineLimit(1)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())

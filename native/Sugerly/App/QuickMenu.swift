@@ -32,7 +32,7 @@ struct QuickMenu: View {
 
     private var items: [Item] {
         var list: [Item] = [
-            Item(title: "Nitro", icon: "sparkles", colors: [0xC084FC, 0x8B5CF6]) { open(.shop) },
+            Item(title: "MimiPlus", icon: "sparkles", colors: [0xC084FC, 0x8B5CF6]) { open(.shop) },
             Item(title: "Music", icon: "music.note", colors: [0xFF7AA2, 0xD9577F]) { go(.music) },
             Item(title: "Servers", icon: "person.3.fill", colors: [0xFF9EC4, 0xE0508A]) { go(.servers) },
             Item(title: "People", icon: "person.crop.circle.badge.plus", colors: [0xFFD166, 0xF08A20]) { go(.people) },

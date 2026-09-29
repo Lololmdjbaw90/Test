@@ -29,6 +29,13 @@ const rating = (c) => (Number(c.rating_count) > 0 ? Number(c.rating_sum) / Numbe
 const byNewest = (a, b) => String(b.updated_date || "").localeCompare(String(a.updated_date || ""));
 const upload = (file) => base44.integrations.Core.UploadFile({ file }).then((r) => r.file_url);
 
+// Sugerly's cut, set by admins (Admin → Site in the app); the payment server uses the same number.
+function useFeePercent() {
+  const { data } = useLiveQuery("SiteConfig", { key: "global" }, { live: false });
+  const fee = Number(data[0]?.commission_fee_percent);
+  return Number.isFinite(fee) ? fee : 10;
+}
+
 function StatusPill({ open }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full" style={{ background: "var(--surface)", color: open ? "var(--success)" : "var(--text-muted)", border: "1px solid var(--border-c)" }}>
@@ -77,6 +84,7 @@ function Thumbs({ files, setFiles, max }) {
 
 function ListingModal({ open, existing, onClose }) {
   const { user } = useAuth();
+  const fee = useFeePercent();
   const blank = { title: "", description: "", is_open: true, tags: "", currency: "usd" };
   const [form, setForm] = useState(blank);
   const [tiers, setTiers] = useState([{ name: "Sketch", price: "", description: "", delivery_days: "" }, { name: "Full colour", price: "", description: "", delivery_days: "" }]);
@@ -157,7 +165,7 @@ function ListingModal({ open, existing, onClose }) {
         </div>
         <div><label className="label" htmlFor="cm-tags">Tags</label><input id="cm-tags" className="input" placeholder="portrait, anime, pets" value={form.tags} onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))} /></div>
         <div className="card-sm p-3.5"><Toggle checked={form.is_open} onChange={(v) => setForm((f) => ({ ...f, is_open: v }))} label="Open for orders" description="Close it any time you're busy." /></div>
-        <p className="text-xs flex gap-2" style={{ color: "var(--text-muted)" }}><Banknote className="w-4 h-4 flex-shrink-0" /> Buyers pay by card through Stripe. You get paid out after they approve your art, minus a small Sugerly fee. Add your payout details in My shop.</p>
+        <p className="text-xs flex gap-2" style={{ color: "var(--text-muted)" }}><Banknote className="w-4 h-4 flex-shrink-0" /> Buyers pay by card through Stripe. You get paid out after they approve your art, minus Sugerly's {fee}% fee. Add your payout details in My shop.</p>
       </div>
     </Modal>
   );
@@ -458,6 +466,7 @@ function OrderRow({ order, asBuyer, onOpen }) {
 // ---- artist money --------------------------------------------------------------
 
 function Earnings({ orders }) {
+  const fee = useFeePercent();
   const currency = orders.find((o) => o.amount_paid != null)?.currency || "usd";
   const sum = (list) => list.reduce((n, o) => n + earnings(o), 0);
   const pending = sum(orders.filter((o) => ["paid", "in_progress", "delivered"].includes(o.status)));
@@ -471,7 +480,7 @@ function Earnings({ orders }) {
           <div key={l} className="rounded-2xl p-3 text-center" style={{ background: `${c}14` }}><p className="font-bold" style={{ color: c }}>{money(v, currency)}</p><p className="text-[11px] font-semibold" style={{ color: "var(--text-muted)" }}>{l}</p></div>
         ))}
       </div>
-      <p className="text-xs" style={{ color: "var(--text-muted)" }}>Buyers pay by card. When they approve your art, Sugerly pays you out (minus a small fee) to your payout details.</p>
+      <p className="text-xs" style={{ color: "var(--text-muted)" }}>Buyers pay by card. When they approve your art, Sugerly pays you out (minus Sugerly's {fee}% fee) to your payout details.</p>
     </div>
   );
 }

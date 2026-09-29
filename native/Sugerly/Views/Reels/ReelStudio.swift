@@ -1633,6 +1633,7 @@ struct SoundPicker: View {
     var body: some View {
         VStack(spacing: 12) {
             Text("Add a sound").font(.display(26)).foregroundStyle(Palette.text).padding(.top, 20)
+            Text("30-second previews by Deezer").font(.jakarta(11)).foregroundStyle(Palette.muted)
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
                 TextField("Search songs or artists", text: $query).font(.jakarta(15))

@@ -66,7 +66,7 @@ export default function GifPicker({ onPick, onClose, className = "" }) {
             <p className="flex items-start gap-2"><Link2 className="w-4 h-4 mt-0.5 flex-shrink-0" /> {keyLoading ? "Loading…" : "Paste a link to a GIF (GIPHY, Tenor or any .gif)."}</p>
           )}
           {!keyLoading && (user?.role === "admin"
-            ? <p className="text-xs">To search GIFs like Discord, add a free GIPHY key in <Link to="/Admin?tab=settings" className="font-bold underline" onClick={onClose}>Admin → Site → GIFs</Link>.</p>
+            ? <p className="text-xs">To search GIFs, add a free GIPHY key in <Link to="/Admin?tab=settings" className="font-bold underline" onClick={onClose}>Admin → Site → GIFs</Link>.</p>
             : <p className="text-xs" style={{ color: "var(--text-muted)" }}>GIF search isn't switched on yet.</p>)}
         </div>
       )}

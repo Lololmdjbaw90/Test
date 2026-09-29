@@ -51,9 +51,9 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         NSPhotoLibraryUsageDescription: Choose photos to post, send in chats or use as your profile picture.
-        NSCameraUsageDescription: Take photos and videos to share on Sugerly.
+        NSCameraUsageDescription: Take photos and film reels to share on Sugerly, with filters and face effects that run on your device.
         NSPhotoLibraryAddUsageDescription: Save reels you like to your photos.
-        NSMicrophoneUsageDescription: Talk in voice channels and record sound for the reels you film.
+        NSMicrophoneUsageDescription: Talk in calls and voice channels, send voice notes and record sound for the reels you film.
         NSAppleMusicUsageDescription: Play whole songs from Apple Music in Sugerly if you subscribe.
         ITSAppUsesNonExemptEncryption: false
         UIBackgroundModes:

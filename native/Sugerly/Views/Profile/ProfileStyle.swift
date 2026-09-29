@@ -111,14 +111,14 @@ struct NitroBadge: View {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: "sparkles").font(.system(size: compact ? 9 : 11, weight: .heavy))
-            if !compact { Text("Nitro").font(.jakarta(12, .heavy)) }
+            if !compact { Text("Plus").font(.jakarta(12, .heavy)) }
         }
         .foregroundStyle(.white)
         .padding(.horizontal, compact ? 5 : 10)
         .padding(.vertical, compact ? 3 : 5)
         .background(NitroStyle.gradient, in: Capsule())
         .shadow(color: Color(hex: 0x8B5CF6).opacity(0.35), radius: 6, y: 2)
-        .accessibilityLabel("Nitro")
+        .accessibilityLabel("MimiPlus")
     }
 }
 
@@ -376,7 +376,7 @@ struct NitroShopView: View {
     private let perks: [(String, String)] = [
         ("photo.stack.fill", "GIF profile picture and banner"),
         ("textformat", "Premium name styles: Gold, Aurora, Neon"),
-        ("circle.hexagongrid.fill", "Animated avatar ring and Nitro badge"),
+        ("circle.hexagongrid.fill", "Animated avatar ring and MimiPlus badge"),
         ("sparkles", "Profile effects: sparkles, hearts, snow"),
     ]
 
@@ -397,7 +397,7 @@ struct NitroShopView: View {
             }
             .sugarBackground()
             .overlay { ConfettiBurst(trigger: burst).allowsHitTesting(false) }
-            .navigationTitle("MimiNitro")
+            .navigationTitle("MimiPlus")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -417,7 +417,7 @@ struct NitroShopView: View {
                     .rotationEffect(.degrees(wiggle ? 6 : -6))
                     .onAppear { withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) { wiggle = true } }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(nitro ? "MimiNitro is active" : "MimiNitro").font(.display(28)).foregroundStyle(.white)
+                    Text(nitro ? "MimiPlus is active" : "MimiPlus").font(.display(28)).foregroundStyle(.white)
                     Text(renewText).font(.jakarta(13, .semibold)).foregroundStyle(.white.opacity(0.9))
                 }
             }
@@ -515,7 +515,7 @@ struct NitroShopView: View {
         let now = Date()
         let from = (model.me?.isNitro ?? false) ? (Dates.parse(model.me?.nitroUntil ?? "") ?? now) : now
         let until = Dates.iso(from.addingTimeInterval(30 * 86400))
-        buy("nitro", NitroStyle.cost, ["nitro_active": true, "nitro_until": until], nitro ? "Nitro extended by 30 days" : "Welcome to MimiNitro")
+        buy("nitro", NitroStyle.cost, ["nitro_active": true, "nitro_until": until], nitro ? "MimiPlus extended by 30 days" : "Welcome to MimiPlus")
     }
 
     private func buy(_ id: String, _ cost: Int, _ patch: Doc, _ message: String) {

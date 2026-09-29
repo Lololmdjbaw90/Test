@@ -13,7 +13,7 @@ const PERKS = [
   { icon: Sparkles, text: "Animated banner on your profile" },
 ];
 
-// Coin shop: MimiNitro and small boosts, all paid with coins earned on the site.
+// Coin shop: MimiPlus and small boosts, all paid with coins earned on the site.
 export default function NitroShop() {
   const { user, updateMe } = useAuth();
   const [busy, setBusy] = useState(null);
@@ -34,7 +34,7 @@ export default function NitroShop() {
   };
   const buyNitro = () => {
     const from = nitro ? new Date(user.nitro_until).getTime() : Date.now();
-    return buy("nitro", NITRO_COST, { nitro_active: true, nitro_until: new Date(from + 30 * 86400000).toISOString() }, nitro ? "Nitro extended by 30 days ✨" : "Welcome to MimiNitro ✨");
+    return buy("nitro", NITRO_COST, { nitro_active: true, nitro_until: new Date(from + 30 * 86400000).toISOString() }, nitro ? "MimiPlus extended by 30 days ✨" : "Welcome to MimiPlus ✨");
   };
 
   return (
@@ -45,7 +45,7 @@ export default function NitroShop() {
         <div className="relative flex flex-col sm:flex-row sm:items-center gap-5">
           <div className="anim-wiggle w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "rgb(255 255 255 / 0.2)" }}><Sparkles className="w-8 h-8" /></div>
           <div className="flex-1">
-            <p className="font-display text-2xl font-semibold">{nitro ? "MimiNitro is active" : "MimiNitro"}</p>
+            <p className="font-display text-2xl font-semibold">{nitro ? "MimiPlus is active" : "MimiPlus"}</p>
             <p className="text-sm opacity-90">{nitro ? `Renews until ${new Date(user.nitro_until).toLocaleDateString()}` : "30 days of premium perks, paid with coins."}</p>
             <ul className="mt-3 space-y-1">{PERKS.map((p) => <li key={p.text} className="text-xs flex items-center gap-2 opacity-95"><p.icon className="w-3.5 h-3.5" />{p.text}</li>)}</ul>
           </div>

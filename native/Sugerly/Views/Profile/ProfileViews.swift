@@ -251,7 +251,7 @@ struct ProfileContent: View {
                     .buttonStyle(OutlineButtonStyle(fullWidth: true))
                 Button { shop = true } label: { Image(systemName: "sparkles").font(.system(size: 17, weight: .bold)) }
                     .buttonStyle(OutlineButtonStyle())
-                    .accessibilityLabel("MimiNitro")
+                    .accessibilityLabel("MimiPlus")
                 Button { settings = true } label: { Image(systemName: "gearshape.fill").font(.system(size: 17, weight: .bold)) }
                     .buttonStyle(OutlineButtonStyle())
             } else {
@@ -551,7 +551,7 @@ struct EditProfileView: View {
         VStack(spacing: 0) {
             Menu {
                 Button { pickingFor = false; showPicker = true } label: { Label("Choose a photo", systemImage: "photo") }
-                Button { nitroOnly { gifFor = false } } label: { Label(nitro ? "Choose a GIF" : "Choose a GIF (Nitro)", systemImage: "photo.stack") }
+                Button { nitroOnly { gifFor = false } } label: { Label(nitro ? "Choose a GIF" : "Choose a GIF (MimiPlus)", systemImage: "photo.stack") }
                 if hasBanner { Button(role: .destructive) { withAnimation { banner = nil; removeBanner = true } } label: { Label("Remove banner", systemImage: "trash") } }
             } label: {
                 ZStack {
@@ -566,7 +566,7 @@ struct EditProfileView: View {
 
             Menu {
                 Button { pickingFor = true; showPicker = true } label: { Label("Choose a photo", systemImage: "photo") }
-                Button { nitroOnly { gifFor = true } } label: { Label(nitro ? "Choose a GIF" : "Choose a GIF (Nitro)", systemImage: "photo.stack") }
+                Button { nitroOnly { gifFor = true } } label: { Label(nitro ? "Choose a GIF" : "Choose a GIF (MimiPlus)", systemImage: "photo.stack") }
             } label: {
                 ZStack(alignment: .bottomTrailing) {
                     avatarPreview
@@ -620,7 +620,7 @@ struct EditProfileView: View {
     private func picked(_ item: PhotosPickerItem, avatar forAvatar: Bool) async {
         guard let data = try? await item.loadTransferable(type: Data.self) else { return }
         let isGIF = data.prefix(4) == Data("GIF8".utf8)
-        if isGIF && !nitro { model.showToast("GIF pictures are a Nitro perk — using the first frame", icon: "sparkles") }
+        if isGIF && !nitro { model.showToast("GIF pictures are a MimiPlus perk — using the first frame", icon: "sparkles") }
         let still = isGIF ? AnimatedImages.decode(data, maxPixel: 1400, maxFrames: 1)?.images?.first ?? UIImage(data: data) : UIImage(data: data)
         guard let still else { return }
         cropping = CropJob(image: still, gif: isGIF && nitro ? data : nil, avatar: forAvatar)
@@ -649,7 +649,7 @@ struct EditProfileView: View {
                 Image(systemName: "sparkles").font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
                     .frame(width: 42, height: 42).background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(nitro ? "MimiNitro is on" : "Get MimiNitro").font(.jakarta(15, .heavy)).foregroundStyle(.white)
+                    Text(nitro ? "MimiPlus is on" : "Get MimiPlus").font(.jakarta(15, .heavy)).foregroundStyle(.white)
                     Text(nitro ? "GIF pictures, premium styles and effects unlocked" : "GIF profile picture, GIF banner, effects and more").font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.9)).lineLimit(2)
                 }
                 Spacer(minLength: 0)
@@ -795,7 +795,7 @@ struct EditProfileView: View {
             Text("Picture frame").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
             FlowLayout(spacing: 8) {
                 ForEach(AvatarFrame.all) { item in
-                    Chip(title: item.premium && !nitro ? "\(item.label) (Nitro)" : item.label, icon: item.icon, active: frame == item.id) {
+                    Chip(title: item.premium && !nitro ? "\(item.label) (MimiPlus)" : item.label, icon: item.icon, active: frame == item.id) {
                         if item.premium && !nitro { shop = true } else { withAnimation(.snappy) { frame = item.id } }
                     }
                 }
@@ -983,7 +983,9 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var legal: LegalDoc?
+    @State private var contacting = false
     @State private var confirmDelete = false
+    @State private var deletePassword = ""
     @State private var confirmLogout = false
     @State private var deleting = false
     @State private var error: String?
@@ -1025,13 +1027,16 @@ struct SettingsView: View {
         .sheet(isPresented: $statusSheet) { StatusSheet().presentationCornerRadius(30) }
         .sheet(item: $peopleList) { kind in PeopleListSheet(kind: kind).presentationCornerRadius(30) }
         .sheet(item: $legal) { doc in LegalView(doc: doc) }
+        .sheet(isPresented: $contacting) { ContactUsSheet() }
         .sheet(isPresented: $editing) { EditProfileView() }
         .confirmationDialog("Log out of Sugerly?", isPresented: $confirmLogout, titleVisibility: .visible) {
             Button("Log out", role: .destructive) { model.signOut() }
         }
-        .confirmationDialog("Delete your account?", isPresented: $confirmDelete, titleVisibility: .visible) {
+        .alert("Delete your account?", isPresented: $confirmDelete) {
+            SecureField("Password", text: $deletePassword)
             Button("Delete account", role: .destructive) { Task { await deleteAccount() } }
-        } message: { Text("Your profile will be deleted. This can't be undone.") }
+            Button("Cancel", role: .cancel) { deletePassword = "" }
+        } message: { Text("Enter your password to confirm. Your profile, posts, reels, comments and messages will be deleted. This can't be undone.") }
         .disabled(deleting)
         .onAppear { ownColours = model.myColors != nil }
     }
@@ -1227,6 +1232,8 @@ struct SettingsView: View {
                 rowButton(doc.title, nil, icon: doc == .terms ? "doc.text.fill" : doc == .privacy ? "lock.fill" : "heart.text.square.fill",
                           tint: doc == .terms ? 0x7C5CF0 : doc == .privacy ? 0x16A37F : 0xE8457C) { legal = doc }
             }
+            divider
+            rowButton("Contact us", "Questions, problems or privacy requests", icon: "envelope.fill", tint: 0x3B82F6) { contacting = true }
         }
     }
 
@@ -1234,7 +1241,7 @@ struct SettingsView: View {
         group(.account, "Account") {
             rowButton("Log out", nil, icon: "rectangle.portrait.and.arrow.right", tint: 0x86707C) { confirmLogout = true }
             divider
-            rowButton("Delete account", "Removes your profile. This can't be undone.", icon: "trash.fill", tint: 0xE0526B, danger: true) { confirmDelete = true }
+            rowButton("Delete account", "Removes your profile and everything you posted. This can't be undone.", icon: "trash.fill", tint: 0xE0526B, danger: true) { confirmDelete = true }
         } note: {
             if let error { Text(error).foregroundStyle(Palette.danger) }
         }
@@ -1381,12 +1388,15 @@ struct SettingsView: View {
     }
 
     private func deleteAccount() async {
+        let password = deletePassword
+        deletePassword = ""
+        guard !password.isEmpty else { error = "Enter your password to delete your account."; return }
         deleting = true
         defer { deleting = false }
         do {
-            try await model.deleteAccount()
+            try await model.deleteAccount(password: password)
         } catch {
-            self.error = error.localizedDescription + " (Log out and back in, then try again.)"
+            self.error = error.localizedDescription
         }
     }
 }

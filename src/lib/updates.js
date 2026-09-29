@@ -9,7 +9,7 @@ export const RELEASES = [
     id: "v2.2", version: "2.2", date: "2026-09-27T08:00:00Z", emoji: "💬", title: "Replies, GIFs & Liquid Glass",
     items: [
       "Comments: reply to anyone, like comments, see the creator's replies, add emoji in one tap — and send GIFs.",
-      "GIFs in comments, DMs and server chats, like Discord (search GIPHY or paste any GIF link).",
+      "GIFs in comments, DMs and server chats (search GIPHY or paste any GIF link).",
       "Turn comments off on your reels when you post, or later from the ⋯ menu.",
       "A real iOS tab bar made of Liquid Glass in the iPhone and iPad app, and the app layout on iPad.",
       "A cleaner menu: the main places up front, big icons for exploring, the rest tucked away.",
@@ -58,7 +58,7 @@ export const RELEASES = [
   {
     id: "v1.7", version: "1.7", date: "2026-09-26T09:00:00Z", emoji: "🛡️", title: "Server roles & the iPhone app",
     items: [
-      "Discord-style roles and permissions for servers, with private channels.",
+      "Roles and permissions for servers, with private channels.",
       "Sugerly as an iPhone and iPad app.",
     ],
   },

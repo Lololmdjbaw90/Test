@@ -342,8 +342,47 @@ final class AppModel {
         }
     }
 
-    func deleteAccount() async throws {
-        if let me { try? await FS.delete("User", me.id) }
+    // Same as the website (src/lib/safety.js): checks the password (which also
+    // makes the sign-in fresh, as Firebase requires for deleting), deletes what
+    // you created, then the account itself. Other people's messages stay.
+    func deleteAccount(password: String) async throws {
+        guard let me else { throw APIError(message: "Please log in again.") }
+        let email = me.email
+        try await auth.signIn(email: email, password: password)
+
+        func rows(_ collection: String, _ filters: [FS.Filter]) async -> [Doc] {
+            (try? await FS.query(collection, filters, limit: 5000)) ?? []
+        }
+        func wipe(_ collection: String, _ docs: [Doc]) async {
+            let ids = docs.map { $0.str("id") }.filter { !$0.isEmpty }
+            await withTaskGroup(of: Void.self) { group in
+                for (i, id) in ids.enumerated() {
+                    if i >= 16 { _ = await group.next() }   // a few at a time
+                    group.addTask { try? await FS.delete(collection, id) }
+                }
+            }
+        }
+        for collection in ["CommunityPost", "MusicReview", "Reel", "CommunityComment", "Comment", "ChannelMessage", "ServerMember"] {
+            await wipe(collection, await rows(collection, [.equals("user_email", email)]))
+        }
+        await wipe("Artwork", await rows("Artwork", [.equals("created_by", email)]))
+        await wipe("Commission", await rows("Commission", [.equals("artist_email", email)]))
+        await wipe("CommunityComment", await rows("CommunityComment", [.equals("post_id", "profile_\(email)")]))
+        await wipe("DirectMessage", await rows("DirectMessage", [.contains("member_emails", email)]).filter { $0.str("user_email") == email })
+        await wipe("Friendship", await rows("Friendship", [.equals("requester_email", email)]))
+        await wipe("Friendship", await rows("Friendship", [.equals("receiver_email", email)]))
+        await wipe("Notification", await rows("Notification", [.equals("to_email", email)]))
+        for server in await rows("Community", [.contains("member_emails", email)]) {
+            let id = server.str("id")
+            if server.str("owner_email") == email {
+                try? await FS.delete("Community", id)
+            } else {
+                try? await FS.change("Community", id, [.remove("member_emails", email)], set: ["updated_date": FS.nowISO()])
+            }
+        }
+        try? await FS.delete("PayoutInfo", me.id)
+        try? await FS.delete("User", me.id)
+
         try await auth.deleteAccount()
         resetForNextAccount()
         phase = .signedOut

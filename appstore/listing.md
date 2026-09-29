@@ -15,6 +15,7 @@ Everything App Store Connect asks for, ready to paste.
 | Secondary category | Graphics & Design |
 | Content rights | "Does your app contain, show, or access third-party content?" → **Yes** (users' posts, Apple Music, song previews from Deezer, GIFs from GIPHY) and you have the rights to use it |
 | Price | Free |
+| Availability | All countries **except China mainland** (voice channels use CallKit, which isn't allowed there) |
 
 ## Version page
 
@@ -80,7 +81,9 @@ real art look even better — take them on your iPhone later and replace these.
 >
 > Safety (Guideline 1.2): every post, reel, comment, message and profile has Report (⋯ menu) and profiles have Block. Reports go to our moderators (Admin → Reports) and are reviewed within 24 hours. New users must agree to the Terms and Community Guidelines, which have zero tolerance for objectionable content. Captions and messages are filtered for abusive words; links are blocked in captions and bios.
 >
-> Account deletion (Guideline 5.1.1(v)): Settings → Account → Delete account.
+> Account deletion (Guideline 5.1.1(v)): Settings → Account → Delete account (asks for the password, then deletes the account and everything the user posted).
+>
+> Support: Settings → Help & legal → Contact us (in-app), plus the Support URL. Terms, Privacy Policy and Community Guidelines are under Settings → Help & legal and on the sign-up screen.
 >
 > Commissions: artists sell custom artwork to other users. On the United States storefront buyers pay by card through Stripe (Guideline 3.1.1(a)); on other storefronts the in-app Pay button is hidden. Sugerly sells no digital content of its own and coins can't be bought.
 >
