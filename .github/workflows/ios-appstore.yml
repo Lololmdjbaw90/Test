@@ -63,6 +63,27 @@ jobs:
           printf '%s\n' "$KEY" > "$RUNNER_TEMP/keys/AuthKey_$KEY_ID.p8"
           echo "KEY_PATH=$RUNNER_TEMP/keys/AuthKey_$KEY_ID.p8" >> "$GITHUB_ENV"
 
+      - name: Test iPhone editor and Fanart interactions
+        timeout-minutes: 18
+        run: bash scripts/test-native-interactions.sh
+
+      - name: Export interaction screenshots
+        if: always()
+        run: |
+          if [ -d native/InteractionTests.xcresult ]; then
+            xcrun xcresulttool export attachments --path native/InteractionTests.xcresult --output-path native/test-screenshots || true
+          fi
+
+      - name: Save interaction results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-interaction-results
+          path: |
+            native/InteractionTests.xcresult
+            native/simulator-test.log
+            native/test-screenshots
+
       - name: Archive (signed)
         run: |
           xcodebuild \
