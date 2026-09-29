@@ -79,10 +79,12 @@ struct RouteView: View {
             }
     }
 
-    // Reels fill the screen and bring their own back button.
+    // Reels and Music bring their own back button.
     private var fullScreen: Bool {
-        if case .reel = route { return true }
-        return false
+        switch route {
+        case .reel, .music: return true
+        default: return false
+        }
     }
 
     private func back() {

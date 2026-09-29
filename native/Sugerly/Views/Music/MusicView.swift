@@ -32,6 +32,7 @@ struct MusicView: View {
     @Binding var path: [Route]
     @Environment(AppModel.self) private var model
     @Environment(Player.self) private var player
+    @Environment(\.dismiss) private var dismiss
     @State private var tracks: [Track] = []
     @State private var charts: [Track] = []
     @State private var genre = 0
@@ -46,7 +47,17 @@ struct MusicView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 22) {
-                HStack(alignment: .bottom) {
+                HStack(alignment: .center, spacing: 12) {
+                    Button {
+                        if path.isEmpty { dismiss() } else { withAnimation(.smooth(duration: 0.3)) { _ = path.popLast() } }
+                    } label: {
+                        Image(systemName: "chevron.left").font(.system(size: 17, weight: .bold)).foregroundStyle(Palette.text)
+                            .frame(width: 44, height: 44)
+                            .background(Palette.surface, in: Circle())
+                            .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
+                    }
+                    .buttonStyle(BouncyStyle())
+                    .accessibilityLabel("Back")
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Music").font(.display(40)).foregroundStyle(Palette.text)
                         Text("\(tracks.count) tracks from \(Set(tracks.map(\.authorEmail)).count) artists").font(.jakarta(14)).foregroundStyle(Palette.muted)
@@ -63,8 +74,8 @@ struct MusicView: View {
                     SectionHeader(icon: "music.note.list", title: "All tracks")
                     // Rows are built as they scroll into view (hundreds of songs
                     // at once made the page stutter).
-                    LazyVStack(spacing: 4) {
-                        ForEach(showAllUploads ? tracks : Array(tracks.prefix(30))) { t in TrackRow(track: t, list: tracks) }
+                    LazyVStack(spacing: 6) {
+                        ForEach(showAllUploads ? tracks : Array(tracks.prefix(30))) { t in TrackRow(track: t, list: tracks).songCard() }
                         if !showAllUploads && tracks.count > 30 {
                             Button { showAllUploads = true } label: {
                                 Text("Show all \(tracks.count) tracks").font(.jakarta(14, .bold)).foregroundStyle(Theme.main)
@@ -73,7 +84,6 @@ struct MusicView: View {
                             .buttonStyle(BouncyStyle(scale: 0.97))
                         }
                     }
-                    .sugarCard(radius: 26, padding: 8)
                 }
             }
             .padding(.horizontal, 16)
@@ -149,10 +159,9 @@ struct MusicView: View {
                     Text("Couldn't load the charts right now — try again in a moment.").font(.jakarta(14)).foregroundStyle(Palette.muted).padding(20)
                 }
                 ForEach(Array(charts.enumerated()), id: \.element.id) { i, t in
-                    TrackRow(track: t, list: charts, rank: i + 1) { fullFor = t }
+                    TrackRow(track: t, list: charts, rank: i + 1) { fullFor = t }.songCard()
                 }
             }
-            .sugarCard(radius: 26, padding: 8)
             Text("Previews by Deezer · tap Full for the whole song").font(.jakarta(11)).foregroundStyle(Palette.muted)
         }
     }
@@ -369,5 +378,13 @@ struct NewTrackView: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+private extension View {
+    // Each song gets its own light card. (One tall card with a soft shadow
+    // round a whole list had to redraw that shadow while you scrolled.)
+    func songCard() -> some View {
+        self.background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
