@@ -66,15 +66,12 @@ struct SideRail: View {
             case .you:
                 YouCard()
                 InviteCard(compact: true)
-                TryThisCard()
-                OnlineNowCard()
             case .both:
                 YouCard()
                 InviteCard(compact: true)
                 PaletteOfTheDay()
                 ArtTipCard()
                 ChartsMini()
-                OnlineNowCard()
             }
         }
     }
@@ -249,67 +246,6 @@ struct YouCard: View {
     }
 }
 
-// Little ideas of things to try in the app.
-struct TryThisCard: View {
-    private static let ideas: [(String, String, String)] = [
-        ("film.stack.fill", "Make a reel", "Film clips, add a song, stickers and text in Reels."),
-        ("paintpalette.fill", "Dress up your profile", "Name styles, frames, banner patterns and effects in Edit profile."),
-        ("person.3.fill", "Start a server", "A cosy place for your art friends, with channels and roles."),
-        ("music.note", "Share a track", "Upload a song or a beat in Music."),
-        ("photo.on.rectangle.angled", "Post in the gallery", "Show your best piece where everyone can see it."),
-        ("bubble.left.and.bubble.right.fill", "Say hi", "Comment on someone's art today: it makes their day."),
-        ("trophy.fill", "Join the challenge", "This week's challenge is on Home and in Community."),
-    ]
-
-    var body: some View {
-        let idea = DayPick.pick(Self.ideas, offset: 1)
-        let second = DayPick.pick(Self.ideas, offset: 4)
-        VStack(alignment: .leading, spacing: 10) {
-            RailTitle(icon: "wand.and.stars", title: "Try this")
-            ForEach([idea, second], id: \.1) { item in
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: item.0).font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.main).frame(width: 22)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.1).font(.jakarta(13, .heavy)).foregroundStyle(Palette.text)
-                        Text(item.2).font(.jakarta(12)).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .sugarCard(radius: 22, padding: 14)
-    }
-}
-
-struct OnlineNowCard: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        let me = model.me?.email ?? ""
-        let people = model.people.values
-            .filter { $0.email != me && $0.isOnline }
-            .sorted { $0.lastSeen > $1.lastSeen }
-            .prefix(6)
-        VStack(alignment: .leading, spacing: 10) {
-            RailTitle(icon: "dot.radiowaves.left.and.right", title: "Around now")
-            if people.isEmpty {
-                Text("It's quiet right now. Invite a friend and draw together!").font(.jakarta(12)).foregroundStyle(Palette.muted)
-            } else {
-                ForEach(Array(people), id: \.email) { person in
-                    HStack(spacing: 10) {
-                        Avatar(url: person.picture, name: person.displayName, size: 32)
-                            .overlay(alignment: .bottomTrailing) { PresenceDot(presence: person.presenceNow, size: 11) }
-                        Text(person.displayName).font(.jakarta(13, .bold)).foregroundStyle(Palette.text).lineLimit(1)
-                        Spacer(minLength: 0)
-                    }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .sugarCard(radius: 22, padding: 14)
-    }
-}
-
 // The same cards inside a page's own column, when its side columns aren't
 // showing (iPhone, iPad portrait).
 struct InlineExtras: View {
@@ -327,8 +263,6 @@ struct InlineExtras: View {
                 case .bottom:
                     InviteCard()
                     ChartsMini()
-                    TryThisCard()
-                    OnlineNowCard()
                 }
             }
         }

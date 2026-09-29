@@ -46,7 +46,6 @@ private struct PatternBackgroundModifier: ViewModifier {
     @AppStorage("sugerly.background.still") private var still = false
     @Environment(\.backgroundPaused) private var paused
     @Environment(\.colorScheme) private var scheme
-    @State private var depth = ScrollDepth()
 
     func body(content: Content) -> some View {
         let kind = AppBackground(rawValue: choice) ?? .dots
@@ -55,23 +54,18 @@ private struct PatternBackgroundModifier: ViewModifier {
         content
             .background {
                 if kind == .off {
-                    DepthLayer(depth: depth) { GlowLayer() }.ignoresSafeArea()
+                    GlowLayer().ignoresSafeArea()
                 } else {
                     // A new id for each look, so a freshly picked pattern (or
                     // colour, or dark mode) starts moving again straight away.
-                    DepthLayer(depth: depth) {
-                        PatternBackground(kind: kind, animated: !still && !paused)
-                            .id("\(kind.rawValue)-\(still)-\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)")
-                    }
-                    .ignoresSafeArea()
-                    .accessibilityHidden(true)
+                    PatternBackground(kind: kind, animated: !still && !paused)
+                        .id("\(kind.rawValue)-\(still)-\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)")
+                        .ignoresSafeArea()
+                        .accessibilityHidden(true)
                 }
             }
-            .modifier(DepthTracking(depth: $depth))
     }
 }
-
-// MARK: - 3D depth while scrolling
 
 // Nothing moves behind a sheet or menu (it would only slow down what's on top).
 private struct BackgroundPausedKey: EnvironmentKey {
@@ -82,51 +76,6 @@ extension EnvironmentValues {
     var backgroundPaused: Bool {
         get { self[BackgroundPausedKey.self] }
         set { self[BackgroundPausedKey.self] = newValue }
-    }
-}
-
-struct ScrollDepth: Equatable {
-    var y: CGFloat = 0
-    var tilt: Double = 0
-}
-
-// Follows the page's scroll: how far down it is, and a tilt from how fast
-// it's moving that springs back when you stop (iOS 18 and later).
-struct DepthTracking: ViewModifier {
-    @Binding var depth: ScrollDepth
-
-    func body(content: Content) -> some View {
-        if #available(iOS 18.0, *) {
-            content
-                .onScrollGeometryChange(for: CGFloat.self, of: { geo in geo.contentOffset.y + geo.contentInsets.top }, action: { old, new in
-                    depth.y = new
-                    depth.tilt = max(-8, min(8, Double(new - old) * 0.45))
-                })
-                .onScrollPhaseChange { _, phase in
-                    if phase == .idle {
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.72)) { depth.tilt = 0 }
-                    }
-                }
-        } else {
-            content
-        }
-    }
-}
-
-// The background sits "behind" the page: it drifts up more slowly than
-// the page, sinks back a little as you go down, and leans with the
-// scroll, so pages feel layered. It's slightly bigger than the screen so no
-// edge ever shows.
-struct DepthLayer<Layer: View>: View {
-    let depth: ScrollDepth
-    @ViewBuilder var layer: Layer
-
-    var body: some View {
-        let travel = tanh(Double(depth.y) / 500)
-        layer
-            .scaleEffect(1.14 - 0.03 * CGFloat(max(0, travel)))
-            .offset(y: -44 * CGFloat(travel))
-            .rotation3DEffect(.degrees(depth.tilt), axis: (x: 1, y: 0, z: 0), perspective: 0.55)
     }
 }
 
@@ -143,19 +92,9 @@ struct GlowLayer: View {
     }
 }
 
-private struct SugarBackground: ViewModifier {
-    @State private var depth = ScrollDepth()
-
-    func body(content: Content) -> some View {
-        content
-            .background { DepthLayer(depth: depth) { GlowLayer() }.ignoresSafeArea() }
-            .modifier(DepthTracking(depth: $depth))
-    }
-}
-
 extension View {
-    // Page background: warm off-white with soft accent glows, in 3D as you scroll.
-    func sugarBackground() -> some View { modifier(SugarBackground()) }
+    // Page background: warm off-white with soft accent glows.
+    func sugarBackground() -> some View { background { GlowLayer().ignoresSafeArea() } }
 }
 
 // Each pattern is drawn once (a little bigger than the screen) and then just

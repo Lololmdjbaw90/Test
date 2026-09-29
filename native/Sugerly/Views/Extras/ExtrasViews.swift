@@ -710,7 +710,7 @@ enum AppReleases {
             "For You now also mixes in reels ranked on the server by likes, views and comments for their age.",
             "Music always restarts: after a call, a voice note, another app or the end of a song. Music and Settings scroll smoothly, and the charts load all at once.",
             "Connect Apple Music in the Music tab to play whole songs if you subscribe.",
-            "Pages open instantly (no sliding), Settings is smooth, and backgrounds feel 3D as you scroll.",
+            "Pages open instantly (no sliding) and Settings is smooth.",
             "Smart safety: everything you write is checked on your phone (and by AI when it's unsure), with a slow mode and cooldowns for spam.",
             "Invite friends with your code: 400 coins for each friend who joins.",
             "More profile looks: name colours and styles, picture frames, banner patterns, and effect colours with how many.",
