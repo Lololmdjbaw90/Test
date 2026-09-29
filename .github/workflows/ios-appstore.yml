@@ -63,31 +63,6 @@ jobs:
           printf '%s\n' "$KEY" > "$RUNNER_TEMP/keys/AuthKey_$KEY_ID.p8"
           echo "KEY_PATH=$RUNNER_TEMP/keys/AuthKey_$KEY_ID.p8" >> "$GITHUB_ENV"
 
-      # Every run on a fresh Mac makes a new development certificate, and Apple
-      # allows only a few. Remove the old ones first (they're only used while
-      # building here; the App Store signing certificate isn't touched).
-      - name: Clear old development certificates
-        run: |
-          node - <<'JS'
-          const fs = require("fs"), crypto = require("crypto");
-          const key = fs.readFileSync(process.env.KEY_PATH, "utf8");
-          const b64 = (o) => Buffer.from(typeof o === "string" ? o : JSON.stringify(o)).toString("base64url");
-          const now = Math.floor(Date.now() / 1000);
-          const head = b64({ alg: "ES256", kid: process.env.KEY_ID, typ: "JWT" });
-          const body = b64({ iss: process.env.ISSUER_ID, iat: now, exp: now + 600, aud: "appstoreconnect-v1" });
-          const sig = crypto.sign("sha256", Buffer.from(head + "." + body), { key, dsaEncoding: "ieee-p1363" }).toString("base64url");
-          const auth = { Authorization: "Bearer " + head + "." + body + "." + sig };
-          (async () => {
-            const res = await fetch("https://api.appstoreconnect.apple.com/v1/certificates?limit=200&filter[certificateType]=DEVELOPMENT,IOS_DEVELOPMENT", { headers: auth });
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) { console.log("Couldn't list certificates:", res.status, JSON.stringify(json.errors || json).slice(0, 300)); return; }
-            for (const c of json.data || []) {
-              const del = await fetch("https://api.appstoreconnect.apple.com/v1/certificates/" + c.id, { method: "DELETE", headers: auth });
-              console.log("Removed old development certificate", c.attributes?.name || c.id, del.status);
-            }
-          })();
-          JS
-
       - name: Archive (signed)
         run: |
           xcodebuild \

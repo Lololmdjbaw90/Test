@@ -17,6 +17,8 @@ struct GalleryView: View {
     @State private var loadingMore = false
     @State private var adding = false
     @State private var appeared = false
+    @State private var pendingLikes = Set<String>()
+    @State private var loadError: String?
 
     private var mediums: [String] {
         let found = Set(artworks.map { $0.medium.lowercased() }.filter { !$0.isEmpty })
@@ -51,7 +53,7 @@ struct GalleryView: View {
 
     var body: some View {
         let content = ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            LazyVStack(alignment: .leading, spacing: 18) {
                 header.stagger(appeared, 0)
                 SearchField(text: $query, placeholder: "Search fan art or artists…").stagger(appeared, 1)
                 chips.stagger(appeared, 2)
@@ -59,6 +61,12 @@ struct GalleryView: View {
                     if let spot = spotlight { spotlightCard(spot).stagger(appeared, 3) }
                     let featured = artworks.filter(\.featured).prefix(8)
                     if !featured.isEmpty { featuredRow(Array(featured)).stagger(appeared, 4) }
+                }
+                if let loadError {
+                    VStack(spacing: 8) {
+                        Text(loadError).font(.jakarta(13)).foregroundStyle(Palette.danger)
+                        Button("Try again") { Task { await load() } }.buttonStyle(OutlineButtonStyle())
+                    }
                 }
                 if loading && artworks.isEmpty {
                     HStack(alignment: .top, spacing: 12) {
@@ -90,7 +98,7 @@ struct GalleryView: View {
         .task { if artworks.isEmpty { await load() } }
         .dropRemoved($artworks)
         .onAppear { appeared = true }
-        .fullScreenCover(isPresented: $adding) { NewArtworkView() }
+        .fullScreenCover(isPresented: $adding, onDismiss: { Task { await load() } }) { NewArtworkView() }
 
         if isRoot {
             content.sugarTopBar($path)
@@ -99,64 +107,29 @@ struct GalleryView: View {
         }
     }
 
-    // The fan art wall: what this page is, a few numbers, and a big button
-    // to hang your own piece.
+    // An editorial sketchbook header; the art is the hero of this page.
     private var header: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 6) {
-                Image(systemName: "sparkles").font(.system(size: 11, weight: .heavy))
-                Text("FAN ART GALLERY").font(.jakarta(11, .heavy)).tracking(1.2)
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("THE COMMUNITY SKETCHBOOK").font(.jakarta(9, .heavy)).tracking(1.7).foregroundStyle(Theme.main)
+                Text("Fan Art").font(.custom("LilitaOne", size: 48)).foregroundStyle(Palette.text)
+                    .overlay(alignment: .bottomLeading) {
+                        Capsule().fill(Theme.main.opacity(0.35)).frame(width: 128, height: 5).rotationEffect(.degrees(-3)).offset(y: 3)
+                    }
+                Text("Made by fans. Kept with love.").font(.jakarta(12)).foregroundStyle(Palette.muted).padding(.top, 8)
             }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 10).frame(height: 26)
-            .background(.white.opacity(0.22), in: Capsule())
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 10) {
-                    Text("Fan Art").font(.display(44)).foregroundStyle(.white)
-                    Image(systemName: "paintpalette.fill").font(.system(size: 28, weight: .semibold)).foregroundStyle(.white)
-                        .rotationEffect(.degrees(appeared ? -10 : 10))
-                        .animation(.spring(response: 0.6, dampingFraction: 0.35).delay(0.3), value: appeared)
-                }
-                Text("Drawings made by fans in the Sugerly community. Love them, save them, and hang up your own.")
-                    .font(.jakarta(14, .semibold)).foregroundStyle(.white.opacity(0.9))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            HStack(spacing: 8) {
-                stat("\(artworks.count)", "pieces", "photo.stack.fill")
-                stat("\(Set(artworks.map(\.authorEmail)).count)", "artists", "person.2.fill")
-                stat("\(artworks.reduce(0) { $0 + $1.likeTotal })", "hearts", "heart.fill")
-            }
+            Spacer(minLength: 0)
             Button { adding = true } label: {
-                Label("Share your fan art", systemImage: "plus")
-                    .font(.jakarta(15, .bold)).foregroundStyle(Theme.main)
-                    .frame(maxWidth: .infinity).frame(height: 48)
-                    .background(.white, in: Capsule())
-            }
-            .buttonStyle(BouncyStyle(scale: 0.96))
-        }
-        .padding(18)
-        .background {
-            RoundedRectangle(cornerRadius: 30, style: .continuous).fill(Theme.gradient)
-                .overlay(alignment: .topTrailing) {
-                    Circle().fill(.white.opacity(0.12)).frame(width: 160).offset(x: 50, y: -60)
+                VStack(spacing: 7) {
+                    Image(systemName: "plus").font(.system(size: 23, weight: .semibold))
+                    Text("Share art").font(.jakarta(11, .heavy))
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-                .shadow(color: Theme.main.opacity(0.3), radius: 16, y: 8)
-        }
-    }
-
-    private func stat(_ value: String, _ label: String, _ icon: String) -> some View {
-        VStack(spacing: 2) {
-            HStack(spacing: 4) {
-                Image(systemName: icon).font(.system(size: 11, weight: .bold))
-                Text(value).font(.jakarta(16, .heavy)).contentTransition(.numericText())
+                .foregroundStyle(.white).frame(width: 82, height: 90)
+                .background(Theme.gradient, in: RoundedRectangle(cornerRadius: 18))
+                .rotationEffect(.degrees(4))
             }
-            Text(label).font(.jakarta(11, .semibold)).opacity(0.85)
-        }
-        .foregroundStyle(.white)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
-        .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .buttonStyle(BouncyStyle(scale: 0.94)).accessibilityLabel("Share fan art")
+        }.padding(.vertical, 12)
     }
 
     private var chips: some View {
@@ -263,24 +236,27 @@ struct GalleryView: View {
     private func column(_ list: [Artwork], offset: Int) -> some View {
         LazyVStack(spacing: 12) {
             ForEach(Array(list.enumerated()), id: \.element.id) { i, art in
-                GalleryCard(artwork: art, liked: LikeBook.shared.isLiked(art, me: model.me?.email ?? ""), onOpen: { path.append(.artwork(art)) }, onLike: { toggleLike(art) })
-                    .stagger(appeared, 5 + i * 2 + offset)
+                GalleryCard(artwork: art, liked: LikeBook.shared.isLiked(art, me: model.me?.email ?? ""), onOpen: { path.append(.artwork(art)) }, onLike: { toggleLike(art) }, onProfile: { path.append(.person(art.authorEmail)) })
+                    .stagger(appeared, min(6, 2 + i + offset))
                     .onAppear { if i >= list.count - 3 { Task { await loadMore() } } }
             }
         }
     }
 
     private func toggleLike(_ art: Artwork) {
-        guard let me = model.me, let i = artworks.firstIndex(where: { $0.id == art.id }) else { return }
+        guard let me = model.me, !pendingLikes.contains(art.id), let i = artworks.firstIndex(where: { $0.id == art.id }) else { return }
+        pendingLikes.insert(art.id)
         let before = artworks[i]
         let liking = !LikeBook.shared.isLiked(before, me: me.email)
         artworks[i].setLiked(liking, me: me.email)
         Task {
+            defer { pendingLikes.remove(art.id) }
             do {
                 try await LikeBook.shared.write(before, liking: liking, me: me.email, owner: art.authorEmail)
                 if liking { Notify.send(to: art.authorEmail, from: me, type: "like", message: "\(me.displayName) loved your fan art", link: "/Gallery?art=\(art.id)") }
             } catch {
                 if let j = artworks.firstIndex(where: { $0.id == art.id }) { artworks[j].restoreLikes(from: before) }
+                model.showToast("Could not save your like. Try again.", icon: "exclamationmark.circle")
             }
         }
     }
@@ -288,7 +264,8 @@ struct GalleryView: View {
     // Pages of 60 (newest first); more load as you scroll down the wall.
     private func load() async {
         defer { loading = false }
-        guard let docs = try? await FS.query("Artwork", orderBy: "created_date", limit: 60) else { return }
+        guard let docs = try? await FS.query("Artwork", orderBy: "created_date", limit: 60) else { loadError = "Could not load fan art. Pull down to retry."; return }
+        loadError = nil
         let page = docs.map(Artwork.init)
         let cutoff = page.map(\.created).min() ?? ""
         let older = artworks.filter { !cutoff.isEmpty && $0.created < cutoff }
@@ -317,59 +294,62 @@ struct GalleryCard: View {
     let liked: Bool
     var onOpen: () -> Void
     var onLike: () -> Void
+    var onProfile: () -> Void
     @Environment(AppModel.self) private var model
-    @State private var burst = false
+    @State private var saving = false
+    private var saved: Bool { model.me?.savedArtworks.contains(artwork.id) == true }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ArtImage(url: artwork.imageURL, tallest: 0.55, widest: 1.5)
-                .overlay {
-                    Image(systemName: "heart.fill").font(.system(size: 56)).foregroundStyle(Theme.gradient)
-                        .shadow(color: Theme.main.opacity(0.6), radius: 12)
-                        .scaleEffect(burst ? 1 : 0.2).opacity(burst ? 1 : 0)
-                }
-                .overlay(alignment: .topLeading) {
-                    if artwork.featured {
-                        Label("Featured", systemImage: "star.fill").font(.jakarta(10, .heavy)).foregroundStyle(.white)
-                            .padding(.horizontal, 8).padding(.vertical, 4).background(Theme.gradient, in: Capsule()).padding(8)
+            Button(action: onOpen) {
+                ArtImage(url: artwork.imageURL, tallest: 0.55, widest: 1.5)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(alignment: .topLeading) {
+                        if artwork.featured {
+                            Text("STAFF PICK").font(.jakarta(9, .heavy)).tracking(1)
+                                .padding(7).foregroundStyle(Color(hex: 0x3A2230)).background(Color(hex: 0xFFE8A3)).rotationEffect(.degrees(-5)).padding(8)
+                        }
                     }
-                }
-                .overlay(alignment: .bottomTrailing) {
-                    Button(action: onLike) {
-                        Image(systemName: liked ? "heart.fill" : "heart")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(liked ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Color.white))
-                            .symbolEffect(.bounce, value: liked)
-                            .frame(width: 34, height: 34)
-                            .background(liked ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.black.opacity(0.28)), in: Circle())
-                    }
-                    .buttonStyle(BouncyStyle(scale: 0.8))
-                    .sensoryFeedback(.impact(weight: .light), trigger: liked)
-                    .padding(8)
-                }
-                .contentShape(Rectangle())
-                .onTapGesture(count: 2) {
-                    if !liked { onLike() }
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { burst = true }
-                    Task { try? await Task.sleep(for: .milliseconds(650)); withAnimation(.easeOut(duration: 0.25)) { burst = false } }
-                }
-                .onTapGesture(perform: onOpen)
-            VStack(alignment: .leading, spacing: 5) {
-                Text(artwork.title).font(.jakarta(14, .heavy)).foregroundStyle(Palette.text).lineLimit(1)
+            }.buttonStyle(BouncyStyle(scale: 0.98)).accessibilityLabel("Open \(artwork.title)")
+            Button(action: onOpen) {
+                Text(artwork.title).font(.jakarta(14, .heavy)).foregroundStyle(Palette.text).lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 10)
+            }.buttonStyle(.plain)
+            Button(action: onProfile) {
                 HStack(spacing: 6) {
-                    Avatar(url: model.person(artwork.authorEmail)?.picture ?? artwork.authorPicture, name: model.name(artwork.authorEmail, artwork.authorName), size: 20)
-                    Text(model.name(artwork.authorEmail, artwork.authorName)).font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted).lineLimit(1)
-                    Spacer(minLength: 0)
-                    Text("\(artwork.likeTotal)").font(.jakarta(11, .heavy)).foregroundStyle(Theme.pink)
-                        .contentTransition(.numericText())
-                }
+                    Avatar(url: model.person(artwork.authorEmail)?.picture ?? artwork.authorPicture, name: artwork.authorName, size: 23)
+                    Text(model.name(artwork.authorEmail, artwork.authorName)).font(.jakarta(11, .semibold)).foregroundStyle(Palette.muted).lineLimit(1)
+                }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            }.buttonStyle(.plain)
+            HStack(spacing: 0) {
+                Button(action: onLike) {
+                    HStack(spacing: 5) {
+                        Image(systemName: liked ? "heart.fill" : "heart").symbolEffect(.bounce, value: liked)
+                        Text("\(artwork.likeTotal)").font(.jakarta(12, .bold)).contentTransition(.numericText())
+                    }.foregroundStyle(liked ? Theme.main : Palette.text2).frame(minWidth: 44, minHeight: 44)
+                }.buttonStyle(BouncyStyle()).accessibilityLabel(liked ? "Unlike artwork" : "Like artwork")
+                Spacer(minLength: 0)
+                Button { save() } label: {
+                    Image(systemName: saved ? "bookmark.fill" : "bookmark").foregroundStyle(saved ? Theme.main : Palette.text2)
+                        .frame(width: 44, height: 44).symbolEffect(.bounce, value: saved)
+                }.buttonStyle(BouncyStyle()).disabled(saving).accessibilityLabel(saved ? "Unsave artwork" : "Save artwork")
             }
-            .padding(10)
-            .contentShape(Rectangle())
-            .onTapGesture(perform: onOpen)
         }
-        .sugarCard(radius: 22)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .padding(9).background(Palette.surface, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
+        .sensoryFeedback(.impact(weight: .light), trigger: liked)
+    }
+
+    private func save() {
+        guard let me = model.me, !saving else { return }
+        saving = true
+        var next = me.savedArtworks
+        if saved { next.removeAll { $0 == artwork.id } } else { next.append(artwork.id) }
+        Task {
+            defer { saving = false }
+            do { try await model.updateMe(["saved_artworks": next]) }
+            catch { model.showToast("Couldn't save this artwork. Try again.", icon: "exclamationmark.circle") }
+        }
     }
 }
 
@@ -478,8 +458,12 @@ struct ArtworkDetailView: View {
         var next = meProfile.savedArtworks
         let saving = !next.contains(artwork.id)
         if saving { next.append(artwork.id) } else { next.removeAll { $0 == artwork.id } }
-        model.showToast(saving ? "Saved to your collection" : "Removed from saved", icon: saving ? "bookmark.fill" : "bookmark")
-        Task { try? await model.updateMe(["saved_artworks": next]) }
+        Task {
+            do {
+                try await model.updateMe(["saved_artworks": next])
+                model.showToast(saving ? "Saved to your collection" : "Removed from saved", icon: "bookmark")
+            } catch { model.showToast("Could not save your change. Try again.", icon: "exclamationmark.circle") }
+        }
     }
 }
 

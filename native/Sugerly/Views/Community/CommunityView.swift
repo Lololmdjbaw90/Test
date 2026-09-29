@@ -296,11 +296,6 @@ struct CommunityView: View {
             LazyVStack(alignment: .leading, spacing: 16, pinnedViews: [.sectionHeaders]) {
                 hero.stagger(appeared, 0)
                 if !storyPeople.isEmpty { stories.stagger(appeared, 1) }
-                WeeklyChallengeCard(posts: store.posts, active: tag != nil && tag == DailyContent.challenge?.tag, compose: compose) { t in
-                    withAnimation(.snappy) { tag = tag == t ? nil : t; feed = .latest }
-                }
-                .stagger(appeared, 2)
-                if !topCreators.isEmpty { creatorsRow.stagger(appeared, 3) }
                 Section {
                     if !trending.isEmpty || tag != nil { trendingRow }
 
@@ -314,7 +309,7 @@ struct CommunityView: View {
                     }
 
                     ForEach(Array(visible.enumerated()), id: \.element.id) { index, post in
-                        PostCard(post: post, path: $path, reporting: $reporting)
+                        PostCard(post: post, path: $path, reporting: $reporting, conversational: true)
                             .transition(.opacity.combined(with: .scale(scale: 0.97)))
                             .onAppear { if index >= visible.count - 5 { Task { await store.loadMore() } } }
                         if index == 1 && !suggestions.isEmpty && feed == .forYou { suggested }
@@ -340,110 +335,58 @@ struct CommunityView: View {
         .onAppear { appeared = true }
     }
 
-    // The top: a colourful card with who's online and a box to post.
+    // A people-first conversation feed, separate from the artwork wall.
     private var hero: some View {
-        let me = model.me?.email ?? ""
-        let online = model.people.values.filter { $0.isOnline && $0.email != me }.sorted { $0.lastSeen > $1.lastSeen }
-        return VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Community").font(.display(36)).foregroundStyle(.white)
-                    HStack(spacing: 8) {
-                        if online.isEmpty {
-                            Circle().fill(.white).frame(width: 8, height: 8)
-                        } else {
-                            HStack(spacing: -9) {
-                                ForEach(Array(online.prefix(4))) { p in
-                                    Avatar(url: p.picture, name: p.displayName, size: 26)
-                                        .overlay(Circle().strokeBorder(.white, lineWidth: 2))
-                                }
-                            }
-                        }
-                        Text(online.isEmpty ? "\(store.posts.count) posts" : "\(online.count) online · \(store.posts.count) posts")
-                            .font(.jakarta(13, .bold)).foregroundStyle(.white.opacity(0.92))
-                            .contentTransition(.numericText())
-                    }
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Community").font(.display(38)).foregroundStyle(Palette.text)
+                    Text("Little updates. Long conversations.").font(.jakarta(13)).foregroundStyle(Palette.muted)
                 }
-                Spacer(minLength: 0)
+                Spacer(minLength: 8)
                 Button { searching = true } label: {
-                    Image(systemName: "magnifyingglass").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
-                        .frame(width: 46, height: 46)
-                        .background(.white.opacity(0.22), in: Circle())
+                    Image(systemName: "magnifyingglass").font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(Theme.main).frame(width: 44, height: 44)
                 }
-                .buttonStyle(BouncyStyle())
-                .accessibilityLabel("Search")
+                .buttonStyle(BouncyStyle()).accessibilityLabel("Search community")
             }
             Button(action: compose) {
-                HStack(spacing: 10) {
-                    Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 36)
-                    Text("Share your latest piece, \(model.me?.displayName.split(separator: " ").first.map(String.init) ?? "")…")
-                        .font(.jakarta(15, .medium)).foregroundStyle(Palette.muted).lineLimit(1)
+                HStack(spacing: 12) {
+                    Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 44)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("What's on your mind?").font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
+                        Text("A thought, a work in progress, a tiny win…").font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(1)
+                    }
                     Spacer(minLength: 0)
-                    Image(systemName: "photo.badge.plus").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
-                        .frame(width: 38, height: 38)
-                        .background(Theme.gradient, in: Circle())
+                    Image(systemName: "square.and.pencil").foregroundStyle(Theme.main)
                 }
-                .padding(.leading, 7).padding(.trailing, 6)
-                .frame(height: 52)
-                .background(Palette.surface, in: Capsule())
-                .shadow(color: .black.opacity(0.08), radius: 8, y: 3)
+                .padding(14).background(Theme.soft, in: RoundedRectangle(cornerRadius: 18))
             }
-            .buttonStyle(BouncyStyle(scale: 0.97))
+            .buttonStyle(BouncyStyle(scale: 0.98))
         }
-        .padding(18)
-        .background {
-            RoundedRectangle(cornerRadius: 32, style: .continuous).fill(Theme.gradient)
-                .overlay(alignment: .topTrailing) {
-                    Circle().fill(.white.opacity(0.13)).frame(width: 190).offset(x: 70, y: -90)
-                }
-                .overlay(alignment: .bottomLeading) {
-                    Circle().fill(.white.opacity(0.09)).frame(width: 130).offset(x: -50, y: 60)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-                .shadow(color: Theme.main.opacity(0.3), radius: 18, y: 8)
-        }
+        .padding(.horizontal, 4)
     }
 
-    // Feed tabs that stick under the top bar: the picked one shows its name,
-    // the rest just their icon, so all five fit on any phone.
     private var feedBar: some View {
-        HStack(spacing: 4) {
-            ForEach(Feed.allCases, id: \.self) { f in feedTab(f) }
-        }
-        .padding(5)
-        .background(Palette.surface, in: Capsule())
-        .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
-        .shadow(color: Palette.shadow, radius: 8, y: 3)
-        .padding(.vertical, 6)
-        .background(Palette.bg.opacity(0.94).padding(.horizontal, -14))
-    }
-
-    private func feedTab(_ f: Feed) -> some View {
-        let active = feed == f
-        return Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { feed = f } } label: {
-            HStack(spacing: 6) {
-                Image(systemName: f.icon).font(.system(size: 15, weight: .bold))
-                if active {
-                    Text(f.rawValue).font(.jakarta(14, .heavy)).lineLimit(1).fixedSize()
-                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 22) {
+                ForEach(Feed.allCases, id: \.self) { f in
+                    Button { withAnimation(.snappy(duration: 0.22)) { feed = f } } label: {
+                        VStack(spacing: 10) {
+                            Text(f.rawValue).font(.jakarta(14, feed == f ? .heavy : .medium))
+                                .foregroundStyle(feed == f ? Palette.text : Palette.muted)
+                            ZStack {
+                                Capsule().fill(.clear).frame(height: 3)
+                                if feed == f { Capsule().fill(Theme.main).frame(height: 3).matchedGeometryEffect(id: "feed", in: feedPill) }
+                            }
+                        }
+                        .padding(.top, 14).frame(minHeight: 44)
+                    }.buttonStyle(.plain)
                 }
-            }
-            .foregroundStyle(active ? .white : Palette.text2)
-            .padding(.horizontal, active ? 16 : 0)
-            .frame(maxWidth: active ? nil : .infinity)
-            .frame(height: 42)
-            .background {
-                if active {
-                    Capsule().fill(Theme.gradient)
-                        .shadow(color: Theme.main.opacity(0.35), radius: 8, y: 3)
-                        .matchedGeometryEffect(id: "feed", in: feedPill)
-                }
-            }
-            .contentShape(Capsule())
+            }.padding(.horizontal, 4)
         }
-        .buttonStyle(BouncyStyle(scale: 0.93))
-        .accessibilityLabel(f.rawValue)
-        .sensoryFeedback(.selection, trigger: active)
+        .background(Palette.bg)
+        .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1).allowsHitTesting(false) }
     }
 
     private var trendingRow: some View {
@@ -553,6 +496,7 @@ struct PostCard: View {
     @Binding var path: [Route]
     @Binding var reporting: ReportSheet.Target?
     var openable = true
+    var conversational = false
 
     @Environment(AppModel.self) private var model
     @Environment(PostsStore.self) private var store
@@ -586,7 +530,7 @@ struct PostCard: View {
                 .padding(.top, friendLiker == nil ? 14 : 8)
                 .padding(.bottom, 12)
             if !post.title.isEmpty {
-                Text(post.title).font(.display(22)).foregroundStyle(Palette.text)
+                Text(post.title).font(conversational ? .jakarta(19, .bold) : .display(22)).foregroundStyle(Palette.text)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
@@ -613,7 +557,7 @@ struct PostCard: View {
                 .padding(.top, 12)
                 .padding(.bottom, 14)
         }
-        .sugarCard(radius: 30)
+        .modifier(ConversationSurface(flat: conversational))
         .confirmationDialog("Delete this post?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 Task {
@@ -1417,5 +1361,15 @@ extension View {
             .background(active ? Theme.soft : Palette.surface2, in: Capsule())
             .overlay(Capsule().strokeBorder(active ? Theme.main.opacity(0.25) : Color.clear, lineWidth: 1))
             .contentShape(Capsule())
+    }
+}
+
+private struct ConversationSurface: ViewModifier {
+    let flat: Bool
+    @ViewBuilder func body(content: Content) -> some View {
+        if flat {
+            content.background(Palette.surface.opacity(0.5))
+                .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1).allowsHitTesting(false) }
+        } else { content.sugarCard(radius: 30) }
     }
 }

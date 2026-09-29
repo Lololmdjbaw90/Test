@@ -53,7 +53,7 @@ extension UINavigationController: @retroactive UIGestureRecognizerDelegate {
     }
 
     public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        viewControllers.count > 1
+        viewControllers.count > 1 && transitionCoordinator == nil && presentedViewController == nil
     }
 }
 
@@ -177,7 +177,7 @@ struct MainShell: View {
         case .me: return mePath
         }
     }
-    private var barHidden: Bool { typing || !currentPath.isEmpty }
+    private var barHidden: Bool { typing || !currentPath.isEmpty || composer != nil || calls.showScreen }
 
     private var currentPathBinding: Binding<[Route]> {
         switch tab {
@@ -359,7 +359,7 @@ struct MainShell: View {
         .onChange(of: model.soundRequest?.id) { _, id in
             if id != nil { composer = .reel }
         }
-        .fullScreenCover(item: $composer) { kind in
+        .fullScreenCover(item: $composer, onDismiss: { typing = false }) { kind in
             switch kind {
             case .post: NewPostView { await posts.load() }
             case .artwork: NewArtworkView()

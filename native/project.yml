@@ -67,6 +67,13 @@ targets:
             CFBundleURLSchemes:
               - sugerly
         UIAppFonts:
+          - BubblegumSans-Regular.ttf
+          - Pacifico-Regular.ttf
+          - LilitaOne-Regular.ttf
+          - BalsamiqSans-Regular.ttf
+          - Modak-Regular.ttf
+          - CaveatBrush-Regular.ttf
+          - ChelaOne-Regular.ttf
           - Bubbly-Regular.otf
           - CuteHere.otf
           - PlusJakartaSans-Regular.ttf
@@ -84,7 +91,21 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_PREVIEWS: YES
         CODE_SIGN_STYLE: Automatic
-    scheme: {}
+    scheme:
+      testTargets:
+        - SugerlyUITests
+  SugerlyUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: SugerlyUITests
+    dependencies:
+      - target: Sugerly
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mimilocks.app.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Sugerly
   SugerlyWidgets:
     type: app-extension
     platform: iOS

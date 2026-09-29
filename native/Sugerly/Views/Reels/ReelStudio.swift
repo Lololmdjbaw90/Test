@@ -124,12 +124,20 @@ struct ReelLook: Equatable {
 
 enum StickerFont: String, CaseIterable {
     case bubbly = "Bubbly", cute = "Cute", bold = "Bold", classic = "Classic"
+    case bubblegum = "Bubblegum", pacifico = "Pacifico", lilita = "Lilita", balsamiq = "Balsamiq", modak = "Modak", brush = "Brush", chela = "Chela"
     var uiName: String {
         switch self {
         case .bubbly: return "Bubbly-Regular"
         case .cute: return "CuteHereRegular"
         case .bold: return "PlusJakartaSans-ExtraBold"
         case .classic: return "PlusJakartaSans-SemiBold"
+        case .bubblegum: return "BubblegumSans-Regular"
+        case .pacifico: return "Pacifico-Regular"
+        case .lilita: return "LilitaOne"
+        case .balsamiq: return "BalsamiqSans-Regular"
+        case .modak: return "Modak"
+        case .brush: return "CaveatBrush-Regular"
+        case .chela: return "ChelaOne-Regular"
         }
     }
 }
@@ -371,6 +379,8 @@ struct ReelStudioView: View {
     @State private var penWidth: CGFloat = 0.012
     @State private var penNeon = false
     // timeline
+    @State private var previewSeeker = PreviewSeeker()
+    @State private var isScrubbing = false
     @State private var playhead: Double = 0         // seconds from the start of the reel
     @State private var isPlaying = false
     @State private var slideSeconds: [Double] = []  // how long each photo shows
@@ -465,6 +475,7 @@ struct ReelStudioView: View {
                 addPhotoOverlay(Self.overlayPicture(image))
             }
         }
+        .onChange(of: editingText?.id) { _, id in if id != nil { pausePlayback() } }
         .onChange(of: look) { _, _ in applyPreviewFilter() }
         .fullScreenCover(item: $cropJob) { job in
             ImageCropper(image: job.image, circle: false, aspect: 9 / 16, choices: CropAspect.editor, title: "Move and pinch to crop", onDone: { rect in
@@ -661,7 +672,7 @@ struct ReelStudioView: View {
         case .trim:
             if asset != nil {
                 TrimBar(thumbs: thumbs, duration: duration, start: $trimStart, end: $trimEnd,
-                        onSeek: { t in player.seek(to: CMTime(seconds: t, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) },
+                        onSeek: { t in previewSeeker.seek(player, seconds: t) },
                         onScrub: { began in
                             if !began { seek(to: 0) }
                             scrubbing(began)
@@ -1094,8 +1105,9 @@ struct ReelStudioView: View {
 
     private func loopPreview() {
         if let timeObserver { player.removeTimeObserver(timeObserver) }
-        timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.1, preferredTimescale: 600), queue: .main) { time in
+        timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 1.0 / 30, preferredTimescale: 600), queue: .main) { time in
             MainActor.assumeIsolated {
+                guard !isScrubbing else { return }
                 if time.seconds >= trimEnd || time.seconds < trimStart - 0.2 {
                     player.seek(to: CMTime(seconds: trimStart, preferredTimescale: 600))
                     soundPlayer?.seek(to: .zero)
@@ -1106,7 +1118,7 @@ struct ReelStudioView: View {
                 // overlays that come and go.
                 if tool == .timeline || stickers.contains(where: { $0.isTimed }) {
                     let at = min(max(0, time.seconds - trimStart), timelineLength)
-                    if abs(at - playhead) > 0.02 { playhead = at }
+                    if abs(at - playhead) > 0.015 { playhead = at }
                 }
             }
         }
@@ -1186,7 +1198,7 @@ struct ReelStudioView: View {
         let t = min(max(0, t), timelineLength)
         playhead = t
         if asset != nil {
-            player.seek(to: CMTime(seconds: trimStart + t, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+            previewSeeker.seek(player, seconds: trimStart + t)
         } else {
             let i = slideIndex(at: t)
             if i != slide { slide = i }
@@ -1195,6 +1207,9 @@ struct ReelStudioView: View {
     }
 
     private func scrubbing(_ began: Bool) {
+        guard began != isScrubbing else { return }
+        isScrubbing = began
+        if !began, asset != nil { previewSeeker.seek(player, seconds: trimStart + playhead, precise: true) }
         if began {
             resumeAfterScrub = isPlaying
             if isPlaying { pausePlayback() }
@@ -1235,7 +1250,7 @@ struct ReelStudioView: View {
         slideTask = Task {
             var last = Date()
             while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(100))
+                try? await Task.sleep(for: .milliseconds(33))
                 if Task.isCancelled { break }
                 let now = Date()
                 var next = playhead + now.timeIntervalSince(last)
@@ -1618,7 +1633,7 @@ struct TrimBar: View {
 
     private let height: CGFloat = 58
     private let tab: CGFloat = 20
-    private let minLength = 1.0
+    private var minLength: Double { min(1, duration) }
     private let maxLength = 60.0
 
     var body: some View {
@@ -1652,6 +1667,7 @@ struct TrimBar: View {
                     handle(left: false).offset(x: x0 + boxWidth - tab).gesture(drag(.end, w))
                 }
                 .frame(width: w, height: height, alignment: .leading)
+                .coordinateSpace(name: "videoTrim")
             }
             .frame(height: height)
             Text(hint).font(.jakarta(11, .semibold)).foregroundStyle(.white.opacity(0.6))
@@ -1713,7 +1729,7 @@ struct TrimBar: View {
     // Uses how far the finger moved (not where it is), so nothing jumps
     // when a drag starts.
     private func drag(_ part: Part, _ w: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: part == .window ? 4 : 0)
+        DragGesture(minimumDistance: part == .window ? 4 : 0, coordinateSpace: .named("videoTrim"))
             .onChanged { v in
                 if dragging == nil {
                     dragging = part

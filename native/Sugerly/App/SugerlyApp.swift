@@ -24,8 +24,16 @@ struct SugerlyApp: App {
 
     var body: some Scene {
         WindowGroup {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--polish-ui-test") {
+                PolishUITestHost().environment(model)
+            } else {
+                RootView().environment(model)
+            }
+            #else
             RootView()
                 .environment(model)
+            #endif
         }
     }
 }

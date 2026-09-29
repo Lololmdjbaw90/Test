@@ -29,9 +29,10 @@ struct ReelTimeline: View {
 
     @State private var dragBase: (start: Double, end: Double)?
     @State private var scrubbing = false
+    @State private var timingEditor = false
 
     private let trackHeight: CGFloat = 46
-    private let laneHeight: CGFloat = 28
+    private let laneHeight: CGFloat = 40
     private let rulerHeight: CGFloat = 18
     private var isSlideshow: Bool { !slides.isEmpty }
     private var slideBounds: [Double] { Self.bounds(slideSeconds) }
@@ -46,7 +47,7 @@ struct ReelTimeline: View {
                     VStack(alignment: .leading, spacing: 6) {
                         ruler(w)
                         mainTrack(w)
-                        lanes(w)
+                        lanes(w).frame(height: max(44, geo.size.height - trackHeight - rulerHeight - 12))
                     }
                     playheadLine(w, height: geo.size.height)
                 }
@@ -56,6 +57,14 @@ struct ReelTimeline: View {
         .padding(.horizontal, 16)
         .sensoryFeedback(.selection, trigger: selected)
         .sensoryFeedback(.selection, trigger: selectedSlide)
+        .sheet(isPresented: $timingEditor, onDismiss: { onScrub(false) }) {
+            if let id = selected, let index = stickers.firstIndex(where: { $0.id == id }) {
+                OverlayTimingEditor(sticker: $stickers[index], length: length, onSeek: onSeek) {
+                    snap(id)
+                }
+                .presentationDetents([.medium, .large])
+            }
+        }
     }
 
     // MARK: top row
@@ -228,12 +237,15 @@ struct ReelTimeline: View {
             }
         }
         .scrollBounceBehavior(.basedOnSize)
+        .scrollDisabled(dragBase != nil)
+        .padding(.horizontal, 12)
+        .padding(.horizontal, -12)
     }
 
     private func lane(_ sticker: TextSticker, _ w: CGFloat) -> some View {
         let total = max(0.1, length)
-        let start = min(sticker.start, length)
-        let end = min(sticker.end ?? length, length)
+        let start = min(max(0, sticker.start), max(0, length - min(shortest, length)))
+        let end = max(start, min(sticker.end ?? length, length))
         let x0 = CGFloat(start / total) * w
         let x1 = max(x0 + 16, CGFloat(end / total) * w)
         let isSelected = selected == sticker.id
@@ -246,15 +258,21 @@ struct ReelTimeline: View {
                 .offset(x: x0)
                 .onTapGesture {
                     selectedSlide = nil
-                    selected = isSelected ? nil : sticker.id
+                    selected = sticker.id
+                    onSeek(start)
                 }
                 .highPriorityGesture(moveGesture(sticker.id, w))
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Text track: \(label(sticker))")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityIdentifier("overlay-track-\(sticker.id)")
             if isSelected {
-                handle(left: true).offset(x: x0 - 7).highPriorityGesture(edgeGesture(sticker.id, w, left: true))
-                handle(left: false).offset(x: min(w, x1) - 7).highPriorityGesture(edgeGesture(sticker.id, w, left: false))
+                handle(left: true).offset(x: x0 - 16).highPriorityGesture(edgeGesture(sticker.id, w, left: true)).accessibilityIdentifier("overlay-start")
+                handle(left: false).offset(x: min(w, x1) - 16).highPriorityGesture(edgeGesture(sticker.id, w, left: false)).accessibilityIdentifier("overlay-end")
             }
         }
         .frame(width: w, height: laneHeight, alignment: .leading)
+        .coordinateSpace(name: sticker.id)
     }
 
     private func bar(_ s: TextSticker, selected: Bool, width: CGFloat, span: Double) -> some View {
@@ -300,21 +318,23 @@ struct ReelTimeline: View {
 
     private func handle(left: Bool) -> some View {
         RoundedRectangle(cornerRadius: 5, style: .continuous).fill(.white)
-            .frame(width: 14, height: laneHeight + 6)
+            .frame(width: 14, height: laneHeight)
             .overlay {
                 Image(systemName: left ? "chevron.compact.left" : "chevron.compact.right")
                     .font(.system(size: 13, weight: .heavy)).foregroundStyle(Theme.main)
             }
             .shadow(color: .black.opacity(0.35), radius: 2)
-            .contentShape(Rectangle().inset(by: -10))
+            .padding(.horizontal, 9)
+            .contentShape(Rectangle())
     }
 
     // Drag the whole bar: same length, new time.
     private func moveGesture(_ id: UUID, _ w: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 4)
+        DragGesture(minimumDistance: 8, coordinateSpace: .named(id))
             .onChanged { v in
                 guard let i = stickers.firstIndex(where: { $0.id == id }) else { return }
                 if dragBase == nil {
+                    onScrub(true)
                     onCheckpoint()
                     selectedSlide = nil
                     selected = id
@@ -332,15 +352,17 @@ struct ReelTimeline: View {
             .onEnded { _ in
                 dragBase = nil
                 snap(id)
+                onScrub(false)
             }
     }
 
     // Drag an end: shorter or longer.
     private func edgeGesture(_ id: UUID, _ w: CGFloat, left: Bool) -> some Gesture {
-        DragGesture(minimumDistance: 0)
+        DragGesture(minimumDistance: 0, coordinateSpace: .named(id))
             .onChanged { v in
                 guard let i = stickers.firstIndex(where: { $0.id == id }) else { return }
                 if dragBase == nil {
+                    onScrub(true)
                     onCheckpoint()
                     dragBase = (stickers[i].start, min(length, stickers[i].end ?? length))
                 }
@@ -359,6 +381,7 @@ struct ReelTimeline: View {
             .onEnded { _ in
                 dragBase = nil
                 snap(id)
+                onScrub(false)
             }
     }
 
@@ -387,6 +410,7 @@ struct ReelTimeline: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     if sticker.image == nil { chip("Edit", "pencil") { onEditText(sticker) } }
+                    chip("Timing", "clock") { onCheckpoint(); onScrub(true); timingEditor = true }
                     chip(isSlideshow ? "From this slide" : "Start here", "arrow.right.to.line") { setStart(id) }
                     chip(isSlideshow ? "To this slide" : "End here", "arrow.left.to.line") { setEnd(id) }
                     chip("Whole reel", "arrow.left.and.right") { whole(id) }

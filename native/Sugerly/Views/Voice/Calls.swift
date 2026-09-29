@@ -326,6 +326,8 @@ struct CallScreen: View {
     @Environment(CallCenter.self) private var calls
     @Environment(VoiceEngine.self) private var voice
     @State private var ringing = false
+    @State private var ending = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var me: String { model.me?.email ?? "" }
     private var call: CallInfo? { calls.current }
@@ -337,7 +339,8 @@ struct CallScreen: View {
             background
             VStack(spacing: 0) {
                 topBar
-                Spacer(minLength: 12)
+                ScrollView {
+                VStack(spacing: 20) {
                 if alone {
                     ringingHero.transition(.opacity.combined(with: .scale(scale: 0.95)))
                 } else if others.count == 1, let other = others.first {
@@ -345,7 +348,20 @@ struct CallScreen: View {
                 } else {
                     group.transition(.opacity)
                 }
-                Spacer(minLength: 12)
+                if let error = voice.error ?? calls.error {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .font(.jakarta(13, .semibold)).foregroundStyle(Color(hex: 0xFFD166))
+                        .padding(16).frame(maxWidth: .infinity)
+                        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+                        .padding(.horizontal, 20)
+                }
+                if voice.muted {
+                    Label("Your microphone is off", systemImage: "mic.slash.fill")
+                        .font(.jakarta(13, .bold)).foregroundStyle(Theme.light)
+                }
+                }.padding(.vertical, 24).frame(maxWidth: .infinity)
+                }
+                .scrollBounceBehavior(.basedOnSize)
                 controls
             }
             .padding(.bottom, 24)
@@ -363,7 +379,6 @@ struct CallScreen: View {
             LinearGradient(colors: [Color(hex: 0x2A1320), Color(hex: 0x12080E)], startPoint: .top, endPoint: .bottom)
             RadialGradient(colors: [Theme.main.opacity(0.35), .clear], center: .init(x: 0.5, y: 0.32), startRadius: 10, endRadius: 360)
         }
-        .drawingGroup()
         .ignoresSafeArea()
     }
 
@@ -426,7 +441,7 @@ struct CallScreen: View {
             }
             .padding(.horizontal, 24)
         }
-        .onAppear { ringing = true }
+        .onAppear { ringing = !reduceMotion }
         .onDisappear { ringing = false }
     }
 
@@ -511,12 +526,17 @@ struct CallScreen: View {
             control(voice.speaker ? "speaker.wave.3.fill" : "speaker.fill", on: voice.speaker, label: "Speaker") { voice.toggleSpeaker() }
             control(voice.muted ? "mic.slash.fill" : "mic.fill", on: voice.muted, label: voice.muted ? "Unmute" : "Mute") { voice.toggleMute() }
             VStack(spacing: 8) {
-                Button { Task { await calls.hangUp() } } label: {
+                Button {
+                    guard !ending else { return }
+                    ending = true
+                    Task { await calls.hangUp(); ending = false }
+                } label: {
                     Image(systemName: "phone.down.fill").font(.system(size: 26, weight: .bold)).foregroundStyle(.white)
                         .frame(width: 70, height: 70).background(Palette.danger, in: Circle())
                         .shadow(color: Palette.danger.opacity(0.5), radius: 14, y: 6)
                 }
                 .buttonStyle(BouncyStyle(scale: 0.85))
+                .disabled(ending)
                 .accessibilityLabel("End call")
                 Text("End").font(.jakarta(12, .bold)).foregroundStyle(.white.opacity(0.75))
             }
