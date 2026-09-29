@@ -55,6 +55,7 @@ targets:
         NSPhotoLibraryAddUsageDescription: Save reels you like to your photos.
         NSMicrophoneUsageDescription: Talk in voice channels and record sound for the reels you film.
         NSAppleMusicUsageDescription: Play whole songs from Apple Music in Sugerly if you subscribe.
+        ITSAppUsesNonExemptEncryption: false
         UIBackgroundModes:
           - audio
           - voip

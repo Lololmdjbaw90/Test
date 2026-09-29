@@ -1,5 +1,6 @@
-# Builds Sugerly, signs it and uploads it to App Store Connect (TestFlight),
-# all on a GitHub Mac, so you can release from Windows. See APP_STORE.md.
+# Builds the native Sugerly app (native/, SwiftUI), signs it with your Apple
+# Developer account and uploads it to App Store Connect (TestFlight), all on a
+# GitHub Mac, so you can release from Windows. See APP_STORE.md.
 #
 # Needs 4 repository secrets (GitHub → Settings → Secrets and variables →
 # Actions → New repository secret):
@@ -45,25 +46,16 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install
-        run: npm ci
-
-      - name: Build the app's web part
-        run: npm run build
-
-      - name: Copy it into the iOS project
-        run: npx cap sync ios
-
       - name: Use the newest Xcode
         run: |
           XC=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -vi beta | sort -V | tail -1)
           if [ -n "$XC" ]; then sudo xcode-select -s "$XC"; fi
           xcodebuild -version
+
+      - name: Make the Xcode project
+        run: |
+          brew install xcodegen
+          cd native && xcodegen generate
 
       - name: App Store Connect API key
         run: |
@@ -74,8 +66,8 @@ jobs:
       - name: Archive (signed)
         run: |
           xcodebuild \
-            -project ios/App/App.xcodeproj \
-            -scheme App \
+            -project native/Sugerly.xcodeproj \
+            -scheme Sugerly \
             -configuration Release \
             -destination "generic/platform=iOS" \
             -archivePath "$RUNNER_TEMP/Sugerly.xcarchive" \
@@ -101,7 +93,7 @@ jobs:
             <key>teamID</key><string>$TEAM_ID</string>
             <key>signingStyle</key><string>automatic</string>
             <key>uploadSymbols</key><true/>
-            <key>manageAppVersionAndBuildNumber</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
           </dict>
           </plist>
           EOF

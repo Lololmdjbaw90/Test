@@ -1,5 +1,37 @@
 # Put Sugerly on the App Store (from Windows)
 
+## Quick path for the native app (TestFlight)
+
+Already in the Apple Developer Program? Do this once (about 20 minutes):
+
+1. **Team ID:** developer.apple.com → Account → Membership details → *Team ID*.
+2. **API key:** appstoreconnect.apple.com → Users and Access → Integrations →
+   App Store Connect API → Team Keys → **Generate API Key** (name "GitHub",
+   access **Admin**). Download the `.p8` file (only possible once) and note the
+   *Key ID* and the *Issuer ID* above the list.
+3. **GitHub secrets** (repo → Settings → Secrets and variables → Actions):
+   `APPLE_TEAM_ID`, `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`,
+   and `APP_STORE_CONNECT_KEY` (the whole text of the `.p8` file).
+4. **App ID with Apple Music:** developer.apple.com → Certificates, IDs &
+   Profiles → Identifiers → **+** → App IDs → App → Bundle ID *Explicit*
+   `com.mimilocks.app`, description "Sugerly". Tick **App Groups** under
+   Capabilities and **MusicKit** under App Services → Register.
+5. **App record:** App Store Connect → Apps → **+ → New App** → iOS, a name
+   (must be unique on the App Store), your language, Bundle ID
+   `com.mimilocks.app`, SKU `sugerly`.
+6. **Upload:** GitHub → Actions → **Upload to App Store** → Run workflow →
+   version `1.0`. About 15–30 minutes later the build is in App Store
+   Connect → **TestFlight**. Add yourself as a tester and install it with the
+   TestFlight app. Run the workflow again for every new version.
+
+Card payments for commissions go through Stripe's page (it shows Apple Pay
+by itself when it's switched on in Stripe → Settings → Payment methods).
+See PAYMENTS.md.
+
+The longer guide below is for the older web-based version.
+
+---
+
 > **No money? Release it free as a web app first.** Do step 3 below
 > (Netlify, free). Then share the link: on iPhone, people open it in
 > Safari → Share → **Add to Home Screen**, and Sugerly installs with its
