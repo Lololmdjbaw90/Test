@@ -209,8 +209,62 @@ service cloud.firestore {
 
     match /Commission/{id} {
       allow read: if signedIn();
-      allow create: if ownsIncomingData() && !mutedNow();
-      allow update, delete: if isAdmin() || ownsResource();
+      // Ratings and sales are counted by the payment server only.
+      allow create: if ownsIncomingData() && !mutedNow()
+        && !request.resource.data.keys().hasAny(['rating_sum', 'rating_count', 'orders_completed']);
+      allow update: if isAdmin() || (ownsResource()
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['rating_sum', 'rating_count', 'orders_completed']));
+      allow delete: if isAdmin() || ownsResource();
+    }
+
+    // A commission order between a buyer and an artist. Money fields (paid,
+    // fees, payouts) are only ever written by the payment server or admins;
+    // each side can only make the moves that belong to them.
+    function orderMoneyKeys() {
+      return ['stripe_session_id', 'paid_at', 'payment_intent', 'amount_paid', 'fee_percent', 'artist_earnings',
+              'payout_status', 'payout_at', 'review_counted', 'refunded_at'];
+    }
+    function orderChanged() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function orderFrom(s) { return resource.data.status == s; }
+    function orderTo(s) { return request.resource.data.status == s; }
+    function orderBuyer() { return signedIn() && resource.data.buyer_email == ownEmail(); }
+    function orderArtist() { return signedIn() && resource.data.artist_email == ownEmail(); }
+
+    match /CommissionOrder/{id} {
+      allow read: if isAdmin() || orderBuyer() || orderArtist();
+      allow create: if signedIn() && !mutedNow()
+        && request.resource.data.buyer_email == ownEmail()
+        && request.resource.data.artist_email is string
+        && request.resource.data.artist_email != ownEmail()
+        && request.resource.data.status == 'requested'
+        && request.resource.data.price is number && request.resource.data.price >= 0
+        && !request.resource.data.keys().hasAny(orderMoneyKeys());
+      allow update: if isAdmin() || (!orderChanged().hasAny(orderMoneyKeys()) && (
+        // Artist: accept (and set the final price) or decline a request.
+        (orderArtist() && orderFrom('requested') && (orderTo('accepted') || orderTo('declined'))
+          && orderChanged().hasOnly(['status', 'price', 'currency', 'quote_note', 'updated_date'])
+          && request.resource.data.price is number && request.resource.data.price >= 0)
+        // Artist: start and deliver paid work (and re-deliver).
+        || (orderArtist() && orderFrom('paid') && orderTo('in_progress')
+          && orderChanged().hasOnly(['status', 'updated_date']))
+        || (orderArtist() && (orderFrom('paid') || orderFrom('in_progress') || orderFrom('delivered')) && orderTo('delivered')
+          && orderChanged().hasOnly(['status', 'delivery_urls', 'delivery_note', 'delivered_at', 'updated_date']))
+        // Either side: cancel before paying.
+        || ((orderArtist() || orderBuyer()) && (orderFrom('requested') || orderFrom('accepted')) && orderTo('cancelled')
+          && orderChanged().hasOnly(['status', 'cancel_reason', 'updated_date']))
+        // Buyer: approve the delivery with a review.
+        || (orderBuyer() && orderFrom('delivered') && orderTo('completed')
+          && orderChanged().hasOnly(['status', 'rating', 'review', 'completed_at', 'updated_date']))
+        // Buyer: ask for a refund after paying (an admin handles it).
+        || (orderBuyer() && (orderFrom('paid') || orderFrom('in_progress') || orderFrom('delivered')) && orderTo('refund_requested')
+          && orderChanged().hasOnly(['status', 'refund_reason', 'updated_date']))
+      ));
+      allow delete: if isAdmin();
+    }
+
+    // Where an artist wants to be paid (only they and admins can see it).
+    match /PayoutInfo/{uid} {
+      allow read, write: if isSelf(uid) || isAdmin();
     }
 
     // ---- Servers -------------------------------------------------------

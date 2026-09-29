@@ -299,7 +299,7 @@ export const ENTITY_NAMES = [
   "Artwork", "ArtworkPing", "ChannelMessage", "Comment", "Commission", "Community",
   "CommunityComment", "CommunityPost", "DirectMessage", "Friendship", "GroupChat", "Log", "MusicReview",
   "Notification", "ServerChannel", "ServerMember", "ServerRole", "SiteConfig", "User",
-  "VoicePresence", "VoiceSignal", "Call", "Report", "Reel", "AppUpdate",
+  "VoicePresence", "VoiceSignal", "Call", "Report", "Reel", "AppUpdate", "CommissionOrder",
 ];
 const entities = {};
 ENTITY_NAMES.forEach((n) => { entities[n] = makeEntity(n); });

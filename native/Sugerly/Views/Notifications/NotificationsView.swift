@@ -217,6 +217,7 @@ struct NotificationsPopup: View {
         case "follow": return [Color(hex: 0xB19CFF), Color(hex: 0x7C5CF0)]
         case "comment", "reply": return [Color(hex: 0x7CBEFF), Color(hex: 0x2F80E0)]
         case "message": return [Color(hex: 0x5FD3B0), Color(hex: 0x16A37F)]
+        case "commission": return [Color(hex: 0xFFD166), Color(hex: 0xF0A020)]
         default: return [Theme.light, Theme.main]
         }
     }
@@ -227,6 +228,7 @@ struct NotificationsPopup: View {
         case "follow": return "person.fill.badge.plus"
         case "comment", "reply": return "bubble.left.fill"
         case "message": return "paperplane.fill"
+        case "commission": return "storefront.fill"
         default: return "sparkles"
         }
     }
@@ -254,6 +256,9 @@ struct NotificationsPopup: View {
         case "/gallery":
             let id = value("art")
             if !id.isEmpty { Task { if let doc = try? await FS.get("Artwork", id) { path.append(.artwork(Artwork(doc))) } } }
+        case "/commissions":
+            let id = value("order")
+            path.append(id.isEmpty ? .commissions : .commissionOrder(id))
         case "/reels":
             let id = value("r")
             if !id.isEmpty { Task { if let doc = try? await FS.get("Reel", id) { path.append(.reel(Reel(doc))) } } }
@@ -278,6 +283,8 @@ final class SiteTheme {
     var announcementColor: UInt32 = 0xD9577F
     var defaultAccent = "rose"
     var giphyKey = ""
+    // Sugerly's cut of each paid commission, in percent.
+    var commissionFee: Double = 10
     // Admin-picked weekly challenges and daily art prompts (nil = built-ins).
     var challenges: [Challenge]?
     var challengePinned = ""
@@ -294,6 +301,7 @@ final class SiteTheme {
         announcementColor = Self.hex(doc.str("announcement_color")) ?? 0xD9577F
         defaultAccent = doc.str("default_accent").isEmpty ? "rose" : doc.str("default_accent")
         giphyKey = doc.str("giphy_key")
+        commissionFee = ReelText.num(doc["commission_fee_percent"]) ?? 10
         if let list = doc["challenges"] as? [Any] {
             challenges = list.compactMap { ($0 as? Doc).flatMap { Challenge($0) } }
         }
@@ -354,6 +362,7 @@ struct AdminView: View {
     @State private var announcement = ""
     @State private var announcementOn = false
     @State private var giphyKey = ""
+    @State private var commissionFee = "10"
     @State private var announcementColor = Color(hex: 0xD9577F)
     @State private var defaultAccent = "rose"
     @State private var editChallenges = false
@@ -421,6 +430,7 @@ struct AdminView: View {
             announcementColor = Color(hex: SiteTheme.shared.announcementColor)
             defaultAccent = SiteTheme.shared.defaultAccent
             giphyKey = SiteTheme.shared.giphyKey
+            commissionFee = String(Int(SiteTheme.shared.commissionFee))
             if model.people.isEmpty { await model.loadPeople() }
             await everything
         }
@@ -686,6 +696,11 @@ struct AdminView: View {
             }
             Text("GIFs").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
             SugarField(placeholder: "GIPHY API key (empty = built-in key)", text: $giphyKey)
+            Text("Commissions").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+            HStack(spacing: 10) {
+                SugarField(placeholder: "Fee", text: $commissionFee).keyboardType(.numberPad).frame(width: 90)
+                Text("% Sugerly keeps from each paid commission (0–50). Artists get the rest.").font(.jakarta(12)).foregroundStyle(Palette.muted)
+            }
             Button { Task { await saveSite() } } label: { Label("Save site settings", systemImage: "checkmark") }
                 .buttonStyle(GradientButtonStyle(height: 46))
             Text("Community").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
@@ -707,6 +722,7 @@ struct AdminView: View {
             "announcement": String(announcement.prefix(160)), "announcement_active": announcementOn,
             "announcement_color": SiteTheme.string(hexValue(announcementColor)), "default_accent": defaultAccent,
             "giphy_key": giphyKey.trimmingCharacters(in: .whitespacesAndNewlines),
+            "commission_fee_percent": min(50, max(0, Double(commissionFee) ?? 10)),
             "updated_date": FS.nowISO(),
         ]
         do {

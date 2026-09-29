@@ -13,6 +13,7 @@ enum Route: Hashable {
     case servers
     case people
     case commissions
+    case commissionOrder(String)
     case topArtists
     case updates
     case server(Server)
@@ -91,6 +92,7 @@ struct RouteView: View {
         case .servers: ServerHubView(path: $path).navigationTitle("Servers").navigationBarTitleDisplayMode(.inline).sugarBackground()
         case .people: PeopleView(path: $path)
         case .commissions: CommissionsView(path: $path)
+        case .commissionOrder(let id): CommissionOrderView(orderId: id, path: $path)
         case .topArtists: TopArtistsView(path: $path)
         case .updates: UpdatesView()
         case .server(let server): ServerHubView(path: $path, initial: server).navigationTitle(server.name).navigationBarTitleDisplayMode(.inline).sugarBackground()

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Payment · Sugerly</title>
+  <style>
+    :root { --bg: #fff3f7; --card: #ffffff; --text: #2a1620; --muted: #9c8a93; --accent: #d9577f; --accent2: #ee8fae; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #140a11; --card: #1d1019; --text: #f7edf2; --muted: #86707c; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: var(--bg); color: var(--text);
+      font-family: "Plus Jakarta Sans", ui-rounded, -apple-system, system-ui, sans-serif; }
+    .card { width: 100%; max-width: 420px; background: var(--card); border-radius: 28px; padding: 32px 24px; text-align: center;
+      box-shadow: 0 14px 40px rgb(217 87 127 / 0.14); }
+    .badge { width: 76px; height: 76px; border-radius: 26px; margin: 0 auto 18px; display: grid; place-items: center;
+      background: linear-gradient(135deg, var(--accent2), var(--accent)); color: #fff; }
+    .badge svg { width: 38px; height: 38px; }
+    h1 { font-size: 26px; margin: 0 0 8px; }
+    p { color: var(--muted); margin: 0 0 22px; line-height: 1.5; }
+    a { display: inline-block; padding: 14px 26px; border-radius: 999px; color: #fff; font-weight: 800; text-decoration: none;
+      background: linear-gradient(135deg, var(--accent2), var(--accent)); }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="badge" id="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+    <h1 id="title">Checking your payment…</h1>
+    <p id="text">One moment.</p>
+    <a href="/Commissions" id="back">Back to Sugerly</a>
+  </main>
+  <script>
+    (async function () {
+      var q = new URLSearchParams(location.search);
+      var title = document.getElementById("title"), text = document.getElementById("text"), icon = document.getElementById("icon");
+      var check = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+      var cross = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg>';
+      if (q.get("cancelled")) {
+        icon.innerHTML = cross; title.textContent = "Payment cancelled"; text.textContent = "Nothing was charged. You can pay any time from your order.";
+        return;
+      }
+      var id = q.get("session_id");
+      if (!id) { title.textContent = "Nothing to check"; text.textContent = ""; return; }
+      try {
+        var res = await fetch("/.netlify/functions/commission-confirm?session_id=" + encodeURIComponent(id));
+        var data = await res.json();
+        if (data.status === "paid" || data.status === "in_progress" || data.status === "delivered" || data.status === "completed") {
+          icon.innerHTML = check; title.textContent = "Payment done!";
+          if (data.orderId) document.getElementById("back").href = "/Commissions?order=" + encodeURIComponent(data.orderId);
+          text.textContent = "The artist has been told. You can close this page and go back to the app to follow your order.";
+        } else {
+          title.textContent = "Payment is processing"; text.textContent = "This can take a moment. Your order updates by itself once it's through.";
+        }
+      } catch (e) {
+        title.textContent = "Couldn't check right now"; text.textContent = "Your order updates by itself once the payment is through.";
+      }
+    })();
+  </script>
+</body>
+</html>
