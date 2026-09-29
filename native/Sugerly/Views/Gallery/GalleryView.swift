@@ -140,15 +140,13 @@ struct GalleryView: View {
             }
             Spacer(minLength: 0)
             Button { adding = true } label: {
-                VStack(spacing: 7) {
-                    Image(systemName: "plus").font(.system(size: 23, weight: .semibold))
-                    Text("Share art").font(.jakarta(11, .heavy))
-                }
-                .foregroundStyle(.white).frame(width: 82, height: 90)
-                .background(Theme.gradient, in: RoundedRectangle(cornerRadius: 18))
-                .rotationEffect(.degrees(4))
+                Image(systemName: "plus").font(.system(size: 22, weight: .bold)).foregroundStyle(.white)
+                    .frame(width: 58, height: 58)
+                    .background(Theme.gradient, in: Circle())
+                    .overlay(Circle().strokeBorder(.white.opacity(0.35), lineWidth: 1))
+                    .shadow(color: Theme.main.opacity(0.35), radius: 10, y: 5)
             }
-            .buttonStyle(BouncyStyle(scale: 0.94)).accessibilityLabel("Share fan art")
+            .buttonStyle(BouncyStyle(scale: 0.9)).accessibilityLabel("Share fan art")
         }.padding(.vertical, 12)
     }
 
@@ -320,45 +318,84 @@ struct GalleryCard: View {
     @State private var saving = false
     private var saved: Bool { model.me?.savedArtworks.contains(artwork.id) == true }
 
+    // A framed piece on the wall: the art big, its title and artist on a
+    // soft shade at the bottom, and two clear round buttons (love, save)
+    // floating in the corner.
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button(action: onOpen) {
-                ArtImage(url: artwork.imageURL, tallest: 0.55, widest: 1.5)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(alignment: .topLeading) {
-                        if artwork.featured {
-                            Text("STAFF PICK").font(.jakarta(9, .heavy)).tracking(1)
-                                .padding(7).foregroundStyle(Color(hex: 0x3A2230)).background(Color(hex: 0xFFE8A3)).rotationEffect(.degrees(-5)).padding(8)
+        Button(action: onOpen) {
+            ArtImage(url: artwork.imageURL, tallest: 0.6, widest: 1.5)
+                .overlay(alignment: .bottom) {
+                    LinearGradient(colors: [.clear, .black.opacity(0.62)], startPoint: .top, endPoint: .bottom)
+                        .frame(height: 96)
+                        .allowsHitTesting(false)
+                }
+        }
+        .buttonStyle(BouncyStyle(scale: 0.98))
+        .accessibilityLabel("Open \(artwork.title)")
+        .overlay(alignment: .bottomLeading) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(artwork.title).font(.jakarta(14, .heavy)).foregroundStyle(.white).lineLimit(2)
+                    .shadow(color: .black.opacity(0.3), radius: 3)
+                    .allowsHitTesting(false)
+                Button(action: onProfile) {
+                    HStack(spacing: 5) {
+                        Avatar(url: model.person(artwork.authorEmail)?.picture ?? artwork.authorPicture, name: artwork.authorName, size: 20)
+                        Text(model.name(artwork.authorEmail, artwork.authorName)).font(.jakarta(11, .bold)).foregroundStyle(.white).lineLimit(1)
+                    }
+                    .padding(.leading, 3).padding(.trailing, 9).padding(.vertical, 3)
+                    .background(.black.opacity(0.28), in: Capsule())
+                }
+                .buttonStyle(BouncyStyle(scale: 0.94))
+            }
+            .padding(10)
+        }
+        .overlay(alignment: .topTrailing) {
+            VStack(spacing: 6) {
+                Button(action: onLike) {
+                    VStack(spacing: 0) {
+                        Image(systemName: liked ? "heart.fill" : "heart").font(.system(size: 15, weight: .bold))
+                            .symbolEffect(.bounce, value: liked)
+                        if artwork.likeTotal > 0 {
+                            Text("\(artwork.likeTotal)").font(.jakarta(9, .heavy)).contentTransition(.numericText())
                         }
                     }
-            }.buttonStyle(BouncyStyle(scale: 0.98)).accessibilityLabel("Open \(artwork.title)")
-            Button(action: onOpen) {
-                Text(artwork.title).font(.jakarta(14, .heavy)).foregroundStyle(Palette.text).lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 10)
-            }.buttonStyle(.plain)
-            Button(action: onProfile) {
-                HStack(spacing: 6) {
-                    Avatar(url: model.person(artwork.authorEmail)?.picture ?? artwork.authorPicture, name: artwork.authorName, size: 23)
-                    Text(model.name(artwork.authorEmail, artwork.authorName)).font(.jakarta(11, .semibold)).foregroundStyle(Palette.muted).lineLimit(1)
-                }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            }.buttonStyle(.plain)
-            HStack(spacing: 0) {
-                Button(action: onLike) {
-                    HStack(spacing: 5) {
-                        Image(systemName: liked ? "heart.fill" : "heart").symbolEffect(.bounce, value: liked)
-                        Text("\(artwork.likeTotal)").font(.jakarta(12, .bold)).contentTransition(.numericText())
-                    }.foregroundStyle(liked ? Theme.main : Palette.text2).frame(minWidth: 44, minHeight: 44)
-                }.buttonStyle(BouncyStyle()).accessibilityLabel(liked ? "Unlike artwork" : "Like artwork")
-                Spacer(minLength: 0)
+                    .foregroundStyle(liked ? Theme.main : Palette.text2)
+                    .frame(width: 38, height: artwork.likeTotal > 0 ? 46 : 38)
+                    .background(.white.opacity(0.92), in: Capsule())
+                    .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                }
+                .buttonStyle(BouncyStyle(scale: 0.85))
+                .accessibilityLabel(liked ? "Unlike artwork" : "Like artwork")
                 Button { save() } label: {
-                    Image(systemName: saved ? "bookmark.fill" : "bookmark").foregroundStyle(saved ? Theme.main : Palette.text2)
-                        .frame(width: 44, height: 44).symbolEffect(.bounce, value: saved)
-                }.buttonStyle(BouncyStyle()).disabled(saving).accessibilityLabel(saved ? "Unsave artwork" : "Save artwork")
+                    Image(systemName: saved ? "bookmark.fill" : "bookmark").font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(saved ? Theme.main : Palette.text2)
+                        .symbolEffect(.bounce, value: saved)
+                        .frame(width: 38, height: 38)
+                        .background(.white.opacity(0.92), in: Circle())
+                        .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                }
+                .buttonStyle(BouncyStyle(scale: 0.85))
+                .disabled(saving)
+                .accessibilityLabel(saved ? "Unsave artwork" : "Save artwork")
+            }
+            .padding(8)
+        }
+        .overlay(alignment: .topLeading) {
+            if artwork.featured {
+                Label("Staff pick", systemImage: "star.fill").font(.jakarta(10, .heavy)).foregroundStyle(Color(hex: 0x3A2230))
+                    .padding(.horizontal, 8).padding(.vertical, 5)
+                    .background(Color(hex: 0xFFE8A3), in: Capsule())
+                    .padding(8)
+                    .allowsHitTesting(false)
             }
         }
-        .padding(9).background(Palette.surface, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        // A thin white mat, like a framed print.
+        .padding(4)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
         .sensoryFeedback(.impact(weight: .light), trigger: liked)
+        .sensoryFeedback(.selection, trigger: saved)
     }
 
     private func save() {

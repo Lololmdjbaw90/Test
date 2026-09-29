@@ -506,6 +506,24 @@ struct PostCard: View {
 
     private var me: String { model.me?.email ?? "" }
     private var liked: Bool { LikeBook.shared.isLiked(post, me: me) }
+
+    // "name  words…" under the picture, like a photo feed.
+    private var caption: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if !post.title.isEmpty {
+                Text(post.title).font(.jakarta(15, .heavy)).foregroundStyle(Palette.text)
+            }
+            if !post.text.isEmpty {
+                (Text(model.name(post.authorEmail, post.authorName) + "  ").font(.jakarta(14, .heavy)).foregroundStyle(Palette.text)
+                 + Text(Hashtags.styled(post.text)).font(.jakarta(14)).foregroundStyle(Palette.text))
+                    .lineLimit(openable ? 4 : nil)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
+        .contentShape(Rectangle())
+        .onTapGesture { open() }
+    }
     private var saved: Bool { model.me?.savedPosts.contains(post.id) ?? false }
     private var author: UserProfile? { model.person(post.authorEmail) }
     private var following: Bool { model.me?.following.contains(post.authorEmail) ?? false }
@@ -529,6 +547,20 @@ struct PostCard: View {
                 .padding(.horizontal, 14)
                 .padding(.top, friendLiker == nil ? 14 : 8)
                 .padding(.bottom, 12)
+            // Social layout: the picture right under the name, edge to edge,
+            // then the buttons, then the words (like a photo feed).
+            if conversational && !post.imageURL.isEmpty {
+                media
+                    .frame(maxWidth: .infinity)
+                    .clipped()
+                    .padding(.bottom, 6)
+                actions.padding(.horizontal, 8)
+                caption.padding(.horizontal, 16).padding(.top, 4)
+                footer
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 14)
+            } else {
             if !post.title.isEmpty {
                 Text(post.title).font(conversational ? .jakarta(19, .bold) : .display(22)).foregroundStyle(Palette.text)
                     .fixedSize(horizontal: false, vertical: true)
@@ -556,6 +588,7 @@ struct PostCard: View {
                 .padding(.horizontal, 14)
                 .padding(.top, 12)
                 .padding(.bottom, 14)
+            }
         }
         .modifier(ConversationSurface(flat: conversational))
         .confirmationDialog("Delete this post?", isPresented: $confirmDelete, titleVisibility: .visible) {
@@ -1364,12 +1397,16 @@ extension View {
     }
 }
 
+// Feed posts: a clean rounded card each (light, no heavy shadow, so the
+// feed scrolls smoothly), like a social app.
 private struct ConversationSurface: ViewModifier {
     let flat: Bool
     @ViewBuilder func body(content: Content) -> some View {
         if flat {
-            content.background(Palette.surface.opacity(0.5))
-                .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1).allowsHitTesting(false) }
+            content
+                .background(Palette.surface, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
         } else { content.sugarCard(radius: 30) }
     }
 }
