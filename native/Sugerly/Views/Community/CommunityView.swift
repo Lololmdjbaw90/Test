@@ -103,6 +103,7 @@ final class PostsStore {
     func delete(_ post: Post) async throws {
         try await FS.delete("CommunityPost", post.id)
         posts.removeAll { $0.id == post.id }
+        Removed.shared.add(post.id)
     }
 }
 

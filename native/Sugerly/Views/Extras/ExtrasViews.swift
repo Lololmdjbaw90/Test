@@ -79,6 +79,7 @@ struct TopArtistsView: View {
         .overlay(alignment: .top) { ConfettiBurst(trigger: burst).frame(height: 520).allowsHitTesting(false) }
         .sugarBackground()
         .navigationTitle("Top artists")
+        .dropRemoved($artworks)
         .navigationBarTitleDisplayMode(.inline)
         .task {
             if posts.posts.isEmpty { await posts.load() }

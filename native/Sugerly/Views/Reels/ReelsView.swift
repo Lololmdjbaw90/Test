@@ -923,6 +923,7 @@ struct ReelPage: View {
         let id = reel.id
         Task {
             try? await FS.delete("Reel", id)
+            Removed.shared.add(id)
             model.showToast("Reel deleted", icon: "trash.fill")
         }
         onHide(id)

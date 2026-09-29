@@ -128,6 +128,8 @@ struct ProfileContent: View {
         .onDisappear { appeared = false }
         .refreshable { await load() }
         .task(id: person.email) { await load() }
+        .dropRemoved($posts)
+        .dropRemoved($reels)
         .sheet(isPresented: $editing) { EditProfileView() }
         .sheet(isPresented: $settings) { SettingsView() }
         .sheet(isPresented: $shop) { NitroShopView() }

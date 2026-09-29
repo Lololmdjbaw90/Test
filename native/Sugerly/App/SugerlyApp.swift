@@ -103,7 +103,11 @@ struct RootView: View {
         }
         .onChange(of: themeKey, initial: true) { old, _ in applyTheme(animated: old != themeKey && model.phase == .signedIn) }
         .tint(Theme.main)
-        .preferredColorScheme(model.colorScheme)
+        // Light / dark: the whole screen (open pages and sheets too) fades
+        // over to the new colours instead of snapping.
+        .onChange(of: model.colorScheme, initial: true) { old, new in
+            ThemeFade.apply(new, animated: old != new)
+        }
         .animation(.smooth(duration: 0.35), value: model.phase)
         .animation(.smooth(duration: 0.5), value: model.needsSetup)
         .task { await model.start() }
@@ -153,5 +157,21 @@ struct SplashView: View {
         .sugarBackground()
         .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
         .onAppear { pulse = true }
+    }
+}
+
+// Switches light / dark on the app's windows with a soft cross-fade.
+enum ThemeFade {
+    @MainActor
+    static func apply(_ scheme: ColorScheme?, animated: Bool) {
+        let style: UIUserInterfaceStyle = scheme == .dark ? .dark : scheme == .light ? .light : .unspecified
+        for scene in UIApplication.shared.connectedScenes {
+            for window in (scene as? UIWindowScene)?.windows ?? [] where window.overrideUserInterfaceStyle != style {
+                guard animated else { window.overrideUserInterfaceStyle = style; continue }
+                UIView.transition(with: window, duration: 0.5, options: [.transitionCrossDissolve, .allowUserInteraction, .curveEaseInOut]) {
+                    window.overrideUserInterfaceStyle = style
+                }
+            }
+        }
     }
 }

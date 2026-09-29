@@ -232,6 +232,8 @@ struct HomeView: View {
         .sugarTopBar($path)
         .refreshable { await load() }
         .task { await load() }
+        .dropRemoved($artworks)
+        .dropRemoved($reels)
         .onAppear { withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) { appeared = true } }
         .onDisappear { appeared = false }
         .sheet(item: Binding(get: { tagSearch.map { TagQuery(id: $0) } }, set: { tagSearch = $0?.id })) { tag in

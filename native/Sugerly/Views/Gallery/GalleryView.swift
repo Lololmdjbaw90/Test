@@ -88,6 +88,7 @@ struct GalleryView: View {
         .sugarBackground()
         .refreshable { await load() }
         .task { if artworks.isEmpty { await load() } }
+        .dropRemoved($artworks)
         .onAppear { appeared = true }
         .onDisappear { appeared = false }
         .fullScreenCover(isPresented: $adding) { NewArtworkView() }
@@ -389,7 +390,18 @@ struct ArtworkDetailView: View {
                             Button { reporting = ReportSheet.Target(id: artwork.id, type: "artwork", ownerEmail: artwork.authorEmail, preview: artwork.title, link: "/Gallery?art=\(artwork.id)") } label: { Label("Report", systemImage: "flag") }
                         }
                         if artwork.authorEmail == me || model.me?.isAdmin == true {
-                            Button(role: .destructive) { Task { try? await FS.delete("Artwork", artwork.id); if !path.isEmpty { path.removeLast() } } } label: { Label("Delete", systemImage: "trash") }
+                            Button(role: .destructive) {
+                                Task {
+                                    do {
+                                        try await FS.delete("Artwork", artwork.id)
+                                        Removed.shared.add(artwork.id)
+                                        model.showToast("Drawing deleted", icon: "trash.fill")
+                                        if !path.isEmpty { path.removeLast() }
+                                    } catch {
+                                        model.showToast("Couldn't delete it. Try again.", error: true)
+                                    }
+                                }
+                            } label: { Label("Delete", systemImage: "trash") }
                         }
                     } label: { Image(systemName: "ellipsis").font(.system(size: 18, weight: .bold)).foregroundStyle(Palette.muted).frame(width: 40, height: 40) }
                 }

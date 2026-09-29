@@ -365,6 +365,7 @@ struct SearchView: View {
         }
         .sugarBackground()
         .onAppear { if !initial.isEmpty && query.isEmpty { query = initial } }
+        .dropRemoved($artworks)
         .task(id: q) {
             // Ask the server too (names starting with what you typed), so
             // results aren't limited to what this phone has loaded.

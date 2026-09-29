@@ -466,3 +466,24 @@ struct Toast: Identifiable, Equatable {
     var icon: String
     var error: Bool
 }
+
+// What you deleted while the app is open. Pages keep their own copy of what
+// they loaded, so each one drops these straight away instead of showing a
+// deleted drawing, post or reel until the app restarts.
+@MainActor
+@Observable
+final class Removed {
+    static let shared = Removed()
+    private(set) var ids: Set<String> = []
+    func add(_ id: String) { ids.insert(id) }
+}
+
+extension View {
+    // Takes anything you just deleted out of a page's own list.
+    func dropRemoved<T: Identifiable>(_ list: Binding<[T]>) -> some View where T.ID == String {
+        onChange(of: Removed.shared.ids, initial: true) { _, gone in
+            guard !gone.isEmpty, list.wrappedValue.contains(where: { gone.contains($0.id) }) else { return }
+            withAnimation(.snappy) { list.wrappedValue.removeAll { gone.contains($0.id) } }
+        }
+    }
+}
