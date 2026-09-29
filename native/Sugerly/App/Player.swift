@@ -33,6 +33,8 @@ final class Player {
     }
 
     private func activateSession() {
+        // During a call the song plays through the call's audio as it is.
+        if VoiceEngine.live { return }
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
         try? AVAudioSession.sharedInstance().setActive(true)
     }

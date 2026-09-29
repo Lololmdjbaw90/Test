@@ -78,6 +78,9 @@ final class VoiceEngine: NSObject {
     }
     private var peers: [String: Peer] = [:]
     private var byConnection: [ObjectIdentifier: String] = [:]
+    // Signals already used (a signal can come back once more before it's deleted).
+    private var handled = Set<String>()
+    private var restartedAt: [String: Date] = [:]
 
     override init() {
         RTCInitializeSSL()
@@ -91,6 +94,38 @@ final class VoiceEngine: NSObject {
     }
 
     var isConnected: Bool { room != nil && !connecting }
+
+    // True while you're in a call or voice channel: music, reels and voice
+    // notes then leave the audio setup alone (switching it to plain playback
+    // turned the microphone and the other person's voice off).
+    nonisolated(unsafe) static var live = false
+
+    // Where to connect through. Direct first (STUN); relay servers (TURN)
+    // carry the audio when two phones can't reach each other directly, e.g.
+    // one on mobile data. Fetched from our server, kept for a few hours.
+    private static var relays: [RTCIceServer] = []
+    private static var relaysFetched = Date.distantPast
+    private static let direct = RTCIceServer(urlStrings: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302", "stun:stun.cloudflare.com:3478"])
+
+    private var relaysLoading = false
+
+    private func loadRelays() async {
+        relaysLoading = true
+        defer { relaysLoading = false }
+        guard Date().timeIntervalSince(Self.relaysFetched) > 4 * 3600 || Self.relays.isEmpty else { return }
+        guard let json = try? await Payments.call("turn-credentials", [:]),
+              let list = json["iceServers"] as? [[String: Any]] else { return }
+        let servers: [RTCIceServer] = list.compactMap { entry in
+            let urls = (entry["urls"] as? [String]) ?? ((entry["urls"] as? String).map { [$0] } ?? [])
+            let turn = urls.filter { $0.hasPrefix("turn") }
+            guard !turn.isEmpty else { return nil }
+            return RTCIceServer(urlStrings: turn, username: entry["username"] as? String, credential: entry["credential"] as? String)
+        }
+        if !servers.isEmpty {
+            Self.relays = servers
+            Self.relaysFetched = Date()
+        }
+    }
 
     // MARK: join / leave
 
@@ -112,6 +147,9 @@ final class VoiceEngine: NSObject {
 
         speaker = true
         ping = nil
+        handled = []
+        Self.live = true
+        Task { await self.loadRelays() }
         systemCall = await call.start(title: room.isCall ? room.name : "\(room.name) · \(room.serverName)")
         if !systemCall {
             // No CallKit: run the audio ourselves.
@@ -161,6 +199,8 @@ final class VoiceEngine: NSObject {
         let was = room != nil
         let left = room
         room = nil
+        Self.live = false
+        handled = []
         connecting = false
         participants = []
         joinedAt = nil
@@ -222,6 +262,9 @@ final class VoiceEngine: NSObject {
     // MARK: the loop: signals often, presence and heartbeat less often
 
     private func run() async {
+        // Give the relay list a moment to arrive before connecting to anyone.
+        let deadline = Date().addingTimeInterval(3)
+        while relaysLoading && Date() < deadline { try? await Task.sleep(for: .milliseconds(100)) }
         var tick = 0
         while !Task.isCancelled, room != nil {
             await pollSignals()
@@ -271,6 +314,8 @@ final class VoiceEngine: NSObject {
         guard let docs = try? await FS.query("VoiceSignal", [.equals("to_peer", selfId), .equals("to_email", email)]) else { return }
         for d in docs.sorted(by: { $0.str("created_date") < $1.str("created_date") }) {
             let id = d.str("id")
+            guard !handled.contains(id) else { continue }
+            handled.insert(id)
             Task { try? await FS.delete("VoiceSignal", id) }
             guard d.str("channel_id") == room?.id else { continue }
             let from = d.str("from_peer")
@@ -318,8 +363,10 @@ final class VoiceEngine: NSObject {
 
     private func connect(_ peer: Peer) {
         let config = RTCConfiguration()
-        config.iceServers = [RTCIceServer(urlStrings: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"])]
+        config.iceServers = [Self.direct] + Self.relays
         config.sdpSemantics = .unifiedPlan
+        config.bundlePolicy = .maxBundle
+        config.rtcpMuxPolicy = .require
         config.continualGatheringPolicy = .gatherContinually
         let constraints = RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: ["DtlsSrtpKeyAgreement": kRTCMediaConstraintsValueTrue])
         guard let pc = factory.peerConnection(with: config, constraints: constraints, delegate: self) else { return }
@@ -331,9 +378,11 @@ final class VoiceEngine: NSObject {
         }
     }
 
-    private func offer(_ peer: Peer) async {
+    private func offer(_ peer: Peer, restart: Bool = false) async {
         guard let pc = peer.pc else { return }
-        let constraints = RTCMediaConstraints(mandatoryConstraints: ["OfferToReceiveAudio": "true"], optionalConstraints: nil)
+        var mandatory = ["OfferToReceiveAudio": "true"]
+        if restart { mandatory["IceRestart"] = "true" }
+        let constraints = RTCMediaConstraints(mandatoryConstraints: mandatory, optionalConstraints: nil)
         let sdp: RTCSessionDescription? = await withCheckedContinuation { done in
             pc.offer(for: constraints) { sdp, _ in done.resume(returning: sdp) }
         }
@@ -381,6 +430,17 @@ final class VoiceEngine: NSObject {
 
     fileprivate func stateChanged(_ pcId: ObjectIdentifier) {
         refreshParticipants()
+        // The line dropped (e.g. Wi-Fi to mobile data): the side that started
+        // the connection tries again on the new network.
+        guard let id = byConnection[pcId], let peer = peers[id], let pc = peer.pc, peer.initiator,
+              pc.iceConnectionState == .failed || pc.iceConnectionState == .disconnected else { return }
+        if let last = restartedAt[id], Date().timeIntervalSince(last) < 6 { return }
+        restartedAt[id] = Date()
+        Task {
+            if pc.iceConnectionState == .disconnected { try? await Task.sleep(for: .seconds(2)) }
+            guard pc.iceConnectionState == .failed || pc.iceConnectionState == .disconnected else { return }
+            await self.offer(peer, restart: true)
+        }
     }
 
     // Who's talking and how loud (for the growing green ring), several
@@ -388,9 +448,9 @@ final class VoiceEngine: NSObject {
     private func levelsLoop() async {
         var n = 0
         while !Task.isCancelled, room != nil {
-            await measureLevels(withPing: n % 8 == 0)
+            await measureLevels(withPing: n % 14 == 0)
             n += 1
-            try? await Task.sleep(for: .milliseconds(160))
+            try? await Task.sleep(for: .milliseconds(90))
         }
     }
 
@@ -417,12 +477,12 @@ final class VoiceEngine: NSObject {
                 }
             }
             let heard = peer.muted || deafened ? 0 : result.0
-            peer.level = max(heard, peer.level * 0.55)
+            peer.level = max(heard, peer.level * 0.4)
             peer.speaking = peer.level > 0.015
             mine = max(mine, result.1)
             if result.2 >= 0 { rtts.append(result.2) }
         }
-        selfLevel = muted ? 0 : max(mine, selfLevel * 0.55)
+        selfLevel = muted ? 0 : max(mine, selfLevel * 0.4)
         speakingSelf = selfLevel > 0.015
         if withPing { ping = rtts.isEmpty ? nil : Int(rtts.reduce(0, +) / Double(rtts.count) * 1000) }
         refreshParticipants()

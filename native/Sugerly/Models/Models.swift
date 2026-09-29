@@ -104,6 +104,8 @@ struct UserProfile: Identifiable, Hashable {
     // Invites: your code, and how many friends joined with it.
     var inviteCode = ""
     var invitesJoined = 0
+    // Finished the welcome setup (accounts from before it existed count as done).
+    var setupDone = true
 
     init(_ d: Doc) {
         id = d.str("id")
@@ -157,6 +159,7 @@ struct UserProfile: Identifiable, Hashable {
         modStrikes = d.int("mod_strikes")
         inviteCode = d.str("invite_code")
         invitesJoined = d.int("invites_joined")
+        setupDone = (d["onboarding_completed"] as? Bool) ?? true
     }
 
     var isBanned: Bool {
@@ -175,8 +178,11 @@ struct UserProfile: Identifiable, Hashable {
     var isAdmin: Bool { role == "admin" || FirebaseConfig.siteOwners.contains(email) }
 
     // What others see: invisible (or away from the app) shows as offline.
+    // Online = seen in the last couple of minutes (the app checks in every
+    // minute or so while it's open, and steps out when you leave it).
+    static let onlineWindow: Double = 150
     var presenceNow: Presence {
-        guard presence != "invisible", let seen = Dates.parse(lastSeen), Date().timeIntervalSince(seen) < 5 * 60 else { return .offline }
+        guard presence != "invisible", let seen = Dates.parse(lastSeen), Date().timeIntervalSince(seen) < Self.onlineWindow else { return .offline }
         return Presence(rawValue: presence) ?? .online
     }
     var isOnline: Bool { presenceNow != .offline }

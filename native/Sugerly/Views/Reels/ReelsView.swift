@@ -129,6 +129,8 @@ final class ReelVideo {
 enum ReelAudio {
     nonisolated(unsafe) private static var ready = false
     static func prepare() {
+        // Never during a call: that would turn the call's microphone off.
+        if VoiceEngine.live { return }
         // (A voice channel switches the session to calls; switch back.)
         if ready && AVAudioSession.sharedInstance().category == .playback { return }
         ready = true

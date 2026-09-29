@@ -62,8 +62,8 @@ enum Referrals {
                 count += 1
             } catch {}
         }
-        guard count > 0, let fresh = model.me else { return }
-        try? await model.updateMe(["coins": fresh.coins + count * reward, "invites_joined": fresh.invitesJoined + count])
+        guard count > 0 else { return }
+        try? await model.addToMe(["coins": count * reward, "invites_joined": count])
         model.showToast(count == 1 ? "A friend joined with your invite: +\(reward) coins!" : "\(count) friends joined with your invite: +\(count * reward) coins!", icon: "gift.fill")
     }
 }

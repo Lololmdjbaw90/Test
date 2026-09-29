@@ -73,8 +73,13 @@ struct RootView: View {
             case .signedOut:
                 LoginView().transition(.opacity)
             case .signedIn:
-                // A fresh shell per account: no pages, chats or players carry over.
-                MainShell().id(model.me?.id ?? "").transition(.opacity)
+                if model.needsSetup {
+                    // New account: the welcome setup first.
+                    WelcomeSetupView().transition(.opacity)
+                } else {
+                    // A fresh shell per account: no pages, chats or players carry over.
+                    MainShell().id(model.me?.id ?? "").transition(.opacity.combined(with: .scale(scale: 1.03)))
+                }
             case .banned(let message):
                 BannedView(message: message).transition(.opacity)
             case .offline(let message):
@@ -100,6 +105,7 @@ struct RootView: View {
         .tint(Theme.main)
         .preferredColorScheme(model.colorScheme)
         .animation(.smooth(duration: 0.35), value: model.phase)
+        .animation(.smooth(duration: 0.5), value: model.needsSetup)
         .task { await model.start() }
         .task { await site.load() }
     }

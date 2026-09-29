@@ -1247,7 +1247,7 @@ struct NewPostView: View {
             ]
             try await FS.create("CommunityPost", data)
             if let draftId { Drafts.delete("posts", draftId) }
-            try? await model.updateMe(["xp": me.xp + 20, "coins": me.coins + 5])
+            try? await model.addToMe(["xp": 20, "coins": 5])
             await onPosted()
             dismiss()
             model.showToast("Posted! +20 XP · +5 coins", icon: "sparkles")

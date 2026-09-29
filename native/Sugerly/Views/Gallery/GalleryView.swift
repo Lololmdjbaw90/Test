@@ -506,7 +506,7 @@ struct NewArtworkView: View {
                 "likes": [String](), "created_by": me.email, "created_date": now, "updated_date": now,
             ]
             try await FS.create("Artwork", doc)
-            try? await model.updateMe(["xp": me.xp + 25, "coins": me.coins + 5])
+            try? await model.addToMe(["xp": 25, "coins": 5])
             dismiss()
             model.showToast("Added to the gallery · +25 XP", icon: "paintpalette.fill")
         } catch {

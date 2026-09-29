@@ -687,7 +687,7 @@ struct ChatVideoPlayer: View {
         }
         .onAppear {
             guard player == nil, let link = URL(string: url) else { return }
-            try? AVAudioSession.sharedInstance().setCategory(.playback)
+            if !VoiceEngine.live { try? AVAudioSession.sharedInstance().setCategory(.playback) }
             let p = AVPlayer(url: link)
             player = p
             p.play()
@@ -1072,8 +1072,11 @@ final class VoiceNoteRecorder: NSObject {
     func start() async -> Bool {
         guard await AVAudioApplication.requestRecordPermission() else { return false }
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
-        try? session.setActive(true)
+        // In a call the microphone is already set up for talking; keep it.
+        if !VoiceEngine.live {
+            try? session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
+            try? session.setActive(true)
+        }
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("note-\(UUID().uuidString).m4a")
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatMPEG4AAC), AVSampleRateKey: 22050, AVNumberOfChannelsKey: 1,
@@ -1119,7 +1122,7 @@ final class VoiceNoteRecorder: NSObject {
         recorder = nil
         recording = false
         level = 0
-        try? AVAudioSession.sharedInstance().setCategory(.playback)
+        if !VoiceEngine.live { try? AVAudioSession.sharedInstance().setCategory(.playback) }
     }
 }
 

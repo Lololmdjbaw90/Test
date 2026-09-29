@@ -198,7 +198,7 @@ struct MainShell: View {
             .toolbar(.hidden, for: .tabBar)
 
             NavigationStack(path: $reelsPath.instant) {
-                ReelsView(visible: tab == .reels && reelsPath.isEmpty, path: $reelsPath.instant, create: { composer = .reel }).sugarRoutes($reelsPath.instant)
+                ReelsView(visible: tab == .reels && reelsPath.isEmpty && !calls.showScreen, path: $reelsPath.instant, create: { composer = .reel }).sugarRoutes($reelsPath.instant)
             }
             .tag(AppTab.reels)
             .toolbar(.hidden, for: .tabBar)
@@ -328,6 +328,10 @@ struct MainShell: View {
         .task(id: model.me?.email) {
             if let me = model.me { await calls.watch(me: me) }
         }
+        // Joining a call: the song stops so you can hear each other.
+        .onChange(of: voice.room?.id) { _, id in
+            if id != nil, player.playing { player.pause() }
+        }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: voice.room?.id)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in typing = true }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in typing = false }
@@ -353,24 +357,33 @@ struct MainShell: View {
             DailyRewardSheet().presentationDetents([.height(520)]).presentationCornerRadius(34)
         }
         .task {
-            // Daily login: pop the reward once a day.
+            // First the notifications question (only ever asked once), then
+            // the daily reward. On a new account both used to pop up at the
+            // same moment and the reward sheet could get stuck.
+            await Alerts.shared.requestPermission()
             try? await Task.sleep(for: .seconds(1.2))
             if model.me?.lastDailyClaim != DailyReward.todayKey() { dailyShown = true }
         }
-        .task { await Alerts.shared.requestPermission() }
         // Live names, pictures and online status while the app is open
         // (and straight away when you come back to it).
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             var tick = 0
             while !Task.isCancelled {
-                await model.syncProfiles(presence: tick % 4 == 0)
+                await model.syncProfiles(presence: tick % 2 == 0)
                 tick += 1
                 try? await Task.sleep(for: .seconds(6))
             }
         }
         .task(id: scenePhase) {
-            if scenePhase == .background { Alerts.shared.scheduleBackground() }
+            if scenePhase == .background {
+                Alerts.shared.scheduleBackground()
+                // Leaving the app: show as offline to friends straight away.
+                if let uid = model.me?.id {
+                    let away = Dates.iso(Date().addingTimeInterval(-UserProfile.onlineWindow - 5))
+                    Task { try? await FS.update("User", uid, ["last_seen": away]) }
+                }
+            }
             guard scenePhase == .active else { return }
             var tick = 0
             while !Task.isCancelled {
@@ -383,7 +396,7 @@ struct MainShell: View {
                 chats.muted = muted
                 Alerts.shared.doNotDisturb = model.me?.presence == "dnd"
                 // Stay "online" for others while the app is open.
-                if tick % 8 == 0, let uid = model.me?.id { Task { try? await FS.update("User", uid, ["last_seen": FS.nowISO()]) } }
+                if tick % 4 == 0, let uid = model.me?.id { Task { try? await FS.update("User", uid, ["last_seen": FS.nowISO()]) } }
                 if tick % 8 == 4 { await model.checkBan() }
                 if tick % 2 == 0 { await Alerts.shared.check() }
                 Alerts.shared.setBadge(chats.unread + notes.unread)
@@ -403,9 +416,20 @@ extension MainShell {
 
     // Opens the place a notification or widget points at.
     func open(_ kind: String, _ target: String) async {
+        // Close pop-ups first, and let a tab switch finish before opening a
+        // page on it: doing both in the same instant could lock up the screen.
+        if model.showMenu || model.showNotifications {
+            model.showMenu = false
+            if kind != "alerts" && kind != "social" { model.showNotifications = false }
+        }
+        let switching: (AppTab) async -> Void = { next in
+            guard tab != next else { return }
+            tab = next
+            try? await Task.sleep(for: .milliseconds(350))
+        }
         switch kind {
         case "dm", "chat":
-            tab = .chat
+            await switching(.chat)
             guard !target.isEmpty else { return }
             let me = model.me?.email ?? ""
             if chats.conversations.first(where: { $0.id == target }) == nil { await chats.refresh(me: me) }
@@ -416,7 +440,7 @@ extension MainShell {
                 chatPath = [.chat(Conversation(id: target, members: members, isGroup: false, groupName: "", last: nil, unread: 0))]
             }
         case "server":
-            tab = .chat
+            await switching(.chat)
             UserDefaults.standard.set(1, forKey: "sugerly.chat.section")
             if !target.isEmpty, let doc = try? await FS.get("Community", target) { chatPath = [.server(Server(doc))] }
         case "reels": tab = .reels
@@ -683,11 +707,12 @@ final class NotificationsStore {
         var filters: [FS.Filter] = [.equals("to_email", me)]
         if loaded, !newest.isEmpty { filters.append(.after("created_date", ChatStore.minus(newest, seconds: 60))) }
         guard let docs = try? await FS.query("Notification", filters, orderBy: "created_date", limit: loaded ? 30 : 60) else { return }
-        let fresh = docs.map(AppNotification.init)
         let known = Set(items.map(\.id))
-        items = (items + fresh.filter { !known.contains($0.id) }).sorted { $0.created > $1.created }
-        newest = items.first?.created ?? newest
+        let fresh = docs.map(AppNotification.init).filter { !known.contains($0.id) }
         loaded = true
+        guard !fresh.isEmpty else { return }
+        items = (items + fresh).sorted { $0.created > $1.created }
+        newest = items.first?.created ?? newest
     }
 
     // Older notifications, a page at a time, as you scroll the list.

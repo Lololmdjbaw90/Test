@@ -23,6 +23,8 @@ final class AppModel {
     var tabRequest: AppTab?
     // "Use this sound" on a reel: opens the reel maker with that sound.
     var soundRequest: Track?
+    // A brand-new account sees the welcome setup before the app.
+    var needsSetup = false
 
     private var auth: AuthClient { AuthClient.shared }
 
@@ -96,7 +98,7 @@ final class AppModel {
                 "id": uid, "email": email, "full_name": name, "display_name": name, "profile_picture": "",
                 "role": FirebaseConfig.siteOwners.contains(email) ? "admin" : "user",
                 "bio": "", "following": [String](), "xp": 0, "coins": 0, "nitro_active": false,
-                "onboarding_completed": true, "theme": "light", "accent": "rose",
+                "onboarding_completed": false, "theme": "light", "accent": "rose",
                 "saved_artworks": [String](), "saved_posts": [String](),
                 "last_seen": now, "created_date": now, "updated_date": now,
             ]
@@ -104,6 +106,7 @@ final class AppModel {
             me = UserProfile(created)
         }
         if let me { people[me.email] = me }
+        needsSetup = me?.setupDone == false
         profilesSince = Date()
         let searchName = (me?.displayName ?? "").lowercased()
         Task { try? await FS.update("User", uid, ["last_seen": FS.nowISO(), "search_name": searchName]) }
@@ -174,6 +177,8 @@ final class AppModel {
     // online stays current. Only changed profiles are read, so it stays cheap.
     @ObservationIgnored private var profilesSince = Date()
     @ObservationIgnored private var writingMe = 0
+    // When you last changed your own profile from this phone.
+    @ObservationIgnored private var lastMeStamp: Date?
     @ObservationIgnored private var syncing = false
 
     func syncProfiles(presence: Bool) async {
@@ -210,6 +215,10 @@ final class AppModel {
                 continue
             }
             if user.email == me?.email {
+                // A copy older than your last change here is skipped: a check
+                // that set off just before you saved (e.g. claimed the daily
+                // reward) would otherwise put the old coins back on screen.
+                if let mine = lastMeStamp, let stamp = Dates.parse(doc.str("updated_date")), stamp < mine { continue }
                 // Your own profile changed somewhere else (e.g. the website).
                 if writingMe == 0, user != me {
                     me = user
@@ -258,21 +267,81 @@ final class AppModel {
         guard let current = me else { return }
         var next = fields
         if let name = fields["display_name"] as? String { next["search_name"] = name.lowercased() }
-        next["updated_date"] = FS.nowISO()
-        var merged = currentDoc(current)
+        let stamp = FS.nowISO()
+        next["updated_date"] = stamp
+        let before = currentDoc(current)
+        var merged = before
         for (k, v) in next { merged[k] = v }
-        let updated = UserProfile(merged)
-        me = updated
-        people[updated.email] = updated
+        showMe(UserProfile(merged))
+        let lastStamp = lastMeStamp
+        lastMeStamp = Dates.parse(stamp)
         writingMe += 1
         defer { writingMe -= 1 }
         do {
             try await FS.update("User", current.id, next)
         } catch {
-            me = current
-            people[current.email] = current
+            // Take back only this change: anything else saved meanwhile stays.
+            if let now = me {
+                var doc = currentDoc(now)
+                for k in next.keys { doc[k] = before[k] }
+                showMe(UserProfile(doc))
+            }
+            lastMeStamp = lastStamp
             throw error
         }
+    }
+
+    // Adds coins, XP and the like with the database doing the sum, so two
+    // rewards landing at the same moment can't cancel each other out.
+    func addToMe(_ amounts: [String: Int], set extra: Doc = [:]) async throws {
+        guard let current = me else { return }
+        let stamp = FS.nowISO()
+        var fields = extra
+        fields["updated_date"] = stamp
+        let before = currentDoc(current)
+        var merged = before
+        for (k, v) in extra { merged[k] = v }
+        for (k, v) in amounts { merged[k] = ((before[k] as? Int) ?? 0) + v }
+        showMe(UserProfile(merged))
+        let lastStamp = lastMeStamp
+        lastMeStamp = Dates.parse(stamp)
+        writingMe += 1
+        defer { writingMe -= 1 }
+        do {
+            try await FS.change("User", current.id, amounts.map { FS.Change.increment($0.key, $0.value) }, set: fields)
+        } catch {
+            if let now = me {
+                var doc = currentDoc(now)
+                for (k, v) in amounts { doc[k] = ((doc[k] as? Int) ?? 0) - v }
+                for k in extra.keys { doc[k] = before[k] }
+                showMe(UserProfile(doc))
+            }
+            lastMeStamp = lastStamp
+            throw error
+        }
+    }
+
+    // The daily reward. It's checked against the saved account (the copy on
+    // screen can be a few seconds old, e.g. right after signing up) and the
+    // coins are added by the database. nil = already collected today.
+    func claimDaily() async throws -> Int? {
+        guard let uid = me?.id, !uid.isEmpty else { throw APIError(message: "Please log in again.", status: 401) }
+        if writingMe == 0, let doc = try await FS.get("User", uid) {
+            let saved = UserProfile(doc)
+            if saved.email == me?.email { showMe(saved) }
+        }
+        guard let current = me else { return nil }
+        let today = DailyReward.todayKey()
+        guard current.lastDailyClaim != today else { return nil }
+        let day = current.lastDailyClaim == DailyReward.yesterdayKey() ? current.dailyStreak + 1 : 1
+        let reward = DailyReward.amount(day)
+        try await addToMe(["coins": reward, "xp": 10], set: ["last_daily_claim": today, "daily_streak": day])
+        return reward
+    }
+
+    private func showMe(_ user: UserProfile) {
+        me = user
+        people[user.email] = user
     }
 
     private func currentDoc(_ u: UserProfile) -> Doc {
@@ -291,7 +360,7 @@ final class AppModel {
             "invite_code": u.inviteCode, "invites_joined": u.invitesJoined,
             "effect_color": u.effectColor, "effect_amount": u.effectAmount, "name_color": u.nameColor,
             "avatar_frame": u.avatarFrame, "banner_pattern": u.bannerPattern,
-            "accent_main": u.accentMain, "accent_sub": u.accentSub,
+            "accent_main": u.accentMain, "accent_sub": u.accentSub, "onboarding_completed": u.setupDone,
         ]
     }
 
@@ -315,6 +384,8 @@ final class AppModel {
     private func resetForNextAccount() {
         NotificationCenter.default.post(name: Self.signingOut, object: nil)
         me = nil
+        needsSetup = false
+        lastMeStamp = nil
         people = [:]
         wanted = []
         unknown = []

@@ -14,30 +14,38 @@ enum DailyReward {
         return (claimed, alive ? max(1, me.dailyStreak) : 0)
     }
 
+    static func amount(_ day: Int) -> Int { 20 + min(day, 7) * 5 }
+
+    // nil = it was already collected today.
     @MainActor
-    static func claim(_ model: AppModel) async throws -> Int {
-        guard let me = model.me else { return 0 }
-        let next = me.lastDailyClaim == yesterdayKey() ? me.dailyStreak + 1 : 1
-        let reward = 20 + min(next, 7) * 5
-        try await model.updateMe(["last_daily_claim": todayKey(), "daily_streak": next, "coins": me.coins + reward, "xp": me.xp + 10])
-        return reward
+    static func claim(_ model: AppModel) async throws -> Int? {
+        try await model.claimDaily()
     }
+
+    static let failed = "Couldn't collect it right now. Check your connection and try again."
 }
 
 struct DailyRewardButton: View {
     @Environment(AppModel.self) private var model
     @State private var confetti = false
     @State private var wiggle = false
+    @State private var claiming = false
 
     var body: some View {
         let status = DailyReward.status(model.me)
         Button {
-            guard !status.claimed else { return }
+            guard !status.claimed, !claiming else { return }
+            claiming = true
             Task {
-                if (try? await DailyReward.claim(model)) != nil {
-                    confetti = true
-                    try? await Task.sleep(for: .seconds(2))
-                    confetti = false
+                defer { claiming = false }
+                do {
+                    if try await DailyReward.claim(model) != nil {
+                        confetti = true
+                        try? await Task.sleep(for: .seconds(2))
+                        confetti = false
+                    }
+                } catch {
+                    model.showToast(DailyReward.failed, error: true)
                 }
             }
         } label: {
@@ -59,6 +67,7 @@ struct DailyRewardButton: View {
                 }
                 .foregroundStyle(status.claimed ? Palette.text : .white)
                 Spacer(minLength: 0)
+                if claiming { ProgressView().tint(.white) }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
@@ -85,6 +94,8 @@ struct DailyRewardSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var reward: Int?
     @State private var bounce = false
+    @State private var claiming = false
+    @State private var failed = false
 
     var body: some View {
         let status = DailyReward.status(model.me)
@@ -125,11 +136,35 @@ struct DailyRewardSheet: View {
             }
             .padding(.horizontal, 20)
 
+            if failed {
+                Label(DailyReward.failed, systemImage: "wifi.exclamationmark")
+                    .font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
+                    .multilineTextAlignment(.center).padding(.horizontal, 28)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+
             Button {
                 if reward != nil || status.claimed { dismiss(); return }
-                Task { reward = try? await DailyReward.claim(model) }
+                guard !claiming else { return }
+                claiming = true
+                Task {
+                    defer { claiming = false }
+                    do {
+                        let got = try await DailyReward.claim(model)
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.7)) {
+                            failed = false
+                            if let got { reward = got }
+                        }
+                    } catch {
+                        withAnimation(.snappy) { failed = true }
+                    }
+                }
             } label: {
-                Text(reward != nil || status.claimed ? "Yay!" : "Claim reward")
+                if claiming {
+                    ProgressView().tint(.white)
+                } else {
+                    Text(reward != nil || status.claimed ? "Yay!" : failed ? "Try again" : "Claim reward")
+                }
             }
             .buttonStyle(GradientButtonStyle(height: 54))
             .padding(.horizontal, 24)

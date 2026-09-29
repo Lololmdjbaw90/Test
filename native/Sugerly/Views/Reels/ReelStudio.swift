@@ -1378,7 +1378,7 @@ struct ReelStudioView: View {
             NotificationCenter.default.post(name: ReelsView.posted, object: Reel(created))
             model.tabRequest = .reels
             if let draftId { Drafts.delete("reels", draftId) }
-            try? await model.updateMe(["xp": me.xp + 30, "coins": me.coins + 5])
+            try? await model.addToMe(["xp": 30, "coins": 5])
             teardown()
             dismiss()
             model.showToast("Your reel is live! +30 XP", icon: "play.rectangle.fill")
