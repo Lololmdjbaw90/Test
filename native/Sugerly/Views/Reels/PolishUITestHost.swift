@@ -4,6 +4,7 @@ import PhotosUI
 
 // Isolated real controls: no login, account mutations, or remote fixtures.
 struct PolishUITestHost: View {
+    @Environment(AppModel.self) private var model
     static let overlayID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
     @State private var stickers = [TextSticker(id: overlayID, text: "Hello Sugerly", start: 1, end: 7)]
     @State private var selected: UUID?
@@ -15,6 +16,14 @@ struct PolishUITestHost: View {
     @State private var tab = 0
     @State private var likes = false
     @State private var action = "Ready"
+    @State private var path: [Route] = []
+    @State private var posts: PostsStore = {
+        let store = PostsStore()
+        store.hasMore = false
+        store.posts = [Post(["id": "sample-post", "user_email": "fixture@example.invalid", "user_display_name": "Luna", "title": "A tiny work in progress", "content": "Trying a new colour palette today. Pink skies or peach skies?", "created_date": FS.nowISO()])]
+        return store
+    }()
+    @State private var notes = NotificationsStore()
     private let art = Artwork(["id": "ui-art", "title": "Pink sketch", "user_display_name": "Luna", "user_email": "fixture@example.invalid"])
 
     var body: some View {
@@ -22,6 +31,8 @@ struct PolishUITestHost: View {
             Picker("Screen", selection: $tab) {
                 Text("Editor").tag(0)
                 Text("Fanart").tag(1)
+                Text("Community").tag(2)
+                Text("Wall").tag(3)
             }.pickerStyle(.segmented).padding()
             if tab == 0 {
                 Text(stickers.first.map { String(format: "%.2f,%.2f", $0.start, $0.end ?? 10) } ?? "Deleted")
@@ -35,14 +46,25 @@ struct PolishUITestHost: View {
                              onCheckpoint: {}, onMoveSlide: { _, _ in }, onDeleteSlide: { _ in })
                     .frame(height: 270).background(Color(hex: 0x24101B))
                 Spacer()
-            } else {
+            } else if tab == 1 {
                 Text(action).accessibilityIdentifier("art-action")
                 GalleryCard(artwork: art, liked: likes, onOpen: { action = "Opened artwork" }, onLike: { likes.toggle(); action = "Liked artwork" }, onProfile: { action = "Opened artist" })
                     .frame(width: 190)
                 Spacer()
+            } else if tab == 2 {
+                NavigationStack(path: $path) {
+                    CommunityView(path: $path, compose: {}).environment(posts).environment(notes)
+                }
+            } else {
+                NavigationStack(path: $path) {
+                    GalleryView(path: $path, initialArtworks: [art])
+                }
             }
         }
         .sugarBackground()
+        .onAppear {
+            model.me = UserProfile(["id": "fixture-user", "email": "test@example.invalid", "display_name": "Mimi"])
+        }
         .sheet(item: $editor) { sticker in
             TextStickerEditor(sticker: sticker) { updated in
                 if let i = stickers.firstIndex(where: { $0.id == updated.id }) { stickers[i] = updated } else { stickers.append(updated) }

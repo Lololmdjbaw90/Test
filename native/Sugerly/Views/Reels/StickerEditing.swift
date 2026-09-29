@@ -471,7 +471,7 @@ struct TextStickerEditor: View {
             let shown: TextSticker = {
                 var s = sticker
                 if s.text.trimmingCharacters(in: .whitespaces).isEmpty { s.text = "Your text" }
-                s.scale = min(sticker.scale, 1.5)
+                s.scale = sticker.scale
                 return s
             }()
             StickerLabel(sticker: shown, width: geo.size.width)
@@ -509,15 +509,6 @@ struct TextStickerEditor: View {
     var body: some View {
         ScrollView {
         VStack(spacing: 14) {
-            HStack {
-                Button("Delete") { onDelete(sticker.id); dismiss() }.foregroundStyle(Palette.danger).font(.jakarta(15, .bold))
-                Spacer()
-                Button("Done") {
-                    if !sticker.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { onSave(sticker) }
-                    dismiss()
-                }
-                .buttonStyle(GradientButtonStyle(height: 38, fullWidth: false))
-            }
             HStack {
                 Text("LIVE PREVIEW").font(.jakarta(11, .heavy)).tracking(1.5).foregroundStyle(Palette.muted)
                 Spacer()
@@ -583,6 +574,18 @@ struct TextStickerEditor: View {
         .padding(20)
         }
         .scrollDismissesKeyboard(.interactively)
+        .safeAreaInset(edge: .top) {
+            HStack {
+                Button("Delete") { onDelete(sticker.id); dismiss() }.foregroundStyle(Palette.danger).font(.jakarta(15, .bold))
+                Spacer()
+                Button("Done") {
+                    if !sticker.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { onSave(sticker) }
+                    dismiss()
+                }
+                .buttonStyle(GradientButtonStyle(height: 38, fullWidth: false))
+            }
+            .padding(.horizontal, 20).padding(.vertical, 10).background(Palette.bg)
+        }
         .safeAreaInset(edge: .bottom) {
             if focused {
                 Button("Hide keyboard") { focused = false }

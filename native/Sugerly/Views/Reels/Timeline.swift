@@ -503,6 +503,18 @@ struct ReelTimeline: View {
 
     // MARK: helpers (shared with the studio)
 
+    // Trimming a video must not leave an overlay beyond its new end.
+    static func clamp(_ stickers: inout [TextSticker], length: Double) {
+        let minimum = min(0.3, max(0, length))
+        for index in stickers.indices {
+            stickers[index].start = min(max(0, stickers[index].start), max(0, length - minimum))
+            if let end = stickers[index].end {
+                let finish = max(stickers[index].start + minimum, min(end, length))
+                stickers[index].end = finish >= length ? nil : finish
+            }
+        }
+    }
+
     // Where each slide starts, plus where the last one ends.
     static func bounds(_ seconds: [Double]) -> [Double] {
         seconds.reduce(into: [Double(0)]) { acc, s in acc.append((acc.last ?? 0) + s) }

@@ -2,6 +2,13 @@ import SwiftUI
 import UIKit
 import PhotosUI
 
+private enum ArtworkEvents {
+    static let changed = Notification.Name("sugerly.artwork.changed")
+    static func publish(_ artwork: Artwork) {
+        NotificationCenter.default.post(name: changed, object: artwork)
+    }
+}
+
 struct GalleryView: View {
     enum Sort: String, CaseIterable { case newest = "Newest", liked = "Most loved", featured = "Featured", saved = "Saved" }
 
@@ -19,6 +26,14 @@ struct GalleryView: View {
     @State private var appeared = false
     @State private var pendingLikes = Set<String>()
     @State private var loadError: String?
+
+    init(path: Binding<[Route]>, isRoot: Bool = false, initialArtworks: [Artwork] = []) {
+        _path = path
+        self.isRoot = isRoot
+        _artworks = State(initialValue: initialArtworks)
+        _loading = State(initialValue: initialArtworks.isEmpty)
+        _hasMore = State(initialValue: initialArtworks.isEmpty)
+    }
 
     private var mediums: [String] {
         let found = Set(artworks.map { $0.medium.lowercased() }.filter { !$0.isEmpty })
@@ -97,6 +112,11 @@ struct GalleryView: View {
         .refreshable { await load() }
         .task { if artworks.isEmpty { await load() } }
         .dropRemoved($artworks)
+        .onReceive(NotificationCenter.default.publisher(for: ArtworkEvents.changed)) { note in
+            guard let artwork = note.object as? Artwork else { return }
+            if let index = artworks.firstIndex(where: { $0.id == artwork.id }) { artworks[index] = artwork }
+            else { artworks.insert(artwork, at: 0) }
+        }
         .onAppear { appeared = true }
         .fullScreenCover(isPresented: $adding, onDismiss: { Task { await load() } }) { NewArtworkView() }
 
@@ -253,6 +273,7 @@ struct GalleryView: View {
             defer { pendingLikes.remove(art.id) }
             do {
                 try await LikeBook.shared.write(before, liking: liking, me: me.email, owner: art.authorEmail)
+                if let updated = artworks.first(where: { $0.id == art.id }) { ArtworkEvents.publish(updated) }
                 if liking { Notify.send(to: art.authorEmail, from: me, type: "like", message: "\(me.displayName) loved your fan art", link: "/Gallery?art=\(art.id)") }
             } catch {
                 if let j = artworks.firstIndex(where: { $0.id == art.id }) { artworks[j].restoreLikes(from: before) }
@@ -360,6 +381,8 @@ struct ArtworkDetailView: View {
     @State private var zoom = false
     @State private var heart = false
     @State private var reporting: ReportSheet.Target?
+    @State private var saving = false
+    @State private var liking = false
 
     private var me: String { model.me?.email ?? "" }
     private var liked: Bool { LikeBook.shared.isLiked(artwork, me: me) }
@@ -441,24 +464,29 @@ struct ArtworkDetailView: View {
     }
 
     private func toggleLike() {
-        guard let meProfile = model.me else { return }
+        guard let meProfile = model.me, !liking else { return }
+        liking = true
         let before = artwork
         let liking = !LikeBook.shared.isLiked(before, me: me)
         artwork.setLiked(liking, me: me)
         Task {
+            defer { self.liking = false }
             do {
                 try await LikeBook.shared.write(before, liking: liking, me: me, owner: before.authorEmail)
+                ArtworkEvents.publish(artwork)
                 if liking { Notify.send(to: artwork.authorEmail, from: meProfile, type: "like", message: "\(meProfile.displayName) liked your artwork \"\(artwork.title)\"", link: "/Gallery?art=\(artwork.id)") }
-            } catch { artwork.restoreLikes(from: before) }
+            } catch { artwork.restoreLikes(from: before); model.showToast("Could not save your like. Try again.", error: true) }
         }
     }
 
     private func toggleSave() {
-        guard let meProfile = model.me else { return }
+        guard let meProfile = model.me, !saving else { return }
+        saving = true
         var next = meProfile.savedArtworks
         let saving = !next.contains(artwork.id)
         if saving { next.append(artwork.id) } else { next.removeAll { $0 == artwork.id } }
         Task {
+            defer { self.saving = false }
             do {
                 try await model.updateMe(["saved_artworks": next])
                 model.showToast(saving ? "Saved to your collection" : "Removed from saved", icon: "bookmark")
@@ -542,7 +570,8 @@ struct NewArtworkView: View {
                 "user_email": me.email, "user_display_name": me.displayName, "user_profile_picture": me.picture,
                 "likes": [String](), "created_by": me.email, "created_date": now, "updated_date": now,
             ]
-            try await FS.create("Artwork", doc)
+            let created = try await FS.create("Artwork", doc)
+            ArtworkEvents.publish(Artwork(created))
             try? await model.addToMe(["xp": 25, "coins": 5])
             dismiss()
             model.showToast("Added to the fan art wall · +25 XP", icon: "paintpalette.fill")

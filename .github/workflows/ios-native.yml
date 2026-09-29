@@ -61,6 +61,14 @@ jobs:
             -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee simulator-test.log | grep -E "error:|Test Case|TEST (SUCCEEDED|FAILED)"
 
+      - name: Export interaction screenshots
+        if: always()
+        working-directory: native
+        run: |
+          if [ -d InteractionTests.xcresult ]; then
+            xcrun xcresulttool export attachments --path InteractionTests.xcresult --output-path test-screenshots || true
+          fi
+
       - name: Save simulator results
         if: always()
         uses: actions/upload-artifact@v4
@@ -69,6 +77,7 @@ jobs:
           path: |
             native/InteractionTests.xcresult
             native/simulator-test.log
+            native/test-screenshots
 
       - name: Show compile errors
         if: failure()

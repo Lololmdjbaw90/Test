@@ -454,8 +454,11 @@ struct ReelStudioView: View {
         .sheet(item: $editingText) { sticker in
             TextStickerEditor(sticker: sticker) { updated in
                 if let i = stickers.firstIndex(where: { $0.id == updated.id }) { stickers[i] = updated } else { stickers.append(updated) }
+                selectedOverlay = updated.id
+                tool = .timeline
+                Task { await refreshTimelineThumbs() }
             } onDelete: { id in stickers.removeAll { $0.id == id } }
-            .presentationDetents([.height(470), .large])
+            .presentationDetents([.large])
             .presentationCornerRadius(30)
         }
         .sheet(isPresented: $choosingSound) {
@@ -476,6 +479,11 @@ struct ReelStudioView: View {
             }
         }
         .onChange(of: editingText?.id) { _, id in if id != nil { pausePlayback() } }
+        .onChange(of: timelineLength) { _, length in
+            guard asset != nil, length > 0 else { return }
+            ReelTimeline.clamp(&stickers, length: length)
+            playhead = min(playhead, length)
+        }
         .onChange(of: look) { _, _ in applyPreviewFilter() }
         .fullScreenCover(item: $cropJob) { job in
             ImageCropper(image: job.image, circle: false, aspect: 9 / 16, choices: CropAspect.editor, title: "Move and pinch to crop", onDone: { rect in

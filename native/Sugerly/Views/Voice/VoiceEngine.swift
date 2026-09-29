@@ -218,8 +218,13 @@ final class VoiceEngine: NSObject {
 
     // Speaker ↔ earpiece (or headphones).
     func toggleSpeaker() {
-        speaker.toggle()
-        try? AVAudioSession.sharedInstance().overrideOutputAudioPort(speaker ? .speaker : .none)
+        let next = !speaker
+        do {
+            try AVAudioSession.sharedInstance().overrideOutputAudioPort(next ? .speaker : .none)
+            speaker = next
+        } catch {
+            self.error = "Couldn't change the audio output. Try again."
+        }
     }
 
     func toggleMute() {

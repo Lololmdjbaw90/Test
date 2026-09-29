@@ -63,8 +63,9 @@ final class LikeBook {
 
     func isLiked<T: Likeable>(_ item: T, me: String) -> Bool {
         guard !me.isEmpty else { return false }
-        if item.likes.contains(me) { return true }
-        return known[Self.key(item)] ?? false
+        // A recent unlike must win over the sample on another open screen.
+        if let known = known[Self.key(item)] { return known }
+        return item.likes.contains(me)
     }
 
     // Things liked by more people than their sample holds: ask the Like table

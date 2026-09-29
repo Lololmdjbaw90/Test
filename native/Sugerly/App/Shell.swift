@@ -294,8 +294,11 @@ struct MainShell: View {
             Task { await open(dest.kind, dest.target) }
         }
         .onOpenURL { url in
-            // Widgets: sugerly://chat, sugerly://gallery, sugerly://alerts …
-            Task { await open(url.host() ?? "", "") }
+            guard url.scheme?.lowercased() == "sugerly" else { return }
+            let parts = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            let target = parts?.queryItems?.first(where: { ["id", "art", "post", "reel", "conversation"].contains($0.name) })?.value
+                ?? url.pathComponents.dropFirst().first ?? ""
+            Task { await open(url.host()?.lowercased() ?? "", target) }
         }
         .overlay(alignment: .top) {
             if let toast = model.toast {
@@ -457,9 +460,22 @@ extension MainShell {
             await switching(.chat)
             UserDefaults.standard.set(1, forKey: "sugerly.chat.section")
             if !target.isEmpty, let doc = try? await FS.get("Community", target) { chatPath = [.server(Server(doc))] }
-        case "reels": tab = .reels
-        case "gallery": tab = .gallery
-        case "home": tab = .home
+        case "reels", "reel":
+            await switching(.reels)
+            if target.isEmpty { reelsPath = [] }
+            else if let doc = try? await FS.get("Reel", target) { reelsPath = [.reel(Reel(doc))] }
+            else { model.showToast("This reel is no longer available.", error: true) }
+        case "gallery", "artwork":
+            await switching(.gallery)
+            if target.isEmpty { galleryPath = [] }
+            else if let doc = try? await FS.get("Artwork", target) { galleryPath = [.artwork(Artwork(doc))] }
+            else { model.showToast("This artwork is no longer available.", error: true) }
+        case "community", "post":
+            await switching(.community)
+            if target.isEmpty { communityPath = [] }
+            else if let doc = try? await FS.get("CommunityPost", target) { communityPath = [.post(Post(doc))] }
+            else { model.showToast("This post is no longer available.", error: true) }
+        case "home": tab = .home; homePath = []
         case "alerts", "social":
             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { model.showNotifications = true }
         default: break
