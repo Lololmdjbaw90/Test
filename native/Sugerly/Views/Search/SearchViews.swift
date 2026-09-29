@@ -62,29 +62,40 @@ struct PeopleView: View {
     @State private var filter = 0
     @State private var appeared = false
 
-    private let filters = ["Suggested", "Online", "Following", "Followers"]
+    // Friends = you follow each other (same as chats and calls).
+    private let filters = ["Friends", "Suggested", "Online", "Following", "Followers"]
 
     private var list: [UserProfile] {
         guard let me = model.me else { return [] }
         let blocked = Set(me.blocked)
+        let mine = Set(me.following)
         var all = model.people.values.filter { $0.email != me.email && !blocked.contains($0.email) }
         switch filter {
-        case 1: all = all.filter(\.isOnline)
-        case 2: all = all.filter { me.following.contains($0.email) }
-        case 3: all = all.filter { $0.following.contains(me.email) }
-        default:
-            // People who follow you or your friends, then the most active.
-            let mine = Set(me.following)
-            all = all.filter { !mine.contains($0.email) }
-            all.sort { a, b in
-                let sa = PeopleView.score(a, me: me), sb = PeopleView.score(b, me: me)
-                return sa > sb
-            }
+        case 0: all = all.filter { mine.contains($0.email) && $0.following.contains(me.email) }
+        case 2: all = all.filter(\.isOnline)
+        case 3: all = all.filter { mine.contains($0.email) }
+        case 4: all = all.filter { $0.following.contains(me.email) }
+        default: all = all.filter { !mine.contains($0.email) }
         }
         if !query.isEmpty {
             all = all.filter { $0.displayName.localizedCaseInsensitiveContains(query) || $0.bio.localizedCaseInsensitiveContains(query) }
         }
-        if filter != 0 { all.sort { $0.displayName.lowercased() < $1.displayName.lowercased() } }
+        // Always the same order for the same people: the people list refreshes
+        // every few seconds, and an unsettled order made rows jump around.
+        let byName: (UserProfile, UserProfile) -> Bool = { a, b in
+            let x = a.displayName.lowercased(), y = b.displayName.lowercased()
+            return x != y ? x < y : a.email < b.email
+        }
+        if filter == 1 {
+            // People who follow you or your friends, then the most active.
+            let scores = Dictionary(all.map { ($0.email, PeopleView.score($0, me: me)) }, uniquingKeysWith: { a, _ in a })
+            all.sort { a, b in
+                let sa = scores[a.email] ?? 0, sb = scores[b.email] ?? 0
+                return sa != sb ? sa > sb : byName(a, b)
+            }
+        } else {
+            all.sort(by: byName)
+        }
         return all
     }
 
@@ -99,9 +110,9 @@ struct PeopleView: View {
             return
         }
         switch filter {
-        case 2:
+        case 0, 3:
             for email in me.following.prefix(300) { _ = model.person(email) }
-        case 3:
+        case 4:
             let docs = (try? await FS.query("User", [.contains("following", me.email)], limit: 300)) ?? []
             var map = model.people
             for doc in docs {
@@ -114,10 +125,11 @@ struct PeopleView: View {
         }
     }
 
+    // Leaves out online status on purpose: it flips all the time and would
+    // keep reshuffling the list.
     static func score(_ p: UserProfile, me: UserProfile) -> Int {
         var s = p.xp / 50
         if p.following.contains(me.email) { s += 1000 }
-        if p.isOnline { s += 200 }
         let mutual = p.following.filter { me.following.contains($0) }.count
         s += mutual * 100
         return s
@@ -127,8 +139,8 @@ struct PeopleView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("People").font(.display(40)).foregroundStyle(Palette.text)
-                    Text("Find artists, friends and new faces.").font(.jakarta(14)).foregroundStyle(Palette.muted)
+                    Text("Friends").font(.display(40)).foregroundStyle(Palette.text)
+                    Text("Your friends, and new people to meet.").font(.jakarta(14)).foregroundStyle(Palette.muted)
                 }
                 SearchField(text: $query, placeholder: "Search people…")
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -141,10 +153,16 @@ struct PeopleView: View {
                 }
                 if model.people.isEmpty {
                     ForEach(0..<5, id: \.self) { _ in SkeletonRow() }
-                } else if list.isEmpty {
-                    EmptyCard(icon: "person.2.fill", title: "No one here yet", text: query.isEmpty ? "Try another tab." : "Try another name.")
                 }
-                ForEach(Array(list.prefix(150).enumerated()), id: \.element.id) { i, person in
+                let shown = list
+                if !model.people.isEmpty && shown.isEmpty {
+                    if filter == 0 && query.isEmpty {
+                        EmptyCard(icon: "person.2.fill", title: "No friends yet", text: "When someone you follow follows you back, they show up here. Find people in Suggested.")
+                    } else {
+                        EmptyCard(icon: "person.2.fill", title: "No one here yet", text: query.isEmpty ? "Try another tab." : "Try another name.")
+                    }
+                }
+                ForEach(Array(shown.prefix(150).enumerated()), id: \.element.id) { i, person in
                     PersonRow(person: person) { path.append(.person(person.email)) }
                         .stagger(appeared, i)
                 }
@@ -156,7 +174,7 @@ struct PeopleView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .sugarBackground()
-        .navigationTitle("People")
+        .navigationTitle("Friends")
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await model.loadPeople() }
         .task { if model.people.isEmpty { await model.loadPeople() } }

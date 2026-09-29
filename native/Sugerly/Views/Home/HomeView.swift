@@ -317,7 +317,11 @@ struct HomeView: View {
     // MARK: friends & servers
 
     private var friendsRow: some View {
-        let friends = mutualFriends.sorted { (model.person($0)?.isOnline == true ? 0 : 1) < (model.person($1)?.isOnline == true ? 0 : 1) }
+        // Online first, then by name, so the row doesn't reshuffle on refresh.
+        let friends = mutualFriends.sorted { a, b in
+            let oa = model.person(a)?.isOnline == true, ob = model.person(b)?.isOnline == true
+            return oa != ob ? oa : model.name(a, a).lowercased() < model.name(b, b).lowercased()
+        }
         return VStack(alignment: .leading, spacing: 14) {
             SectionHeader(icon: "person.2.fill", title: "Friends") { path.append(.people) }
             if friends.isEmpty {

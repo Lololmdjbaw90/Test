@@ -1127,11 +1127,17 @@ struct ReelStudioView: View {
         withAnimation { step = .post }
     }
 
+    // Runs when posting and again when the screen closes, so it must be safe
+    // twice: AVPlayer crashes the app if the same time observer is removed
+    // two times (that was the crash right after posting a video).
     private func teardown() {
         slideTask?.cancel()
         player.pause()
         soundPlayer?.pause()
-        if let timeObserver { player.removeTimeObserver(timeObserver) }
+        if let timeObserver {
+            player.removeTimeObserver(timeObserver)
+            self.timeObserver = nil
+        }
     }
 
     // MARK: timeline
@@ -1535,7 +1541,10 @@ struct ReelStudioView: View {
         session.outputURL = out
         session.outputFileType = .mp4
         session.shouldOptimizeForNetworkUse = true
-        session.timeRange = CMTimeRange(start: CMTime(seconds: trimStart, preferredTimescale: 600), end: CMTime(seconds: trimEnd, preferredTimescale: 600))
+        // A start after the end is an invalid range, which AVFoundation throws on.
+        if trimEnd > trimStart + 0.05 {
+            session.timeRange = CMTimeRange(start: CMTime(seconds: max(0, trimStart), preferredTimescale: 600), end: CMTime(seconds: trimEnd, preferredTimescale: 600))
+        }
         if muteOriginal || originalVolume < 0.99 {
             let mix = AVMutableAudioMix()
             let tracks = (try? await asset.loadTracks(withMediaType: .audio)) ?? []
