@@ -53,8 +53,10 @@ final class Player {
         timeObserver = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600), queue: .main) { [weak self] now in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                self.time = now.seconds.isFinite ? now.seconds : 0
-                if let d = self.player?.currentItem?.duration.seconds, d.isFinite { self.duration = d }
+                // Only real changes: every update redraws whatever shows the song.
+                let at = now.seconds.isFinite ? now.seconds : 0
+                if abs(at - self.time) >= 0.4 || at == 0 { self.time = at }
+                if let d = self.player?.currentItem?.duration.seconds, d.isFinite, d != self.duration { self.duration = d }
             }
         }
         endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
@@ -64,7 +66,11 @@ final class Player {
         // for a call, another app or a video with sound).
         statusWatch = p.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
             let status = player.timeControlStatus
-            Task { @MainActor in self?.playing = status != .paused }
+            Task { @MainActor in
+                guard let self else { return }
+                let now = status != .paused
+                if self.playing != now { self.playing = now }
+            }
         }
         // Chart previews are links that expire: fetch a fresh one and retry.
         itemWatch = item.observe(\.status, options: [.new]) { [weak self] item, _ in
@@ -214,19 +220,26 @@ final class Player {
 // The floating "now playing" card above the tab bar.
 struct MiniPlayer: View {
     @Environment(Player.self) private var player
-    @State private var spin = false
 
     var body: some View {
         if let track = player.track {
             VStack(spacing: 6) {
                 HStack(spacing: 12) {
+                    // A still cover: a spinning one redrew the bar on every
+                    // frame and made the whole app stutter while music played.
                     RemoteImage(url: track.coverURL)
                         .frame(width: 44, height: 44)
-                        .clipShape(Circle())
-                        .overlay(Circle().strokeBorder(.white.opacity(0.6), lineWidth: 1))
-                        .rotationEffect(.degrees(spin ? 360 : 0))
-                        .animation(player.playing ? .linear(duration: 8).repeatForever(autoreverses: false) : .default, value: spin)
-                        .onAppear { spin = true }
+                        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                        .overlay(alignment: .bottomTrailing) {
+                            if player.playing {
+                                Image(systemName: "waveform")
+                                    .font(.system(size: 9, weight: .heavy)).foregroundStyle(.white)
+                                    .frame(width: 18, height: 18)
+                                    .background(Theme.gradient, in: Circle())
+                                    .offset(x: 4, y: 4)
+                                    .transition(.scale.combined(with: .opacity))
+                            }
+                        }
                     VStack(alignment: .leading, spacing: 1) {
                         Text(track.title).font(.jakarta(14, .bold)).foregroundStyle(Palette.text).lineLimit(1)
                         Text(track.artist).font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(1)
@@ -245,13 +258,7 @@ struct MiniPlayer: View {
                     Button { withAnimation(.snappy) { player.close() } } label: { Image(systemName: "xmark").frame(width: 30, height: 40) }
                         .foregroundStyle(Palette.muted)
                 }
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Palette.border)
-                        Capsule().fill(Theme.gradient).frame(width: player.duration > 0 ? geo.size.width * min(1, player.time / player.duration) : 0)
-                    }
-                }
-                .frame(height: 3)
+                MiniProgress()
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 12)
@@ -261,5 +268,22 @@ struct MiniPlayer: View {
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .sensoryFeedback(.impact(weight: .light), trigger: player.playing)
         }
+    }
+}
+
+// The thin progress line, on its own so the song's clock only redraws this
+// line (stretched, not re-laid out) and not the whole card.
+private struct MiniProgress: View {
+    @Environment(Player.self) private var player
+
+    var body: some View {
+        let progress = player.duration > 0 ? min(1, max(0, player.time / player.duration)) : 0
+        Capsule().fill(Palette.border)
+            .overlay(alignment: .leading) {
+                Capsule().fill(Theme.gradient)
+                    .scaleEffect(x: progress, y: 1, anchor: .leading)
+            }
+            .frame(height: 3)
+            .allowsHitTesting(false)
     }
 }

@@ -61,8 +61,9 @@ struct MusicView: View {
                 chartsSection
                 if !tracks.isEmpty {
                     SectionHeader(icon: "music.note.list", title: "All tracks")
-                    // Everything is already loaded: nothing pops in while you scroll.
-                    VStack(spacing: 4) {
+                    // Rows are built as they scroll into view (hundreds of songs
+                    // at once made the page stutter).
+                    LazyVStack(spacing: 4) {
                         ForEach(showAllUploads ? tracks : Array(tracks.prefix(30))) { t in TrackRow(track: t, list: tracks) }
                         if !showAllUploads && tracks.count > 30 {
                             Button { showAllUploads = true } label: {
@@ -142,7 +143,7 @@ struct MusicView: View {
                     .padding(.vertical, 2)
                 }
             }
-            VStack(spacing: 4) {
+            LazyVStack(spacing: 4) {
                 if chartsLoading && charts.isEmpty { ForEach(0..<5, id: \.self) { _ in SkeletonRow() } }
                 if chartsError && charts.isEmpty {
                     Text("Couldn't load the charts right now — try again in a moment.").font(.jakarta(14)).foregroundStyle(Palette.muted).padding(20)
