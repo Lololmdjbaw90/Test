@@ -19,13 +19,14 @@ export async function callPayments(name, body) {
   const token = await user.getIdToken();
   const res = await fetch(`/.netlify/functions/${name}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    // Not the Authorization header: Netlify can answer that one itself.
+    headers: { "Content-Type": "application/json", "X-Sugerly-Token": token },
     body: JSON.stringify(body || {}),
   });
   const data = await res.json().catch(() => ({}));
   // A 404 without our JSON means the payment server isn't deployed at all.
   if (res.status === 404 && !data.error) throw new Error("Card payments aren't switched on yet (the payment server isn't deployed). Ask the Sugerly team.");
-  if (!res.ok) throw new Error(data.error || `Payments aren't available right now (${res.status}).`);
+  if (!res.ok) throw new Error((typeof data.error === "string" && data.error) || data.msg || `Payments aren't available right now (${res.status}).`);
   return data;
 }
 

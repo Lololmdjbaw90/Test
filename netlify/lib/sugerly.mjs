@@ -22,7 +22,7 @@ export const CURRENCIES = ["usd", "eur", "gbp", "cad", "aud"];
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "Authorization, Content-Type",
+  "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Sugerly-Token",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
@@ -60,8 +60,11 @@ export function body(event) {
 // ---- who is asking --------------------------------------------------------
 
 // Checks the Firebase ID token the app sends and returns { uid, email }.
+// It comes in X-Sugerly-Token: Netlify can answer a Bearer token in the
+// Authorization header itself (with a bare 401) before this code runs.
 export async function signedInUser(event) {
-  const header = event.headers?.authorization || event.headers?.Authorization || "";
+  const h = event.headers || {};
+  const header = h["x-sugerly-token"] || h["X-Sugerly-Token"] || h.authorization || h.Authorization || "";
   const token = header.replace(/^Bearer\s+/i, "").trim();
   if (!token) throw new Problem(401, "Please log in again.");
   const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${WEB_API_KEY}`, {

@@ -204,7 +204,8 @@ enum Payments {
         request.timeoutInterval = 30
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(try await AuthClient.shared.token())", forHTTPHeaderField: "Authorization")
+        // Not the Authorization header: Netlify can answer that one itself.
+        request.setValue(try await AuthClient.shared.token(), forHTTPHeaderField: "X-Sugerly-Token")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let data: Data
         let response: URLResponse
@@ -218,7 +219,7 @@ enum Payments {
         guard (200..<300).contains(status) else {
             // A 404 without our JSON means the payment server isn't deployed at all.
             if status == 404 && json["error"] == nil { throw APIError(message: "Card payments aren't switched on yet (the payment server isn't deployed). Ask the Sugerly team.", status: status) }
-            throw APIError(message: json["error"] as? String ?? "Payments aren't available right now (\(status)).", status: status)
+            throw APIError(message: json["error"] as? String ?? json["msg"] as? String ?? "Payments aren't available right now (\(status)).", status: status)
         }
         return json
     }
