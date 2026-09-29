@@ -1116,6 +1116,7 @@ struct CommissionOrderView: View {
     @State private var busy = false
     @State private var error: String?
     @State private var checkout: CheckoutPage?
+    @State private var canPayByCard: Bool?
     @State private var quote = ""
     @State private var currency = "usd"
     @State private var quoteNote = ""
@@ -1160,6 +1161,7 @@ struct CommissionOrderView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
         .task { await load() }
+        .task { canPayByCard = await Payments.cardCheckoutAllowed() }
         // Keeps up with the other side while you're looking at it.
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
@@ -1393,17 +1395,21 @@ struct CommissionOrderView: View {
                 Button { confirm = .cancel } label: { Label("Cancel request", systemImage: "xmark") }
                     .buttonStyle(OutlineButtonStyle(height: 44, fullWidth: true))
             case .accepted where isBuyer:
-                Button { Task { await pay(o) } } label: {
-                    if busy { ProgressView().tint(.white) } else { Label("Pay \(Money.format(o.price, o.currency)) by card", systemImage: "creditcard.fill") }
+                if canPayByCard == true {
+                    Button { Task { await pay(o) } } label: {
+                        if busy { ProgressView().tint(.white) } else { Label("Pay \(Money.format(o.price, o.currency)) by card", systemImage: "creditcard.fill") }
+                    }
+                    .buttonStyle(GradientButtonStyle(height: 54))
+                    .disabled(busy)
+                    HStack(spacing: 8) {
+                        Image(systemName: "lock.fill")
+                        Text("Card, Apple Pay and more · secured by Stripe")
+                    }
+                    .font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
+                    .frame(maxWidth: .infinity)
+                } else if canPayByCard == false {
+                    infoLine("Paying for commissions isn't available in the iOS app in your region yet.", "creditcard")
                 }
-                .buttonStyle(GradientButtonStyle(height: 54))
-                .disabled(busy)
-                HStack(spacing: 8) {
-                    Image(systemName: "apple.logo")
-                    Text("Card, Apple Pay and more · secured by Stripe")
-                }
-                .font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
-                .frame(maxWidth: .infinity)
                 Button { confirm = .cancel } label: { Label("Cancel order", systemImage: "xmark") }
                     .buttonStyle(OutlineButtonStyle(height: 44, fullWidth: true))
             case .accepted where isArtist:

@@ -1,7 +1,6 @@
 # Sugerly — App Store listing (copy & paste)
 
-Everything App Store Connect asks for, ready to paste. Replace
-`YOUR-SITE` with your Netlify address (see APP_STORE.md, step 3).
+Everything App Store Connect asks for, ready to paste.
 
 ## App information
 
@@ -14,7 +13,7 @@ Everything App Store Connect asks for, ready to paste. Replace
 | Primary language | English (U.S.) |
 | Primary category | Social Networking |
 | Secondary category | Graphics & Design |
-| Content rights | "Does your app contain, show, or access third-party content?" → **Yes** (users' posts, song previews from Deezer, GIFs from GIPHY) and you have the rights to use it |
+| Content rights | "Does your app contain, show, or access third-party content?" → **Yes** (users' posts, Apple Music, song previews from Deezer, GIFs from GIPHY) and you have the rights to use it |
 | Price | Free |
 
 ## Version page
@@ -37,7 +36,10 @@ Everything App Store Connect asks for, ready to paste. Replace
 > Message friends, start group chats, send GIFs, and join communities with text and voice channels.
 >
 > MUSIC
-> Upload your own tracks, discover what other artists make, and browse today's popular songs.
+> Upload your own tracks, discover what other artists make, browse today's popular songs, and connect Apple Music to play whole songs.
+>
+> COMMISSIONS
+> Open your own shop, take requests for custom art and deliver it right in the app — or hire an artist you love.
 >
 > MAKE IT YOURS
 > Pick your colour — the whole app and even the logo change to match. Earn XP, level up and collect coins just for fun.
@@ -51,9 +53,9 @@ Everything App Store Connect asks for, ready to paste. Replace
 art,artist,drawing,painting,reels,sketch,creative,community,music,friends,chat,cosplay,anime,share
 ```
 
-**Support URL:** `https://YOUR-SITE.netlify.app/Help`
+**Support URL:** `https://sugerly.netlify.app/Help`
 **Marketing URL:** leave empty
-**Privacy Policy URL:** `https://YOUR-SITE.netlify.app/Legal/privacy`
+**Privacy Policy URL:** `https://sugerly.netlify.app/Legal/privacy`
 **Copyright:** `2026 <your name>`
 **Version:** 1.0
 
@@ -78,9 +80,11 @@ real art look even better — take them on your iPhone later and replace these.
 >
 > Safety (Guideline 1.2): every post, reel, comment, message and profile has Report (⋯ menu) and profiles have Block. Reports go to our moderators (Admin → Reports) and are reviewed within 24 hours. New users must agree to the Terms and Community Guidelines, which have zero tolerance for objectionable content. Captions and messages are filtered for abusive words; links are blocked in captions and bios.
 >
-> Account deletion (Guideline 5.1.1(v)): Settings → Account & data → Delete account.
+> Account deletion (Guideline 5.1.1(v)): Settings → Account → Delete account.
 >
-> Camera and microphone are only used when the user films a reel, takes a photo or joins a call. Song previews are 30-second previews from the Deezer API; GIFs come from GIPHY.
+> Commissions: artists sell custom artwork to other users. On the United States storefront buyers pay by card through Stripe (Guideline 3.1.1(a)); on other storefronts the in-app Pay button is hidden. Sugerly sells no digital content of its own and coins can't be bought.
+>
+> Camera and microphone are only used when the user films a reel, takes a photo or joins a call. Song previews are 30-second previews from the Deezer API; Apple Music subscribers can play whole songs through MusicKit; GIFs come from GIPHY.
 
 ## Age rating (questionnaire answers)
 
@@ -111,9 +115,11 @@ Data linked to the user, purpose **App Functionality** only:
 | Contact Info | Email Address, Name |
 | User Content | Photos or Videos, Audio Data, Emails or Text Messages (chat messages), Other User Content (posts, comments) |
 | Identifiers | User ID |
+| Purchases | Purchase History (commission orders) |
+| Usage Data | Product Interaction (likes and views, for the feeds) |
 
-Not collected: location, contacts, health, financial info, browsing
-history, search history, purchases, advertising data, diagnostics.
+Not collected: location, contacts, health, financial info (Stripe handles
+cards), browsing history, search history, advertising data, diagnostics.
 
 ## Export compliance
 

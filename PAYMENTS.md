@@ -61,8 +61,9 @@ They use Stripe's and Firebase's web APIs directly, so no packages are needed.
 ## Notes
 
 - Apple requires In-App Purchase for digital content bought inside App Store
-  apps. Card checkout is fine on the website and in apps installed outside the
-  App Store. Check Apple's rules before putting card checkout in an App Store
-  release.
+  apps, except on the US storefront, where apps may link to their own checkout.
+  So the App Store / TestFlight app only shows the Pay button to US App Store
+  accounts; everywhere else buyers pay on the website. Sideloaded copies and
+  the website always can pay by card.
 - Selling coins for real money is not enabled; coins stay earned (daily
   rewards, invites, posting).
