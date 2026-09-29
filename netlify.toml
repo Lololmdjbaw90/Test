@@ -9,11 +9,12 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
-# The site is the full Sugerly app: on iPhone, Safari → Share → "Add to
-# Home Screen" installs it for free. To show only Help & legal instead
-# (e.g. once Sugerly is on the App Store), add:
-# [build.environment]
-#   VITE_LEGAL_SITE = "true"
+# Sugerly is an iPhone / iPad app only. The website just hosts what the
+# App Store and payments need: Help (support URL), Terms / Privacy /
+# Guidelines, the "payment done" page and the payment server below. Remove
+# this to bring back the full web app.
+[build.environment]
+  VITE_LEGAL_SITE = "true"
 
 [[redirects]]
   from = "/*"

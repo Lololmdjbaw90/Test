@@ -26,7 +26,7 @@
     <div class="badge" id="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
     <h1 id="title">Checking your payment…</h1>
     <p id="text">One moment.</p>
-    <a href="/Commissions" id="back">Back to Sugerly</a>
+    <p id="hint" style="margin:0;font-weight:700;color:var(--text)">Tap <b>Done</b> at the top to go back to the Sugerly app.</p>
   </main>
   <script>
     (async function () {
@@ -45,8 +45,7 @@
         var data = await res.json();
         if (data.status === "paid" || data.status === "in_progress" || data.status === "delivered" || data.status === "completed") {
           icon.innerHTML = check; title.textContent = "Payment done!";
-          if (data.orderId) document.getElementById("back").href = "/Commissions?order=" + encodeURIComponent(data.orderId);
-          text.textContent = "The artist has been told. You can close this page and go back to the app to follow your order.";
+          text.textContent = "The artist has been told. You can follow your order in the app: Commissions → My orders.";
         } else {
           title.textContent = "Payment is processing"; text.textContent = "This can take a moment. Your order updates by itself once it's through.";
         }
