@@ -21,32 +21,21 @@ Everything App Store Connect asks for, ready to paste.
 
 **Promotional text (170)**
 
-> A cozy home for artists: share your art, film reels with music, chat with friends and join creative communities.
+> A cozy place to post your art, film little reels, chat with friends and meet people who love making things as much as you do.
 
 **Description**
 
-> Sugerly is a friendly social app made for artists.
+> Sugerly is a little corner of the internet for people who make things.
 >
-> SHARE YOUR ART
-> Post drawings, paintings, cosplay, crafts and music. Get likes, comments and feedback from people who love to create.
+> Post your drawings, paintings, crafts, cosplay or music and get real feedback from other artists. Film a quick reel or turn a few pictures into a slideshow, add a song and some text, and share it.
 >
-> REELS
-> Film short videos in clips or turn your pictures into a swipeable slideshow. Add filters, text, stickers and a song from the top charts, then post it to the Reels feed.
+> Chat with friends one on one or in a group, send GIFs and voice notes, or hang out in community servers with text and voice channels.
 >
-> CHAT & COMMUNITIES
-> Message friends, start group chats, send GIFs, and join communities with text and voice channels.
+> Artists can open a small shop and take commissions. Someone asks for a piece, you agree on a price, and you send the finished art right in the app.
 >
-> MUSIC
-> Upload your own tracks, discover what other artists make, browse today's popular songs, and connect Apple Music to play whole songs.
+> You can make the whole app your own colour (the logo changes too), level up as you post, and collect coins for fun extras on your profile.
 >
-> COMMISSIONS
-> Open your own shop, take requests for custom art and deliver it right in the app — or hire an artist you love.
->
-> MAKE IT YOURS
-> Pick your colour — the whole app and even the logo change to match. Earn XP, level up and collect coins just for fun.
->
-> SAFE BY DESIGN
-> Report any post, reel, comment, message or person, block anyone, and let our moderators handle the rest. Links aren't allowed in captions and bios to keep out spam and scams.
+> If someone isn't being nice, you can report or block them in a couple of taps and our team will take a look.
 
 **Keywords (100)**
 
