@@ -1023,6 +1023,7 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity)
             }
         }
+        .overlay(alignment: .topTrailing) { closeButton }
         .sugarBackground()
         .sheet(isPresented: $statusSheet) { StatusSheet().presentationCornerRadius(30) }
         .sheet(item: $peopleList) { kind in PeopleListSheet(kind: kind).presentationCornerRadius(30) }
@@ -1044,18 +1045,26 @@ struct SettingsView: View {
     // MARK: top
 
     private var topRow: some View {
-        HStack {
-            Text("Settings").font(.display(34)).foregroundStyle(Palette.text)
-            Spacer()
-            Button { dismiss() } label: {
-                Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(Palette.text2)
-                    .frame(width: 40, height: 40).background(Palette.surface, in: Circle())
-                    .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
-            }
-            .buttonStyle(BouncyStyle())
-            .accessibilityLabel("Close")
+        Text("Settings").font(.display(34)).foregroundStyle(Palette.text)
+            .padding(.trailing, 56)   // room for the pinned close button
+            .padding(.top, 20)
+    }
+
+    // Pinned above the scrolling content, so it's always there and never
+    // fights the scroll view or the sheet's swipe for the tap.
+    private var closeButton: some View {
+        Button { dismiss() } label: {
+            Image(systemName: "xmark").font(.system(size: 15, weight: .bold)).foregroundStyle(Palette.text2)
+                .frame(width: 42, height: 42)
+                .background(.regularMaterial, in: Circle())
+                .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
+                .frame(width: 52, height: 52)
+                .contentShape(Circle())
         }
-        .padding(.top, 20)
+        .buttonStyle(BouncyStyle())
+        .accessibilityLabel("Close")
+        .padding(.top, 10)
+        .padding(.trailing, 10)
     }
 
     private func profileCard(_ me: UserProfile) -> some View {
