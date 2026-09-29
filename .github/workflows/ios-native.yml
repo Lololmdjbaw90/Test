@@ -15,7 +15,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Use the newest Xcode
         run: |
@@ -66,7 +66,7 @@ jobs:
           zip -qry Sugerly-native-unsigned.ipa Payload
           ls -lh Sugerly-native-unsigned.ipa
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: Sugerly-native-ipa
           path: native/Sugerly-native-unsigned.ipa

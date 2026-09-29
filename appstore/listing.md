@@ -54,7 +54,7 @@ Everything App Store Connect asks for, ready to paste.
 art,artist,drawing,painting,reels,sketch,creative,community,music,friends,chat,cosplay,anime,share
 ```
 
-**Support URL:** `https://sugerly.netlify.app/Help`
+**Support URL:** `https://sugerly.netlify.app/Help` (shows sugerlysupport@gmail.com)
 **Marketing URL:** leave empty
 **Privacy Policy URL:** `https://sugerly.netlify.app/Legal/privacy`
 **Copyright:** `2026 <your name>`

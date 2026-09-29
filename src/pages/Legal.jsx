@@ -34,7 +34,7 @@ const DOCS = {
       ["No warranty", "Sugerly is provided \"as is\". We work hard to keep it running and safe, but we can't promise it will always be available or error-free. To the extent the law allows, we aren't liable for indirect or consequential losses. Nothing in these Terms limits rights you have by law as a consumer."],
       ["Apple", "If you use the iPhone or iPad app, these Terms are between you and Sugerly, not Apple. Apple isn't responsible for the app, its content, support or any claims about it, and Apple and its subsidiaries may enforce these Terms as third-party beneficiaries."],
       ["Changes", "We may update these Terms. If the changes are important we'll tell you in the app (What's new). Using Sugerly after that means you accept the new Terms."],
-      ["Contact", "Questions or requests? Use Contact us in the app (Settings → Help & legal) or on the Help page of the website. We usually reply within 2 days."],
+      ["Contact", "Questions or requests? Email sugerlysupport@gmail.com, or use Contact us in the app (Settings → Help & legal) or on the Help page of the website. We usually reply within 2 days."],
     ],
   },
   privacy: {
@@ -54,7 +54,7 @@ const DOCS = {
       ["Children", "Sugerly isn't for children under 13 and we don't knowingly collect their data. If you believe a child under 13 has an account, contact us and we'll delete it."],
       ["Security", "Data is sent over encrypted connections and protected by Firebase security rules that only let people read and change what they're allowed to. Only our payment server can mark an order as paid."],
       ["Changes", "We'll tell you in the app if this policy changes in an important way."],
-      ["Contact", "Questions or requests? Use Contact us in the app (Settings → Help & legal) or on the Help page of the website. We usually reply within 2 days."],
+      ["Contact", "Questions or requests? Email sugerlysupport@gmail.com, or use Contact us in the app (Settings → Help & legal) or on the Help page of the website. We usually reply within 2 days."],
     ],
   },
   guidelines: {
@@ -142,7 +142,7 @@ export default function Legal({ doc: forced }) {
   const navigate = useNavigate();
   const doc = forced || params.doc || "help";
   const { data: configs } = useLiveQuery("SiteConfig", { key: "global" }, { live: false });
-  const email = configs[0]?.support_email || import.meta.env.VITE_SUPPORT_EMAIL || "";
+  const email = configs[0]?.support_email || import.meta.env.VITE_SUPPORT_EMAIL || "sugerlysupport@gmail.com";
   const page = DOCS[doc];
   const back = () => (window.history.length > 1 ? navigate(-1) : navigate("/"));
 
