@@ -303,6 +303,15 @@ function OrderModal({ order, onClose }) {
   const isArtist = order.artist_email === user.email;
   const st = ORDER_STATUS[order.status] || ORDER_STATUS.requested;
   const other = isBuyer ? order.artist_email : order.buyer_email;
+  // Started paying but it still says "waiting for payment": ask Stripe, in
+  // case the "payment done" page was closed before it could confirm.
+  const checkPaid = isBuyer && order.status === "accepted" && !!order.stripe_session_id;
+  useEffect(() => {
+    if (!checkPaid) return;
+    callPayments("commission-confirm", { orderId: order.id })
+      .then((r) => { if (r?.status === "paid") toast.success("Payment done! The artist has been told."); })
+      .catch(() => {});
+  }, [checkPaid, order.id]);
 
   const tell = (to, message) => base44.entities.Notification.create({
     to_email: to, from_email: user.email, from_display_name: displayName(user), from_profile_picture: user.profile_picture || "",
