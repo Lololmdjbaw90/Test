@@ -92,18 +92,33 @@ function serviceAccount() {
     const text = raw.startsWith("{") ? raw : Buffer.from(raw, "base64").toString("utf8");
     key = JSON.parse(text);
   } else if (process.env.FIREBASE_PRIVATE_KEY) {
+    const value = process.env.FIREBASE_PRIVATE_KEY.trim();
+    // The whole key file pasted into FIREBASE_PRIVATE_KEY works too.
+    let file = null;
+    if (value.startsWith("{")) { try { file = JSON.parse(value); } catch { file = null; } }
     key = {
-      client_email: (process.env.FIREBASE_CLIENT_EMAIL || `firebase-adminsdk-fbsvc@${PROJECT}.iam.gserviceaccount.com`).trim(),
-      private_key: process.env.FIREBASE_PRIVATE_KEY,
+      client_email: (file?.client_email || process.env.FIREBASE_CLIENT_EMAIL || `firebase-adminsdk-fbsvc@${PROJECT}.iam.gserviceaccount.com`).trim(),
+      private_key: file?.private_key || value,
     };
   }
   if (!key) throw new Problem(503, "Payments aren't set up yet (missing Firebase key on the server).");
-  // Rebuild the PEM block if its line breaks got lost when pasting.
-  const pem = String(key.private_key).replace(/\\n/g, "\n");
-  const m = /-----BEGIN PRIVATE KEY-----([\s\S]*?)-----END PRIVATE KEY-----/.exec(pem);
-  const bodyText = m ? m[1].replace(/\s+/g, "") : "";
-  key.private_key = m ? `-----BEGIN PRIVATE KEY-----\n${bodyText.match(/.{1,64}/g).join("\n")}\n-----END PRIVATE KEY-----\n` : pem;
+  key.private_key = cleanPem(key.private_key);
   return key;
+}
+
+// Rebuilds the key however it was pasted: with or without quotes, with
+// "\n" written out or real line breaks, or without the BEGIN/END lines.
+function cleanPem(value) {
+  const text = String(value || "").replace(/\\n/g, "\n");
+  const hasBegin = /-----BEGIN PRIVATE KEY-----/.test(text);
+  const hasEnd = /-----END PRIVATE KEY-----/.test(text);
+  const middle = text
+    .replace(/[\s\S]*-----BEGIN PRIVATE KEY-----/, "")
+    .replace(/-----END PRIVATE KEY-----[\s\S]*/, "")
+    .replace(/[^A-Za-z0-9+/=]/g, "");
+  cleanPem.info = { hasBegin, hasEnd, length: middle.length };
+  if (middle.length < 100) return text;
+  return `-----BEGIN PRIVATE KEY-----\n${middle.match(/.{1,64}/g).join("\n")}\n-----END PRIVATE KEY-----\n`;
 }
 
 let cachedToken = null;
@@ -129,7 +144,9 @@ async function googleToken() {
   try {
     signature = crypto.createSign("RSA-SHA256").update(unsigned).sign(key.private_key).toString("base64url");
   } catch {
-    throw new Problem(503, "Payments setup: FIREBASE_PRIVATE_KEY on Netlify is incomplete. Paste the whole private_key, from -----BEGIN to END PRIVATE KEY-----.");
+    // Says what's there (never the key itself): a full key is about 1,600 characters.
+    const info = cleanPem.info || {};
+    throw new Problem(503, `Payments setup: FIREBASE_PRIVATE_KEY on Netlify is incomplete (start line: ${info.hasBegin ? "yes" : "missing"}, end line: ${info.hasEnd ? "yes" : "missing"}, ${info.length ?? 0} of about 1,600 characters). Paste the whole private_key, from -----BEGIN to END PRIVATE KEY-----.`);
   }
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
