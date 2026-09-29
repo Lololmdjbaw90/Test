@@ -257,8 +257,18 @@ export function notify(to, from, message, link) {
 // ---- Stripe --------------------------------------------------------------
 
 function stripeKey() {
-  const key = (process.env.STRIPE_SECRET_KEY || "").trim();
+  const key = (process.env.STRIPE_SECRET_KEY || "").trim().replace(/^["']|["']$/g, "");
   if (!key) throw new Problem(503, "Card payments aren't set up yet (missing Stripe key on the server).");
+  // Never echo the value back: just say what kind of thing is there.
+  if (/BEGIN PRIVATE KEY|private_key/.test(key)) {
+    throw new Problem(503, "Payments setup: STRIPE_SECRET_KEY on Netlify holds the Firebase key by mistake. Put your Stripe secret key there (it starts with sk_test_ or sk_live_).");
+  }
+  if (key.startsWith("pk_")) {
+    throw new Problem(503, "Payments setup: STRIPE_SECRET_KEY on Netlify is the publishable key (pk_…). Use the secret key, which starts with sk_test_ or sk_live_.");
+  }
+  if (!/^(sk|rk)_(test|live)_[A-Za-z0-9]+$/.test(key)) {
+    throw new Problem(503, "Payments setup: STRIPE_SECRET_KEY on Netlify isn't a Stripe secret key. It should start with sk_test_ or sk_live_.");
+  }
   return key;
 }
 
@@ -268,7 +278,11 @@ export async function stripe(path, params, method = "POST") {
     headers: { Authorization: `Bearer ${stripeKey()}`, "Content-Type": "application/x-www-form-urlencoded" },
     body: method === "GET" ? undefined : new URLSearchParams(params),
   });
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    // Stripe's own text repeats part of the key, so it isn't passed on.
+    throw new Problem(503, "Payments setup: Stripe didn't accept STRIPE_SECRET_KEY on Netlify. Copy the secret key again from Stripe → Developers → API keys.");
+  }
   if (!res.ok) throw new Problem(502, data.error?.message || "Stripe didn't accept that.");
   return data;
 }
