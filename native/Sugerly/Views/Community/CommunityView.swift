@@ -293,9 +293,9 @@ struct CommunityView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 16, pinnedViews: [.sectionHeaders]) {
+            LazyVStack(alignment: .leading, spacing: 14, pinnedViews: [.sectionHeaders]) {
                 hero.stagger(appeared, 0)
-                if !storyPeople.isEmpty { stories.stagger(appeared, 1) }
+                stories.stagger(appeared, 1)
                 Section {
                     if !trending.isEmpty || tag != nil { trendingRow }
 
@@ -308,12 +308,23 @@ struct CommunityView: View {
                                   actionTitle: feed == .saved ? nil : "Share a post", action: feed == .saved ? nil : compose)
                     }
 
-                    ForEach(Array(visible.enumerated()), id: \.element.id) { index, post in
-                        PostCard(post: post, path: $path, reporting: $reporting, conversational: true)
-                            .transition(.opacity.combined(with: .scale(scale: 0.97)))
-                            .onAppear { if index >= visible.count - 5 { Task { await store.loadMore() } } }
-                        if index == 1 && !suggestions.isEmpty && feed == .forYou { suggested }
+                    // One sheet of conversation: a slim composer on top, then
+                    // every post as a thread row with a line down the side.
+                    LazyVStack(spacing: 0) {
+                        startThread
+                        ForEach(Array(visible.enumerated()), id: \.element.id) { index, post in
+                            PostCard(post: post, path: $path, reporting: $reporting, conversational: true)
+                                .transition(.opacity)
+                                .onAppear { if index >= visible.count - 5 { Task { await store.loadMore() } } }
+                            if index == 1 && !suggestions.isEmpty && feed == .forYou {
+                                suggested.padding(12)
+                                    .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1).allowsHitTesting(false) }
+                            }
+                        }
                     }
+                    .background(Palette.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
                 } header: {
                     feedBar
                 }
@@ -335,58 +346,78 @@ struct CommunityView: View {
         .onAppear { appeared = true }
     }
 
-    // A people-first conversation feed, separate from the artwork wall.
+    // A social app header: title, search and a big + to post.
     private var hero: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Community").font(.display(38)).foregroundStyle(Palette.text)
-                    Text("Little updates. Long conversations.").font(.jakarta(13)).foregroundStyle(Palette.muted)
-                }
-                Spacer(minLength: 8)
-                Button { searching = true } label: {
-                    Image(systemName: "magnifyingglass").font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(Theme.main).frame(width: 44, height: 44)
-                }
-                .buttonStyle(BouncyStyle()).accessibilityLabel("Search community")
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Community").font(.display(36)).foregroundStyle(Palette.text)
+                Text("Little updates. Long conversations.").font(.jakarta(13, .medium)).foregroundStyle(Palette.muted)
             }
+            Spacer(minLength: 8)
+            Button { searching = true } label: {
+                Image(systemName: "magnifyingglass").font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(Palette.text).frame(width: 42, height: 42)
+                    .background(Palette.surface, in: Circle())
+                    .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
+            }
+            .buttonStyle(BouncyStyle()).accessibilityLabel("Search community")
             Button(action: compose) {
-                HStack(spacing: 12) {
-                    Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 44)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("What's on your mind?").font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
-                        Text("A thought, a work in progress, a tiny win…").font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "square.and.pencil").foregroundStyle(Theme.main)
-                }
-                .padding(14).background(Theme.soft, in: RoundedRectangle(cornerRadius: 18))
+                Image(systemName: "plus").font(.system(size: 18, weight: .heavy))
+                    .foregroundStyle(.white).frame(width: 42, height: 42)
+                    .background(Theme.gradient, in: Circle())
+                    .shadow(color: Theme.main.opacity(0.35), radius: 8, y: 4)
             }
-            .buttonStyle(BouncyStyle(scale: 0.98))
+            .buttonStyle(BouncyStyle()).accessibilityLabel("New post")
         }
         .padding(.horizontal, 4)
     }
 
+    // "Start a thread…" at the top of the feed, like a social app.
+    private var startThread: some View {
+        Button(action: compose) {
+            HStack(spacing: 12) {
+                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 40)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(model.me?.displayName ?? "You").font(.jakarta(14, .heavy)).foregroundStyle(Palette.text)
+                    Text("Start a thread…").font(.jakarta(14)).foregroundStyle(Palette.muted)
+                }
+                Spacer(minLength: 0)
+                Text("Post").font(.jakarta(13, .heavy)).foregroundStyle(.white)
+                    .padding(.horizontal, 16).frame(height: 34)
+                    .background(Theme.gradient, in: Capsule())
+            }
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1).allowsHitTesting(false) }
+    }
+
+    // Feed tabs as soft pills; the chosen one slides over.
     private var feedBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 22) {
+            HStack(spacing: 6) {
                 ForEach(Feed.allCases, id: \.self) { f in
-                    Button { withAnimation(.snappy(duration: 0.22)) { feed = f } } label: {
-                        VStack(spacing: 10) {
-                            Text(f.rawValue).font(.jakarta(14, feed == f ? .heavy : .medium))
-                                .foregroundStyle(feed == f ? Palette.text : Palette.muted)
-                            ZStack {
-                                Capsule().fill(.clear).frame(height: 3)
-                                if feed == f { Capsule().fill(Theme.main).frame(height: 3).matchedGeometryEffect(id: "feed", in: feedPill) }
+                    let on = feed == f
+                    Button { withAnimation(.snappy(duration: 0.25)) { feed = f } } label: {
+                        Label(f.rawValue, systemImage: f.icon)
+                            .font(.jakarta(13, on ? .heavy : .semibold))
+                            .foregroundStyle(on ? .white : Palette.text2)
+                            .padding(.horizontal, 14).frame(height: 36)
+                            .background {
+                                if on { Capsule().fill(Theme.gradient).matchedGeometryEffect(id: "feed", in: feedPill) }
                             }
-                        }
-                        .padding(.top, 14).frame(minHeight: 44)
-                    }.buttonStyle(.plain)
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
                 }
-            }.padding(.horizontal, 4)
+            }
+            .padding(4)
+            .background(Palette.surface, in: Capsule())
+            .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
+            .padding(.vertical, 8)
         }
-        .background(Palette.bg)
-        .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1).allowsHitTesting(false) }
+        .background(Palette.bg.opacity(0.96))
     }
 
     private var trendingRow: some View {
@@ -418,17 +449,31 @@ struct CommunityView: View {
         .buttonStyle(BouncyStyle())
     }
 
-    // People who posted in the last few days, like stories.
+    // Who's been posting lately, as round stories; you first, with a +.
     private var stories: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
+            HStack(spacing: 14) {
+                Button(action: compose) {
+                    VStack(spacing: 6) {
+                        Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 62)
+                            .padding(3)
+                            .overlay(Circle().strokeBorder(Palette.border, lineWidth: 2))
+                            .overlay(alignment: .bottomTrailing) {
+                                Image(systemName: "plus").font(.system(size: 11, weight: .black)).foregroundStyle(.white)
+                                    .frame(width: 22, height: 22).background(Theme.gradient, in: Circle())
+                                    .overlay(Circle().strokeBorder(Palette.bg, lineWidth: 2.5))
+                            }
+                        Text("You").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
+                    }
+                }
+                .buttonStyle(BouncyStyle()).accessibilityLabel("Share a post")
                 ForEach(storyPeople, id: \.self) { email in
                     let person = model.person(email)
                     Button { path.append(.person(email)) } label: {
                         VStack(spacing: 6) {
-                            Avatar(url: person?.picture ?? "", name: person?.displayName ?? email, size: 60, online: person?.isOnline ?? false)
+                            Avatar(url: person?.picture ?? "", name: person?.displayName ?? email, size: 62, online: person?.isOnline ?? false)
                                 .padding(3)
-                                .overlay(Circle().strokeBorder(Theme.gradient, lineWidth: 3))
+                                .overlay(Circle().strokeBorder(AngularGradient(colors: [Theme.main, Theme.light, Color(hex: 0xFFD166), Theme.main], center: .center), lineWidth: 3))
                             Text(person?.displayName ?? "").font(.jakarta(12, .semibold)).foregroundStyle(Palette.text).lineLimit(1).frame(width: 70)
                         }
                     }
@@ -535,7 +580,7 @@ struct PostCard: View {
         return post.likes.first { following.contains($0) && $0 != post.authorEmail }.flatMap { model.person($0) }
     }
 
-    var body: some View {
+    private var card: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let friend = friendLiker {
                 Label("Liked by \(friend.displayName)", systemImage: "heart.fill")
@@ -591,6 +636,12 @@ struct PostCard: View {
             }
         }
         .modifier(ConversationSurface(flat: conversational))
+    }
+
+    var body: some View {
+        Group {
+            if conversational { threadRow } else { card }
+        }
         .confirmationDialog("Delete this post?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 Task {
@@ -607,6 +658,136 @@ struct PostCard: View {
             .presentationDetents([.height(340)])
             .presentationCornerRadius(30)
         }
+    }
+
+    // MARK: conversation row (the Community feed)
+
+    // A post as a conversation: picture on the left with a thread line
+    // running down to who replied, name and time, the words, the picture,
+    // then light icon buttons with counts.
+    private var threadRow: some View {
+        let comments = store.commentCounts[post.id] ?? 0
+        return HStack(alignment: .top, spacing: 12) {
+            VStack(spacing: 6) {
+                Button { path.append(.person(post.authorEmail)) } label: {
+                    Avatar(url: author?.picture ?? post.authorPicture, name: author?.displayName ?? post.authorName, size: 42,
+                           online: author?.isOnline ?? false, nitro: author?.isNitro ?? false)
+                }
+                .buttonStyle(BouncyStyle())
+                if comments > 0, let top = store.latestComment[post.id] {
+                    Capsule().fill(Palette.border).frame(width: 2).frame(maxHeight: .infinity)
+                    Avatar(url: model.person(top.email)?.picture ?? "", name: model.person(top.email)?.displayName ?? top.name, size: 20)
+                }
+            }
+            .frame(width: 44)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Button { path.append(.person(post.authorEmail)) } label: {
+                        NameText(name: author?.displayName ?? post.authorName, style: author?.nameStyle ?? "", size: 15, nitro: author?.isNitro ?? false).lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                    if author?.isNitro == true { NitroBadge(compact: true) }
+                    Text(Dates.ago(post.created)).font(.jakarta(13)).foregroundStyle(Palette.muted).lineLimit(1)
+                    Spacer(minLength: 4)
+                    if post.authorEmail != me && !following {
+                        Button { follow() } label: {
+                            Text("Follow").font(.jakarta(12, .heavy)).foregroundStyle(Theme.main)
+                                .padding(.horizontal, 10).frame(height: 28)
+                                .overlay(Capsule().strokeBorder(Theme.main.opacity(0.4), lineWidth: 1.2))
+                        }
+                        .buttonStyle(BouncyStyle())
+                    }
+                    moreMenu
+                }
+                if !post.title.isEmpty {
+                    Text(post.title).font(.jakarta(16, .heavy)).foregroundStyle(Palette.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .contentShape(Rectangle()).onTapGesture { open() }
+                }
+                if !post.text.isEmpty {
+                    Text(Hashtags.styled(post.text)).font(.jakarta(15)).foregroundStyle(Palette.text).lineLimit(8)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle()).onTapGesture { open() }
+                }
+                if !post.imageURL.isEmpty {
+                    media
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
+                        .padding(.top, 2)
+                }
+                HStack(spacing: 18) {
+                    Button { store.toggleLike(post, me: model.me) } label: {
+                        iconCount(liked ? "heart.fill" : "heart", post.likeTotal, on: liked)
+                    }
+                    .sensoryFeedback(.impact(weight: .light), trigger: liked)
+                    .accessibilityLabel(liked ? "Unlike" : "Like")
+                    Button { open() } label: { iconCount("bubble.right", comments, on: false) }
+                        .accessibilityLabel("Comments")
+                    Button { sendSheet = true } label: { iconCount("paperplane", nil, on: false) }
+                        .accessibilityLabel("Send to a chat")
+                    ShareLink(item: ReelLinks.post(post.id), subject: Text("Sugerly"), message: Text(post.title.isEmpty ? post.text : post.title)) {
+                        iconCount("square.and.arrow.up", nil, on: false)
+                    }
+                    .accessibilityLabel("Share")
+                    Spacer(minLength: 0)
+                    Button { toggleSave() } label: { iconCount(saved ? "bookmark.fill" : "bookmark", nil, on: saved) }
+                        .sensoryFeedback(.impact(weight: .light), trigger: saved)
+                        .accessibilityLabel(saved ? "Remove from saved" : "Save")
+                }
+                .buttonStyle(BouncyStyle(scale: 0.8))
+                .padding(.top, 2)
+                if comments > 0 || post.likeTotal > 0 {
+                    Button { open() } label: {
+                        Text(summary(comments))
+                            .font(.jakarta(13)).foregroundStyle(Palette.muted)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .contentShape(Rectangle())
+        .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1).allowsHitTesting(false) }
+    }
+
+    // "3 replies · 12 likes"
+    private func summary(_ comments: Int) -> String {
+        var parts: [String] = []
+        if comments > 0 { parts.append(comments == 1 ? "1 reply" : "\(comments) replies") }
+        if post.likeTotal > 0 { parts.append(post.likeTotal == 1 ? "1 like" : "\(post.likeTotal) likes") }
+        return parts.joined(separator: " · ")
+    }
+
+    private func iconCount(_ icon: String, _ count: Int?, on: Bool) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon).font(.system(size: 17, weight: .semibold))
+                .symbolEffect(.bounce, value: on)
+            if let count, count > 0 {
+                Text("\(count)").font(.jakarta(13, .bold)).contentTransition(.numericText())
+            }
+        }
+        .foregroundStyle(on ? AnyShapeStyle(Theme.main) : AnyShapeStyle(Palette.text2))
+        .frame(minWidth: 30, minHeight: 36, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    private var moreMenu: some View {
+        Menu {
+            if !post.text.isEmpty { Button { UIPasteboard.general.string = post.text; model.showToast("Copied", icon: "doc.on.doc.fill") } label: { Label("Copy text", systemImage: "doc.on.doc") } }
+            Button { sendSheet = true } label: { Label("Send to a chat", systemImage: "paperplane") }
+            if post.authorEmail != me {
+                Button { reporting = ReportSheet.Target(id: post.id, type: "post", ownerEmail: post.authorEmail, preview: post.title.isEmpty ? post.text : post.title, link: "/Community?post=\(post.id)") } label: { Label("Report", systemImage: "flag") }
+            }
+            if post.authorEmail == me || model.me?.isAdmin == true {
+                Button(role: .destructive) { confirmDelete = true } label: { Label("Delete", systemImage: "trash") }
+            }
+        } label: {
+            Image(systemName: "ellipsis").font(.system(size: 15, weight: .bold)).foregroundStyle(Palette.muted)
+                .frame(width: 30, height: 30).contentShape(Rectangle())
+        }
+        .accessibilityLabel("More")
     }
 
     private var header: some View {
