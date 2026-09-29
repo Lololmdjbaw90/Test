@@ -69,6 +69,8 @@ struct StickerCanvas: View {
     var onBegin: () -> Void
     // Timeline: stickers outside their time are hidden and can't be grabbed.
     var isShown: (TextSticker) -> Bool = { _ in true }
+    // Rounded corners of the picture, so stickers are cut off at its edge.
+    var corner: CGFloat = 26
 
     @State private var rects: [UUID: CGRect] = [:]
     @State private var grabbed: UUID?
@@ -80,6 +82,9 @@ struct StickerCanvas: View {
 
     var body: some View {
         ZStack {
+            // Stickers stay inside the picture: anything pushed past an edge
+            // is cut off there, like in the finished video.
+            ZStack {
             ForEach(stickers) { sticker in
                 let live = grabbed == sticker.id
                 StickerLabel(sticker: sticker, width: size.width)
@@ -93,8 +98,11 @@ struct StickerCanvas: View {
                     .opacity(isShown(sticker) ? (live && overTrash ? 0.45 : 1) : 0)
                     .animation(.easeOut(duration: 0.15), value: isShown(sticker))
                     .shadow(color: selected == sticker.id ? Theme.main.opacity(0.6) : .clear, radius: 10)
-                    .position(x: sticker.x * size.width + (live ? drag.width : 0), y: sticker.y * size.height + (live ? drag.height : 0))
+                    .position(x: clampX(sticker.x * size.width + (live ? drag.width : 0)), y: clampY(sticker.y * size.height + (live ? drag.height : 0)))
             }
+            }
+            .frame(width: size.width, height: size.height)
+            .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
             if grabbed != nil {
                 VStack {
                     Spacer()
@@ -146,6 +154,10 @@ struct StickerCanvas: View {
         .sensoryFeedback(.impact(weight: .medium), trigger: overTrash)
         .sensoryFeedback(.selection, trigger: grabbed)
     }
+
+    // The middle of a sticker can't leave the picture.
+    private func clampX(_ x: CGFloat) -> CGFloat { min(size.width * 0.97, max(size.width * 0.03, x)) }
+    private func clampY(_ y: CGFloat) -> CGFloat { min(size.height * 0.97, max(size.height * 0.03, y)) }
 
     private func hit(_ point: CGPoint) -> UUID? {
         for sticker in stickers.reversed() where isShown(sticker) {
@@ -373,29 +385,41 @@ struct StickerLabel: View {
             Text(sticker.text).font(.system(size: fontSize)).fixedSize()
         } else {
             let size = fontSize
+            // Measured like the finished video, so the label grows with the text.
+            let box = sticker.textSize(fontSize: size, maxWidth: width * 0.9)
+            let glow = Color(hex: sticker.glowColor)
             Text(sticker.text)
-                .font(.custom(sticker.font.uiName, size: size))
+                .font(.custom(sticker.font.uiName, fixedSize: size))
                 .foregroundStyle(Color(hex: sticker.inkColor))
                 .multilineTextAlignment(sticker.textAlignment)
-                .frame(maxWidth: width * 0.9)
+                .frame(width: box.width, alignment: frameAlignment)
                 .fixedSize(horizontal: false, vertical: true)
-                .modifier(OutlineText(on: sticker.style == .outline, color: sticker.color == 0x2A1620 ? .white : Color(hex: 0x2A1620)))
+                .modifier(OutlineText(on: sticker.style == .outline, color: Color(hex: sticker.outlineColor), width: max(1.5, size * 0.05)))
                 .padding(.horizontal, size * 0.45)
-                .padding(.vertical, size * 0.25)
+                .padding(.vertical, size * 0.27)
                 .background {
                     if sticker.style == .label {
                         RoundedRectangle(cornerRadius: size * 0.5, style: .continuous).fill(Color(hex: sticker.color))
                     }
                 }
-                .shadow(color: shadowColor, radius: sticker.style == .glow ? size * 0.4 : 4)
+                .shadow(color: sticker.style == .glow ? glow : shadowColor, radius: sticker.style == .glow ? size * 0.22 : 4)
+                .shadow(color: sticker.style == .glow ? glow : .clear, radius: sticker.style == .glow ? size * 0.6 : 0)
                 .fixedSize()
+        }
+    }
+
+    private var frameAlignment: Alignment {
+        switch sticker.align {
+        case .left: return .leading
+        case .right: return .trailing
+        default: return .center
         }
     }
 
     private var shadowColor: Color {
         switch sticker.style {
-        case .glow: return Color(hex: sticker.color)
         case .label: return .black.opacity(0.15)
+        case .outline: return .black.opacity(0.25)
         default: return .black.opacity(0.45)
         }
     }
@@ -415,13 +439,16 @@ extension TextSticker {
 struct OutlineText: ViewModifier {
     let on: Bool
     let color: Color
+    var width: CGFloat = 1.5
     func body(content: Content) -> some View {
         if on {
             content
-                .shadow(color: color, radius: 0, x: 1.5, y: 1.5)
-                .shadow(color: color, radius: 0, x: -1.5, y: -1.5)
-                .shadow(color: color, radius: 0, x: 1.5, y: -1.5)
-                .shadow(color: color, radius: 0, x: -1.5, y: 1.5)
+                .shadow(color: color, radius: 0, x: width, y: width)
+                .shadow(color: color, radius: 0, x: -width, y: -width)
+                .shadow(color: color, radius: 0, x: width, y: -width)
+                .shadow(color: color, radius: 0, x: -width, y: width)
+                .shadow(color: color, radius: 0, x: width, y: 0)
+                .shadow(color: color, radius: 0, x: -width, y: 0)
         } else {
             content
         }
@@ -437,9 +464,45 @@ struct TextStickerEditor: View {
     private let colors: [UInt32] = [0xFFFFFF, 0x2A1620, 0xFFB3D1, 0xD9577F, 0xFF4F8B, 0xB19CFF, 0x7CBEFF, 0x5FD3B0, 0xFFD166, 0xFF8A5B]
     private let aligns: [(NSTextAlignment, String)] = [(.left, "text.alignleft"), (.center, "text.aligncenter"), (.right, "text.alignright")]
 
-    private var fieldInk: UInt32 {
-        if sticker.style == .label { return sticker.inkColor }
-        return sticker.color == 0xFFFFFF ? 0x2A1620 : sticker.color
+    // The preview sits on a dark card so white text, neon and outlines show.
+    private var preview: some View {
+        GeometryReader { geo in
+            let shown: TextSticker = {
+                var s = sticker
+                if s.text.trimmingCharacters(in: .whitespaces).isEmpty { s.text = "Your text" }
+                s.scale = 1.35
+                return s
+            }()
+            StickerLabel(sticker: shown, width: geo.size.width)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .opacity(sticker.text.isEmpty ? 0.5 : 1)
+        }
+        .frame(height: 150)
+        .background(LinearGradient(colors: [Color(hex: 0x3A2230), Color(hex: 0x160B12)], startPoint: .top, endPoint: .bottom), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    private func styleChip(_ st: StickerStyle) -> some View {
+        let on = sticker.style == st
+        var sample = sticker
+        sample.text = "Aa"
+        sample.style = st
+        sample.scale = 1
+        return Button { withAnimation(.snappy) { sticker.style = st } } label: {
+            VStack(spacing: 5) {
+                StickerLabel(sticker: sample, width: 250)
+                    .frame(height: 44)
+                Text(st.title).font(.jakarta(11, .bold)).foregroundStyle(on ? Color.white : Color.white.opacity(0.7))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(Color(hex: 0x2A1620), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(on ? Theme.main : Color.white.opacity(0.08), lineWidth: on ? 2.5 : 1))
+            .scaleEffect(on ? 1.03 : 1)
+        }
+        .buttonStyle(BouncyStyle(scale: 0.94))
+        .sensoryFeedback(.selection, trigger: on)
+        .accessibilityLabel("\(st.title) style")
     }
 
     var body: some View {
@@ -453,14 +516,16 @@ struct TextStickerEditor: View {
                 }
                 .buttonStyle(GradientButtonStyle(height: 38, fullWidth: false))
             }
+            preview
             TextField("Type something cute…", text: $sticker.text, axis: .vertical)
-                .font(.custom(sticker.font.uiName, size: 26))
+                .font(.custom(sticker.font.uiName, size: 20))
+                .lineLimit(1...4)
                 .multilineTextAlignment(sticker.textAlignment)
-                .foregroundStyle(Color(hex: fieldInk))
+                .foregroundStyle(Palette.text)
                 .focused($focused)
-                .padding(14)
-                .background(sticker.style == .label ? Color(hex: sticker.color) : Palette.surface2, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+                .padding(12)
+                .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(StickerFont.allCases, id: \.self) { f in
@@ -475,10 +540,7 @@ struct TextStickerEditor: View {
                 }
             }
             HStack(spacing: 8) {
-                ForEach(StickerStyle.allCases, id: \.self) { st in
-                    Chip(title: st.rawValue, active: sticker.style == st) { sticker.style = st }
-                }
-                Spacer(minLength: 0)
+                ForEach(StickerStyle.allCases, id: \.self) { st in styleChip(st) }
             }
             HStack(spacing: 8) {
                 ForEach(aligns, id: \.1) { item in

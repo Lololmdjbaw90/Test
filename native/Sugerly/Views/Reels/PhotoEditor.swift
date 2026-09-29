@@ -118,7 +118,7 @@ struct PhotoEditorView: View {
                         guard sticker.image == nil else { return }
                         checkpoint()
                         editingText = sticker
-                    }, onTapEmpty: {}, onSwipe: { _ in }, onBegin: { checkpoint() })
+                    }, onTapEmpty: {}, onSwipe: { _ in }, onBegin: { checkpoint() }, corner: 18)
                     if tool == .draw {
                         DrawCapture(strokes: $strokes, current: $drawing, color: penColor, width: penWidth, neon: penNeon) { checkpoint() }
                     }

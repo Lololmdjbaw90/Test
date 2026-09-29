@@ -136,6 +136,7 @@ enum StickerFont: String, CaseIterable {
 
 enum StickerStyle: String, CaseIterable {
     case plain = "Plain", label = "Label", outline = "Outline", glow = "Glow"
+    var title: String { self == .glow ? "Neon" : rawValue }
 }
 
 // Text (or an emoji, a sticker or a photo) on the video: where it sits (0…1
@@ -177,7 +178,23 @@ struct TextSticker: Identifiable, Equatable {
     // Text colour and label colour for the chosen style.
     var inkColor: UInt32 {
         if style == .label { return color == 0xFFFFFF || color == 0xFFD166 || color == 0xFFB3D1 ? 0x2A1620 : 0xFFFFFF }
+        if style == .glow { return 0xFFFFFF }
         return color
+    }
+
+    // Neon: a white core with the picked colour glowing round it (pink when
+    // the colour is white, so it never disappears).
+    var glowColor: UInt32 { color == 0xFFFFFF ? 0xFF4F8B : color }
+    var outlineColor: UInt32 { color == 0x2A1620 ? 0xFFFFFF : 0x2A1620 }
+
+    // How big the words are once wrapped (the same measuring the finished
+    // video uses), so the label box always fits the text.
+    func textSize(fontSize: CGFloat, maxWidth: CGFloat) -> CGSize {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = align
+        let text = NSAttributedString(string: self.text.isEmpty ? " " : self.text, attributes: [.font: uiFont(size: fontSize), .paragraphStyle: paragraph])
+        let r = text.boundingRect(with: CGSize(width: maxWidth, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin], context: nil)
+        return CGSize(width: ceil(r.width) + 2, height: ceil(r.height))
     }
 
     // The sticker drawn as a picture (for baking into the video).
@@ -209,8 +226,8 @@ struct TextSticker: Identifiable, Equatable {
         paragraph.alignment = align
         var attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor(hex: isEmoji ? 0xFFFFFF : inkColor), .paragraphStyle: paragraph]
         if style == .outline && !isEmoji {
-            attrs[.strokeColor] = UIColor(hex: color == 0x2A1620 ? 0xFFFFFF : 0x2A1620)
-            attrs[.strokeWidth] = -6.0
+            attrs[.strokeColor] = UIColor(hex: outlineColor)
+            attrs[.strokeWidth] = -8.0
         }
         let text = NSAttributedString(string: self.text, attributes: attrs)
         let textSize = text.boundingRect(with: CGSize(width: width * 0.9, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin], context: nil).size
@@ -223,12 +240,16 @@ struct TextSticker: Identifiable, Equatable {
                 UIColor(hex: color).setFill()
                 UIBezierPath(roundedRect: CGRect(origin: .zero, size: box), cornerRadius: size * 0.5).fill()
             }
+            let spot = CGRect(x: pad, y: pad * 0.6, width: textSize.width + 1, height: textSize.height + 1)
             if style == .glow && !isEmoji {
-                ctx.cgContext.setShadow(offset: .zero, blur: size * 0.5, color: UIColor(hex: color).cgColor)
+                // A wide soft glow, then a tighter bright one, then the white core.
+                ctx.cgContext.setShadow(offset: .zero, blur: size * 0.6, color: UIColor(hex: glowColor).cgColor)
+                text.draw(with: spot, options: [.usesLineFragmentOrigin], context: nil)
+                ctx.cgContext.setShadow(offset: .zero, blur: size * 0.22, color: UIColor(hex: glowColor).cgColor)
             } else if style == .plain && !isEmoji {
                 ctx.cgContext.setShadow(offset: CGSize(width: 0, height: size * 0.04), blur: size * 0.18, color: UIColor.black.withAlphaComponent(0.45).cgColor)
             }
-            text.draw(with: CGRect(x: pad, y: pad * 0.6, width: textSize.width + 1, height: textSize.height + 1), options: [.usesLineFragmentOrigin], context: nil)
+            text.draw(with: spot, options: [.usesLineFragmentOrigin], context: nil)
         }
     }
 }
