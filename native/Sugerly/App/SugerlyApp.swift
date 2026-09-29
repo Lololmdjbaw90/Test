@@ -17,6 +17,9 @@ struct SugerlyApp: App {
         }
         // Notifications + background checks have to be set up at launch.
         Alerts.shared.registerBackground()
+        // Reels start at normal speed each time the app opens (a speed picked
+        // last time shouldn't leave every video slow or fast).
+        UserDefaults.standard.set(1.0, forKey: "sugerly.reels.speed")
     }
 
     var body: some Scene {

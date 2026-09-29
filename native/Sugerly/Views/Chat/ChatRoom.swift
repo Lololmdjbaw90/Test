@@ -93,6 +93,9 @@ struct ChatView: View {
                         dismissChat()
                     } label: { Label(conversation.isGroup ? "Hide chat" : "Close DM", systemImage: "xmark.circle") }
                     if !conversation.isGroup && !otherEmail.isEmpty {
+                        Button {
+                            reporting = ReportSheet.Target(id: otherEmail, type: "user", ownerEmail: otherEmail, preview: model.name(otherEmail, otherEmail), link: "/Profile?email=\(otherEmail)")
+                        } label: { Label("Report", systemImage: "flag") }
                         let ignoring = model.me?.ignored.contains(otherEmail) ?? false
                         Button { Task { await Privacy.setIgnored(otherEmail, !ignoring, model: model) } } label: {
                             Label(ignoring ? "Stop ignoring" : "Ignore", systemImage: ignoring ? "bell.fill" : "bell.slash.fill")

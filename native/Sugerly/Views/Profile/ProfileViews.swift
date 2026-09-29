@@ -21,7 +21,9 @@ struct PersonView: View {
     var body: some View {
         Group {
             if let person {
-                ProfileContent(person: person, isMe: isMe, path: $path)
+                ProfileContent(person: person, isMe: isMe, path: $path,
+                               onReport: { reporting = ReportSheet.Target(id: person.email, type: "user", ownerEmail: person.email, preview: person.displayName, link: "/Profile?email=\(person.email)") },
+                               onBlock: { confirmBlock = true }, isBlocked: isBlocked)
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).sugarBackground()
             }
@@ -70,6 +72,11 @@ struct ProfileContent: View {
     let person: UserProfile
     let isMe: Bool
     @Binding var path: [Route]
+    // Someone else's profile: Report and Block right next to Follow, so
+    // they're easy to find (App Store rule for user content).
+    var onReport: (() -> Void)? = nil
+    var onBlock: (() -> Void)? = nil
+    var isBlocked = false
 
     @Environment(AppModel.self) private var model
     @Environment(PostsStore.self) private var store
@@ -263,6 +270,21 @@ struct ProfileContent: View {
                 .sensoryFeedback(.success, trigger: following)
                 Button { openChat() } label: { Label("Message", systemImage: "paperplane.fill") }
                     .buttonStyle(OutlineButtonStyle(fullWidth: true))
+                if onReport != nil || onBlock != nil {
+                    Menu {
+                        if let onReport { Button(action: onReport) { Label("Report", systemImage: "flag") } }
+                        if let onBlock {
+                            Button(role: .destructive, action: onBlock) { Label(isBlocked ? "Unblock" : "Block", systemImage: "hand.raised") }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis").font(.system(size: 17, weight: .bold))
+                            .frame(width: 44, height: 44)
+                            .background(Palette.surface, in: Capsule())
+                            .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
+                            .foregroundStyle(Palette.text2)
+                    }
+                    .accessibilityLabel("More: report or block")
+                }
             }
         }
     }

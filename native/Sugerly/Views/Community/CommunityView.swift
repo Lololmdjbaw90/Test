@@ -1114,6 +1114,14 @@ struct CommentRow: View {
                     if !comment.likes.isEmpty {
                         Text("\(comment.likes.count) like\(comment.likes.count == 1 ? "" : "s")").foregroundStyle(Palette.muted)
                     }
+                    // Always visible (not only on a long press), so anyone can report.
+                    if comment.authorEmail != me {
+                        Button(action: onReport) { Label("Report", systemImage: "flag") }
+                            .foregroundStyle(Palette.muted)
+                    } else {
+                        Button(role: .destructive, action: onDelete) { Label("Delete", systemImage: "trash") }
+                            .foregroundStyle(Palette.muted)
+                    }
                 }
                 .font(.jakarta(12, .bold))
                 .buttonStyle(.plain)

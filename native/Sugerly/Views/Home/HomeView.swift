@@ -595,6 +595,13 @@ struct TrackRow: View {
     var rank: Int? = nil
     var onFull: (() -> Void)? = nil
     @Environment(Player.self) private var player
+    @Environment(AppModel.self) private var model
+    @State private var reporting: ReportSheet.Target?
+
+    // Songs people uploaded (not chart previews) can be reported.
+    private var reportable: Bool {
+        !track.authorEmail.isEmpty && track.authorEmail != model.me?.email && !track.id.hasPrefix("deezer_")
+    }
 
     var body: some View {
         let current = player.isCurrent(track)
@@ -632,10 +639,22 @@ struct TrackRow: View {
                 }
                 .buttonStyle(BouncyStyle())
             }
+            if reportable {
+                Menu {
+                    Button {
+                        reporting = ReportSheet.Target(id: track.id, type: "music", ownerEmail: track.authorEmail, preview: track.title, link: "/Music")
+                    } label: { Label("Report", systemImage: "flag") }
+                } label: {
+                    Image(systemName: "ellipsis").font(.system(size: 15, weight: .bold)).foregroundStyle(Palette.muted)
+                        .frame(width: 32, height: 40).contentShape(Rectangle())
+                }
+                .accessibilityLabel("More: report")
+            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .background(current ? Theme.pink.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .sheet(item: $reporting) { target in ReportSheet(target: target) }
     }
 }
 

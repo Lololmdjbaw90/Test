@@ -563,7 +563,7 @@ struct ReelPage: View {
                            onReport: { reporting = ReportSheet.Target(id: reel.id, type: "reel", ownerEmail: reel.authorEmail, preview: reel.caption, link: "/Reels?r=\(reel.id)") },
                            onDelete: { deleteReel() },
                            onUseSound: { useSound = true })
-                .presentationDetents([.height(440), .large])
+                .presentationDetents([.height(500), .large])
                 .presentationCornerRadius(30)
         }
         .onAppear {
@@ -644,7 +644,7 @@ struct ReelPage: View {
             .task(id: active) {
                 // Slideshows move on by themselves, like on the website.
                 while active && !Task.isCancelled {
-                    try? await Task.sleep(for: .seconds(reel.slideSeconds(slide)))
+                    try? await Task.sleep(for: .seconds(reel.slideSeconds(slide) / max(0.25, playSpeed)))
                     if active && !paused {
                         if autoScroll && slide == reel.pictures.count - 1 { onNext() }
                         withAnimation(.easeInOut) { slide = (slide + 1) % reel.pictures.count }
@@ -865,6 +865,7 @@ struct ReelPage: View {
             guard active, wanted == reel.id, sound == nil, let url = URL(string: link), !link.isEmpty else { return }
             let p = AVPlayer(url: url)
             p.isMuted = muted
+            p.defaultRate = currentRate   // the song keeps pace with the video
             p.play()
             sound = p
         }
@@ -893,10 +894,15 @@ struct ReelPage: View {
         }
     }
 
+    private var currentRate: Float { Float(max(0.25, min(3, reel.speed * playSpeed))) }
+
+    // Video and its song change speed together, so they stay in sync.
     private func applySpeed() {
-        let rate = Float(max(0.25, min(3, reel.speed * playSpeed)))
+        let rate = currentRate
         video?.player.defaultRate = rate
         if video?.player.timeControlStatus == .playing { video?.player.rate = rate }
+        sound?.defaultRate = rate
+        if sound?.timeControlStatus == .playing { sound?.rate = rate }
     }
 
     private func refreshComments() async {

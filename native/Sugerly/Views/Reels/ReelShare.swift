@@ -298,15 +298,29 @@ struct ReelShareSheet: View {
                 .padding(.horizontal, 18)
             }
 
+            // Speed: plain buttons (a pop-up menu inside this sideways row
+            // didn't open reliably and its label didn't update).
+            HStack(spacing: 6) {
+                Image(systemName: "gauge.with.dots.needle.50percent").font(.system(size: 14, weight: .bold)).foregroundStyle(Palette.muted)
+                    .frame(width: 26)
+                    .accessibilityLabel("Playback speed")
+                ForEach([0.5, 1.0, 1.5, 2.0], id: \.self) { v in
+                    Button { withAnimation(.snappy) { speed = v } } label: {
+                        Text(Self.speedText(v)).font(.jakarta(14, .heavy))
+                            .foregroundStyle(speed == v ? Color.white : Palette.text)
+                            .frame(maxWidth: .infinity).frame(height: 38)
+                            .background(speed == v ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.surface), in: Capsule())
+                            .overlay(Capsule().strokeBorder(Palette.border, lineWidth: speed == v ? 0 : 1))
+                    }
+                    .buttonStyle(BouncyStyle(scale: 0.95))
+                    .accessibilityAddTraits(speed == v ? .isSelected : [])
+                }
+            }
+            .sensoryFeedback(.selection, trigger: speed)
+            .padding(.horizontal, 18)
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
-                    Menu {
-                        ForEach([0.5, 1.0, 1.5, 2.0], id: \.self) { v in
-                            Button { speed = v } label: {
-                                if speed == v { Label(Self.speedText(v), systemImage: "checkmark") } else { Text(Self.speedText(v)) }
-                            }
-                        }
-                    } label: { tile("gauge.with.dots.needle.50percent", "Speed \(Self.speedText(speed))") }
                     action(autoScroll ? "arrow.down.circle.fill" : "arrow.down.circle", autoScroll ? "Auto-scroll on" : "Auto-scroll") { autoScroll.toggle() }
                     action("eye.slash", "Clear mode") { clearMode = true; dismiss() }
                     if mine {
