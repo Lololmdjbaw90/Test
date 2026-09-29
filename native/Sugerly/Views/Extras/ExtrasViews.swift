@@ -278,6 +278,12 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-2.1", icon: "sparkles", title: "New MimiPlus & a smoother editor", date: "2026-09-29T15:00:00Z", items: [
+            "MimiPlus is all new: see yourself with the perks before you get it, pick 1 or 3 months, and see how close you are.",
+            "Trimming videos is smoother: drag the ends without jumps, slide the whole selection, and see the exact times.",
+            "The timeline has a time ruler, a clearer playhead and bars that show how long each overlay lasts.",
+            "Artists add their payout details before taking paid requests, so every payment has somewhere to go.",
+        ]),
         AppRelease(id: "ios-2.0", icon: "storefront.fill", title: "Commissions with real payments", date: "2026-09-29T12:00:00Z", items: [
             "A new Commissions: explore shops, open your own, and follow every order in My orders and My shop.",
             "Request art in a few taps, the artist accepts and sets the price, then pay by card or Apple Pay, secured by Stripe.",

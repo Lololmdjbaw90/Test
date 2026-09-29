@@ -252,6 +252,7 @@ struct CommissionsView: View {
     @State private var editing: Commission?
     @State private var selected: Commission?
     @State private var appeared = false
+    @State private var payoutsReady: Bool?
     @Namespace private var tabPill
 
     private var me: String { model.me?.email ?? "" }
@@ -474,6 +475,10 @@ struct CommissionsView: View {
 
     @ViewBuilder
     private var shopTab: some View {
+        if payoutsReady == false {
+            SetUpPayoutsNotice()
+            PayoutInfoCard { withAnimation(.snappy) { payoutsReady = true } }
+        }
         EarningsCard(orders: selling)
         let requests = selling.filter { $0.status == .requested }
         let working = selling.filter { [.accepted, .paid, .inProgress, .delivered, .refundRequested].contains($0.status) }
@@ -501,7 +506,7 @@ struct CommissionsView: View {
                 }
             }
         }
-        PayoutInfoCard()
+        if payoutsReady != false { PayoutInfoCard() }
         let done = selling.filter { $0.status == .completed }
         if !done.isEmpty {
             sectionTitle("Finished", "checkmark.seal.fill")
@@ -521,6 +526,7 @@ struct CommissionsView: View {
         let newest: (CommissionOrder, CommissionOrder) -> Bool = { $0.updated > $1.updated }
         if let docs = await bought { buying = docs.map(CommissionOrder.init).sorted(by: newest) }
         if let docs = await sold { selling = docs.map(CommissionOrder.init).sorted(by: newest) }
+        payoutsReady = await Payouts.isSetUp(model.me?.id ?? "")
         if model.me?.isAdmin == true {
             async let completed = try? FS.query("CommissionOrder", [.equals("status", "completed")], limit: 300)
             async let refunds = try? FS.query("CommissionOrder", [.equals("status", "refund_requested")], limit: 100)
@@ -697,7 +703,17 @@ struct EarningsCard: View {
 }
 
 // Where the artist wants their money (private: only them and admins).
+// Artists need payout details before they can take paid orders, so
+// Sugerly knows where to send their money.
+enum Payouts {
+    static func isSetUp(_ uid: String) async -> Bool {
+        guard !uid.isEmpty, let doc = try? await FS.get("PayoutInfo", uid) else { return false }
+        return doc.str("paypal_email").contains("@")
+    }
+}
+
 struct PayoutInfoCard: View {
+    var onSaved: (() -> Void)? = nil
     @Environment(AppModel.self) private var model
     @State private var email = ""
     @State private var name = ""
@@ -742,9 +758,38 @@ struct PayoutInfoCard: View {
             do { try await FS.update("PayoutInfo", me.id, data) } catch { try await FS.create("PayoutInfo", data, id: me.id) }
             saved = true
             model.showToast("Payout details saved", icon: "lock.fill")
+            onSaved?()
         } catch {
             model.showToast(error.localizedDescription, error: true)
         }
+    }
+}
+
+// "Set up payouts first": shown in My shop and on requests until the artist
+// has saved where Sugerly should send their money.
+struct SetUpPayoutsNotice: View {
+    var action: (() -> Void)? = nil
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "banknote.fill").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
+                .frame(width: 42, height: 42)
+                .background(LinearGradient(colors: [Color(hex: 0xFFB38A), Color(hex: 0xF0A020)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Set up payouts first").font(.jakarta(15, .heavy)).foregroundStyle(Palette.text)
+                Text("Add the PayPal email where Sugerly should send your money. You can accept paid requests once it's saved.")
+                    .font(.jakarta(12)).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                if let action {
+                    Button("Set up payouts", action: action)
+                        .buttonStyle(OutlineButtonStyle())
+                        .padding(.top, 4)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .background(Palette.warning.opacity(0.1), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.warning.opacity(0.35), lineWidth: 1))
     }
 }
 
@@ -1125,6 +1170,8 @@ struct CommissionOrderView: View {
     @State private var confirm: Confirm?
     @State private var reason = ""
     @State private var viewing: String?
+    @State private var payoutsReady: Bool?
+    @State private var settingUpPayouts = false
 
     enum Confirm: String, Identifiable { case decline, cancel, refund; var id: String { rawValue } }
 
@@ -1162,6 +1209,25 @@ struct CommissionOrderView: View {
         .refreshable { await load() }
         .task { await load() }
         .task { canPayByCard = await Payments.cardCheckoutAllowed() }
+        .task { payoutsReady = await Payouts.isSetUp(model.me?.id ?? "") }
+        .sheet(isPresented: $settingUpPayouts) {
+            NavigationStack {
+                ScrollView {
+                    PayoutInfoCard {
+                        payoutsReady = true
+                        settingUpPayouts = false
+                    }
+                    .padding(16)
+                }
+                .sugarBackground()
+                .navigationTitle("Payouts")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { settingUpPayouts = false } }
+                }
+            }
+            .presentationDetents([.medium, .large])
+        }
         // Keeps up with the other side while you're looking at it.
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
@@ -1385,9 +1451,12 @@ struct CommissionOrderView: View {
                     SugarField(placeholder: "Price", text: $quote).keyboardType(.decimalPad)
                 }
                 SugarField(placeholder: "A note for the buyer (optional): what's included, when it'll be ready…", text: $quoteNote, lines: 2...5)
+                if payoutsReady == false {
+                    SetUpPayoutsNotice(action: { settingUpPayouts = true })
+                }
                 Button { Task { await accept(o) } } label: { Label("Accept request", systemImage: "hand.thumbsup.fill") }
                     .buttonStyle(GradientButtonStyle(height: 50))
-                    .disabled(busy || (Double(quote.replacingOccurrences(of: ",", with: ".")) ?? 0) < 1)
+                    .disabled(busy || payoutsReady != true || (Double(quote.replacingOccurrences(of: ",", with: ".")) ?? 0) < 1)
                 Button { confirm = .decline } label: { Label("Decline", systemImage: "xmark") }
                     .buttonStyle(OutlineButtonStyle(height: 44, fullWidth: true))
             case .requested where isBuyer:

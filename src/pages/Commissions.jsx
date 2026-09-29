@@ -298,6 +298,7 @@ function OrderModal({ order, onClose }) {
   const [deliverNote, setDeliverNote] = useState("");
   const [stars, setStars] = useState(5);
   const [review, setReview] = useState("");
+  const [payoutsReady, setPayoutsReady] = usePayoutsReady();
   const isBuyer = order.buyer_email === user.email;
   const isArtist = order.artist_email === user.email;
   const st = ORDER_STATUS[order.status] || ORDER_STATUS.requested;
@@ -407,7 +408,8 @@ function OrderModal({ order, onClose }) {
               <input className="input" type="number" min="1" value={quote} onChange={(e) => setQuote(e.target.value)} aria-label="Price" />
             </div>
             <textarea className="input resize-none" rows={2} placeholder="A note for the buyer (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
-            <div className="flex gap-2"><button className="btn flex-1" disabled={busy} onClick={accept}><Hand className="w-4 h-4" /> Accept request</button><button className="btn-outline" onClick={() => ask("decline")}>Decline</button></div>
+            {payoutsReady === false && <><SetUpPayoutsNotice /><PayoutDetails onSaved={() => setPayoutsReady(true)} /></>}
+            <div className="flex gap-2"><button className="btn flex-1" disabled={busy || payoutsReady !== true} onClick={accept}><Hand className="w-4 h-4" /> Accept request</button><button className="btn-outline" onClick={() => ask("decline")}>Decline</button></div>
           </div>
         )}
         {order.status === "requested" && isBuyer && <button className="btn-outline w-full" onClick={() => ask("cancel")}>Cancel request</button>}
@@ -485,7 +487,35 @@ function Earnings({ orders }) {
   );
 }
 
-function PayoutDetails() {
+// Artists need payout details before they can take paid orders, so Sugerly
+// knows where to send their money. null while loading; local mode has no
+// payouts, so it's always ready there.
+function usePayoutsReady() {
+  const { user } = useAuth();
+  const db = base44.firebase?.db;
+  const [ready, setReady] = useState(db ? null : true);
+  useEffect(() => {
+    if (!db || !user?.id) return;
+    getDoc(doc(db, "PayoutInfo", user.id))
+      .then((snap) => setReady(snap.exists() && String(snap.data().paypal_email || "").includes("@")))
+      .catch(() => setReady(false));
+  }, [db, user?.id]);
+  return [ready, setReady];
+}
+
+function SetUpPayoutsNotice() {
+  return (
+    <div className="rounded-3xl p-4 flex gap-3" style={{ background: "rgb(240 160 32 / 0.1)", boxShadow: "inset 0 0 0 1px rgb(240 160 32 / 0.35)" }}>
+      <span className="w-10 h-10 rounded-xl flex items-center justify-center text-white flex-shrink-0" style={{ background: "linear-gradient(135deg,#ffb38a,#f0a020)" }}><Banknote className="w-5 h-5" /></span>
+      <div>
+        <p className="font-bold text-sm" style={{ color: "var(--text-primary)" }}>Set up payouts first</p>
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}>Add the PayPal email where Sugerly should send your money. You can accept paid requests once it's saved.</p>
+      </div>
+    </div>
+  );
+}
+
+function PayoutDetails({ onSaved }) {
   const { user } = useAuth();
   const [form, setForm] = useState({ paypal_email: "", full_name: "" });
   const [saving, setSaving] = useState(false);
@@ -500,6 +530,7 @@ function PayoutDetails() {
     try {
       await setDoc(doc(db, "PayoutInfo", user.id), { paypal_email: form.paypal_email.trim().toLowerCase(), full_name: form.full_name.trim(), email: user.email, updated_date: new Date().toISOString() }, { merge: true });
       toast.success("Payout details saved");
+      onSaved?.();
     } catch (e) { toast.error(e?.message || "Could not save."); }
     setSaving(false);
   };
@@ -571,6 +602,7 @@ export default function CommissionsPage() {
   const buying = useMemo(() => [...buyingRaw].sort(byNewest), [buyingRaw]);
   const selling = useMemo(() => [...sellingRaw].sort(byNewest), [sellingRaw]);
   const [loose, setLoose] = useState(null);
+  const [payoutsReady, setPayoutsReady] = usePayoutsReady();
   const orderId = params.get("order");
   const order = buying.find((o) => o.id === orderId) || selling.find((o) => o.id === orderId) || (loose?.id === orderId ? loose : null);
   useEffect(() => {
@@ -651,12 +683,13 @@ export default function CommissionsPage() {
       {tab === "shop" && (
         <div className="grid lg:grid-cols-2 gap-5 items-start">
           <div className="space-y-5">
+            {payoutsReady === false && <><SetUpPayoutsNotice /><PayoutDetails onSaved={() => setPayoutsReady(true)} /></>}
             <Earnings orders={selling} />
             {selling.filter((o) => o.status === "requested").length > 0 && <div className="space-y-2"><p className="label">New requests</p>{selling.filter((o) => o.status === "requested").map((o) => <OrderRow key={o.id} order={o} asBuyer={false} onOpen={() => openOrder(o.id)} />)}</div>}
             {selling.filter((o) => ["accepted", "paid", "in_progress", "delivered", "refund_requested"].includes(o.status)).length > 0 && (
               <div className="space-y-2"><p className="label">Your work</p>{selling.filter((o) => ["accepted", "paid", "in_progress", "delivered", "refund_requested"].includes(o.status)).map((o) => <OrderRow key={o.id} order={o} asBuyer={false} onOpen={() => openOrder(o.id)} />)}</div>
             )}
-            <PayoutDetails />
+            {payoutsReady !== false && <PayoutDetails />}
             {isAdmin && <AdminPayouts onOpen={openOrder} />}
           </div>
           <div className="space-y-3">

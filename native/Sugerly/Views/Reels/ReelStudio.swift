@@ -567,7 +567,7 @@ struct ReelStudioView: View {
             .padding(.horizontal, 16)
 
             toolPanel
-                .frame(height: tool == .timeline ? 236 : 118)
+                .frame(height: tool == .timeline ? 256 : tool == .trim ? 132 : 118)
                 .animation(.snappy, value: tool)
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -639,7 +639,12 @@ struct ReelStudioView: View {
         switch tool {
         case .trim:
             if asset != nil {
-                TrimBar(thumbs: thumbs, duration: duration, start: $trimStart, end: $trimEnd) { player.seek(to: CMTime(seconds: trimStart, preferredTimescale: 600)) }
+                TrimBar(thumbs: thumbs, duration: duration, start: $trimStart, end: $trimEnd,
+                        onSeek: { t in player.seek(to: CMTime(seconds: t, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) },
+                        onScrub: { began in
+                            if !began { seek(to: 0) }
+                            scrubbing(began)
+                        })
                     .padding(.horizontal, 16)
             }
         case .timeline:
@@ -1566,58 +1571,154 @@ struct VideoPlayerLayer: UIViewRepresentable {
 }
 
 // Trim: drag the two handles over the film strip.
+// Trim a video: drag the gradient ends to cut the start or end, or drag the
+// middle to slide the whole selection. The live times show above.
 struct TrimBar: View {
     let thumbs: [UIImage]
     let duration: Double
     @Binding var start: Double
     @Binding var end: Double
-    var onChange: () -> Void
+    var onSeek: (Double) -> Void
+    var onScrub: (Bool) -> Void = { _ in }
+
+    private enum Part { case start, end, window }
+    @State private var dragging: Part?
+    @State private var base: (start: Double, end: Double) = (0, 0)
+    @State private var atLimit = false
+
+    private let height: CGFloat = 58
+    private let tab: CGFloat = 20
+    private let minLength = 1.0
+    private let maxLength = 60.0
 
     var body: some View {
-        VStack(spacing: 6) {
-            GeometryReader { geo in
-                let w = geo.size.width
-                let x0 = duration > 0 ? CGFloat(start / duration) * w : 0
-                let x1 = duration > 0 ? CGFloat(end / duration) * w : w
-                ZStack(alignment: .leading) {
-                    HStack(spacing: 0) {
-                        ForEach(thumbs.indices, id: \.self) { i in
-                            Image(uiImage: thumbs[i]).resizable().scaledToFill().frame(width: w / CGFloat(max(1, thumbs.count)), height: 54).clipped()
-                        }
-                    }
-                    .frame(width: w, height: 54, alignment: .leading)
-                    .background(.white.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    Rectangle().fill(.black.opacity(0.55)).frame(width: max(0, x0), height: 54)
-                    Rectangle().fill(.black.opacity(0.55)).frame(width: max(0, w - x1), height: 54).offset(x: x1)
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Theme.gradient, lineWidth: 3)
-                        .frame(width: max(20, x1 - x0), height: 54)
-                        .offset(x: x0)
-                        .allowsHitTesting(false)
-                    handle.offset(x: x0 - 9)
-                        .gesture(DragGesture().onChanged { v in
-                            let t = Double(max(0, min(v.location.x, x1 - 20)) / w) * duration
-                            start = max(0, min(t, end - 1))
-                            onChange()
-                        })
-                    handle.offset(x: x1 - 9)
-                        .gesture(DragGesture().onChanged { v in
-                            let t = Double(max(x0 + 20, min(v.location.x, w)) / w) * duration
-                            end = min(duration, max(t, start + 1), start + 60)
-                            onChange()
-                        })
-                }
+        VStack(spacing: 10) {
+            HStack(spacing: 8) {
+                timeTag("Start", start, active: dragging == .start || dragging == .window)
+                Spacer(minLength: 0)
+                Label(ReelTimeline.seconds(((end - start) * 10).rounded() / 10), systemImage: "scissors")
+                    .font(.jakarta(13, .heavy)).foregroundStyle(.white).monospacedDigit()
+                    .padding(.horizontal, 12).frame(height: 30)
+                    .background(Theme.gradient, in: Capsule())
+                    .contentTransition(.numericText())
+                Spacer(minLength: 0)
+                timeTag("End", end, active: dragging == .end || dragging == .window)
             }
-            .frame(height: 54)
-            Text(String(format: "%.1fs selected", end - start)).font(.jakarta(12, .bold)).foregroundStyle(.white.opacity(0.8))
+            GeometryReader { geo in
+                let w = max(1, geo.size.width)
+                let x0 = x(start, w)
+                let boxWidth = max(tab * 2 + 6, x(end, w) - x0)
+                ZStack(alignment: .leading) {
+                    strip(w)
+                    Rectangle().fill(.black.opacity(0.62)).frame(width: max(0, x0), height: height)
+                    Rectangle().fill(.black.opacity(0.62)).frame(width: max(0, w - x0 - boxWidth), height: height).offset(x: x0 + boxWidth)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Theme.gradient, lineWidth: 3.5)
+                        .frame(width: boxWidth, height: height)
+                        .contentShape(Rectangle())
+                        .offset(x: x0)
+                        .gesture(drag(.window, w))
+                    handle(left: true).offset(x: x0).gesture(drag(.start, w))
+                    handle(left: false).offset(x: x0 + boxWidth - tab).gesture(drag(.end, w))
+                }
+                .frame(width: w, height: height, alignment: .leading)
+            }
+            .frame(height: height)
+            Text(hint).font(.jakarta(11, .semibold)).foregroundStyle(.white.opacity(0.6))
+                .lineLimit(1).minimumScaleFactor(0.8)
         }
+        .sensoryFeedback(.selection, trigger: dragging) { _, new in new != nil }
+        .sensoryFeedback(.impact(weight: .light), trigger: atLimit) { old, new in !old && new }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Trim, \(ReelTimeline.seconds(end - start)) selected")
     }
 
-    private var handle: some View {
-        Capsule().fill(.white).frame(width: 18, height: 62).shadow(radius: 4)
-            .overlay(Capsule().fill(Theme.pink).frame(width: 4, height: 24))
+    private var hint: String {
+        if end - start >= maxLength - 0.05 { return "Reels can be up to 60 seconds" }
+        return dragging == nil ? "Drag the ends to trim · drag the middle to move" : "Release to preview"
+    }
+
+    private func x(_ t: Double, _ w: CGFloat) -> CGFloat {
+        duration > 0 ? CGFloat(min(max(0, t), duration) / duration) * w : 0
+    }
+
+    private func strip(_ w: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            ForEach(thumbs.indices, id: \.self) { i in
+                Image(uiImage: thumbs[i]).resizable().scaledToFill()
+                    .frame(width: w / CGFloat(max(1, thumbs.count)), height: height).clipped()
+            }
+        }
+        .frame(width: w, height: height, alignment: .leading)
+        .background(.white.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func handle(left: Bool) -> some View {
+        UnevenRoundedRectangle(topLeadingRadius: left ? 12 : 0, bottomLeadingRadius: left ? 12 : 0,
+                               bottomTrailingRadius: left ? 0 : 12, topTrailingRadius: left ? 0 : 12, style: .continuous)
+            .fill(Theme.gradient)
+            .frame(width: tab, height: height)
+            .overlay {
+                Image(systemName: left ? "chevron.compact.left" : "chevron.compact.right")
+                    .font(.system(size: 18, weight: .heavy)).foregroundStyle(.white)
+            }
+            .scaleEffect(y: dragging == (left ? Part.start : Part.end) ? 1.06 : 1)
+            .animation(.snappy(duration: 0.2), value: dragging)
             .contentShape(Rectangle().inset(by: -12))
+            .accessibilityHidden(true)
+    }
+
+    private func timeTag(_ title: String, _ t: Double, active: Bool) -> some View {
+        HStack(spacing: 5) {
+            Text(title).font(.jakarta(10, .heavy)).opacity(0.75)
+            Text(ReelTimeline.clock(t)).font(.jakarta(12, .heavy)).monospacedDigit()
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 10).frame(height: 28)
+        .background(active ? AnyShapeStyle(Theme.main.opacity(0.55)) : AnyShapeStyle(Color.white.opacity(0.12)), in: Capsule())
+        .animation(.snappy(duration: 0.2), value: active)
+    }
+
+    // Uses how far the finger moved (not where it is), so nothing jumps
+    // when a drag starts.
+    private func drag(_ part: Part, _ w: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: part == .window ? 4 : 0)
+            .onChanged { v in
+                if dragging == nil {
+                    dragging = part
+                    base = (start, end)
+                    onScrub(true)
+                }
+                let dt = Double(v.translation.width / w) * duration
+                switch part {
+                case .start:
+                    let lo = max(0, base.end - maxLength), hi = base.end - minLength
+                    let raw = base.start + dt
+                    start = min(max(raw, lo), hi)
+                    atLimit = raw < lo || raw > hi
+                    onSeek(start)
+                case .end:
+                    let lo = base.start + minLength, hi = min(duration, base.start + maxLength)
+                    let raw = base.end + dt
+                    end = min(max(raw, lo), hi)
+                    atLimit = raw < lo || raw > hi
+                    onSeek(end)
+                case .window:
+                    let span = base.end - base.start
+                    let raw = base.start + dt
+                    let s = min(max(0, raw), max(0, duration - span))
+                    start = s
+                    end = s + span
+                    atLimit = raw < 0 || raw > duration - span
+                    onSeek(s)
+                }
+            }
+            .onEnded { _ in
+                dragging = nil
+                atLimit = false
+                onScrub(false)
+            }
     }
 }
 

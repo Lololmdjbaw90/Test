@@ -126,6 +126,19 @@ enum NitroStyle {
     static let gradient = LinearGradient(colors: [Color(hex: 0x8B5CF6), Color(hex: 0xC084FC), Color(hex: 0xEE8FAE)], startPoint: .topLeading, endPoint: .bottomTrailing)
     static let cost = 800
     static let xpBoostCost = 150
+
+    // Same plans as the website (src/components/profile/NitroShop.jsx).
+    struct Plan: Identifiable {
+        let id: String
+        let days: Int
+        let cost: Int
+        let title: String
+        let note: String
+    }
+    static let plans = [
+        Plan(id: "month", days: 30, cost: 800, title: "1 month", note: "30 days"),
+        Plan(id: "season", days: 90, cost: 2000, title: "3 months", note: "Save 400 coins"),
+    ]
 }
 
 // MARK: - Profile colours + effects
@@ -363,36 +376,68 @@ struct BannerPatternView: View {
 
 // MARK: - Nitro shop (a sheet, not a page)
 
+// A MimiCoin: a little gold coin with a sparkle (coins are just for fun,
+// so no money signs).
+struct CoinIcon: View {
+    var size: CGFloat = 18
+    var body: some View {
+        Image(systemName: "sparkle")
+            .font(.system(size: size * 0.5, weight: .heavy))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(LinearGradient(colors: [Color(hex: 0xFFD978), Color(hex: 0xF0A020)], startPoint: .top, endPoint: .bottom), in: Circle())
+            .overlay(Circle().strokeBorder(.white.opacity(0.55), lineWidth: max(1, size * 0.06)))
+            .accessibilityHidden(true)
+    }
+}
+
+// MimiPlus: premium looks for your profile, paid with coins you earn.
 struct NitroShopView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var busy: String?
     @State private var burst = 0
-    @State private var wiggle = false
+    @State private var plan = NitroStyle.plans[0].id
+    @State private var editing = false
 
-    private var coins: Int { model.me?.coins ?? 0 }
-    private var nitro: Bool { model.me?.isNitro ?? false }
+    private var me: UserProfile? { model.me }
+    private var coins: Int { me?.coins ?? 0 }
+    private var nitro: Bool { me?.isNitro ?? false }
+    private var chosen: NitroStyle.Plan { NitroStyle.plans.first { $0.id == plan } ?? NitroStyle.plans[0] }
 
-    private let perks: [(String, String)] = [
-        ("photo.stack.fill", "GIF profile picture and banner"),
-        ("textformat", "Premium name styles: Gold, Aurora, Neon"),
-        ("circle.hexagongrid.fill", "Animated avatar ring and MimiPlus badge"),
-        ("sparkles", "Profile effects: sparkles, hearts, snow"),
+    private struct Perk {
+        let icon: String
+        let title: String
+        let text: String
+        let colors: [UInt32]
+    }
+    private let perks: [Perk] = [
+        Perk(icon: "photo.stack.fill", title: "GIF picture & banner", text: "Bring your profile to life", colors: [0xEE8FAE, 0xD9577F]),
+        Perk(icon: "textformat", title: "Name styles", text: "Gold, Aurora, Neon, Rainbow and Sunset", colors: [0xFFD166, 0xF0A020]),
+        Perk(icon: "sparkles", title: "Profile effects", text: "12 floating effects for your banner", colors: [0xB19CFF, 0x8B5CF6]),
+        Perk(icon: "heart.circle.fill", title: "Premium frames", text: "Rainbow, Hearts and Stars", colors: [0x7CBEFF, 0x2F80E0]),
+        Perk(icon: "circle.dashed.inset.filled", title: "Candy ring", text: "An animated ring around your picture", colors: [0x5EC8B8, 0x2E9E8F]),
+        Perk(icon: "checkmark.seal.fill", title: "MimiPlus badge", text: "Next to your name on your profile", colors: [0xF472B6, 0xC084FC]),
     ]
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 18) {
                     hero
-                    HStack(spacing: 12) {
+                    if nitro { activeCard }
+                    plans
+                    perksGrid
+                    HStack(alignment: .top, spacing: 12) {
                         balance
                         boost
                     }
                     earn
                 }
                 .padding(16)
-                .frame(maxWidth: 640)
+                .padding(.bottom, 20)
+                .frame(maxWidth: 720)
                 .frame(maxWidth: .infinity)
             }
             .sugarBackground()
@@ -402,87 +447,224 @@ struct NitroShopView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { dismiss() } label: { Image(systemName: "xmark").font(.system(size: 15, weight: .bold)) }
+                        .accessibilityLabel("Close")
                 }
             }
+            .sheet(isPresented: $editing) { EditProfileView() }
         }
         .presentationCornerRadius(34)
     }
 
+    // MARK: hero with a live preview of your profile
+
     private var hero: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 14) {
-                Image(systemName: "sparkles").font(.system(size: 28, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 60, height: 60)
-                    .background(.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .rotationEffect(.degrees(wiggle ? 6 : -6))
-                    .onAppear { withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) { wiggle = true } }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(nitro ? "MimiPlus is active" : "MimiPlus").font(.display(28)).foregroundStyle(.white)
-                    Text(renewText).font(.jakarta(13, .semibold)).foregroundStyle(.white.opacity(0.9))
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("MimiPlus").font(.display(36)).foregroundStyle(.white)
+                    Text(statusText).font(.jakarta(13, .semibold)).foregroundStyle(.white.opacity(0.92))
                 }
+                Spacer(minLength: 8)
+                Label(nitro ? "Active" : "Paid with coins", systemImage: nitro ? "checkmark.circle.fill" : "sparkle")
+                    .font(.jakarta(12, .heavy)).foregroundStyle(.white)
+                    .padding(.horizontal, 12).frame(height: 30)
+                    .background(.white.opacity(0.22), in: Capsule())
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.35), lineWidth: 1))
             }
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(perks.indices, id: \.self) { i in
-                    Label(perks[i].1, systemImage: perks[i].0).font(.jakarta(13, .semibold)).foregroundStyle(.white)
-                }
-            }
-            Button { buyNitro() } label: {
-                HStack(spacing: 8) {
-                    if busy == "nitro" { ProgressView().tint(Color(hex: 0x7C3AED)) } else {
-                        Image(systemName: "dollarsign.circle.fill")
-                        Text("\(nitro ? "Extend" : "Get") · \(NitroStyle.cost) coins")
-                    }
-                }
-                .font(.jakarta(15, .heavy))
-                .foregroundStyle(Color(hex: 0x7C3AED))
-                .frame(maxWidth: .infinity).frame(height: 50)
-                .background(.white, in: Capsule())
-            }
-            .buttonStyle(BouncyStyle())
-            .disabled(busy != nil)
+            preview
         }
         .padding(20)
         .background {
             ZStack {
                 NitroStyle.gradient
-                Circle().fill(.white.opacity(0.22)).frame(width: 220).blur(radius: 40).offset(x: 140, y: -90)
+                Circle().fill(.white.opacity(0.22)).frame(width: 240).blur(radius: 50).offset(x: 150, y: -120)
+                Circle().fill(Color(hex: 0x7CBEFF).opacity(0.3)).frame(width: 200).blur(radius: 60).offset(x: -140, y: 140)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-        .shadow(color: Color(hex: 0x8B5CF6).opacity(0.3), radius: 20, y: 10)
+        .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+        .shadow(color: Color(hex: 0x8B5CF6).opacity(0.3), radius: 22, y: 12)
     }
 
-    private var renewText: String {
-        if nitro, let until = Dates.parse(model.me?.nitroUntil ?? "") {
-            return "Active until \(until.formatted(date: .abbreviated, time: .omitted))"
+    // You, with the perks switched on (your own style if you have one).
+    private var preview: some View {
+        let name = me?.displayName ?? "You"
+        let style = NameStyles.isPremium(me?.nameStyle ?? "") ? (me?.nameStyle ?? "aurora") : "aurora"
+        let effect = (me?.profileEffect ?? "").isEmpty ? "sparkles" : (me?.profileEffect ?? "sparkles")
+        return VStack(spacing: 0) {
+            ZStack {
+                NitroStyle.gradient.opacity(0.85)
+                ProfileEffectLayer(effect: effect, color: me?.effectColor ?? "", amount: me?.effectAmount ?? 0)
+            }
+            .frame(height: 78)
+            .clipped()
+            VStack(spacing: 8) {
+                Avatar(url: me?.picture ?? "", name: name, size: 70, nitro: true)
+                    .padding(4)
+                    .background(Palette.surface, in: Circle())
+                    .offset(y: -38)
+                    .padding(.bottom, -38)
+                HStack(spacing: 6) {
+                    NameText(name: name, style: style, size: 24, display: true, nitro: true, tint: me?.nameColor ?? "")
+                        .lineLimit(1)
+                    NitroBadge(compact: true)
+                }
+                Text(nitro ? "Your MimiPlus look" : "This is you with MimiPlus").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
+            }
+            .padding(.horizontal, 14)
+            .padding(.bottom, 16)
         }
-        return "30 days of premium perks, paid with coins"
+        .frame(maxWidth: .infinity)
+        .background(Palette.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
+
+    private var statusText: String {
+        if nitro, let until = Dates.parse(me?.nitroUntil ?? "") {
+            let days = max(0, Int(ceil(until.timeIntervalSinceNow / 86400)))
+            return "\(days) day\(days == 1 ? "" : "s") left · until \(until.formatted(date: .abbreviated, time: .omitted))"
+        }
+        return "Premium looks for your profile"
+    }
+
+    private var activeCard: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "paintbrush.pointed.fill").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                .frame(width: 42, height: 42)
+                .background(NitroStyle.gradient, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Use your perks").font(.jakarta(15, .heavy)).foregroundStyle(Palette.text)
+                Text("Pick a GIF picture, name style, frame or effect").font(.jakarta(12)).foregroundStyle(Palette.muted)
+            }
+            Spacer(minLength: 8)
+            Button("Customise") { editing = true }
+                .buttonStyle(OutlineButtonStyle())
+        }
+        .sugarCard(radius: 24, padding: 14)
+    }
+
+    // MARK: plans
+
+    private var plans: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(nitro ? "Add more time" : "Choose your plan").font(.jakarta(16, .heavy)).foregroundStyle(Palette.text)
+            HStack(spacing: 10) {
+                ForEach(NitroStyle.plans) { p in planCard(p) }
+            }
+            if coins < chosen.cost { progress }
+            Button { buyNitro() } label: {
+                HStack(spacing: 8) {
+                    if busy == "nitro" { ProgressView().tint(.white) } else if coins < chosen.cost {
+                        Text("Earn \(chosen.cost - coins) more coins")
+                    } else {
+                        CoinIcon(size: 20)
+                        Text("\(nitro ? "Add \(chosen.title)" : "Get MimiPlus") · \(chosen.cost)")
+                    }
+                }
+            }
+            .buttonStyle(GradientButtonStyle(height: 54))
+            .disabled(busy != nil || coins < chosen.cost)
+            .opacity(coins < chosen.cost ? 0.6 : 1)
+            Text("Paid with MimiCoins you earn in Sugerly. Coins can't be bought, and MimiPlus never renews by itself.")
+                .font(.jakarta(11)).foregroundStyle(Palette.muted)
+        }
+        .sugarCard(radius: 26, padding: 16)
+    }
+
+    private func planCard(_ p: NitroStyle.Plan) -> some View {
+        let on = plan == p.id
+        return Button { withAnimation(.snappy) { plan = p.id } } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(p.title).font(.jakarta(15, .heavy))
+                    Spacer(minLength: 4)
+                    Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(on ? Theme.main : Palette.muted)
+                }
+                HStack(spacing: 6) {
+                    CoinIcon(size: 18)
+                    Text("\(p.cost)").font(.display(26)).monospacedDigit()
+                }
+                Text(p.note).font(.jakarta(12, .bold)).foregroundStyle(p.days > 30 ? Palette.success : Palette.muted)
+            }
+            .foregroundStyle(Palette.text)
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(on ? Theme.soft : Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(on ? Theme.main : Palette.border, lineWidth: on ? 2 : 1))
+        }
+        .buttonStyle(BouncyStyle(scale: 0.97))
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    private var progress: some View {
+        let part = min(1, Double(coins) / Double(max(1, chosen.cost)))
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("\(coins) / \(chosen.cost) coins").font(.jakarta(13, .heavy)).foregroundStyle(Palette.text).monospacedDigit()
+                Spacer()
+                Text("\(chosen.cost - coins) to go").font(.jakarta(12, .bold)).foregroundStyle(Palette.muted)
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Palette.surface2)
+                    Capsule().fill(NitroStyle.gradient).frame(width: max(10, geo.size.width * part))
+                }
+            }
+            .frame(height: 10)
+        }
+    }
+
+    // MARK: perks
+
+    private var perksGrid: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Everything in MimiPlus").font(.jakarta(12, .heavy)).tracking(0.8).foregroundStyle(Palette.muted)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: sizeClass == .regular ? 3 : 2), spacing: 10) {
+                ForEach(perks.indices, id: \.self) { i in perkTile(perks[i]) }
+            }
+        }
+    }
+
+    private func perkTile(_ p: Perk) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: p.icon).font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                .frame(width: 40, height: 40)
+                .background(LinearGradient(colors: p.colors.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            Text(p.title).font(.jakarta(14, .heavy)).foregroundStyle(Palette.text)
+            Text(p.text).font(.jakarta(12)).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, minHeight: 124, alignment: .topLeading)
+        .sugarCard(radius: 22, padding: 14)
+    }
+
+    // MARK: balance, boost, earning
 
     private var balance: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: "dollarsign.circle.fill").font(.system(size: 20, weight: .bold)).foregroundStyle(.white)
-                .frame(width: 44, height: 44)
-                .background(LinearGradient(colors: [Color(hex: 0xFFD166), Color(hex: 0xF0A020)], startPoint: .top, endPoint: .bottom), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            CoinIcon(size: 42)
             Text("\(coins)").font(.display(26)).foregroundStyle(Palette.text).monospacedDigit().contentTransition(.numericText())
             Text("MimiCoins").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
         .sugarCard(radius: 24, padding: 16)
     }
 
     private var boost: some View {
         VStack(alignment: .leading, spacing: 8) {
             Image(systemName: "bolt.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
-                .frame(width: 44, height: 44).background(Theme.gradient, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .frame(width: 42, height: 42).background(Theme.gradient, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             Text("XP boost").font(.jakarta(15, .heavy)).foregroundStyle(Palette.text)
-            Button { buy("xp", NitroStyle.xpBoostCost, ["xp": (model.me?.xp ?? 0) + 100], "+100 XP") } label: {
-                if busy == "xp" { ProgressView() } else { Text("+100 XP · \(NitroStyle.xpBoostCost)") }
+            Button { buy("xp", NitroStyle.xpBoostCost, ["xp": (me?.xp ?? 0) + 100], "+100 XP") } label: {
+                if busy == "xp" { ProgressView() } else {
+                    HStack(spacing: 5) { Text("+100 XP ·"); CoinIcon(size: 14); Text("\(NitroStyle.xpBoostCost)") }
+                }
             }
             .buttonStyle(OutlineButtonStyle(fullWidth: true))
             .disabled(busy != nil)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
         .sugarCard(radius: 24, padding: 16)
     }
 
@@ -507,20 +689,24 @@ struct NitroShopView: View {
 
     private let earnRows: [(String, String, String)] = [
         ("gift.fill", "Daily reward", "25–55 coins, bigger with streaks"),
+        ("person.2.fill", "Invite friends", "+400 coins when a friend joins with your code"),
         ("square.and.pencil", "Post to Community", "+5 coins per post"),
         ("checkmark.seal.fill", "Finish onboarding", "+50 coins once"),
     ]
 
+    // MARK: buying
+
     private func buyNitro() {
         let now = Date()
-        let from = (model.me?.isNitro ?? false) ? (Dates.parse(model.me?.nitroUntil ?? "") ?? now) : now
-        let until = Dates.iso(from.addingTimeInterval(30 * 86400))
-        buy("nitro", NitroStyle.cost, ["nitro_active": true, "nitro_until": until], nitro ? "MimiPlus extended by 30 days" : "Welcome to MimiPlus")
+        let from = nitro ? max(now, Dates.parse(me?.nitroUntil ?? "") ?? now) : now
+        let until = Dates.iso(from.addingTimeInterval(Double(chosen.days) * 86400))
+        buy("nitro", chosen.cost, ["nitro_active": true, "nitro_until": until],
+            nitro ? "MimiPlus extended by \(chosen.days) days" : "Welcome to MimiPlus")
     }
 
     private func buy(_ id: String, _ cost: Int, _ patch: Doc, _ message: String) {
         guard coins >= cost else {
-            model.showToast("You need \(cost - coins) more coins", icon: "dollarsign.circle", error: true)
+            model.showToast("You need \(cost - coins) more coins", icon: "sparkle", error: true)
             return
         }
         busy = id

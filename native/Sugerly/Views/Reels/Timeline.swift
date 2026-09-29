@@ -30,8 +30,9 @@ struct ReelTimeline: View {
     @State private var dragBase: (start: Double, end: Double)?
     @State private var scrubbing = false
 
-    private let trackHeight: CGFloat = 42
-    private let laneHeight: CGFloat = 26
+    private let trackHeight: CGFloat = 46
+    private let laneHeight: CGFloat = 28
+    private let rulerHeight: CGFloat = 18
     private var isSlideshow: Bool { !slides.isEmpty }
     private var slideBounds: [Double] { Self.bounds(slideSeconds) }
     private var shortest: Double { isSlideshow ? 0.5 : 0.3 }
@@ -43,6 +44,7 @@ struct ReelTimeline: View {
                 let w = max(1, geo.size.width)
                 ZStack(alignment: .topLeading) {
                     VStack(alignment: .leading, spacing: 6) {
+                        ruler(w)
                         mainTrack(w)
                         lanes(w)
                     }
@@ -68,10 +70,11 @@ struct ReelTimeline: View {
             }
             .buttonStyle(BouncyStyle(scale: 0.88))
             .accessibilityLabel(playing ? "Pause" : "Play")
-            Text("\(Self.clock(playhead)) / \(Self.clock(length))")
-                .font(.jakarta(12, .bold)).monospacedDigit()
-                .foregroundStyle(.white.opacity(0.85))
+            (Text(Self.clock(playhead)).foregroundStyle(.white) + Text(" / \(Self.clock(length))").foregroundStyle(.white.opacity(0.55)))
+                .font(.jakarta(12, .heavy)).monospacedDigit()
                 .lineLimit(1).minimumScaleFactor(0.7)
+                .padding(.horizontal, 10).frame(height: 30)
+                .background(.white.opacity(0.1), in: Capsule())
             Spacer(minLength: 0)
             Button(action: onAddText) { addLabel("Text", "textformat") }
                 .buttonStyle(BouncyStyle(scale: 0.9))
@@ -92,6 +95,44 @@ struct ReelTimeline: View {
         .frame(height: 30)
         .background(.white.opacity(0.14), in: Capsule())
         .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+    }
+
+    // MARK: time ruler
+
+    // A tick every step, labelled, with a smaller tick in between.
+    private var rulerStep: Double {
+        let raw = max(0.1, length) / 6
+        return [0.5, 1, 2, 5, 10, 15, 30, 60].first { $0 >= raw } ?? 60
+    }
+
+    private func ruler(_ w: CGFloat) -> some View {
+        let step = rulerStep
+        let total = max(0.1, length)
+        return Canvas { ctx, size in
+            var t = 0.0
+            while t <= total + 0.0001 {
+                let x = CGFloat(t / total) * size.width
+                var tick = Path()
+                tick.move(to: CGPoint(x: x, y: size.height - 5))
+                tick.addLine(to: CGPoint(x: x, y: size.height))
+                ctx.stroke(tick, with: .color(.white.opacity(0.5)), lineWidth: 1)
+                if t + step / 2 < total {
+                    let hx = CGFloat((t + step / 2) / total) * size.width
+                    var half = Path()
+                    half.move(to: CGPoint(x: hx, y: size.height - 3))
+                    half.addLine(to: CGPoint(x: hx, y: size.height))
+                    ctx.stroke(half, with: .color(.white.opacity(0.25)), lineWidth: 1)
+                }
+                let label = ctx.resolve(Text(Self.seconds(t)).font(.jakarta(9, .bold)).foregroundStyle(.white.opacity(0.6)))
+                let anchor: UnitPoint = t == 0 ? .topLeading : (x > size.width - 14 ? .topTrailing : .top)
+                ctx.draw(label, at: CGPoint(x: x, y: 0), anchor: anchor)
+                t += step
+            }
+        }
+        .frame(width: w, height: rulerHeight)
+        .contentShape(Rectangle())
+        .gesture(scrub(w, minimum: 0))
+        .accessibilityHidden(true)
     }
 
     // MARK: main track (film strip or slides)
@@ -135,6 +176,7 @@ struct ReelTimeline: View {
             .frame(width: w, height: trackHeight, alignment: .leading)
             .background(.white.opacity(0.1))
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.white.opacity(0.14), lineWidth: 1))
             .contentShape(Rectangle())
             .gesture(scrub(w, minimum: 0))
         }
@@ -157,11 +199,15 @@ struct ReelTimeline: View {
 
     private func playheadLine(_ w: CGFloat, height: CGFloat) -> some View {
         let x = CGFloat(min(max(0, playhead), length) / max(0.1, length)) * w
-        return Capsule().fill(.white)
-            .frame(width: 3, height: height + 6)
-            .shadow(color: .black.opacity(0.5), radius: 2)
-            .offset(x: x - 1.5, y: -3)
-            .allowsHitTesting(false)
+        return VStack(spacing: -1) {
+            Circle().fill(.white).frame(width: 12, height: 12)
+                .overlay(Circle().fill(Theme.main).frame(width: 5, height: 5))
+            Capsule().fill(.white).frame(width: 2.5)
+        }
+        .frame(width: 12, height: height + 4)
+        .shadow(color: .black.opacity(0.45), radius: 2)
+        .offset(x: x - 6, y: -2)
+        .allowsHitTesting(false)
     }
 
     // MARK: overlay lanes
@@ -170,10 +216,11 @@ struct ReelTimeline: View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 5) {
                 if stickers.isEmpty {
-                    Text("Add text, stickers or photos — each one gets a bar here")
-                        .font(.jakarta(11, .semibold)).foregroundStyle(.white.opacity(0.55))
-                        .frame(width: w, height: laneHeight)
-                        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    Label("Add text, stickers or photos — each one gets a bar here", systemImage: "plus.circle")
+                        .font(.jakarta(11, .semibold)).foregroundStyle(.white.opacity(0.6))
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .frame(width: w, height: laneHeight + 6)
+                        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(.white.opacity(0.22), style: StrokeStyle(lineWidth: 1, dash: [4, 4])))
                 }
                 ForEach(stickers) { sticker in
                     lane(sticker, w)
@@ -194,7 +241,7 @@ struct ReelTimeline: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(0.06))
                 .frame(width: w, height: laneHeight)
                 .onTapGesture { selected = nil }
-            bar(sticker, selected: isSelected)
+            bar(sticker, selected: isSelected, width: min(w, x1) - x0, span: end - start)
                 .frame(width: min(w, x1) - x0, height: laneHeight)
                 .offset(x: x0)
                 .onTapGesture {
@@ -203,29 +250,36 @@ struct ReelTimeline: View {
                 }
                 .highPriorityGesture(moveGesture(sticker.id, w))
             if isSelected {
-                handle.offset(x: x0 - 8).highPriorityGesture(edgeGesture(sticker.id, w, left: true))
-                handle.offset(x: min(w, x1) - 8).highPriorityGesture(edgeGesture(sticker.id, w, left: false))
+                handle(left: true).offset(x: x0 - 7).highPriorityGesture(edgeGesture(sticker.id, w, left: true))
+                handle(left: false).offset(x: min(w, x1) - 7).highPriorityGesture(edgeGesture(sticker.id, w, left: false))
             }
         }
         .frame(width: w, height: laneHeight, alignment: .leading)
     }
 
-    private func bar(_ s: TextSticker, selected: Bool) -> some View {
+    private func bar(_ s: TextSticker, selected: Bool, width: CGFloat, span: Double) -> some View {
         let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
         return shape.fill(barStyle(for: s))
             .overlay(alignment: .leading) {
                 HStack(spacing: 5) {
                     if let image = s.image {
                         Image(uiImage: image).resizable().scaledToFill()
-                            .frame(width: 18, height: 18)
-                            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                            .frame(width: 20, height: 20)
+                            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                     } else {
                         Image(systemName: s.isEmoji ? "face.smiling" : "textformat").font(.system(size: 10, weight: .black))
                     }
                     Text(label(s)).font(.jakarta(11, .bold)).lineLimit(1)
+                    if width > 110 {
+                        Spacer(minLength: 4)
+                        Text(Self.seconds((span * 10).rounded() / 10)).font(.jakarta(9, .heavy)).monospacedDigit()
+                            .padding(.horizontal, 5).padding(.vertical, 2)
+                            .background(.black.opacity(0.22), in: Capsule())
+                    }
                 }
                 .foregroundStyle(.white)
-                .padding(.horizontal, 6)
+                .padding(.leading, selected ? 10 : 6)
+                .padding(.trailing, selected ? 10 : 5)
             }
             .clipShape(shape)
             .overlay(shape.strokeBorder(.white, lineWidth: selected ? 2 : 0))
@@ -244,9 +298,13 @@ struct ReelTimeline: View {
         return s.text.replacingOccurrences(of: "\n", with: " ")
     }
 
-    private var handle: some View {
-        Capsule().fill(.white).frame(width: 16, height: laneHeight + 6)
-            .overlay(Capsule().fill(Theme.pink).frame(width: 3, height: 12))
+    private func handle(left: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 5, style: .continuous).fill(.white)
+            .frame(width: 14, height: laneHeight + 6)
+            .overlay {
+                Image(systemName: left ? "chevron.compact.left" : "chevron.compact.right")
+                    .font(.system(size: 13, weight: .heavy)).foregroundStyle(Theme.main)
+            }
             .shadow(color: .black.opacity(0.35), radius: 2)
             .contentShape(Rectangle().inset(by: -10))
     }
@@ -369,6 +427,7 @@ struct ReelTimeline: View {
             .padding(.horizontal, title.isEmpty ? 0 : 11)
             .frame(minWidth: 32, minHeight: 30)
             .background(.white.opacity(0.14), in: Capsule())
+            .overlay(Capsule().strokeBorder(.white.opacity(0.16), lineWidth: 1))
         }
         .buttonStyle(BouncyStyle(scale: 0.9))
     }
