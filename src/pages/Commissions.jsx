@@ -451,7 +451,7 @@ function OrderModal({ order, onClose }) {
             <button className="btn-ghost w-full text-xs" onClick={() => ask("refund")}><Undo2 className="w-3.5 h-3.5" /> Not right? Ask for a refund</button>
           </div>
         )}
-        {order.status === "completed" && isArtist && <p className="card-sm p-3 text-sm" style={{ color: "var(--text-secondary)" }}>{order.payout_status === "paid_out" ? `You've been paid ${money(earnings(order), order.currency)} for this one.` : `Approved! Sugerly will pay you ${money(earnings(order), order.currency)}.`}</p>}
+        {order.status === "completed" && isArtist && <p className="card-sm p-3 text-sm" style={{ color: "var(--text-secondary)" }}>{order.payout_status === "paid_out" ? `Sugerly sent you ${money(earnings(order), order.currency)} by PayPal. Check your PayPal account.` : `Approved! Sugerly will send you ${money(earnings(order), order.currency)} by PayPal, to the email in My shop → Payout details.`}</p>}
         {order.status === "refund_requested" && <p className="card-sm p-3 text-sm" style={{ color: "var(--text-secondary)" }}>A refund was asked for. The Sugerly team will sort it out.</p>}
         {isAdmin && ["refund_requested", "paid", "in_progress", "delivered"].includes(order.status) && <button className="btn-outline w-full" disabled={busy} onClick={refund}><Undo2 className="w-4 h-4" /> Admin: refund the buyer</button>}
         <p className="text-xs flex gap-2" style={{ color: "var(--text-muted)" }}><ShieldCheck className="w-4 h-4 flex-shrink-0" />{order.fee_percent != null ? `Paid by card through Stripe. Sugerly keeps ${order.fee_percent}% to run the app; the artist gets the rest once the buyer approves.` : "Payments go through Stripe. The artist only gets paid once the buyer approves the art."}</p>
@@ -557,6 +557,7 @@ function PayoutDetails({ onSaved }) {
 }
 
 function AdminPayouts({ onOpen }) {
+  const { user } = useAuth();
   const { data: completed } = useLiveQuery("CommissionOrder", { status: "completed" });
   const { data: refunds } = useLiveQuery("CommissionOrder", { status: "refund_requested" });
   const [payouts, setPayouts] = useState({});
@@ -575,9 +576,18 @@ function AdminPayouts({ onOpen }) {
   }, [db, Object.keys(groups).join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
   const markPaid = async (list) => {
     const now = new Date().toISOString();
+    const artist = list[0].artist_email;
+    const total = money(list.reduce((n, o) => n + earnings(o), 0), list[0].currency);
     try {
       await Promise.all(list.map((o) => base44.entities.CommissionOrder.update(o.id, { payout_status: "paid_out", payout_at: now })));
-      toast.success("Marked as paid out");
+      // Tell the artist where the money went, so they know to check.
+      await base44.entities.Notification.create({
+        to_email: artist, from_email: user.email, from_display_name: "Sugerly", from_profile_picture: "",
+        type: "commission", link: "/Commissions",
+        message: `Sugerly sent you ${total} for ${list.length} commission${list.length === 1 ? "" : "s"}${payouts[artist] ? ` to your PayPal (${payouts[artist]})` : " by PayPal"}. Check your PayPal account!`,
+        is_read: false, created_by: user.email, created_date: now, updated_date: now,
+      }).catch(() => {});
+      toast.success("Marked as paid out · the artist has been told");
     } catch (e) { toast.error(e?.message || "Could not update."); }
   };
   return (

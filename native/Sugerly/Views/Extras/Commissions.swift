@@ -861,7 +861,12 @@ struct AdminPayouts: View {
         let now = FS.nowISO()
         for o in list { try? await FS.update("CommissionOrder", o.id, ["payout_status": "paid_out", "payout_at": now, "updated_date": now]) }
         if let me = model.me, let first = list.first {
-            Notify.send(to: first.artistEmail, from: me, type: "commission", message: "You've been paid out for \(list.count) commission\(list.count == 1 ? "" : "s")!", link: "/Commissions")
+            // Tell the artist where the money went, so they know to check.
+            let total = Money.format(list.reduce(0) { $0 + $1.earnings }, first.currency)
+            let whereTo = payouts[first.artistEmail].map { " to your PayPal (\($0))" } ?? " by PayPal"
+            Notify.send(to: first.artistEmail, from: me, type: "commission",
+                        message: "Sugerly sent you \(total) for \(list.count) commission\(list.count == 1 ? "" : "s")\(whereTo). Check your PayPal account!",
+                        link: "/Commissions")
         }
         model.showToast("Marked as paid out", icon: "banknote.fill")
         reload()
@@ -1510,7 +1515,7 @@ struct CommissionOrderView: View {
                 Button { delivering = true } label: { Label("Send a new version", systemImage: "arrow.triangle.2.circlepath") }
                     .buttonStyle(OutlineButtonStyle(height: 44, fullWidth: true))
             case .completed where isArtist:
-                infoLine(o.payoutStatus == "paid_out" ? "You've been paid \(Money.format(o.earnings, o.currency)) for this one." : "Approved! Sugerly will pay you \(Money.format(o.earnings, o.currency)).", "banknote")
+                infoLine(o.payoutStatus == "paid_out" ? "Sugerly sent you \(Money.format(o.earnings, o.currency)) by PayPal. Check your PayPal account." : "Approved! Sugerly will send you \(Money.format(o.earnings, o.currency)) by PayPal, to the email in My shop → Payout details.", "banknote")
             case .refundRequested:
                 infoLine("A refund was asked for. The Sugerly team will sort it out.", "arrow.uturn.backward")
             default:
