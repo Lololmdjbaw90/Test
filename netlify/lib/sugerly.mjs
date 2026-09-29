@@ -46,7 +46,8 @@ export async function handle(event, work) {
   } catch (e) {
     const status = e instanceof Problem ? e.status : 500;
     if (status === 500) console.error(e);
-    return reply(status, { error: e instanceof Problem ? e.message : "Something went wrong. Please try again." });
+    // Unexpected errors keep a short reason so problems can be found quickly.
+    return reply(status, { error: e instanceof Problem ? e.message : `Something went wrong on the payment server (${String(e?.message || e).slice(0, 140)}). Please try again.` });
   }
 }
 
@@ -108,21 +109,38 @@ function serviceAccount() {
 let cachedToken = null;
 async function googleToken() {
   if (cachedToken && cachedToken.expires > Date.now() + 60_000) return cachedToken.value;
-  const key = serviceAccount();
+  let key;
+  try {
+    key = serviceAccount();
+  } catch (e) {
+    if (e instanceof Problem) throw e;
+    throw new Problem(503, "Payments setup: FIREBASE_SERVICE_ACCOUNT on Netlify isn't a valid key file.");
+  }
+  if (!key.client_email || !String(key.client_email).includes("@")) {
+    throw new Problem(503, "Payments setup: FIREBASE_CLIENT_EMAIL on Netlify is missing or wrong.");
+  }
   const now = Math.floor(Date.now() / 1000);
   const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
   const unsigned = `${b64({ alg: "RS256", typ: "JWT" })}.${b64({
     iss: key.client_email, sub: key.client_email, aud: "https://oauth2.googleapis.com/token",
     scope: "https://www.googleapis.com/auth/datastore", iat: now, exp: now + 3600,
   })}`;
-  const signature = crypto.createSign("RSA-SHA256").update(unsigned).sign(key.private_key).toString("base64url");
+  let signature;
+  try {
+    signature = crypto.createSign("RSA-SHA256").update(unsigned).sign(key.private_key).toString("base64url");
+  } catch {
+    throw new Problem(503, "Payments setup: FIREBASE_PRIVATE_KEY on Netlify is incomplete. Paste the whole private_key, from -----BEGIN to END PRIVATE KEY-----.");
+  }
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: `${unsigned}.${signature}` }),
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(`Google token: ${data.error_description || data.error || res.status}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    // Usually the key was deleted in Google Cloud or doesn't match the email.
+    throw new Problem(503, `Payments setup: Google refused the Firebase key on Netlify (${data.error_description || data.error || res.status}). Make a new key and put it in Netlify.`);
+  }
   cachedToken = { value: data.access_token, expires: Date.now() + data.expires_in * 1000 };
   return cachedToken.value;
 }
@@ -165,6 +183,9 @@ async function firestore(path, init = {}) {
   });
   if (res.status === 404) return null;
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401 || res.status === 403) {
+    throw new Problem(503, `Payments setup: the Firebase key on Netlify can't use the database (${data.error?.status || res.status}). Check it's from the umikoworks-86333 project.`);
+  }
   if (!res.ok) throw new Error(`Firestore ${res.status}: ${data.error?.message || ""}`);
   return data;
 }
