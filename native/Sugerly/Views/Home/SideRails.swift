@@ -60,7 +60,6 @@ struct SideRail: View {
         VStack(spacing: 14) {
             switch kind {
             case .explore:
-                PromptOfTheDay()
                 PaletteOfTheDay()
                 ArtTipCard()
                 ChartsMini()
@@ -71,7 +70,6 @@ struct SideRail: View {
                 OnlineNowCard()
             case .both:
                 YouCard()
-                PromptOfTheDay()
                 InviteCard(compact: true)
                 PaletteOfTheDay()
                 ArtTipCard()
@@ -100,23 +98,6 @@ private struct RailTitle: View {
 enum DayPick {
     static var day: Int { Calendar.current.ordinality(of: .day, in: .era, for: Date()) ?? 0 }
     static func pick<T>(_ list: [T], offset: Int = 0) -> T { list[(day + offset) % list.count] }
-}
-
-struct PromptOfTheDay: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            RailTitle(icon: "paintbrush.pointed.fill", title: "Today's prompt")
-            if let prompt = DailyContent.prompt {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: prompt.icon).font(.system(size: 20, weight: .bold)).foregroundStyle(Theme.main)
-                    Text(prompt.text).font(.jakarta(15, .bold)).foregroundStyle(Palette.text).fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            Text("Draw it, post it with #prompt, and see what others made.").font(.jakarta(12)).foregroundStyle(Palette.muted)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .sugarCard(radius: 22, padding: 14)
-    }
 }
 
 // Five colours that go together, new every day (tap one to copy it).
