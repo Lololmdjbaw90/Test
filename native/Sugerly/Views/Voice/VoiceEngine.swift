@@ -383,8 +383,8 @@ final class VoiceEngine: NSObject {
         var mandatory = ["OfferToReceiveAudio": "true"]
         if restart { mandatory["IceRestart"] = "true" }
         let constraints = RTCMediaConstraints(mandatoryConstraints: mandatory, optionalConstraints: nil)
-        let sdp: RTCSessionDescription? = await withCheckedContinuation { done in
-            pc.offer(for: constraints) { sdp, _ in done.resume(returning: sdp) }
+        let sdp: RTCSessionDescription? = await Wait.upTo(5, nil) { done in
+            pc.offer(for: constraints) { sdp, _ in done(sdp) }
         }
         guard let sdp else { return }
         await setLocal(pc, sdp)
@@ -393,26 +393,26 @@ final class VoiceEngine: NSObject {
 
     private func makeAnswer(_ pc: RTCPeerConnection) async -> RTCSessionDescription? {
         let constraints = RTCMediaConstraints(mandatoryConstraints: ["OfferToReceiveAudio": "true"], optionalConstraints: nil)
-        return await withCheckedContinuation { done in
-            pc.answer(for: constraints) { sdp, _ in done.resume(returning: sdp) }
+        return await Wait.upTo(5, nil) { done in
+            pc.answer(for: constraints) { sdp, _ in done(sdp) }
         }
     }
 
     private func setLocal(_ pc: RTCPeerConnection, _ sdp: RTCSessionDescription) async {
-        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
-            pc.setLocalDescription(sdp) { _ in done.resume() }
+        await Wait.upTo(5, ()) { done in
+            pc.setLocalDescription(sdp) { _ in done(()) }
         }
     }
 
     private func setRemote(_ pc: RTCPeerConnection, _ sdp: RTCSessionDescription) async {
-        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
-            pc.setRemoteDescription(sdp) { _ in done.resume() }
+        await Wait.upTo(5, ()) { done in
+            pc.setRemoteDescription(sdp) { _ in done(()) }
         }
     }
 
     private func addIce(_ pc: RTCPeerConnection, _ c: RTCIceCandidate) async {
-        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
-            pc.add(c) { _ in done.resume() }
+        await Wait.upTo(3, ()) { done in
+            pc.add(c) { _ in done(()) }
         }
     }
 
@@ -450,7 +450,7 @@ final class VoiceEngine: NSObject {
         while !Task.isCancelled, room != nil {
             await measureLevels(withPing: n % 14 == 0)
             n += 1
-            try? await Task.sleep(for: .milliseconds(90))
+            try? await Task.sleep(for: .milliseconds(120))
         }
     }
 
@@ -459,7 +459,7 @@ final class VoiceEngine: NSObject {
         var rtts: [Double] = []
         for peer in peers.values {
             guard let pc = peer.pc else { continue }
-            let result: (Double, Double, Double) = await withCheckedContinuation { done in
+            let result: (Double, Double, Double) = await Wait.upTo(1, (0, 0, -1)) { done in
                 pc.statistics { report in
                     var inbound = 0.0, outbound = 0.0, rtt = -1.0
                     for stat in report.statistics.values {
@@ -473,7 +473,7 @@ final class VoiceEngine: NSObject {
                         default: break
                         }
                     }
-                    done.resume(returning: (inbound, outbound, rtt))
+                    done((inbound, outbound, rtt))
                 }
             }
             let heard = peer.muted || deafened ? 0 : result.0
@@ -546,5 +546,34 @@ enum Chime {
         case .unmute: id = 1105
         }
         AudioServicesPlaySystemSound(id)
+    }
+}
+
+// Waits for a WebRTC answer, but never forever: if the reply doesn't come
+// (a closed or restarting connection), the call carries on with the fallback
+// instead of freezing.
+enum Wait {
+    static func upTo<T>(_ seconds: Double, _ fallback: T, _ body: (@escaping @Sendable (T) -> Void) -> Void) async -> T {
+        await withCheckedContinuation { (done: CheckedContinuation<T, Never>) in
+            let once = Once(done)
+            body { once.resume($0) }
+            Task.detached {
+                try? await Task.sleep(for: .seconds(seconds))
+                once.resume(fallback)
+            }
+        }
+    }
+
+    private final class Once<T>: @unchecked Sendable {
+        private let lock = NSLock()
+        private var continuation: CheckedContinuation<T, Never>?
+        init(_ c: CheckedContinuation<T, Never>) { continuation = c }
+        func resume(_ value: T) {
+            lock.lock()
+            let c = continuation
+            continuation = nil
+            lock.unlock()
+            c?.resume(returning: value)
+        }
     }
 }

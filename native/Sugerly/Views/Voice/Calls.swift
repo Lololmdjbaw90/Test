@@ -325,157 +325,224 @@ struct CallScreen: View {
     @Environment(AppModel.self) private var model
     @Environment(CallCenter.self) private var calls
     @Environment(VoiceEngine.self) private var voice
-    @State private var breathe = false
-    @State private var drift = false
+    @State private var ringing = false
 
     private var me: String { model.me?.email ?? "" }
     private var call: CallInfo? { calls.current }
-    private var alone: Bool { voice.participants.filter { !$0.isSelf }.isEmpty }
+    private var others: [VoiceEngine.Participant] { voice.participants.filter { !$0.isSelf } }
+    private var alone: Bool { others.isEmpty }
 
     var body: some View {
         ZStack {
             background
-            VStack(spacing: 18) {
-                HStack {
-                    Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) { calls.showScreen = false } } label: {
-                        Image(systemName: "chevron.down").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
-                            .frame(width: 44, height: 44).background(.white.opacity(0.14), in: Circle())
-                    }
-                    .accessibilityLabel("Minimise")
-                    Spacer()
-                    Label("End-to-end voice", systemImage: "lock.fill").font(.jakarta(11, .bold)).foregroundStyle(.white.opacity(0.6))
-                    Spacer()
-                    Color.clear.frame(width: 44, height: 44)
+            VStack(spacing: 0) {
+                topBar
+                Spacer(minLength: 12)
+                if alone {
+                    ringingHero.transition(.opacity.combined(with: .scale(scale: 0.95)))
+                } else if others.count == 1, let other = others.first {
+                    oneToOne(other).transition(.opacity.combined(with: .scale(scale: 0.95)))
+                } else {
+                    group.transition(.opacity)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-
-                Spacer(minLength: 10)
-                if alone { ringingHero } else { people }
-                Spacer(minLength: 10)
+                Spacer(minLength: 12)
                 controls
             }
-            .padding(.bottom, 30)
+            .padding(.bottom, 24)
+            .animation(.spring(response: 0.45, dampingFraction: 0.85), value: alone)
+            .animation(.spring(response: 0.45, dampingFraction: 0.85), value: others.count)
         }
         .statusBarHidden(false)
         .preferredColorScheme(.dark)
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) { breathe = true }
-            withAnimation(.easeInOut(duration: 9).repeatForever(autoreverses: true)) { drift = true }
-        }
     }
 
+    // A still background (moving blurred lights redrew the whole screen on
+    // every frame and made the call stutter when anything else happened).
     private var background: some View {
         ZStack {
-            Color(hex: 0x1A0E15)
-            Circle().fill(Theme.main.opacity(0.45)).frame(width: 420).blur(radius: 120)
-                .offset(x: drift ? 120 : -120, y: drift ? -260 : -180)
-            Circle().fill(Theme.lavender.opacity(0.3)).frame(width: 380).blur(radius: 120)
-                .offset(x: drift ? -140 : 100, y: drift ? 300 : 220)
+            LinearGradient(colors: [Color(hex: 0x2A1320), Color(hex: 0x12080E)], startPoint: .top, endPoint: .bottom)
+            RadialGradient(colors: [Theme.main.opacity(0.35), .clear], center: .init(x: 0.5, y: 0.32), startRadius: 10, endRadius: 360)
         }
+        .drawingGroup()
         .ignoresSafeArea()
+    }
+
+    private var topBar: some View {
+        HStack {
+            Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) { calls.showScreen = false } } label: {
+                Image(systemName: "chevron.down").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                    .frame(width: 44, height: 44).background(.white.opacity(0.12), in: Circle())
+            }
+            .buttonStyle(BouncyStyle(scale: 0.88))
+            .accessibilityLabel("Minimise")
+            Spacer()
+            Label("Encrypted", systemImage: "lock.fill").font(.jakarta(12, .bold)).foregroundStyle(.white.opacity(0.6))
+            Spacer()
+            quality.frame(width: 44, height: 44)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+    }
+
+    // Signal bars from the ping: green, yellow, or red when the line is poor.
+    @ViewBuilder
+    private var quality: some View {
+        if let ping = voice.ping, !alone {
+            let color = ping < 180 ? Palette.success : ping < 400 ? Color(hex: 0xFFD166) : Palette.danger
+            Image(systemName: "cellularbars", variableValue: ping < 180 ? 1 : ping < 400 ? 0.66 : 0.33)
+                .font(.system(size: 16, weight: .bold)).foregroundStyle(color)
+                .accessibilityLabel(ping < 180 ? "Good connection" : ping < 400 ? "OK connection" : "Poor connection")
+        }
     }
 
     private var title: String { call?.title(for: me) ?? voice.room?.name ?? "Call" }
 
     private var statusText: String {
         if voice.connecting { return "Connecting…" }
-        if alone {
-            if call?.callerEmail == me || call == nil { return call?.status == "ended" ? "Call ended" : "Calling…" }
-            return "Connecting…"
-        }
-        return ""
+        if call?.status == "ended" { return "Call ended" }
+        if call?.callerEmail == me || call == nil { return "Ringing…" }
+        return "Connecting…"
     }
 
-    // Big picture with rings while it rings (like WhatsApp).
+    // Big picture with soft rings while it rings (only then do they move).
     private var ringingHero: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 20) {
             ZStack {
                 ForEach(0..<3) { i in
-                    Circle().stroke(Theme.light.opacity(0.4), lineWidth: 2)
-                        .frame(width: 150, height: 150)
-                        .scaleEffect(breathe ? 1.25 + Double(i) * 0.22 : 1)
-                        .opacity(breathe ? 0.05 : 0.6)
+                    Circle().stroke(Theme.light.opacity(0.35), lineWidth: 2)
+                        .frame(width: 160, height: 160)
+                        .scaleEffect(ringing ? 1.5 + Double(i) * 0.25 : 1)
+                        .opacity(ringing ? 0 : 0.7)
+                        .animation(.easeOut(duration: 2).repeatForever(autoreverses: false).delay(Double(i) * 0.6), value: ringing)
                 }
-                Avatar(url: call?.picture(for: me) ?? "", name: title, size: 140)
-                    .shadow(color: Theme.main.opacity(0.5), radius: 30)
-                    .scaleEffect(breathe ? 1.03 : 0.98)
+                Avatar(url: call?.picture(for: me) ?? "", name: title, size: 150)
+                    .overlay(Circle().strokeBorder(.white.opacity(0.25), lineWidth: 2))
             }
-            Text(title).font(.display(34)).foregroundStyle(.white).multilineTextAlignment(.center).padding(.horizontal, 20)
-            Text(statusText).font(.jakarta(16, .semibold)).foregroundStyle(.white.opacity(0.75))
-                .contentTransition(.opacity)
+            .frame(height: 260)
+            VStack(spacing: 6) {
+                Text(title).font(.display(34)).foregroundStyle(.white).multilineTextAlignment(.center).lineLimit(2)
+                Text(statusText).font(.jakarta(16, .semibold)).foregroundStyle(.white.opacity(0.7))
+                    .contentTransition(.opacity)
+            }
+            .padding(.horizontal, 24)
+        }
+        .onAppear { ringing = true }
+        .onDisappear { ringing = false }
+    }
+
+    private var timer: some View {
+        Group {
+            if let since = voice.joinedAt {
+                TimelineView(.periodic(from: since, by: 1)) { t in
+                    Text(Self.clock(t.date.timeIntervalSince(since)))
+                        .font(.jakarta(15, .bold)).monospacedDigit().foregroundStyle(.white.opacity(0.75))
+                }
+            }
         }
     }
 
-    // Everyone in the call, with the green ring when they talk.
-    private var people: some View {
-        VStack(spacing: 14) {
-            Text(title).font(.display(28)).foregroundStyle(.white).lineLimit(1)
-            if let since = voice.joinedAt {
-                TimelineView(.periodic(from: since, by: 1)) { t in
-                    Text(Self.clock(t.date.timeIntervalSince(since))).font(.jakarta(15, .bold)).monospacedDigit().foregroundStyle(.white.opacity(0.8))
+    // Two people: their picture big in the middle, glowing green as they talk.
+    private func oneToOne(_ other: VoiceEngine.Participant) -> some View {
+        VStack(spacing: 18) {
+            speakingAvatar(other, size: 170)
+            VStack(spacing: 6) {
+                Text(model.person(other.email)?.displayName ?? other.name).font(.display(32)).foregroundStyle(.white).lineLimit(1)
+                HStack(spacing: 8) {
+                    if !other.connected {
+                        Label("Connecting audio…", systemImage: "antenna.radiowaves.left.and.right")
+                            .font(.jakarta(13, .bold)).foregroundStyle(Color(hex: 0xFFD166))
+                    } else {
+                        timer
+                    }
+                    if other.muted {
+                        Image(systemName: "mic.slash.fill").font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.danger)
+                    }
                 }
             }
+            .padding(.horizontal, 24)
+        }
+    }
+
+    // Groups: a tile for everyone.
+    private var group: some View {
+        VStack(spacing: 14) {
+            Text(title).font(.display(28)).foregroundStyle(.white).lineLimit(1)
+            timer
             let list = voice.participants
-            let columns = list.count <= 2 ? 1 : 2
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: columns), spacing: 16) {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                 ForEach(list) { p in
-                    let size: CGFloat = list.count <= 2 ? 120 : 84
                     VStack(spacing: 8) {
-                        ZStack {
-                            Circle().fill(Palette.success.opacity(0.25))
-                                .frame(width: size + 16, height: size + 16)
-                                .scaleEffect(p.speaking ? 1 + p.level * 0.3 : 0.9)
-                                .opacity(p.speaking ? 1 : 0)
-                            Circle().strokeBorder(Palette.success, lineWidth: 3.5)
-                                .frame(width: size + 10, height: size + 10)
-                                .opacity(p.speaking ? 1 : 0)
-                            Avatar(url: model.person(p.email)?.picture ?? p.picture, name: p.name, size: size)
-                                .opacity(p.connected || p.isSelf ? 1 : 0.5)
-                        }
-                        .animation(.easeOut(duration: 0.14), value: p.level)
-                        .animation(.spring(response: 0.25, dampingFraction: 0.65), value: p.speaking)
+                        speakingAvatar(p, size: 76)
                         HStack(spacing: 4) {
-                            if p.muted { Image(systemName: "mic.slash.fill").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.danger) }
-                            Text(p.isSelf ? "You" : p.name).font(.jakarta(14, .bold)).foregroundStyle(.white).lineLimit(1)
+                            if p.muted { Image(systemName: "mic.slash.fill").font(.system(size: 10, weight: .bold)).foregroundStyle(Palette.danger) }
+                            Text(p.isSelf ? "You" : (model.person(p.email)?.displayName ?? p.name)).font(.jakarta(13, .bold)).foregroundStyle(.white).lineLimit(1)
                         }
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(.white.opacity(p.speaking ? 0.12 : 0.06), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(p.speaking ? Palette.success.opacity(0.8) : .white.opacity(0.08), lineWidth: p.speaking ? 2 : 1))
                     .transition(.scale.combined(with: .opacity))
                 }
             }
-            .padding(.horizontal, 30)
+            .padding(.horizontal, 20)
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: list.map(\.id))
         }
     }
 
+    private func speakingAvatar(_ p: VoiceEngine.Participant, size: CGFloat) -> some View {
+        ZStack {
+            Circle().fill(Palette.success.opacity(0.22))
+                .frame(width: size + 22, height: size + 22)
+                .scaleEffect(p.speaking ? 1 + p.level * 0.22 : 0.9)
+                .opacity(p.speaking ? 1 : 0)
+            Circle().strokeBorder(Palette.success, lineWidth: 3)
+                .frame(width: size + 10, height: size + 10)
+                .opacity(p.speaking ? 1 : 0)
+            Avatar(url: model.person(p.email)?.picture ?? p.picture, name: p.name, size: size)
+                .opacity(p.connected || p.isSelf ? 1 : 0.55)
+        }
+        .animation(.easeOut(duration: 0.12), value: p.level)
+        .animation(.spring(response: 0.22, dampingFraction: 0.7), value: p.speaking)
+    }
+
     private var controls: some View {
-        HStack(spacing: 22) {
+        HStack(alignment: .top, spacing: 26) {
             control(voice.speaker ? "speaker.wave.3.fill" : "speaker.fill", on: voice.speaker, label: "Speaker") { voice.toggleSpeaker() }
             control(voice.muted ? "mic.slash.fill" : "mic.fill", on: voice.muted, label: voice.muted ? "Unmute" : "Mute") { voice.toggleMute() }
-            Button { Task { await calls.hangUp() } } label: {
-                Image(systemName: "phone.down.fill").font(.system(size: 26, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 74, height: 74).background(Palette.danger, in: Circle())
-                    .shadow(color: Palette.danger.opacity(0.55), radius: 16, y: 6)
+            VStack(spacing: 8) {
+                Button { Task { await calls.hangUp() } } label: {
+                    Image(systemName: "phone.down.fill").font(.system(size: 26, weight: .bold)).foregroundStyle(.white)
+                        .frame(width: 70, height: 70).background(Palette.danger, in: Circle())
+                        .shadow(color: Palette.danger.opacity(0.5), radius: 14, y: 6)
+                }
+                .buttonStyle(BouncyStyle(scale: 0.85))
+                .accessibilityLabel("End call")
+                Text("End").font(.jakarta(12, .bold)).foregroundStyle(.white.opacity(0.75))
             }
-            .buttonStyle(BouncyStyle(scale: 0.85))
-            .accessibilityLabel("End call")
         }
+        .padding(.horizontal, 26)
+        .padding(.top, 18)
+        .padding(.bottom, 14)
+        .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 36, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 36, style: .continuous).strokeBorder(.white.opacity(0.08), lineWidth: 1))
         .padding(.horizontal, 20)
-        .padding(.vertical, 16)
-        .background(.white.opacity(0.08), in: Capsule())
     }
 
     private func control(_ icon: String, on: Bool, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon).font(.system(size: 22, weight: .bold))
-                .foregroundStyle(on ? Color(hex: 0x1A0E15) : .white)
-                .frame(width: 60, height: 60)
-                .background(on ? Color.white : Color.white.opacity(0.16), in: Circle())
-                .contentTransition(.symbolEffect(.replace))
+        VStack(spacing: 8) {
+            Button(action: action) {
+                Image(systemName: icon).font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(on ? Color(hex: 0x1A0E15) : .white)
+                    .frame(width: 62, height: 62)
+                    .background(on ? Color.white : Color.white.opacity(0.14), in: Circle())
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .buttonStyle(BouncyStyle(scale: 0.85))
+            .accessibilityLabel(label)
+            .sensoryFeedback(.impact(weight: .light), trigger: on)
+            Text(label).font(.jakarta(12, .bold)).foregroundStyle(.white.opacity(0.75))
         }
-        .buttonStyle(BouncyStyle(scale: 0.85))
-        .accessibilityLabel(label)
-        .sensoryFeedback(.impact(weight: .light), trigger: on)
     }
 
     static func clock(_ seconds: TimeInterval) -> String {
