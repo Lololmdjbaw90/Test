@@ -190,6 +190,7 @@ struct HomeView: View {
     @State private var reels: [Reel] = []
     @State private var loaded = false
     @State private var appeared = false
+    @State private var lastLoad = Date.distantPast
     @State private var tagSearch: String?
     @AppStorage("sugerly.dismissedAnnouncement") private var dismissedAnnouncement = ""
 
@@ -200,25 +201,25 @@ struct HomeView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 30) {
+            LazyVStack(alignment: .leading, spacing: 30) {
                 announcementBanner
-                StoriesRow(reels: reels, path: $path, compose: compose).stagger(appeared, 0)
-                hero.stagger(appeared, 1)
-                HomeComposerBar(compose: compose).stagger(appeared, 2)
-                quickLinks.stagger(appeared, 3)
-                ArtPromptCard(compose: compose).stagger(appeared, 4)
-                InlineExtras(part: .top).stagger(appeared, 5)
-                HappeningNow(posts: posts.posts, artworks: artworks, reels: reels, tracks: tracks, path: $path).stagger(appeared, 5)
-                featured.stagger(appeared, 6)
-                if !reels.isEmpty { reelStrip.stagger(appeared, 7) }
-                SuggestedPeople(path: $path).stagger(appeared, 8)
-                community.stagger(appeared, 9)
-                TrendingTags(posts: posts.posts, reels: reels) { tagSearch = $0 }.stagger(appeared, 10)
-                freshTracks.stagger(appeared, 10)
-                artists.stagger(appeared, 10)
-                friendsRow.stagger(appeared, 10)
-                yourServers.stagger(appeared, 10)
-                InlineExtras(part: .bottom).stagger(appeared, 10)
+                StoriesRow(reels: reels, path: $path, compose: compose).homeSection(appeared, 0)
+                hero.homeSection(appeared, 1)
+                HomeComposerBar(compose: compose).homeSection(appeared, 2)
+                quickLinks.homeSection(appeared, 3)
+                ArtPromptCard(compose: compose).homeSection(appeared, 4)
+                InlineExtras(part: .top).homeSection(appeared, 5)
+                HappeningNow(posts: posts.posts, artworks: artworks, reels: reels, tracks: tracks, path: $path).homeSection(appeared, 6)
+                featured.homeSection(appeared, 7)
+                if !reels.isEmpty { reelStrip.homeSection(appeared, 8).transition(.opacity) }
+                SuggestedPeople(path: $path).homeSection(appeared, 9)
+                community.homeSection(appeared, 10)
+                TrendingTags(posts: posts.posts, reels: reels) { tagSearch = $0 }.homeSection(appeared, 11)
+                freshTracks.homeSection(appeared, 12)
+                artists.homeSection(appeared, 13)
+                friendsRow.homeSection(appeared, 14)
+                yourServers.homeSection(appeared, 15)
+                InlineExtras(part: .bottom).homeSection(appeared, 16)
                 Label("Last activity \(Dates.ago(posts.posts.first?.created ?? ""))", systemImage: "sparkles")
                     .font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
                     .frame(maxWidth: .infinity)
@@ -231,11 +232,22 @@ struct HomeView: View {
         .patternBackground()
         .sugarTopBar($path)
         .refreshable { await load() }
-        .task { await load() }
+        .task {
+            if !appeared {
+                // The first time: wait a moment for the first things to load,
+                // then let the sections float in (so nothing jumps in later).
+                let first = Task { await load() }
+                let started = Date()
+                while !loaded && Date().timeIntervalSince(started) < 0.7 { try? await Task.sleep(for: .milliseconds(40)) }
+                appeared = true
+                await first.value
+            } else if Date().timeIntervalSince(lastLoad) > 60 {
+                // Coming back later: freshen up quietly, no replay.
+                await load()
+            }
+        }
         .dropRemoved($artworks)
         .dropRemoved($reels)
-        .onAppear { withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) { appeared = true } }
-        .onDisappear { appeared = false }
         .sheet(item: Binding(get: { tagSearch.map { TagQuery(id: $0) } }, set: { tagSearch = $0?.id })) { tag in
             SearchView(go: { route in
                 tagSearch = nil
@@ -253,12 +265,20 @@ struct HomeView: View {
         async let serverDocs = try? FS.query("Community", [.contains("member_emails", model.me?.email ?? "")], limit: 12)
         async let reelDocs = try? FS.query("Reel", orderBy: "created_date", limit: 30)
         if posts.posts.isEmpty { await posts.load() }
-        artworks = (await art ?? []).map(Artwork.init)
-        tracks = (await music ?? []).map(Track.init)
-        servers = (await serverDocs ?? []).map(Server.init)
-        reels = (await reelDocs ?? []).map(Reel.init)
-        if model.people.isEmpty { await model.loadPeople() }
+        let nextArt = (await art ?? []).map(Artwork.init)
+        let nextTracks = (await music ?? []).map(Track.init)
+        let nextServers = (await serverDocs ?? []).map(Server.init)
+        let nextReels = (await reelDocs ?? []).map(Reel.init)
+        // New things fade in place instead of making the page jump.
+        withAnimation(.smooth(duration: 0.4)) {
+            if nextArt != artworks { artworks = nextArt }
+            if nextTracks != tracks { tracks = nextTracks }
+            if nextServers != servers { servers = nextServers }
+            if nextReels != reels { reels = nextReels }
+        }
+        lastLoad = Date()
         loaded = true
+        if model.people.isEmpty { await model.loadPeople() }
     }
 
     // The admin's announcement (Admin → Site), until you close it.
@@ -695,3 +715,21 @@ struct TrackRow: View {
     }
 }
 
+
+private extension View {
+    // Home sections rise and fade in one after another the first time Home
+    // opens, then glide softly as they scroll into and out of view.
+    func homeSection(_ shown: Bool, _ index: Int) -> some View {
+        self
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown ? 0 : 28)
+            .scaleEffect(shown ? 1 : 0.96, anchor: .top)
+            .animation(.spring(response: 0.62, dampingFraction: 0.86).delay(0.04 + Double(min(index, 8)) * 0.06), value: shown)
+            .scrollTransition(.interactive(timingCurve: .easeOut), axis: .vertical) { content, phase in
+                content
+                    .opacity(1 - abs(phase.value) * 0.3)
+                    .scaleEffect(1 - abs(phase.value) * 0.025)
+                    .offset(y: phase.value * 8)
+            }
+    }
+}

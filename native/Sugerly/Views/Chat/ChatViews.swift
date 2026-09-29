@@ -234,7 +234,6 @@ struct ChatListView: View {
         .sugarBackground()
         .sugarTopBar($path)
         .onAppear { appeared = true }
-        .onDisappear { appeared = false }
         .sheet(isPresented: $starting) {
             NewChatView { email in
                 starting = false

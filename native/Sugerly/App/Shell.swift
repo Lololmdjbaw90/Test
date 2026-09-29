@@ -37,14 +37,23 @@ enum AppTab: Hashable {
 
 enum Composer: String, Identifiable { case post, artwork, reel, track; var id: String { rawValue } }
 
-// Pages open and close in place, without the sideways slide.
+// Pages open and close with the iPhone's own smooth animation. (Turning it
+// off made pages jump, and could leave a page without its top bar, so the
+// back button wasn't there.)
 extension Binding where Value == [Route] {
-    var instant: Binding<[Route]> {
-        Binding(get: { wrappedValue }, set: { next in
-            var still = Transaction()
-            still.disablesAnimations = true
-            withTransaction(still) { wrappedValue = next }
-        })
+    var instant: Binding<[Route]> { self }
+}
+
+// Swipe from the left edge to go back, even though pages use our own back
+// button (hiding the system one normally turns the swipe off too).
+extension UINavigationController: @retroactive UIGestureRecognizerDelegate {
+    override open func viewDidLoad() {
+        super.viewDidLoad()
+        interactivePopGestureRecognizer?.delegate = self
+    }
+
+    public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        viewControllers.count > 1
     }
 }
 
@@ -55,27 +64,30 @@ struct RouteView: View {
 
     var body: some View {
         page
-            // Our own back button (and a swipe from the left edge), both
-            // instant, instead of the system one that slides.
+            // Our own back button (the swipe from the left edge works too).
             .navigationBarBackButtonHidden(true)
+            .toolbar(fullScreen ? .hidden : .visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { back() } label: {
                         Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold))
+                            .frame(width: 36, height: 36)
+                            .contentShape(Rectangle())
                     }
                     .accessibilityLabel("Back")
                 }
             }
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 24).onEnded { drag in
-                    if drag.startLocation.x < 28, drag.translation.width > 90, abs(drag.translation.height) < 70 { back() }
-                }
-            )
+    }
+
+    // Reels fill the screen and bring their own back button.
+    private var fullScreen: Bool {
+        if case .reel = route { return true }
+        return false
     }
 
     private func back() {
         guard !path.isEmpty else { return }
-        path.removeLast()
+        withAnimation(.smooth(duration: 0.3)) { _ = path.popLast() }
     }
 
     @ViewBuilder

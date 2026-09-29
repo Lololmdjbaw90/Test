@@ -125,7 +125,6 @@ struct ProfileContent: View {
         }
         .sugarBackground()
         .onAppear { appeared = true }
-        .onDisappear { appeared = false }
         .refreshable { await load() }
         .task(id: person.email) { await load() }
         .dropRemoved($posts)

@@ -90,7 +90,6 @@ struct GalleryView: View {
         .task { if artworks.isEmpty { await load() } }
         .dropRemoved($artworks)
         .onAppear { appeared = true }
-        .onDisappear { appeared = false }
         .fullScreenCover(isPresented: $adding) { NewArtworkView() }
 
         if isRoot {

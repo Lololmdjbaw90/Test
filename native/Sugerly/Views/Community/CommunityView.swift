@@ -338,7 +338,6 @@ struct CommunityView: View {
         }
         .task { if store.posts.isEmpty { await store.load() } }
         .onAppear { appeared = true }
-        .onDisappear { appeared = false }
     }
 
     // The top: a colourful card with who's online and a box to post.
