@@ -961,205 +961,423 @@ struct MyColorsPicker: View {
     }
 }
 
+
+// Settings: your profile up top, quick jumps to each part, then tidy groups
+// of rows (a coloured icon, a title, and a switch or an arrow).
 struct SettingsView: View {
+    enum Part: String, CaseIterable, Identifiable {
+        case look = "Look", alerts = "Alerts", privacy = "Privacy", sounds = "Sounds", help = "Help", account = "Account"
+        var id: String { rawValue }
+        var icon: String {
+            switch self {
+            case .look: return "paintpalette.fill"
+            case .alerts: return "bell.badge.fill"
+            case .privacy: return "lock.shield.fill"
+            case .sounds: return "hand.tap.fill"
+            case .help: return "questionmark.circle.fill"
+            case .account: return "person.crop.circle.fill"
+            }
+        }
+    }
+
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var legal: LegalDoc?
     @State private var confirmDelete = false
+    @State private var confirmLogout = false
     @State private var deleting = false
     @State private var error: String?
     @AppStorage("sugerly.haptics") private var haptics = true
     @AppStorage(TapSound.settingKey) private var clickSounds = true
+    @AppStorage(Alerts.Kind.dms.key) private var alertDMs = true
+    @AppStorage(Alerts.Kind.servers.key) private var alertServers = true
+    @AppStorage(Alerts.Kind.social.key) private var alertSocial = true
+    @AppStorage(Alerts.Kind.reels.key) private var alertReels = true
     @State private var statusSheet = false
     @State private var peopleList: PeopleListSheet.Kind?
+    @State private var editing = false
+    @State private var ownColours = false
+    private var alerts = Alerts.shared
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack {
-                    Text("Settings").font(.display(34)).foregroundStyle(Palette.text)
-                    Spacer()
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(Palette.text2)
-                            .frame(width: 38, height: 38).background(Palette.surface, in: Circle())
-                            .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
-                    }
-                    .buttonStyle(BouncyStyle())
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    topRow
+                    if let me = model.me { profileCard(me) }
+                    jumpBar(proxy)
+                    InviteCard()
+                    lookGroup
+                    alertsGroup
+                    privacyGroup
+                    soundsGroup
+                    helpGroup
+                    accountGroup
+                    footer
                 }
-                .padding(.top, 20)
-
-                if let me = model.me {
-                    HStack(spacing: 14) {
-                        Avatar(url: me.picture, name: me.displayName, size: 58).overlay(Circle().strokeBorder(Theme.gradient, lineWidth: 2.5))
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(me.displayName).font(.display(22)).foregroundStyle(Palette.text)
-                            Text(me.email).font(.jakarta(13)).foregroundStyle(Palette.muted)
-                        }
-                        Spacer()
-                        VStack(spacing: 2) {
-                            Text("\(me.coins)").font(.display(22)).foregroundStyle(Theme.gradient)
-                            Text("COINS").font(.jakarta(9, .bold)).foregroundStyle(Palette.muted)
-                        }
-                    }
-                    .sugarCard(radius: 26, padding: 16)
-                }
-
-                InviteCard()
-
-                section("Appearance", icon: "paintpalette.fill") {
-                    Text("Theme").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
-                    HStack(spacing: 8) {
-                        themeOption("light", "Light", "sun.max.fill")
-                        themeOption("dark", "Dark", "moon.fill")
-                        themeOption("system", "Auto", "circle.lefthalf.filled")
-                    }
-                    Text("Accent colour").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2).padding(.top, 6)
-                    HStack(spacing: 12) {
-                        ForEach(Accent.allCases) { accent in
-                            let picked = model.accent == accent && model.myColors == nil
-                            Button { Task { try? await model.updateMe(["accent": accent.rawValue, "accent_main": "", "accent_sub": ""]) } } label: {
-                                VStack(spacing: 6) {
-                                    Circle().fill(accent.gradient)
-                                        .frame(width: 46, height: 46)
-                                        .overlay(Circle().strokeBorder(.white, lineWidth: picked ? 3 : 0))
-                                        .overlay { if picked { Image(systemName: "checkmark").font(.system(size: 16, weight: .black)).foregroundStyle(.white) } }
-                                        .overlay(Circle().strokeBorder(accent.main.opacity(picked ? 0.9 : 0), lineWidth: 2).padding(-4))
-                                    Text(accent.label).font(.jakarta(11, .semibold)).foregroundStyle(Palette.text2)
-                                }
-                            }
-                            .buttonStyle(BouncyStyle(scale: 0.88))
-                            .frame(maxWidth: .infinity)
-                        }
-                    }
-                    MyColorsPicker()
-                    Text("The logo and Mimi change colour to match.").font(.jakarta(12)).foregroundStyle(Palette.muted)
-                    Text("Background").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2).padding(.top, 6)
-                    BackgroundPicker()
-                    Text("Shown behind Home. It follows your colour and dark mode.").font(.jakarta(12)).foregroundStyle(Palette.muted)
-                }
-
-                section("Notifications", icon: "bell.badge.fill") {
-                    AlertSettings()
-                    Text("Sugerly checks for new things while it's open and every so often in the background.").font(.jakarta(12)).foregroundStyle(Palette.muted)
-                }
-
-                section("Sounds & haptics", icon: "hand.tap.fill") {
-                    toggleRow("Haptics", "Little taps when you like, send and switch tabs", isOn: $haptics)
-                    toggleRow("Click sounds", "A soft pop when you tap buttons (quiet when your phone is on silent)", isOn: $clickSounds)
-                }
-
-                section("Privacy & status", icon: "lock.shield.fill") {
-                    row(statusLine, icon: "bubble.left.fill") { statusSheet = true }
-                    toggleRow("Show when I'm online", "Off makes you look offline (invisible), like Discord", isOn: Binding(
-                        get: { model.me?.presence != "invisible" },
-                        set: { on in Task { await Privacy.setPresence(on ? .online : .invisible, model: model) } }))
-                    row("Blocked people (\(model.me?.blocked.count ?? 0))", icon: "hand.raised.fill") { peopleList = .blocked }
-                    row("Ignored people (\(model.me?.ignored.count ?? 0))", icon: "bell.slash.fill") { peopleList = .ignored }
-                    Text("Only friends (people who follow you back) can call you or send voice messages. Anyone else's first message arrives as a request.")
-                        .font(.jakarta(12)).foregroundStyle(Palette.muted)
-                }
-
-                section("Help & legal", icon: "questionmark.circle.fill") {
-                    ForEach(LegalDoc.allCases) { doc in
-                        row(doc.title, icon: doc == .terms ? "doc.text.fill" : doc == .privacy ? "lock.fill" : "heart.text.square.fill") { legal = doc }
-                    }
-                }
-
-                section("Account", icon: "person.crop.circle.fill") {
-                    row("Log out", icon: "rectangle.portrait.and.arrow.right") { model.signOut() }
-                    row("Delete account", icon: "trash.fill", danger: true) { confirmDelete = true }
-                    Text("Deleting your account removes your profile. This can't be undone.").font(.jakarta(12)).foregroundStyle(Palette.muted)
-                    if let error { Text(error).font(.jakarta(13, .semibold)).foregroundStyle(Palette.danger) }
-                }
-
-                Text("Sugerly for iPhone & iPad").font(.cute(18)).foregroundStyle(Theme.gradient).frame(maxWidth: .infinity).padding(.vertical, 10)
+                .padding(.horizontal, 18)
+                .padding(.bottom, 34)
+                .frame(maxWidth: 720)
+                .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, 18)
-            .padding(.bottom, 30)
         }
         .sugarBackground()
         .sheet(isPresented: $statusSheet) { StatusSheet().presentationCornerRadius(30) }
         .sheet(item: $peopleList) { kind in PeopleListSheet(kind: kind).presentationCornerRadius(30) }
         .sheet(item: $legal) { doc in LegalView(doc: doc) }
+        .sheet(isPresented: $editing) { EditProfileView() }
+        .confirmationDialog("Log out of Sugerly?", isPresented: $confirmLogout, titleVisibility: .visible) {
+            Button("Log out", role: .destructive) { model.signOut() }
+        }
         .confirmationDialog("Delete your account?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete account", role: .destructive) { Task { await deleteAccount() } }
         } message: { Text("Your profile will be deleted. This can't be undone.") }
         .disabled(deleting)
+        .onAppear { ownColours = model.myColors != nil }
     }
 
-    private func section<Content: View>(_ title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                Image(systemName: icon).font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 32, height: 32).background(Theme.gradient, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                Text(title).font(.display(21)).foregroundStyle(Palette.text)
+    // MARK: top
+
+    private var topRow: some View {
+        HStack {
+            Text("Settings").font(.display(34)).foregroundStyle(Palette.text)
+            Spacer()
+            Button { dismiss() } label: {
+                Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(Palette.text2)
+                    .frame(width: 40, height: 40).background(Palette.surface, in: Circle())
+                    .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
             }
-            content()
+            .buttonStyle(BouncyStyle())
+            .accessibilityLabel("Close")
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .sugarCard(radius: 26, padding: 16)
+        .padding(.top, 20)
     }
 
-    private func themeOption(_ value: String, _ title: String, _ icon: String) -> some View {
-        let active = (model.me?.theme.isEmpty == false ? model.me?.theme : "light") == value
-        return Button { Task { try? await model.updateMe(["theme": value]) } } label: {
-            VStack(spacing: 6) {
-                Image(systemName: icon).font(.system(size: 18, weight: .bold))
-                Text(title).font(.jakarta(12, .bold))
+    private func profileCard(_ me: UserProfile) -> some View {
+        let level = LevelInfo(xp: me.xp)
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 14) {
+                Avatar(url: me.picture, name: me.displayName, size: 66)
+                    .overlay(Circle().strokeBorder(.white, lineWidth: 3))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(me.displayName).font(.display(24)).foregroundStyle(.white).lineLimit(1)
+                    Text(me.email).font(.jakarta(13, .medium)).foregroundStyle(.white.opacity(0.85)).lineLimit(1)
+                }
+                Spacer(minLength: 0)
             }
-            .foregroundStyle(active ? .white : Palette.text2)
-            .frame(maxWidth: .infinity)
-            .frame(height: 64)
-            .background {
-                if active {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.gradient)
-                } else {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.surface2)
+            HStack(spacing: 8) {
+                stat("\(level.level)", "Level", "star.fill")
+                stat("\(me.coins)", "Coins", "circle.hexagongrid.fill")
+                stat("\(me.dailyStreak)", "Day streak", "flame.fill")
+            }
+            Button { editing = true } label: {
+                Label("Edit profile", systemImage: "pencil")
+                    .font(.jakarta(14, .heavy)).foregroundStyle(Theme.main)
+                    .frame(maxWidth: .infinity).frame(height: 44)
+                    .background(.white, in: Capsule())
+            }
+            .buttonStyle(BouncyStyle(scale: 0.96))
+        }
+        .padding(18)
+        .background {
+            RoundedRectangle(cornerRadius: 30, style: .continuous).fill(Theme.gradient)
+                .overlay(alignment: .topTrailing) {
+                    Circle().fill(.white.opacity(0.12)).frame(width: 170).offset(x: 60, y: -70)
+                }
+                .overlay(alignment: .bottomLeading) {
+                    Circle().fill(.white.opacity(0.08)).frame(width: 120).offset(x: -40, y: 50)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+                .shadow(color: Theme.main.opacity(0.3), radius: 16, y: 8)
+        }
+    }
+
+    private func stat(_ value: String, _ label: String, _ icon: String) -> some View {
+        VStack(spacing: 2) {
+            HStack(spacing: 4) {
+                Image(systemName: icon).font(.system(size: 11, weight: .bold))
+                Text(value).font(.jakarta(17, .heavy)).lineLimit(1).minimumScaleFactor(0.7)
+            }
+            Text(label).font(.jakarta(10, .bold)).opacity(0.85)
+        }
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity).frame(height: 54)
+        .background(.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    // Chips that jump to each part of the page.
+    private func jumpBar(_ proxy: ScrollViewProxy) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Part.allCases) { part in
+                    Button { withAnimation(.snappy) { proxy.scrollTo(part, anchor: .top) } } label: {
+                        Label(part.rawValue, systemImage: part.icon)
+                            .font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+                            .padding(.horizontal, 14).frame(height: 38)
+                            .background(Palette.surface, in: Capsule())
+                            .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
+                    }
+                    .buttonStyle(BouncyStyle(scale: 0.93))
                 }
             }
+            .padding(.horizontal, 2)
         }
-        .buttonStyle(BouncyStyle())
     }
 
-    private func row(_ title: String, icon: String, danger: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: icon).font(.system(size: 15, weight: .bold)).foregroundStyle(danger ? Palette.danger : Theme.pink).frame(width: 24)
+    // MARK: groups
+
+    private var lookGroup: some View {
+        group(.look, "Appearance") {
+            block {
+                label("Theme", "moon.stars.fill", tint: 0x7C5CF0)
+                HStack(spacing: 6) {
+                    themeOption("light", "Light", "sun.max.fill")
+                    themeOption("dark", "Dark", "moon.fill")
+                    themeOption("system", "Auto", "circle.lefthalf.filled")
+                }
+                .padding(4)
+                .background(Palette.surface2, in: Capsule())
+            }
+            divider
+            block {
+                label("Colour", "drop.fill", tint: 0xE8457C)
+                HStack(spacing: 0) {
+                    ForEach(Accent.allCases) { accent in
+                        let picked = model.accent == accent && model.myColors == nil
+                        Button {
+                            ownColours = false
+                            Task { try? await model.updateMe(["accent": accent.rawValue, "accent_main": "", "accent_sub": ""]) }
+                        } label: {
+                            swatch(accent.gradient, picked: picked, ring: accent.main)
+                        }
+                        .buttonStyle(BouncyStyle(scale: 0.86))
+                        .frame(maxWidth: .infinity)
+                        .accessibilityLabel(accent.label)
+                    }
+                    Button { withAnimation(.snappy) { ownColours.toggle() } } label: {
+                        swatch(AngularGradient(colors: [Color(hex: 0xFF7AA2), Color(hex: 0xFFD166), Color(hex: 0x5FD3B0), Color(hex: 0x7CBEFF), Color(hex: 0xB19CFF), Color(hex: 0xFF7AA2)], center: .center),
+                               picked: model.myColors != nil, ring: Theme.main, icon: model.myColors == nil ? "plus" : nil)
+                    }
+                    .buttonStyle(BouncyStyle(scale: 0.86))
+                    .frame(maxWidth: .infinity)
+                    .accessibilityLabel("Your own colours")
+                }
+                if ownColours {
+                    MyColorsPicker()
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+                Text("The logo and Mimi change colour to match.").font(.jakarta(12)).foregroundStyle(Palette.muted)
+            }
+            divider
+            block {
+                label("Background", "sparkles", tint: 0xF0A020)
+                BackgroundPicker()
+                Text("Shown behind Home and the menu.").font(.jakarta(12)).foregroundStyle(Palette.muted)
+            }
+        }
+    }
+
+    private var alertsGroup: some View {
+        group(.alerts, "Notifications") {
+            if alerts.permission == .denied {
+                rowButton("Notifications are off", "Tap to turn them on in iPhone Settings", icon: "bell.slash.fill", tint: 0xE0526B) {
+                    if let url = URL(string: UIApplication.openNotificationSettingsURLString) { UIApplication.shared.open(url) }
+                }
+                divider
+            }
+            toggleRow(Alerts.Kind.dms.title, nil, icon: Alerts.Kind.dms.icon, tint: 0x2F80E0, isOn: $alertDMs)
+            divider
+            toggleRow(Alerts.Kind.servers.title, nil, icon: Alerts.Kind.servers.icon, tint: 0x7C5CF0, isOn: $alertServers)
+            divider
+            toggleRow(Alerts.Kind.social.title, nil, icon: Alerts.Kind.social.icon, tint: 0xE8457C, isOn: $alertSocial)
+            divider
+            toggleRow(Alerts.Kind.reels.title, nil, icon: Alerts.Kind.reels.icon, tint: 0xEE6E40, isOn: $alertReels)
+        }
+        .task { await alerts.requestPermission() }
+    }
+
+    private var privacyGroup: some View {
+        group(.privacy, "Privacy & status") {
+            rowButton("Status", statusLine, icon: "bubble.left.fill", tint: 0x16A37F) { statusSheet = true }
+            divider
+            toggleRow("Show when I'm online", "Off makes you look offline", icon: "circle.fill", tint: 0x17A673, isOn: Binding(
+                get: { model.me?.presence != "invisible" },
+                set: { on in Task { await Privacy.setPresence(on ? .online : .invisible, model: model) } }))
+            divider
+            rowButton("Blocked people", nil, icon: "hand.raised.fill", tint: 0xE0526B, value: "\(model.me?.blocked.count ?? 0)") { peopleList = .blocked }
+            divider
+            rowButton("Ignored people", nil, icon: "bell.slash.fill", tint: 0x86707C, value: "\(model.me?.ignored.count ?? 0)") { peopleList = .ignored }
+        } note: {
+            Text("Only friends (people who follow you back) can call you or send voice messages. Anyone else's first message arrives as a request.")
+        }
+    }
+
+    private var soundsGroup: some View {
+        group(.sounds, "Sounds & haptics") {
+            toggleRow("Haptics", "Little taps when you like, send and switch tabs", icon: "iphone.radiowaves.left.and.right", tint: 0x2F80E0, isOn: $haptics)
+            divider
+            toggleRow("Click sounds", "A soft pop when you tap (quiet on silent)", icon: "speaker.wave.2.fill", tint: 0xEE6E40, isOn: $clickSounds)
+        }
+    }
+
+    private var helpGroup: some View {
+        group(.help, "Help & legal") {
+            ForEach(Array(LegalDoc.allCases.enumerated()), id: \.element.id) { i, doc in
+                if i > 0 { divider }
+                rowButton(doc.title, nil, icon: doc == .terms ? "doc.text.fill" : doc == .privacy ? "lock.fill" : "heart.text.square.fill",
+                          tint: doc == .terms ? 0x7C5CF0 : doc == .privacy ? 0x16A37F : 0xE8457C) { legal = doc }
+            }
+        }
+    }
+
+    private var accountGroup: some View {
+        group(.account, "Account") {
+            rowButton("Log out", nil, icon: "rectangle.portrait.and.arrow.right", tint: 0x86707C) { confirmLogout = true }
+            divider
+            rowButton("Delete account", "Removes your profile. This can't be undone.", icon: "trash.fill", tint: 0xE0526B, danger: true) { confirmDelete = true }
+        } note: {
+            if let error { Text(error).foregroundStyle(Palette.danger) }
+        }
+    }
+
+    private var footer: some View {
+        VStack(spacing: 6) {
+            BrandLogo(height: 30)
+            Text("Sugerly for iPhone & iPad").font(.cute(16)).foregroundStyle(Theme.gradient)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 6)
+    }
+
+    // MARK: building blocks
+
+    private func group<Content: View>(_ part: Part, _ title: String, @ViewBuilder content: () -> Content) -> some View {
+        group(part, title, content: content) { EmptyView() }
+    }
+
+    private func group<Content: View, Note: View>(_ part: Part, _ title: String, @ViewBuilder content: () -> Content, @ViewBuilder note: () -> Note) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased()).font(.jakarta(12, .heavy)).tracking(1.2).foregroundStyle(Palette.muted).padding(.leading, 10)
+            VStack(spacing: 0) { content() }
+                .background(Palette.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+                .shadow(color: Palette.shadow, radius: 6, y: 2)
+            note()
+                .font(.jakarta(12)).foregroundStyle(Palette.muted)
+                .padding(.horizontal, 10)
+        }
+        .id(part)
+    }
+
+    // A roomy part of a group (for pickers).
+    private func block<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 12) { content() }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var divider: some View {
+        Rectangle().fill(Palette.border).frame(height: 1).padding(.leading, 58)
+    }
+
+    private func iconTile(_ icon: String, tint: UInt32) -> some View {
+        Image(systemName: icon).font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
+            .frame(width: 32, height: 32)
+            .background(Color(hex: tint), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func label(_ title: String, _ icon: String, tint: UInt32) -> some View {
+        HStack(spacing: 12) {
+            iconTile(icon, tint: tint)
+            Text(title).font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
+        }
+    }
+
+    private func rowContent(_ title: String, _ sub: String?, icon: String, tint: UInt32, danger: Bool) -> some View {
+        HStack(spacing: 12) {
+            iconTile(icon, tint: tint)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.jakarta(15, .semibold)).foregroundStyle(danger ? Palette.danger : Palette.text)
-                Spacer()
+                if let sub, !sub.isEmpty {
+                    Text(sub).font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(2)
+                }
+            }
+            Spacer(minLength: 8)
+        }
+    }
+
+    private func rowButton(_ title: String, _ sub: String?, icon: String, tint: UInt32, danger: Bool = false, value: String? = nil, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                rowContent(title, sub, icon: icon, tint: tint, danger: danger)
+                if let value { Text(value).font(.jakarta(14, .semibold)).foregroundStyle(Palette.muted) }
                 Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.muted)
             }
             .padding(.horizontal, 14)
-            .frame(height: 50)
-            .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .frame(minHeight: 56)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(BouncyStyle(scale: 0.97))
+        .buttonStyle(.plain)
     }
 
-    private var statusLine: String {
-        guard let me = model.me else { return "Status" }
-        let presence = Presence(rawValue: me.presence) ?? .online
-        let text = me.activeStatus
-        return text.isEmpty ? "Status: \(presence.label)" : "\(presence.label) · \(text)"
-    }
-
-    private func toggleRow(_ title: String, _ sub: String, isOn: Binding<Bool>) -> some View {
+    private func toggleRow(_ title: String, _ sub: String?, icon: String, tint: UInt32, isOn: Binding<Bool>) -> some View {
         Button { withAnimation(.snappy) { isOn.wrappedValue.toggle() } } label: {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.jakarta(15, .semibold)).foregroundStyle(Palette.text)
-                    Text(sub).font(.jakarta(12)).foregroundStyle(Palette.muted)
-                }
-                Spacer()
+            HStack(spacing: 8) {
+                rowContent(title, sub, icon: icon, tint: tint, danger: false)
                 Capsule().fill(isOn.wrappedValue ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.border))
                     .frame(width: 52, height: 32)
                     .overlay(alignment: isOn.wrappedValue ? .trailing : .leading) {
                         Circle().fill(.white).frame(width: 26, height: 26).padding(3).shadow(radius: 2, y: 1)
                     }
             }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 56)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .sensoryFeedback(.selection, trigger: isOn.wrappedValue)
+        .accessibilityAddTraits(isOn.wrappedValue ? .isSelected : [])
+    }
+
+    private func swatch<S: ShapeStyle>(_ fill: S, picked: Bool, ring: Color, icon: String? = nil) -> some View {
+        Circle().fill(fill)
+            .frame(width: 42, height: 42)
+            .overlay(Circle().strokeBorder(.white, lineWidth: picked ? 3 : 0))
+            .overlay {
+                if picked {
+                    Image(systemName: "checkmark").font(.system(size: 15, weight: .black)).foregroundStyle(.white)
+                } else if let icon {
+                    Image(systemName: icon).font(.system(size: 15, weight: .black)).foregroundStyle(.white)
+                }
+            }
+            .overlay(Circle().strokeBorder(ring.opacity(picked ? 0.9 : 0), lineWidth: 2).padding(-4))
+            .padding(4)
+    }
+
+    private func themeOption(_ value: String, _ title: String, _ icon: String) -> some View {
+        let active = (model.me?.theme.isEmpty == false ? model.me?.theme : "light") == value
+        return Button { Task { try? await model.updateMe(["theme": value]) } } label: {
+            HStack(spacing: 6) {
+                Image(systemName: icon).font(.system(size: 13, weight: .bold))
+                Text(title).font(.jakarta(13, .bold))
+            }
+            .foregroundStyle(active ? .white : Palette.text2)
+            .frame(maxWidth: .infinity)
+            .frame(height: 38)
+            .background {
+                if active { Capsule().fill(Theme.gradient) }
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(BouncyStyle(scale: 0.95))
+        .sensoryFeedback(.selection, trigger: active)
+    }
+
+    private var statusLine: String {
+        guard let me = model.me else { return "" }
+        let presence = Presence(rawValue: me.presence) ?? .online
+        let text = me.activeStatus
+        return text.isEmpty ? presence.label : "\(presence.label) · \(text)"
     }
 
     private func deleteAccount() async {

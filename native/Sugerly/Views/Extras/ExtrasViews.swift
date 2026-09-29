@@ -695,6 +695,7 @@ enum AppReleases {
             "Photo overlays: put pictures on top of your video or slideshow, with a cute white edge.",
             "Slideshows: make each photo longer or shorter, move it or remove it, right on the timeline.",
             "Your own colours in Settings: a main colour and a sub tone. The logo and Mimi turn to match any colour.",
+            "A brand-new Settings (your profile up top, quick jumps, tidy groups) and a fresh Community with new post cards and comments.",
         ]),
         AppRelease(id: "ios-1.8", icon: "lock.shield.fill", title: "Status, requests & privacy", date: "2026-09-28T13:00:00Z", items: [
             "Set your status like Discord: Online, Idle, Do not disturb or Invisible, plus a custom status that can clear itself.",
