@@ -455,7 +455,8 @@ struct ConversationRow: View {
         else if last.displayText.isEmpty { body = last.imageURL.isEmpty ? "Message" : Media.label(last.imageURL) }
         else { body = last.displayText }
         if last.authorEmail == me || !conversation.isGroup { return body }
-        return "\(last.authorName.split(separator: " ").first.map(String.init) ?? last.authorName): \(body)"
+        let name = model.name(last.authorEmail, last.authorName)
+        return "\(name.split(separator: " ").first.map(String.init) ?? name): \(body)"
     }
 }
 

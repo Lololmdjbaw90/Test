@@ -197,7 +197,7 @@ struct GalleryView: View {
                                 LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .center, endPoint: .bottom)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(art.title).font(.display(18)).foregroundStyle(.white).lineLimit(1)
-                                    Text(art.authorName).font(.jakarta(11, .semibold)).foregroundStyle(.white.opacity(0.85))
+                                    Text(model.name(art.authorEmail, art.authorName)).font(.jakarta(11, .semibold)).foregroundStyle(.white.opacity(0.85))
                                 }
                                 .padding(12)
                             }
@@ -315,8 +315,8 @@ struct GalleryCard: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text(artwork.title).font(.jakarta(14, .heavy)).foregroundStyle(Palette.text).lineLimit(1)
                 HStack(spacing: 6) {
-                    Avatar(url: model.person(artwork.authorEmail)?.picture ?? artwork.authorPicture, name: artwork.authorName, size: 20)
-                    Text(artwork.authorName).font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted).lineLimit(1)
+                    Avatar(url: model.person(artwork.authorEmail)?.picture ?? artwork.authorPicture, name: model.name(artwork.authorEmail, artwork.authorName), size: 20)
+                    Text(model.name(artwork.authorEmail, artwork.authorName)).font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted).lineLimit(1)
                     Spacer(minLength: 0)
                     Text("\(artwork.likeTotal)").font(.jakarta(11, .heavy)).foregroundStyle(Theme.pink)
                         .contentTransition(.numericText())
@@ -359,9 +359,9 @@ struct ArtworkDetailView: View {
                 Text(artwork.title).font(.display(32)).foregroundStyle(Palette.text)
                 Button { path.append(.person(artwork.authorEmail)) } label: {
                     HStack(spacing: 10) {
-                        Avatar(url: model.person(artwork.authorEmail)?.picture ?? artwork.authorPicture, name: artwork.authorName, size: 40)
+                        Avatar(url: model.person(artwork.authorEmail)?.picture ?? artwork.authorPicture, name: model.name(artwork.authorEmail, artwork.authorName), size: 40)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(artwork.authorName).font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
+                            Text(model.name(artwork.authorEmail, artwork.authorName)).font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
                             Text(Dates.ago(artwork.created)).font(.jakarta(12)).foregroundStyle(Palette.muted)
                         }
                     }

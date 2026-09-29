@@ -356,6 +356,17 @@ struct MainShell: View {
             if model.me?.lastDailyClaim != DailyReward.todayKey() { dailyShown = true }
         }
         .task { await Alerts.shared.requestPermission() }
+        // Live names, pictures and online status while the app is open
+        // (and straight away when you come back to it).
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            var tick = 0
+            while !Task.isCancelled {
+                await model.syncProfiles(presence: tick % 4 == 0)
+                tick += 1
+                try? await Task.sleep(for: .seconds(6))
+            }
+        }
         .task(id: scenePhase) {
             if scenePhase == .background { Alerts.shared.scheduleBackground() }
             guard scenePhase == .active else { return }

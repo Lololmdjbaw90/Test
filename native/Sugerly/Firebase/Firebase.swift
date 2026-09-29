@@ -24,6 +24,8 @@ enum HTTP {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.timeoutInterval = 30
+        // Always the newest data from the server, never an old saved copy.
+        request.cachePolicy = .reloadIgnoringLocalCacheData
         if let body {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")

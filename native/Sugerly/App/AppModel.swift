@@ -103,6 +103,8 @@ final class AppModel {
             let created = try await FS.create("User", profile, id: uid)
             me = UserProfile(created)
         }
+        if let me { people[me.email] = me }
+        profilesSince = Date()
         let searchName = (me?.displayName ?? "").lowercased()
         Task { try? await FS.update("User", uid, ["last_seen": FS.nowISO(), "search_name": searchName]) }
         Task { await loadPeople() }
@@ -128,6 +130,8 @@ final class AppModel {
 
     func person(_ email: String) -> UserProfile? {
         let key = email.lowercased()
+        // You always see your own newest name and picture, straight away.
+        if let me, me.email == key { return me }
         if let hit = people[key] { return hit }
         request(key)
         return nil
@@ -159,6 +163,67 @@ final class AppModel {
             }
             fetchingPeople = false
         }
+    }
+
+    // Someone's newest name (or what was saved with their post if we don't
+    // know them yet).
+    func name(_ email: String, _ fallback: String) -> String { person(email)?.displayName ?? fallback }
+
+    // Live profiles: when anyone changes their name, picture or looks (here
+    // or on the website), it shows everywhere within a few seconds, and who's
+    // online stays current. Only changed profiles are read, so it stays cheap.
+    @ObservationIgnored private var profilesSince = Date()
+    @ObservationIgnored private var writingMe = 0
+    @ObservationIgnored private var syncing = false
+
+    func syncProfiles(presence: Bool) async {
+        guard me != nil, !syncing else { return }
+        syncing = true
+        defer { syncing = false }
+        // Phones' clocks differ a little, so look back a couple of minutes.
+        let since = Dates.iso(profilesSince.addingTimeInterval(-120))
+        let started = Date()
+        if let docs = try? await FS.query("User", [.after("updated_date", since)], orderBy: "updated_date", limit: 100) {
+            merge(docs)
+            profilesSince = started
+        }
+        if presence {
+            let online = Dates.iso(Date().addingTimeInterval(-5 * 60))
+            if let docs = try? await FS.query("User", [.after("last_seen", online)], orderBy: "last_seen", limit: 100) { merge(docs, presenceOnly: true) }
+        }
+    }
+
+    // Fresh copies of people, applied only where something really changed
+    // (so nothing redraws for no reason). For who's online, only a change
+    // in online / idle / busy counts.
+    private func merge(_ docs: [Doc], presenceOnly: Bool = false) {
+        var map = people
+        var changed = false
+        for doc in docs {
+            let user = UserProfile(doc)
+            guard !user.email.isEmpty else { continue }
+            if presenceOnly {
+                guard user.email != me?.email else { continue }
+                if let old = map[user.email], old.presenceNow == user.presenceNow { continue }
+                map[user.email] = user
+                changed = true
+                continue
+            }
+            if user.email == me?.email {
+                // Your own profile changed somewhere else (e.g. the website).
+                if writingMe == 0, user != me {
+                    me = user
+                    map[user.email] = user
+                    changed = true
+                }
+                continue
+            }
+            if map[user.email] != user {
+                map[user.email] = user
+                changed = true
+            }
+        }
+        if changed { people = map }
     }
 
     // Look people up by name on the server (prefix search).
@@ -196,11 +261,16 @@ final class AppModel {
         next["updated_date"] = FS.nowISO()
         var merged = currentDoc(current)
         for (k, v) in next { merged[k] = v }
-        me = UserProfile(merged)
+        let updated = UserProfile(merged)
+        me = updated
+        people[updated.email] = updated
+        writingMe += 1
+        defer { writingMe -= 1 }
         do {
             try await FS.update("User", current.id, next)
         } catch {
             me = current
+            people[current.email] = current
             throw error
         }
     }
@@ -246,6 +316,8 @@ final class AppModel {
         NotificationCenter.default.post(name: Self.signingOut, object: nil)
         me = nil
         people = [:]
+        wanted = []
+        unknown = []
         toast = nil
         showNotifications = false
         showMenu = false

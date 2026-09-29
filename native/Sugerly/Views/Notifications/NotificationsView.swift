@@ -167,7 +167,7 @@ struct NotificationsPopup: View {
         let n = b.first
         var names: [String] = []
         for item in b.items {
-            let name = item.fromName.isEmpty ? "Someone" : item.fromName
+            let name = model.name(item.fromEmail, item.fromName.isEmpty ? "Someone" : item.fromName)
             if !names.contains(name) { names.append(name) }
         }
         let text: String = {

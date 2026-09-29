@@ -373,7 +373,7 @@ struct ChatView: View {
         HStack(spacing: 10) {
             RoundedRectangle(cornerRadius: 2).fill(Theme.main).frame(width: 4)
             VStack(alignment: .leading, spacing: 2) {
-                Text(message.authorEmail == me ? "You" : message.authorName).font(.jakarta(13, .heavy)).foregroundStyle(Theme.main)
+                Text(message.authorEmail == me ? "You" : model.name(message.authorEmail, message.authorName)).font(.jakarta(13, .heavy)).foregroundStyle(Theme.main)
                 Text(ChatBubble.preview(message)).font(.jakarta(13)).foregroundStyle(Palette.text2).lineLimit(1)
             }
             Spacer()
@@ -743,6 +743,7 @@ struct ChatBubble: View {
     var me = ""
     var onReact: (String) -> Void = { _ in }
     var onQuote: (String) -> Void = { _ in }
+    @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
 
     static func preview(_ m: Message) -> String {
@@ -793,7 +794,7 @@ struct ChatBubble: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: 4) {
             if showName {
-                Text(message.authorName).font(.jakarta(13, .heavy)).foregroundStyle(Self.nameColor(message.authorEmail))
+                Text(model.name(message.authorEmail, message.authorName)).font(.jakarta(13, .heavy)).foregroundStyle(Self.nameColor(message.authorEmail))
                     .padding(.horizontal, 8).padding(.top, 2)
             }
             if !message.replyPreview.isEmpty {

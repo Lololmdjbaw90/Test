@@ -696,6 +696,7 @@ enum AppReleases {
             "Slideshows: make each photo longer or shorter, move it or remove it, right on the timeline.",
             "Your own colours in Settings: a main colour and a sub tone. The logo and Mimi turn to match any colour.",
             "A brand-new Settings (your profile up top, quick jumps, tidy groups) and a fresh Community with new post cards and comments.",
+            "Names, pictures and who's online update live everywhere within seconds, including your own changes and after switching accounts.",
         ]),
         AppRelease(id: "ios-1.8", icon: "lock.shield.fill", title: "Status, requests & privacy", date: "2026-09-28T13:00:00Z", items: [
             "Set your status like Discord: Online, Idle, Do not disturb or Invisible, plus a custom status that can clear itself.",

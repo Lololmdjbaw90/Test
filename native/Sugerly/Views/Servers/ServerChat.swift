@@ -161,7 +161,7 @@ struct ChannelChatView: View {
             if let target = replyTo ?? editing {
                 HStack {
                     Image(systemName: editing != nil ? "pencil" : "arrowshape.turn.up.left.fill").foregroundStyle(Theme.main)
-                    Text(editing != nil ? "Editing your message" : "Replying to \(target.authorName)").font(.jakarta(12, .bold)).foregroundStyle(Palette.text2)
+                    Text(editing != nil ? "Editing your message" : "Replying to \(model.name(target.authorEmail, target.authorName))").font(.jakarta(12, .bold)).foregroundStyle(Palette.text2)
                     Spacer()
                     Button { replyTo = nil; if editing != nil { editing = nil; draft = "" } } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Palette.muted) }
                 }

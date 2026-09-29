@@ -494,8 +494,8 @@ struct HomeView: View {
                                 }
                                 .clipped()
                             HStack(spacing: 8) {
-                                Avatar(url: model.person(post.authorEmail)?.picture ?? post.authorPicture, name: post.authorName, size: 26)
-                                Text(post.authorName).font(.jakarta(13, .semibold)).foregroundStyle(Palette.text).lineLimit(1)
+                                Avatar(url: model.person(post.authorEmail)?.picture ?? post.authorPicture, name: model.name(post.authorEmail, post.authorName), size: 26)
+                                Text(model.name(post.authorEmail, post.authorName)).font(.jakarta(13, .semibold)).foregroundStyle(Palette.text).lineLimit(1)
                                 Spacer(minLength: 0)
                                 Image(systemName: "heart.fill").font(.system(size: 11)).foregroundStyle(Theme.pink)
                                 Text("\(post.likeTotal)").font(.jakarta(12, .bold)).foregroundStyle(Theme.pink)

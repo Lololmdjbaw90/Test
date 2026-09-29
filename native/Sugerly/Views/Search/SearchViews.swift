@@ -310,7 +310,7 @@ struct SearchView: View {
                                             RemoteImage(url: post.imageURL).frame(width: 54, height: 54).clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                         }
                                         VStack(alignment: .leading, spacing: 3) {
-                                            Text(post.authorName).font(.jakarta(13, .heavy)).foregroundStyle(Palette.text)
+                                            Text(model.name(post.authorEmail, post.authorName)).font(.jakarta(13, .heavy)).foregroundStyle(Palette.text)
                                             Text(post.text.isEmpty ? post.title : post.text).font(.jakarta(13)).foregroundStyle(Palette.text2).lineLimit(2).multilineTextAlignment(.leading)
                                         }
                                         Spacer(minLength: 0)

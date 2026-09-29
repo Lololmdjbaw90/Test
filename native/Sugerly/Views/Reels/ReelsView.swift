@@ -764,7 +764,7 @@ struct ReelPage: View {
     private var actions: some View {
         VStack(spacing: 14) {
             Button { path.append(.person(reel.authorEmail)) } label: {
-                Avatar(url: author?.picture ?? reel.authorPicture, name: reel.authorName, size: 54, nitro: author?.isNitro ?? false)
+                Avatar(url: author?.picture ?? reel.authorPicture, name: author?.displayName ?? reel.authorName, size: 54, nitro: author?.isNitro ?? false)
                     .overlay(Circle().strokeBorder(.white, lineWidth: (author?.isNitro ?? false) ? 0 : 2.5))
                     .overlay(alignment: .bottom) {
                         if (!following || justFollowed) && reel.authorEmail != me {
@@ -793,7 +793,7 @@ struct ReelPage: View {
             bubble("arrowshape.turn.up.right.fill") { sharing = true }
                 .accessibilityLabel("Share")
             Button { useSound = true } label: {
-                MusicDisc(picture: author?.picture ?? reel.authorPicture, name: reel.authorName, spinning: active && !paused)
+                MusicDisc(picture: author?.picture ?? reel.authorPicture, name: author?.displayName ?? reel.authorName, spinning: active && !paused)
             }
             .buttonStyle(BouncyStyle())
             .accessibilityLabel("Use this sound")
@@ -966,7 +966,7 @@ struct ReelPage: View {
 
     private var soundName: String {
         if !reel.musicTitle.isEmpty { return "\(reel.musicTitle)\(reel.musicArtist.isEmpty ? "" : " · \(reel.musicArtist)")" }
-        return "Original sound · \(reel.authorName)"
+        return "Original sound · \(author?.displayName ?? reel.authorName)"
     }
 
     // How long you watched teaches the For You brain.
