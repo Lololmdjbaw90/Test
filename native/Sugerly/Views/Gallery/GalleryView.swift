@@ -64,13 +64,12 @@ struct GalleryView: View {
                 if query.isEmpty && medium == "all" && sort == .newest && !featuredList.isEmpty {
                     featuredCarousel.stagger(appeared, 0)
                 }
-                header.stagger(appeared, 1)
-                SearchField(text: $query, placeholder: "Search fan art or artists…").stagger(appeared, 2)
+                searchRow.stagger(appeared, 1)
                 browseTiles.stagger(appeared, 3)
                 if query.isEmpty && topArtists.count > 1 { artistsRow.stagger(appeared, 4) }
                 if !shown.isEmpty {
                     HStack(alignment: .firstTextBaseline) {
-                        Text(wallTitle).font(.custom("LilitaOne", size: 24)).foregroundStyle(Palette.text)
+                        Text(wallTitle).font(.jakarta(18, .heavy)).foregroundStyle(Palette.text)
                         Spacer()
                         Text("\(shown.count) pieces").font(.jakarta(12, .bold)).foregroundStyle(Palette.muted)
                     }
@@ -127,19 +126,15 @@ struct GalleryView: View {
         }
     }
 
-    // Under the showcase: the title, how big the wall is, and a round +.
-    private var header: some View {
-        HStack(alignment: .center, spacing: 14) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Fan Art").font(.custom("LilitaOne", size: 44)).foregroundStyle(Palette.text)
-                Text("\(artworks.count) pieces · \(Set(artworks.map(\.authorEmail)).count) artists · made with love").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
-            }
-            Spacer(minLength: 0)
+    // No big title: just search and a round + to share, on one line.
+    private var searchRow: some View {
+        HStack(spacing: 10) {
+            SearchField(text: $query, placeholder: "Search fan art or artists…")
             Button { adding = true } label: {
-                Image(systemName: "plus").font(.system(size: 22, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 54, height: 54)
+                Image(systemName: "plus").font(.system(size: 19, weight: .bold)).foregroundStyle(.white)
+                    .frame(width: 48, height: 48)
                     .background(Theme.gradient, in: Circle())
-                    .shadow(color: Theme.main.opacity(0.35), radius: 10, y: 5)
+                    .shadow(color: Theme.main.opacity(0.3), radius: 8, y: 4)
             }
             .buttonStyle(BouncyStyle(scale: 0.88)).accessibilityLabel("Share fan art")
         }
@@ -179,7 +174,7 @@ struct GalleryView: View {
                         }
                         .overlay(alignment: .bottomLeading) {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text(art.title).font(.custom("LilitaOne", size: 30)).foregroundStyle(.white).lineLimit(2)
+                                Text(art.title).font(.display(28)).foregroundStyle(.white).lineLimit(2)
                                 HStack(spacing: 8) {
                                     Avatar(url: model.person(art.authorEmail)?.picture ?? art.authorPicture, name: art.authorName, size: 26)
                                     Text("by \(model.name(art.authorEmail, art.authorName))").font(.jakarta(13, .bold)).foregroundStyle(.white.opacity(0.95)).lineLimit(1)
