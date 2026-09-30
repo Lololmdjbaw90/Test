@@ -513,8 +513,8 @@ struct NitroRing: View {
         // used to spin too, which redrew it every frame on every MimiPlus
         // picture in a list and made scrolling stutter.)
         Circle()
-            .fill(Color(hex: 0xB19CFF).opacity(0.35))
-            .blur(radius: 5)
+            .fill(Color(hex: 0xB19CFF))
+            .shadow(color: Color(hex: 0xB19CFF).opacity(0.5), radius: 4)
             .overlay {
                 Circle()
                     .fill(AngularGradient(colors: [Color(hex: 0xFF7AA2), Color(hex: 0xB19CFF), Color(hex: 0x7CBEFF), Color(hex: 0xFFD166), Color(hex: 0xFF7AA2)], center: .center))

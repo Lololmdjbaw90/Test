@@ -190,6 +190,9 @@ struct MainShell: View {
         }
     }
     private var barHidden: Bool { typing || !currentPath.isEmpty || composer != nil || calls.showScreen }
+    @State private var barHeight: CGFloat = 0
+    // Room each main page keeps free at the bottom for the floating bar.
+    private var room: CGFloat { barHidden ? 0 : barHeight + 8 }
 
     private var currentPathBinding: Binding<[Route]> {
         switch tab {
@@ -206,19 +209,19 @@ struct MainShell: View {
     private var tabs: some View {
         TabView(selection: $tab) {
             NavigationStack(path: $homePath.instant) {
-                HomeView(path: $homePath.instant, compose: { composer = $0 }).sugarRoutes($homePath.instant)
+                HomeView(path: $homePath.instant, compose: { composer = $0 }).tabRoom(room).sugarRoutes($homePath.instant)
             }
             .tag(AppTab.home)
             .toolbar(.hidden, for: .tabBar)
 
             NavigationStack(path: $communityPath.instant) {
-                CommunityView(path: $communityPath.instant, compose: { composer = .post }).sugarRoutes($communityPath.instant)
+                CommunityView(path: $communityPath.instant, compose: { composer = .post }).tabRoom(room).sugarRoutes($communityPath.instant)
             }
             .tag(AppTab.community)
             .toolbar(.hidden, for: .tabBar)
 
             NavigationStack(path: $galleryPath.instant) {
-                GalleryView(path: $galleryPath.instant, isRoot: true).sugarRoutes($galleryPath.instant)
+                GalleryView(path: $galleryPath.instant, isRoot: true).tabRoom(room).sugarRoutes($galleryPath.instant)
             }
             .tag(AppTab.gallery)
             .toolbar(.hidden, for: .tabBar)
@@ -230,7 +233,7 @@ struct MainShell: View {
             .toolbar(.hidden, for: .tabBar)
 
             NavigationStack(path: $chatPath.instant) {
-                ChatListView(path: $chatPath.instant).sugarRoutes($chatPath.instant)
+                ChatListView(path: $chatPath.instant).tabRoom(room).sugarRoutes($chatPath.instant)
             }
             .tag(AppTab.chat)
             .toolbar(.hidden, for: .tabBar)
@@ -238,6 +241,7 @@ struct MainShell: View {
             NavigationStack(path: $mePath.instant) {
                 PersonView(email: model.me?.email ?? "", path: $mePath.instant)
                     .sugarTopBar($mePath.instant)
+                    .tabRoom(room)
                     .sugarRoutes($mePath.instant)
             }
             .tag(AppTab.me)
@@ -282,7 +286,10 @@ struct MainShell: View {
     private var core: some View {
         tabs
         .environment(\.backgroundPaused, menuSheet != nil || composer != nil || model.showMenu || model.showNotifications)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        // The bar floats on top; each page makes exactly its height of room
+        // at the bottom (tabRoom), so nothing ends up hidden under it. (Room
+        // made around the whole tab view didn't always reach every page.)
+        .overlay(alignment: .bottom) {
             if !barHidden {
                 VStack(spacing: 8) {
                     VoiceDock()
@@ -290,8 +297,12 @@ struct MainShell: View {
                     SugarTabBar(tab: $tab, unread: chats.unread, dark: tab == .reels) { creating = true }
                 }
                 .padding(.bottom, 2)
+                .background(GeometryReader { g in Color.clear.preference(key: TabBarHeightKey.self, value: g.size.height) })
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+        }
+        .onPreferenceChange(TabBarHeightKey.self) { height in
+            if abs(height - barHeight) > 0.5 { barHeight = height }
         }
         .overlay { ZStack { popups } }
         .sheet(item: $menuSheet) { sheet in menuSheetView(sheet) }
@@ -691,7 +702,20 @@ struct TopBar: View {
     }
 }
 
+// How tall the floating bottom bar is right now (tab bar, music, call).
+struct TabBarHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
 extension View {
+    // Keeps the bottom of a main page clear of the floating bar.
+    func tabRoom(_ height: CGFloat) -> some View {
+        safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear.frame(height: height).allowsHitTesting(false)
+        }
+    }
+
     // Tab root screens: our own top bar instead of the system navigation bar.
     func sugarTopBar(_ path: Binding<[Route]>) -> some View {
         self

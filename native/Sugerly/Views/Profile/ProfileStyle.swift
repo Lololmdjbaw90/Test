@@ -372,8 +372,95 @@ struct BannerPatternView: View {
             Image(systemName: pattern == "stars" ? "star.fill" : "heart.fill")
                 .font(.system(size: 12, weight: .bold)).foregroundStyle(.white.opacity(0.28)).tag(0)
         }
+        // A fresh drawing for each pattern: without this the first one you
+        // picked stayed on screen and you couldn't change it.
+        .id(pattern)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+
+// Little banner tiles to pick a pattern from, each showing the pattern.
+struct BannerPatternPicker: View {
+    @Binding var selection: String
+    var tint: Color = Theme.main
+    var light: Color = Theme.light
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 10)], spacing: 10) {
+            ForEach(BannerPattern.all) { item in
+                let active = selection == item.id
+                Button { withAnimation(.snappy) { selection = item.id } } label: {
+                    VStack(spacing: 6) {
+                        ZStack {
+                            LinearGradient(colors: [light, tint], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            if !item.id.isEmpty { BannerPatternView(pattern: item.id) }
+                        }
+                        .frame(height: 54)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(active ? Palette.text : .clear, lineWidth: 2.5).padding(-3))
+                        .overlay(alignment: .topTrailing) {
+                            if active {
+                                Image(systemName: "checkmark.circle.fill").font(.system(size: 16, weight: .bold))
+                                    .foregroundStyle(.white, Palette.text)
+                                    .padding(5)
+                                    .transition(.scale.combined(with: .opacity))
+                            }
+                        }
+                        Text(item.label).font(.jakarta(12, active ? .heavy : .semibold)).foregroundStyle(active ? Palette.text : Palette.text2)
+                    }
+                }
+                .buttonStyle(BouncyStyle(scale: 0.95))
+                .accessibilityLabel("\(item.label) pattern")
+                .accessibilityAddTraits(active ? .isSelected : [])
+            }
+        }
+    }
+}
+
+// Little pictures to pick a frame from, each showing the frame.
+struct AvatarFramePicker: View {
+    @Binding var selection: String
+    var picture: String
+    var name: String
+    var tint: Color = Theme.main
+    var nitro: Bool
+    var onLocked: () -> Void
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 78), spacing: 10)], spacing: 12) {
+            ForEach(AvatarFrame.all) { item in
+                let active = selection == item.id
+                let locked = item.premium && !nitro
+                Button {
+                    if locked { onLocked() } else { withAnimation(.snappy) { selection = item.id } }
+                } label: {
+                    VStack(spacing: 6) {
+                        ZStack {
+                            Avatar(url: picture, name: name, size: 44, ring: item.id.isEmpty)
+                                .padding(3)
+                                .background(Palette.bg, in: Circle())
+                            if !item.id.isEmpty { AvatarFrameView(frame: item.id, color: tint, size: 44) }
+                        }
+                        .frame(width: 64, height: 64)
+                        .background(active ? tint.opacity(0.12) : Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(active ? tint : Palette.border, lineWidth: active ? 2 : 1))
+                        .overlay(alignment: .topTrailing) {
+                            if locked {
+                                Image(systemName: "lock.fill").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+                                    .frame(width: 18, height: 18).background(NitroStyle.gradient, in: Circle())
+                                    .offset(x: 4, y: -4)
+                            }
+                        }
+                        Text(item.label).font(.jakarta(11, active ? .heavy : .semibold)).foregroundStyle(active ? Palette.text : Palette.text2)
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                }
+                .buttonStyle(BouncyStyle(scale: 0.95))
+                .accessibilityLabel(locked ? "\(item.label) frame, MimiPlus" : "\(item.label) frame")
+                .accessibilityAddTraits(active ? .isSelected : [])
+            }
+        }
     }
 }
 

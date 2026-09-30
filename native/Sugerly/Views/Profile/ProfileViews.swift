@@ -157,20 +157,22 @@ struct ProfileContent: View {
             .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
             .padding(.horizontal, 12)
 
-            Avatar(url: person.picture, name: person.displayName, size: 104, ring: person.avatarFrame.isEmpty, nitro: person.isNitro,
+            // One ring at a time: a chosen frame replaces the plain / MimiPlus
+            // ring (both at once used to draw over each other).
+            let framed = !person.avatarFrame.isEmpty && (person.isNitro || !AvatarFrame.isPremium(person.avatarFrame))
+            Avatar(url: person.picture, name: person.displayName, size: 104, ring: !framed && !person.isNitro, nitro: !framed && person.isNitro,
                    presence: isMe ? (Presence(rawValue: person.presence) ?? .online) : person.presenceNow)
                 .padding(4)
-                .background(Palette.bg, in: Circle())
+                .background(Circle().fill(Palette.bg).shadow(color: (accent ?? Theme.pink).opacity(0.3), radius: 16, y: 8))
                 .overlay {
-                    if !person.avatarFrame.isEmpty && (person.isNitro || !AvatarFrame.isPremium(person.avatarFrame)) {
-                        AvatarFrameView(frame: person.avatarFrame, color: accent ?? Theme.main, size: 104)
-                    }
+                    if framed { AvatarFrameView(frame: person.avatarFrame, color: accent ?? Theme.main, size: 104) }
                 }
-                .shadow(color: (accent ?? Theme.pink).opacity(0.3), radius: 16, y: 8)
-                .offset(x: 26, y: 58)
+                .offset(x: 26, y: 56)
         }
         .padding(.top, 8)
-        .padding(.bottom, 54)
+        // Room for the picture that hangs below the banner, so it never
+        // covers the name.
+        .padding(.bottom, 72)
     }
 
     private var accent: Color? { ProfileColors.color(person.profileColor) }
@@ -833,7 +835,7 @@ struct EditProfileView: View {
                 .frame(height: 110)
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 HStack(alignment: .bottom, spacing: 10) {
-                    Avatar(url: model.me?.picture ?? "", name: name, size: 58, ring: frame.isEmpty, nitro: nitro)
+                    Avatar(url: model.me?.picture ?? "", name: name, size: 58, ring: frame.isEmpty && !nitro, nitro: frame.isEmpty && nitro)
                         .padding(3)
                         .background(Palette.bg, in: Circle())
                         .overlay { if !frame.isEmpty { AvatarFrameView(frame: frame, color: accentTint ?? Theme.main, size: 58) } }
@@ -851,24 +853,17 @@ struct EditProfileView: View {
     private var patternSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Banner pattern").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
-            FlowLayout(spacing: 8) {
-                ForEach(BannerPattern.all) { item in
-                    Chip(title: item.label, icon: item.icon, active: pattern == item.id) { withAnimation(.snappy) { pattern = item.id } }
-                }
-            }
+            BannerPatternPicker(selection: $pattern,
+                                tint: ProfileColors.color(profileColor) ?? Theme.main,
+                                light: ProfileColors.color(bannerColor) ?? Theme.light)
         }
     }
 
     private var frameSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Picture frame").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
-            FlowLayout(spacing: 8) {
-                ForEach(AvatarFrame.all) { item in
-                    Chip(title: item.premium && !nitro ? "\(item.label) (MimiPlus)" : item.label, icon: item.icon, active: frame == item.id) {
-                        if item.premium && !nitro { shop = true } else { withAnimation(.snappy) { frame = item.id } }
-                    }
-                }
-            }
+            AvatarFramePicker(selection: $frame, picture: model.me?.picture ?? "", name: name,
+                              tint: ProfileColors.color(profileColor) ?? Theme.main, nitro: nitro) { shop = true }
         }
     }
 
