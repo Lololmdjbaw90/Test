@@ -40,6 +40,7 @@ struct DailyRewardButton: View {
                 defer { claiming = false }
                 do {
                     if try await DailyReward.claim(model) != nil {
+                        RewardSound.play()
                         confetti = true
                         try? await Task.sleep(for: .seconds(2))
                         confetti = false
@@ -82,7 +83,14 @@ struct DailyRewardButton: View {
             }
         }
         .buttonStyle(BouncyStyle(scale: 0.96))
-        .overlay { if confetti { ConfettiView() } }
+        .overlay {
+            if confetti {
+                ZStack {
+                    ConfettiView()
+                    SparkleBurst(radius: 110)
+                }
+            }
+        }
         .sensoryFeedback(.success, trigger: status.claimed)
         .onAppear { wiggle = true }
     }
@@ -114,7 +122,14 @@ struct DailyRewardSheet: View {
                     .contentTransition(.symbolEffect(.replace))
             }
             .padding(.top, 34)
-            .overlay { if reward != nil { ConfettiView() } }
+            .overlay {
+                if reward != nil {
+                    ZStack {
+                        ConfettiView()
+                        SparkleBurst(radius: 140)
+                    }
+                }
+            }
 
             Text(reward == nil ? "Daily reward!" : "+\(reward ?? 0) coins").font(.display(38)).foregroundStyle(Theme.gradient)
             Text(reward == nil ? "Log in every day to grow your streak and earn more coins." : "See you tomorrow — your streak is \(max(1, DailyReward.status(model.me).streak)) days!")
@@ -155,6 +170,7 @@ struct DailyRewardSheet: View {
                             failed = false
                             if let got { reward = got }
                         }
+                        if got != nil { RewardSound.play() }
                     } catch {
                         withAnimation(.snappy) { failed = true }
                     }

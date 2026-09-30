@@ -464,6 +464,7 @@ struct WelcomeSetupView: View {
                 .overlay(Circle().strokeBorder(Theme.gradient, lineWidth: 4))
             }
             .overlay { ConfettiView() }
+            .overlay { SparkleBurst(radius: 150) }
             Text("You're all set!").font(.display(40)).foregroundStyle(Theme.gradient)
             Text("Welcome to Sugerly, \(name). Here's a little gift to get you started.")
                 .font(.jakarta(15)).foregroundStyle(Palette.text2).multilineTextAlignment(.center).padding(.horizontal, 30)
@@ -488,6 +489,7 @@ struct WelcomeSetupView: View {
         .frame(maxWidth: .infinity)
         .task {
             try? await Task.sleep(for: .milliseconds(350))
+            RewardSound.play()
             for n in stride(from: 5, through: 50, by: 5) {
                 withAnimation(.snappy(duration: 0.12)) { coins = n }
                 try? await Task.sleep(for: .milliseconds(45))
