@@ -235,9 +235,12 @@ struct ArtPromptCard: View {
                     Circle().fill(.white.opacity(0.1)).frame(width: 90, height: 90).offset(x: -30, y: 40)
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                // Shadow on the card shape only, so the floating icon
+                // doesn't make the whole card's shadow redraw every frame.
+                .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Theme.main).shadow(color: Theme.main.opacity(0.35), radius: 16, y: 8))
         }
-        .shadow(color: Theme.main.opacity(0.35), radius: 16, y: 8)
         .onAppear { float = true }
+        .onDisappear { float = false }
     }
 }
 

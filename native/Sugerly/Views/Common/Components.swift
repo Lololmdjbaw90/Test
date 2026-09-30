@@ -507,11 +507,23 @@ enum Moderation {
 // Nitro's animated rainbow-candy ring around a profile picture.
 struct NitroRing: View {
     @State private var spin = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
+        // The glow sits still underneath; only the colours turn. (The glow
+        // used to spin too, which redrew it every frame on every MimiPlus
+        // picture in a list and made scrolling stutter.)
         Circle()
-            .fill(AngularGradient(colors: [Color(hex: 0xFF7AA2), Color(hex: 0xB19CFF), Color(hex: 0x7CBEFF), Color(hex: 0xFFD166), Color(hex: 0xFF7AA2)], center: .center))
-            .rotationEffect(.degrees(spin ? 360 : 0))
-            .shadow(color: Color(hex: 0xB19CFF).opacity(0.6), radius: 6)
-            .onAppear { withAnimation(.linear(duration: 4).repeatForever(autoreverses: false)) { spin = true } }
+            .fill(Color(hex: 0xB19CFF).opacity(0.35))
+            .blur(radius: 5)
+            .overlay {
+                Circle()
+                    .fill(AngularGradient(colors: [Color(hex: 0xFF7AA2), Color(hex: 0xB19CFF), Color(hex: 0x7CBEFF), Color(hex: 0xFFD166), Color(hex: 0xFF7AA2)], center: .center))
+                    .rotationEffect(.degrees(spin ? 360 : 0))
+            }
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.linear(duration: 6).repeatForever(autoreverses: false)) { spin = true }
+            }
+            .onDisappear { spin = false }
     }
 }

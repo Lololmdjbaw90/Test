@@ -97,7 +97,9 @@ struct NameText: View {
 private struct AuroraName: View {
     let text: Text
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
+        // 12 updates a second is plenty for a slow 5-second slide (many of
+        // these can be on screen at once in a feed).
+        TimelineView(.animation(minimumInterval: 1 / 12)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             let phase = CGFloat(t.truncatingRemainder(dividingBy: 5) / 5)
             text.foregroundStyle(LinearGradient(

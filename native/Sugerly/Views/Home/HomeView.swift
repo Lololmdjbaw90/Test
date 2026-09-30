@@ -56,8 +56,9 @@ struct DailyRewardButton: View {
                     .foregroundStyle(status.claimed ? AnyShapeStyle(Theme.pink) : AnyShapeStyle(Color.white))
                     .frame(width: 42, height: 42)
                     .background(status.claimed ? Theme.pink.opacity(0.12) : Color.white.opacity(0.22), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-                    .rotationEffect(.degrees(wiggle && !status.claimed ? 8 : -8))
-                    .animation(status.claimed ? .default : .easeInOut(duration: 0.35).repeatForever(autoreverses: true), value: wiggle)
+                    // A light bounce the system draws (it used to wiggle
+                    // non-stop, which kept Home redrawing all the time).
+                    .symbolEffect(.pulse, options: .repeating, isActive: !status.claimed && wiggle)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(status.claimed ? "Daily reward claimed" : "Claim daily reward").font(.jakarta(15, .bold))
                     HStack(spacing: 4) {
