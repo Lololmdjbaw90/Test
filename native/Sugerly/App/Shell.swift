@@ -170,6 +170,14 @@ struct MainShell: View {
     @State private var typing = false
     @State private var dailyShown = false
     @State private var menuSheet: MenuSheet?
+    @State private var openedAt = Date()
+
+    // Right after logging in, background refreshes wait a moment so the first
+    // screen can draw smoothly (coming back to the app doesn't wait).
+    private func settle(_ seconds: Double) async {
+        let left = seconds - Date().timeIntervalSince(openedAt)
+        if left > 0 { try? await Task.sleep(for: .seconds(left)) }
+    }
 
     private var currentPath: [Route] {
         switch tab {
@@ -381,14 +389,16 @@ struct MainShell: View {
             // First the notifications question (only ever asked once), then
             // the daily reward. On a new account both used to pop up at the
             // same moment and the reward sheet could get stuck.
+            try? await Task.sleep(for: .seconds(1))
             await Alerts.shared.requestPermission()
-            try? await Task.sleep(for: .seconds(1.2))
+            try? await Task.sleep(for: .seconds(1.5))
             if model.me?.lastDailyClaim != DailyReward.todayKey() { dailyShown = true }
         }
         // Live names, pictures and online status while the app is open
         // (and straight away when you come back to it).
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
+            await settle(2.5)
             var tick = 0
             while !Task.isCancelled {
                 await model.syncProfiles(presence: tick % 2 == 0)
@@ -406,6 +416,7 @@ struct MainShell: View {
                 }
             }
             guard scenePhase == .active else { return }
+            await settle(1.2)
             var tick = 0
             while !Task.isCancelled {
                 let me = model.me?.email ?? ""

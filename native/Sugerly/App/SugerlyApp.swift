@@ -87,7 +87,9 @@ struct RootView: View {
                     WelcomeSetupView().transition(.opacity)
                 } else {
                     // A fresh shell per account: no pages, chats or players carry over.
-                    MainShell().id(model.me?.id ?? "").transition(.opacity.combined(with: .scale(scale: 1.03)))
+                    // Just a fade: zooming the whole app while it builds its
+                    // first screen made logging in stutter.
+                    MainShell().id(model.me?.id ?? "").transition(.opacity)
                 }
             case .banned(let message):
                 BannedView(message: message).transition(.opacity)

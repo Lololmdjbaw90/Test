@@ -110,8 +110,13 @@ final class AppModel {
         profilesSince = Date()
         let searchName = (me?.displayName ?? "").lowercased()
         Task { try? await FS.update("User", uid, ["last_seen": FS.nowISO(), "search_name": searchName]) }
-        Task { await loadPeople() }
+        // The rest waits until the first screen is up, so logging in stays smooth.
         Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            await loadPeople()
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(3))
             await Referrals.ensureCode(self)
             await Referrals.claim(self)
         }

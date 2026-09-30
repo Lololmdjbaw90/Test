@@ -463,7 +463,6 @@ struct AppBadge: View {
                 FourPointStar()
                     .fill(.white)
                     .frame(width: s.2 * unit, height: s.2 * unit)
-                    .shadow(color: .white.opacity(0.9), radius: 6 * unit * 4)
                     .phaseAnimator(reduceMotion ? [1.0] : [0.55, 1.0, 0.8]) { view, phase in
                         view
                             .scaleEffect(phase)
