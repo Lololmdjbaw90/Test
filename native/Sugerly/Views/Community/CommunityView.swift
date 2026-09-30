@@ -314,7 +314,7 @@ struct CommunityView: View {
                         startThread
                         ForEach(Array(visible.enumerated()), id: \.element.id) { index, post in
                             PostCard(post: post, path: $path, reporting: $reporting, conversational: true)
-                                .transition(.opacity)
+                                .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 18)), removal: .opacity))
                                 .onAppear { if index >= visible.count - 5 { Task { await store.loadMore() } } }
                             if index == 1 && !suggestions.isEmpty && feed == .forYou {
                                 suggested.padding(12)
@@ -333,7 +333,7 @@ struct CommunityView: View {
             .padding(.top, 10)
             .padding(.bottom, 30)
             .sideRails(680)
-            .animation(.snappy, value: feed)
+            .animation(.spring(response: 0.45, dampingFraction: 0.85), value: feed)
         }
         .sugarBackground()
         .sugarTopBar($path)
@@ -462,12 +462,13 @@ struct CommunityView: View {
                                 Image(systemName: "plus").font(.system(size: 11, weight: .black)).foregroundStyle(.white)
                                     .frame(width: 22, height: 22).background(Theme.gradient, in: Circle())
                                     .overlay(Circle().strokeBorder(Palette.bg, lineWidth: 2.5))
+                                    .phaseAnimator([1.0, 1.15]) { v, s in v.scaleEffect(s) } animation: { _ in .easeInOut(duration: 1.1) }
                             }
                         Text("You").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
                     }
                 }
                 .buttonStyle(BouncyStyle()).accessibilityLabel("Share a post")
-                ForEach(storyPeople, id: \.self) { email in
+                ForEach(Array(storyPeople.enumerated()), id: \.element) { i, email in
                     let person = model.person(email)
                     Button { path.append(.person(email)) } label: {
                         VStack(spacing: 6) {
@@ -478,6 +479,9 @@ struct CommunityView: View {
                         }
                     }
                     .buttonStyle(BouncyStyle())
+                    .scaleEffect(appeared ? 1 : 0.4)
+                    .opacity(appeared ? 1 : 0)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.62).delay(0.15 + Double(min(i, 10)) * 0.05), value: appeared)
                 }
             }
             .padding(.horizontal, 4)
@@ -548,6 +552,7 @@ struct PostCard: View {
     @State private var heart = false
     @State private var confirmDelete = false
     @State private var sendSheet = false
+    @State private var likeBurst: UUID?
 
     private var me: String { model.me?.email ?? "" }
     private var liked: Bool { LikeBook.shared.isLiked(post, me: me) }
@@ -717,8 +722,14 @@ struct PostCard: View {
                         .padding(.top, 2)
                 }
                 HStack(spacing: 18) {
-                    Button { store.toggleLike(post, me: model.me) } label: {
+                    Button {
+                        if !liked { burstLike() }
+                        store.toggleLike(post, me: model.me)
+                    } label: {
                         iconCount(liked ? "heart.fill" : "heart", post.likeTotal, on: liked)
+                            .overlay(alignment: .leading) {
+                                if let likeBurst { HeartPop().id(likeBurst).offset(x: 8) }
+                            }
                     }
                     .sensoryFeedback(.impact(weight: .light), trigger: liked)
                     .accessibilityLabel(liked ? "Unlike" : "Like")
@@ -750,6 +761,23 @@ struct PostCard: View {
         .padding(.vertical, 14)
         .contentShape(Rectangle())
         .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1).allowsHitTesting(false) }
+        // Posts glide up and fade in as they come into view.
+        .scrollTransition(.animated(.spring(response: 0.5, dampingFraction: 0.86)).threshold(.visible(0.08))) { content, phase in
+            content
+                .opacity(phase.isIdentity ? 1 : 0)
+                .offset(y: phase == .bottomTrailing ? 28 : 0)
+                .scaleEffect(phase.isIdentity ? 1 : 0.97, anchor: .top)
+        }
+    }
+
+    // Little hearts fly out of the button when you like.
+    private func burstLike() {
+        let id = UUID()
+        likeBurst = id
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(750))
+            if likeBurst == id { likeBurst = nil }
+        }
     }
 
     // "3 replies · 12 likes"
@@ -1589,5 +1617,27 @@ private struct ConversationSurface: ViewModifier {
                 .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
         } else { content.sugarCard(radius: 30) }
+    }
+}
+
+// A little burst of hearts (a like). Shows once and fades away.
+struct HeartPop: View {
+    var size: CGFloat = 9
+    var spread: CGFloat = 22
+    @State private var go = false
+
+    var body: some View {
+        ZStack {
+            ForEach(0..<7, id: \.self) { i in
+                let a = Double(i) / 7 * 2 * .pi - .pi / 2
+                Image(systemName: "heart.fill").font(.system(size: size, weight: .bold))
+                    .foregroundStyle(i.isMultiple(of: 2) ? Theme.main : Theme.light)
+                    .offset(x: go ? cos(a) * spread : 0, y: go ? sin(a) * spread : 0)
+                    .scaleEffect(go ? 1 : 0.2)
+                    .opacity(go ? 0 : 1)
+            }
+        }
+        .allowsHitTesting(false)
+        .onAppear { withAnimation(.easeOut(duration: 0.65)) { go = true } }
     }
 }

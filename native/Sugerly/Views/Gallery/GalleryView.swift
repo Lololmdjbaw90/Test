@@ -26,6 +26,7 @@ struct GalleryView: View {
     @State private var appeared = false
     @State private var pendingLikes = Set<String>()
     @State private var loadError: String?
+    @State private var featuredIndex = 0
 
     init(path: Binding<[Route]>, isRoot: Bool = false, initialArtworks: [Artwork] = []) {
         _path = path
@@ -60,13 +61,22 @@ struct GalleryView: View {
     var body: some View {
         let content = ScrollView {
             LazyVStack(alignment: .leading, spacing: 18) {
-                header.stagger(appeared, 0)
-                SearchField(text: $query, placeholder: "Search fan art or artists…").stagger(appeared, 1)
-                if query.isEmpty && medium == "all" && sort == .newest {
-                    if let piece = pieceOfTheDay { heroPiece(piece).stagger(appeared, 2) }
-                    if topArtists.count > 1 { artistsRow.stagger(appeared, 3) }
+                if query.isEmpty && medium == "all" && sort == .newest && !featuredList.isEmpty {
+                    featuredCarousel.stagger(appeared, 0)
                 }
-                chips.stagger(appeared, 4)
+                header.stagger(appeared, 1)
+                SearchField(text: $query, placeholder: "Search fan art or artists…").stagger(appeared, 2)
+                browseTiles.stagger(appeared, 3)
+                if query.isEmpty && topArtists.count > 1 { artistsRow.stagger(appeared, 4) }
+                if !shown.isEmpty {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(wallTitle).font(.custom("LilitaOne", size: 24)).foregroundStyle(Palette.text)
+                        Spacer()
+                        Text("\(shown.count) pieces").font(.jakarta(12, .bold)).foregroundStyle(Palette.muted)
+                    }
+                    .padding(.top, 4)
+                    .stagger(appeared, 5)
+                }
                 if let loadError {
                     VStack(spacing: 8) {
                         Text(loadError).font(.jakarta(13)).foregroundStyle(Palette.danger)
@@ -117,68 +127,157 @@ struct GalleryView: View {
         }
     }
 
-    // A gallery entrance: small caps, a big title and a round + to add art.
+    // Under the showcase: the title, how big the wall is, and a round +.
     private var header: some View {
-        HStack(alignment: .bottom, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("THE FAN ART GALLERY").font(.jakarta(10, .heavy)).tracking(2).foregroundStyle(Theme.main)
-                Text("Fan Art").font(.custom("LilitaOne", size: 50)).foregroundStyle(Palette.text)
-                Text("\(artworks.count) pieces by \(Set(artworks.map(\.authorEmail)).count) fans").font(.jakarta(13, .medium)).foregroundStyle(Palette.muted)
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Fan Art").font(.custom("LilitaOne", size: 44)).foregroundStyle(Palette.text)
+                Text("\(artworks.count) pieces · \(Set(artworks.map(\.authorEmail)).count) artists · made with love").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
             }
             Spacer(minLength: 0)
             Button { adding = true } label: {
                 Image(systemName: "plus").font(.system(size: 22, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 56, height: 56)
+                    .frame(width: 54, height: 54)
                     .background(Theme.gradient, in: Circle())
                     .shadow(color: Theme.main.opacity(0.35), radius: 10, y: 5)
             }
-            .buttonStyle(BouncyStyle(scale: 0.9)).accessibilityLabel("Share fan art")
+            .buttonStyle(BouncyStyle(scale: 0.88)).accessibilityLabel("Share fan art")
         }
-        .padding(.top, 6)
     }
 
-    // The most-loved piece this week (or the newest), shown big.
-    private var pieceOfTheDay: Artwork? {
+    // The most-loved pieces (this week first), as a sliding showcase.
+    private var featuredList: [Artwork] {
         let weekAgo = Dates.iso(Date().addingTimeInterval(-7 * 86_400))
         let recent = artworks.filter { $0.created > weekAgo }
-        return (recent.isEmpty ? artworks : recent).max { $0.likeTotal < $1.likeTotal } ?? artworks.first
+        let pool = recent.count >= 3 ? recent : artworks
+        return Array(pool.sorted { ($0.featured ? 1 : 0, $0.likeTotal) > ($1.featured ? 1 : 0, $1.likeTotal) }.prefix(5))
     }
 
-    private func heroPiece(_ art: Artwork) -> some View {
-        let liked = LikeBook.shared.isLiked(art, me: model.me?.email ?? "")
-        return Button { path.append(.artwork(art)) } label: {
-            RemoteImage(url: art.imageURL)
-                .frame(height: 360)
-                .frame(maxWidth: .infinity)
-                .clipped()
-                .overlay {
-                    LinearGradient(colors: [.black.opacity(0.25), .clear, .clear, .black.opacity(0.7)], startPoint: .top, endPoint: .bottom)
-                }
-                .overlay(alignment: .topLeading) {
-                    Label("PIECE OF THE DAY", systemImage: "sparkles").font(.jakarta(10, .heavy)).tracking(1.2).foregroundStyle(.white)
-                        .padding(.horizontal, 10).frame(height: 26)
-                        .background(.black.opacity(0.3), in: Capsule())
-                        .padding(14)
-                }
-                .overlay(alignment: .bottomLeading) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(art.title).font(.custom("LilitaOne", size: 28)).foregroundStyle(.white).lineLimit(2)
-                        HStack(spacing: 8) {
-                            Avatar(url: model.person(art.authorEmail)?.picture ?? art.authorPicture, name: art.authorName, size: 26)
-                            Text("by \(model.name(art.authorEmail, art.authorName))").font(.jakarta(13, .bold)).foregroundStyle(.white.opacity(0.95)).lineLimit(1)
-                            Spacer(minLength: 0)
-                            Label("\(art.likeTotal)", systemImage: liked ? "heart.fill" : "heart").font(.jakarta(13, .heavy)).foregroundStyle(.white)
-                                .padding(.horizontal, 10).frame(height: 30)
-                                .background(.white.opacity(0.22), in: Capsule())
+    private var featuredCarousel: some View {
+        let list = featuredList
+        return VStack(spacing: 10) {
+            TabView(selection: $featuredIndex) {
+                ForEach(Array(list.enumerated()), id: \.element.id) { i, art in
+                    Button { path.append(.artwork(art)) } label: {
+                        GeometryReader { geo in
+                            RemoteImage(url: art.imageURL)
+                                .frame(width: geo.size.width, height: geo.size.height)
+                                // A slow zoom while each piece is on show.
+                                .scaleEffect(featuredIndex == i ? 1.08 : 1)
+                                .animation(.easeOut(duration: 5), value: featuredIndex)
+                                .clipped()
                         }
+                        .overlay {
+                            LinearGradient(colors: [.black.opacity(0.2), .clear, .black.opacity(0.72)], startPoint: .top, endPoint: .bottom)
+                        }
+                        .overlay(alignment: .topLeading) {
+                            Label(i == 0 ? "FEATURED" : "#\(i + 1) MOST LOVED", systemImage: i == 0 ? "sparkles" : "heart.fill")
+                                .font(.jakarta(10, .heavy)).tracking(1.1).foregroundStyle(.white)
+                                .padding(.horizontal, 10).frame(height: 26)
+                                .background(.black.opacity(0.3), in: Capsule())
+                                .padding(14)
+                        }
+                        .overlay(alignment: .bottomLeading) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(art.title).font(.custom("LilitaOne", size: 30)).foregroundStyle(.white).lineLimit(2)
+                                HStack(spacing: 8) {
+                                    Avatar(url: model.person(art.authorEmail)?.picture ?? art.authorPicture, name: art.authorName, size: 26)
+                                    Text("by \(model.name(art.authorEmail, art.authorName))").font(.jakarta(13, .bold)).foregroundStyle(.white.opacity(0.95)).lineLimit(1)
+                                    Spacer(minLength: 0)
+                                    Label("\(art.likeTotal)", systemImage: "heart.fill").font(.jakarta(13, .heavy)).foregroundStyle(.white)
+                                        .padding(.horizontal, 10).frame(height: 30)
+                                        .background(.white.opacity(0.22), in: Capsule())
+                                }
+                            }
+                            .padding(18)
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+                        .padding(.horizontal, 2)
                     }
-                    .padding(16)
+                    .buttonStyle(BouncyStyle(scale: 0.98))
+                    .accessibilityLabel("Open \(art.title)")
+                    .tag(i)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-                .shadow(color: Theme.main.opacity(0.22), radius: 18, y: 10)
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .frame(height: 400)
+            .shadow(color: Theme.main.opacity(0.22), radius: 18, y: 10)
+            // Page dots: the current one stretches.
+            HStack(spacing: 6) {
+                ForEach(list.indices, id: \.self) { i in
+                    Capsule().fill(i == featuredIndex ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.border))
+                        .frame(width: i == featuredIndex ? 22 : 7, height: 7)
+                }
+            }
+            .animation(.spring(response: 0.35, dampingFraction: 0.75), value: featuredIndex)
         }
-        .buttonStyle(BouncyStyle(scale: 0.98))
-        .accessibilityLabel("Open \(art.title), piece of the day")
+        // Moves on by itself every few seconds.
+        .task(id: list.map(\.id)) {
+            while !Task.isCancelled, list.count > 1 {
+                try? await Task.sleep(for: .seconds(5))
+                guard !Task.isCancelled else { return }
+                withAnimation(.smooth(duration: 0.6)) { featuredIndex = (featuredIndex + 1) % list.count }
+            }
+        }
+    }
+
+    private var wallTitle: String {
+        if !query.isEmpty { return "Results" }
+        if medium != "all" { return medium.capitalized }
+        switch sort {
+        case .newest: return "Fresh on the wall"
+        case .liked: return "Most loved"
+        case .featured: return "Staff picks"
+        case .saved: return "Your saved pieces"
+        }
+    }
+
+    // Colourful tiles to browse the wall (and one per medium).
+    private var browseTiles: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(Sort.allCases, id: \.self) { s in
+                    let on = sort == s && medium == "all"
+                    let look: (String, [UInt32]) = {
+                        switch s {
+                        case .newest: return ("clock.fill", [0xFF9EC4, 0xE0508A])
+                        case .liked: return ("heart.fill", [0xFFB38A, 0xF25F8C])
+                        case .featured: return ("star.fill", [0xFFD166, 0xF0A020])
+                        case .saved: return ("bookmark.fill", [0xB19CFF, 0x7C5CF0])
+                        }
+                    }()
+                    Button { withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { sort = s; medium = "all" } } label: {
+                        tile(s.rawValue, look.0, look.1, on: on)
+                    }
+                    .buttonStyle(BouncyStyle(scale: 0.93))
+                }
+                ForEach(mediums.dropFirst(), id: \.self) { m in
+                    Button { withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { medium = medium == m ? "all" : m } } label: {
+                        tile(m.capitalized, "paintbrush.pointed.fill", [0x7CBEFF, 0x2F80E0], on: medium == m)
+                    }
+                    .buttonStyle(BouncyStyle(scale: 0.93))
+                }
+            }
+            .padding(.vertical, 6).padding(.horizontal, 2)
+        }
+    }
+
+    private func tile(_ title: String, _ icon: String, _ colors: [UInt32], on: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Image(systemName: icon).font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
+            Spacer(minLength: 0)
+            HStack(spacing: 4) {
+                Text(title).font(.jakarta(13, .heavy)).foregroundStyle(.white).lineLimit(1)
+                if on { Image(systemName: "checkmark.circle.fill").font(.system(size: 12, weight: .bold)).foregroundStyle(.white) }
+            }
+        }
+        .padding(12)
+        .frame(width: 118, height: 84, alignment: .leading)
+        .background(LinearGradient(colors: colors.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.white.opacity(on ? 0.95 : 0.25), lineWidth: on ? 2.5 : 1))
+        .scaleEffect(on ? 1.04 : 1)
+        .shadow(color: Color(hex: colors.last ?? 0).opacity(on ? 0.45 : 0.2), radius: on ? 10 : 5, y: 4)
+        .opacity(on || (sort == .newest && medium == "all") ? 1 : 0.85)
     }
 
     // Fans with the most pieces, as round portraits.
@@ -213,42 +312,16 @@ struct GalleryView: View {
         }
     }
 
-    private var chips: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(Sort.allCases, id: \.self) { s in
-                        Chip(title: s.rawValue, icon: s == .newest ? "clock.fill" : s == .liked ? "heart.fill" : s == .featured ? "star.fill" : "bookmark.fill", active: sort == s) { withAnimation(.snappy) { sort = s } }
-                    }
-                }
-                .padding(.vertical, 2)
-            }
-            if mediums.count > 2 {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(mediums, id: \.self) { m in
-                            Button { withAnimation(.snappy) { medium = m } } label: {
-                                Text(m == "all" ? "All mediums" : m.capitalized)
-                                    .font(.jakarta(12, .bold))
-                                    .foregroundStyle(medium == m ? Theme.main : Palette.text2)
-                                    .padding(.horizontal, 12).frame(height: 30)
-                                    .background(medium == m ? Theme.soft : Color.clear, in: Capsule())
-                                    .overlay(Capsule().strokeBorder(medium == m ? Theme.main.opacity(0.4) : Palette.border, lineWidth: 1))
-                            }
-                            .buttonStyle(BouncyStyle())
-                        }
-                    }
-                    .padding(.vertical, 2)
-                }
-            }
-        }
-    }
-
     private func column(_ list: [Artwork], offset: Int) -> some View {
         LazyVStack(spacing: 16) {
             ForEach(Array(list.enumerated()), id: \.element.id) { i, art in
                 GalleryCard(artwork: art, liked: LikeBook.shared.isLiked(art, me: model.me?.email ?? ""), onOpen: { path.append(.artwork(art)) }, onLike: { toggleLike(art) }, onProfile: { path.append(.person(art.authorEmail)) })
-                    .stagger(appeared, min(6, 2 + i + offset))
+                    .scrollTransition(.animated(.spring(response: 0.5, dampingFraction: 0.8)).threshold(.visible(0.05))) { content, phase in
+                        content
+                            .opacity(phase.isIdentity ? 1 : 0)
+                            .scaleEffect(phase.isIdentity ? 1 : 0.9)
+                            .offset(y: phase == .bottomTrailing ? 30 : 0)
+                    }
                     .onAppear { if i >= list.count - 3 { Task { await loadMore() } } }
             }
         }
@@ -309,7 +382,21 @@ struct GalleryCard: View {
     var onProfile: () -> Void
     @Environment(AppModel.self) private var model
     @State private var saving = false
+    @State private var pop: UUID?
     private var saved: Bool { model.me?.savedArtworks.contains(artwork.id) == true }
+
+    // A big heart pops over the picture (and little ones fly) when you love it.
+    private func love() {
+        if !liked {
+            let id = UUID()
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) { pop = id }
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(800))
+                if pop == id { withAnimation(.easeOut(duration: 0.25)) { pop = nil } }
+            }
+        }
+        onLike()
+    }
 
     // A piece on the wall, Pinterest style: just the picture with a small
     // heart, and underneath a short title and the artist. No box around it.
@@ -335,8 +422,19 @@ struct GalleryCard: View {
                 Button { save() } label: { Label(saved ? "Unsave" : "Save", systemImage: saved ? "bookmark.slash" : "bookmark") }
                 Button { onProfile() } label: { Label("See the artist", systemImage: "person.crop.circle") }
             }
+            .overlay {
+                if let pop {
+                    ZStack {
+                        HeartPop(size: 14, spread: 46).id(pop)
+                        Image(systemName: "heart.fill").font(.system(size: 54)).foregroundStyle(Theme.gradient)
+                            .shadow(color: Theme.main.opacity(0.5), radius: 12)
+                    }
+                    .transition(.scale(scale: 0.3).combined(with: .opacity))
+                    .allowsHitTesting(false)
+                }
+            }
             .overlay(alignment: .bottomTrailing) {
-                Button(action: onLike) {
+                Button(action: love) {
                     Image(systemName: liked ? "heart.fill" : "heart").font(.system(size: 14, weight: .bold))
                         .foregroundStyle(liked ? Theme.main : Palette.text2)
                         .symbolEffect(.bounce, value: liked)
