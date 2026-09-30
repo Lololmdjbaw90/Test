@@ -65,6 +65,9 @@ struct CallInfo: Identifiable, Equatable {
 @Observable
 final class CallCenter {
     static let ringMs: Double = 45_000
+    // One for the whole app (calls can be answered from iPhone's call
+    // screen while the app's pages aren't open).
+    static let shared = CallCenter()
 
     var incoming: CallInfo?
     var current: CallInfo?
@@ -78,6 +81,27 @@ final class CallCenter {
     // Your own calls given up because the other person called you at the
     // same moment (both of you end up in their call instead).
     @ObservationIgnored private var merged = Set<String>()
+    @ObservationIgnored private var watchToken: UUID?
+
+    init() {
+        attach(voice: VoiceEngine.shared)
+        let bridge = VoiceEngine.shared.bridge
+        bridge.onAnswer = { [weak self] id in Task { await self?.answerFromSystem(id) } }
+        bridge.onDecline = { [weak self] id in Task { await self?.declineFromSystem(id) } }
+    }
+
+    // Logging out: forget everything about the last account's calls.
+    func reset() {
+        stopRinging()
+        incoming = nil
+        current = nil
+        showScreen = false
+        error = nil
+        me = nil
+        dismissed = []
+        merged = []
+        watchToken = nil
+    }
 
     func attach(voice: VoiceEngine) {
         self.voice = voice
@@ -120,6 +144,10 @@ final class CallCenter {
             let created = try await FS.create("Call", doc)
             let call = CallInfo(created)
             current = call
+            // Rings their phone even when Sugerly is closed there (iPhone's
+            // own call screen). Without the server set up it still rings in
+            // the app.
+            Task { _ = try? await Payments.call("call-ring", ["call_id": call.id]) }
             withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { showScreen = true }
             await voice.join(room(call), me: me)
             ringback(call.id)
@@ -128,7 +156,7 @@ final class CallCenter {
         }
     }
 
-    func accept(_ call: CallInfo, me: UserProfile) async {
+    func accept(_ call: CallInfo, me: UserProfile, fromSystem: Bool = false) async {
         guard let voice else { return }
         self.me = me
         stopRinging()
@@ -143,14 +171,18 @@ final class CallCenter {
         next.answeredAt = call.answeredAt ?? Date().timeIntervalSince1970 * 1000
         current = next
         withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { showScreen = true }
-        await voice.join(room(next), me: me)
+        await voice.join(room(next), me: me, adoptSystemCall: fromSystem)
     }
 
     func decline(_ call: CallInfo, me: UserProfile) {
+        decline(call, email: me.email)
+    }
+
+    private func decline(_ call: CallInfo, email: String) {
         stopRinging()
         dismissed.insert(call.id)
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { incoming = nil }
-        var fields: Doc = ["declined_by": Array(Set(call.declinedBy + [me.email])), "updated_date": FS.nowISO()]
+        var fields: Doc = ["declined_by": Array(Set(call.declinedBy + [email])), "updated_date": FS.nowISO()]
         if !call.isGroup && call.status == "ringing" {
             fields["status"] = "ended"
             fields["ended_at"] = Int(Date().timeIntervalSince1970 * 1000)
@@ -206,13 +238,57 @@ final class CallCenter {
         _ = try? await FS.create("DirectMessage", doc)
     }
 
+    // MARK: iPhone's call screen
+
+    // A call push is ringing on iPhone's call screen: the in-app banner and
+    // ringtone step aside so it doesn't ring twice.
+    func systemRinging(_ callId: String) {
+        guard incoming?.id == callId else { return }
+        stopRinging()
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { incoming = nil }
+    }
+
+    // Answered on iPhone's call screen (maybe with the app closed): load who
+    // you are and the call, then join it on that same system call.
+    func answerFromSystem(_ callId: String) async {
+        dismissed.insert(callId)
+        let profile: UserProfile?
+        if let me { profile = me } else if let uid = AuthClient.shared.uid, let doc = try? await FS.get("User", uid) { profile = UserProfile(doc) } else { profile = nil }
+        guard let profile, let doc = try? await FS.get("Call", callId) else {
+            // Couldn't load it: hang up the answered system call.
+            if voice?.bridge.adoptAnswered() == true { voice?.bridge.end() }
+            return
+        }
+        let call = CallInfo(doc)
+        guard call.status != "ended" else {
+            if voice?.bridge.adoptAnswered() == true { voice?.bridge.end() }
+            return
+        }
+        self.me = profile
+        await accept(call, me: profile, fromSystem: true)
+        // The app's pages may not be open: keep an eye on the call anyway.
+        if watchToken == nil { Task { await watch(me: profile) } }
+    }
+
+    // Declined on iPhone's call screen.
+    func declineFromSystem(_ callId: String) async {
+        dismissed.insert(callId)
+        guard let email = AuthClient.shared.email, let doc = try? await FS.get("Call", callId) else { return }
+        decline(CallInfo(doc), email: email)
+    }
+
     // MARK: watching for calls
 
     // Checks every few seconds for calls ringing you, and keeps the call
     // you're in up to date (answered, declined, ended by the other side).
     func watch(me: UserProfile) async {
         self.me = me
-        while !Task.isCancelled {
+        // Only the newest watcher keeps going (one started after answering
+        // from iPhone's call screen hands over to the app's own).
+        let token = UUID()
+        watchToken = token
+        defer { if watchToken == token { watchToken = nil } }
+        while !Task.isCancelled && watchToken == token {
             await check(me)
             try? await Task.sleep(for: .seconds(current != nil || incoming != nil ? 2 : 3.5))
         }
@@ -234,7 +310,7 @@ final class CallCenter {
         let calls = docs.map(CallInfo.init)
         let ringingMe = calls.first { c in
             c.callerEmail != me.email && c.ringing && !c.declinedBy.contains(me.email) && !c.joined.contains(me.email)
-                && c.id != current?.id && !dismissed.contains(c.id)
+                && c.id != current?.id && !dismissed.contains(c.id) && !(voice?.bridge.isRinging(c.id) ?? false)
         }
         // You both called each other at the same moment: the call started
         // first wins and both of you end up in it, connected straight away,

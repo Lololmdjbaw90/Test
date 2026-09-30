@@ -426,7 +426,10 @@ final class AppModel {
         try? await Task.sleep(for: .milliseconds(300))
         if closeSheets(animated: true) { try? await Task.sleep(for: .milliseconds(380)) }
         withAnimation(.easeInOut(duration: 0.35)) { goodbye = true }
+        // Calls for this account stop ringing this phone.
+        let forgetting = Task { await IncomingCalls.shared.forget() }
         try? await Task.sleep(for: .milliseconds(420))
+        await forgetting.value
         finish?()
         resetForNextAccount()
         var quiet = Transaction()
@@ -525,6 +528,7 @@ final class AppModel {
             }
         }
         try? await FS.delete("PayoutInfo", me.id)
+        try? await FS.delete("PushToken", me.email)
         try? await FS.delete("User", me.id)
 
         try await auth.deleteAccount()

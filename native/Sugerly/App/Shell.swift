@@ -156,8 +156,8 @@ struct MainShell: View {
     @State private var posts = PostsStore()
     @State private var player = Player()
     @State private var notes = NotificationsStore()
-    @State private var voice = VoiceEngine()
-    @State private var calls = CallCenter()
+    @State private var voice = VoiceEngine.shared
+    @State private var calls = CallCenter.shared
     @State private var homePath: [Route] = []
     @State private var communityPath: [Route] = []
     @State private var galleryPath: [Route] = []
@@ -369,9 +369,13 @@ struct MainShell: View {
             player.pause()
             if calls.current != nil { Task { await calls.hangUp() } }
             if voice.room != nil { Task { await voice.leave(silent: true) } }
+            calls.reset()
         }
         .task(id: model.me?.email) {
-            if let me = model.me { await calls.watch(me: me) }
+            guard let me = model.me else { return }
+            // This phone can be rung while the app is closed.
+            await IncomingCalls.shared.upload()
+            await calls.watch(me: me)
         }
         // Joining a call: the song stops so you can hear each other.
         .onChange(of: voice.room?.id) { _, id in
@@ -380,6 +384,12 @@ struct MainShell: View {
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: voice.room?.id)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in typing = true }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in typing = false }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in typing = false }
+        // Leaving the app closes the keyboard without always saying so, which
+        // left the bottom bar hidden when you came back. Coming back with the
+        // keyboard still up tells us again.
+        .onChange(of: scenePhase) { _, phase in if phase != .active { typing = false } }
+        .onChange(of: tab) { _, _ in typing = false }
         .sheet(isPresented: $creating, onDismiss: {
             if let pendingComposer { composer = pendingComposer; self.pendingComposer = nil }
         }) {

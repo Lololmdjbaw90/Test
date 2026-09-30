@@ -13,6 +13,10 @@ import WebRTC
 @MainActor
 @Observable
 final class VoiceEngine: NSObject {
+    // One for the whole app, so a call answered on iPhone's call screen can
+    // connect even before (or without) the app's pages opening.
+    static let shared = VoiceEngine()
+
     struct Room: Equatable {
         var id: String
         var name: String
@@ -110,6 +114,9 @@ final class VoiceEngine: NSObject {
 
     var isConnected: Bool { room != nil && !connecting }
 
+    // The iOS call bridge (incoming calls ring through it too).
+    var bridge: CallBridge { call }
+
     // True while you're in a call or voice channel: music, reels and voice
     // notes then leave the audio setup alone (switching it to plain playback
     // turned the microphone and the other person's voice off).
@@ -144,7 +151,7 @@ final class VoiceEngine: NSObject {
 
     // MARK: join / leave
 
-    func join(_ room: Room, me: UserProfile, canSpeak: Bool = true) async {
+    func join(_ room: Room, me: UserProfile, canSpeak: Bool = true, adoptSystemCall: Bool = false) async {
         if self.room != nil { await leave() }
         guard await AVCaptureDevice.requestAccess(for: .audio) else {
             error = "Microphone access is off — turn it on in Settings → Sugerly."
@@ -165,7 +172,12 @@ final class VoiceEngine: NSObject {
         handled = []
         Self.live = true
         Task { await self.loadRelays() }
-        systemCall = await call.start(title: room.isCall ? room.name : "\(room.name) · \(room.serverName)")
+        // Answered on iPhone's call screen: that call carries the audio.
+        if adoptSystemCall && call.adoptAnswered() {
+            systemCall = true
+        } else {
+            systemCall = await call.start(title: room.isCall ? room.name : "\(room.name) · \(room.serverName)")
+        }
         if !systemCall {
             // No CallKit: run the audio ourselves.
             let session = AVAudioSession.sharedInstance()

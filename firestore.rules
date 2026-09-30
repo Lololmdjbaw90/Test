@@ -403,6 +403,15 @@ service cloud.firestore {
       allow delete: if isAdmin() || resource.data.caller_email == ownEmail();
     }
 
+    // Each phone's call-push address (so calls ring it while Sugerly is
+    // closed). Only you can save or remove yours; only the server reads them.
+    match /PushToken/{email} {
+      allow read: if false;
+      allow create, update: if signedIn() && email == ownEmail()
+        && request.resource.data.email == ownEmail();
+      allow delete: if signedIn() && email == ownEmail();
+    }
+
     // Reports of posts / people: anyone signed in can file one, only admins see them.
     match /Report/{id} {
       allow create: if signedIn() && request.resource.data.reporter_email == ownEmail();
