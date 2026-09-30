@@ -203,7 +203,7 @@ final class VoiceEngine: NSObject {
         levelLoop?.cancel()
         levelLoop = nil
         call.end()
-        if cameraOn { cameraCapturer?.stopCapture() }
+        if cameraOn { await cameraCapturer?.stopCapture() }
         if sharingScreen { RPScreenRecorder.shared().stopCapture { _ in } }
         cameraCapturer = nil
         screenCapturer = nil
@@ -461,7 +461,7 @@ final class VoiceEngine: NSObject {
         guard let format = formats.min(by: { abs(width($0) - 640) < abs(width($1) - 640) }) else { return }
         let fps = Int(min(24, format.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? 24))
         let capturer = cameraCapturer ?? RTCCameraVideoCapturer(delegate: source)
-        capturer.startCapture(with: device, format: format, fps: fps)
+        try? await capturer.startCapture(with: device, format: format, fps: fps)
         cameraCapturer = capturer
         cameraOn = true
         sendVideo(true)
