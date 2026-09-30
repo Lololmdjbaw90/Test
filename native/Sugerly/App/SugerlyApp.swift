@@ -59,6 +59,7 @@ struct RootView: View {
         } else {
             custom = nil
         }
+        AppIconSync.match(model.accent, custom: custom?.main)
         guard animated else {
             Theme.accent = model.accent
             Theme.custom = custom
@@ -155,10 +156,10 @@ struct BannedView: View {
 struct SplashView: View {
     @State private var pulse = false
     var body: some View {
-        VStack(spacing: 14) {
-            BrandLogo(height: 86)
-                .scaleEffect(pulse ? 1.06 : 0.96)
-                .shadow(color: Theme.main.opacity(0.45), radius: pulse ? 28 : 10)
+        VStack(spacing: 16) {
+            AppBadge(size: 132)
+                .scaleEffect(pulse ? 1.04 : 0.97)
+            BrandLogo(height: 58)
             ProgressView().tint(Theme.main)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

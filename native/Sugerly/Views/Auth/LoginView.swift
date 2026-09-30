@@ -19,9 +19,11 @@ struct LoginView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 22) {
-                BrandLogo(height: 84)
+                AppBadge(size: 104)
+                    .padding(.top, 40)
+                BrandLogo(height: 64)
                     .shadow(color: Theme.main.opacity(0.4), radius: 22)
-                    .padding(.top, 48)
+                    .padding(.top, -8)
                     .accessibilityLabel("Sugerly")
 
                 VStack(spacing: 6) {

@@ -107,6 +107,36 @@ enum Theme {
     static var tint: TintShift { custom.map { TintShift(from: 0xD9577F, to: $0.main) } ?? .none }
 }
 
+// The home screen icon follows your colour: one icon per accent, and custom
+// colours get the closest one. iOS shows a short "icon changed" note.
+@MainActor
+enum AppIconSync {
+    private static var pending: Task<Void, Never>?
+
+    static func match(_ accent: Accent, custom: UInt32?) {
+        let target = custom.map(nearest) ?? accent
+        let name: String? = target == .rose ? nil : "AppIcon-\(target.rawValue.capitalized)"
+        pending?.cancel()
+        pending = Task { @MainActor in
+            // Wait a moment so trying colours quickly only changes it once.
+            try? await Task.sleep(for: .milliseconds(800))
+            let app = UIApplication.shared
+            guard !Task.isCancelled, app.supportsAlternateIcons, app.alternateIconName != name,
+                  app.applicationState == .active else { return }
+            try? await app.setAlternateIconName(name)
+        }
+    }
+
+    static func nearest(_ hex: UInt32) -> Accent {
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(hex: hex).getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        let hue = h * 360
+        let hues: [(Accent, CGFloat)] = [(.rose, 340), (.lavender, 253), (.mint, 163), (.peach, 16), (.sky, 213)]
+        func distance(_ x: CGFloat) -> CGFloat { let d = abs(x - hue); return min(d, 360 - d) }
+        return hues.min { distance($0.1) < distance($1.1) }?.0 ?? .rose
+    }
+}
+
 // Turns the rose artwork (logo, Mimi) to any colour: rotates the hue from
 // rose to the target and matches how strong the colour is. White and the
 // dark outlines stay as they are.
@@ -406,6 +436,64 @@ struct BrandLogo: View {
                 Task { try? await Task.sleep(for: .milliseconds(220)); withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) { hop = false } }
             }
             .accessibilityLabel("Sugerly")
+    }
+}
+
+// The app icon (the polka-dot S with Mimi) in your colour, with sparkles
+// that twinkle and drift a little — the home screen icon can't move, this can.
+struct AppBadge: View {
+    var size: CGFloat = 120
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var art: String {
+        let accent = Theme.custom.map { AppIconSync.nearest($0.main) } ?? Theme.accent
+        return "IconBadge-\(accent.rawValue)"
+    }
+
+    // Same spots as the home screen icon (x, y, size out of 1024).
+    private let sparkles: [(CGFloat, CGFloat, CGFloat, Double)] = [(846, 170, 124, 0), (930, 296, 52, 0.5), (130, 250, 76, 1.0)]
+
+    var body: some View {
+        let unit = size / 1024
+        ZStack(alignment: .topLeading) {
+            Image(art).resizable().interpolation(.high).scaledToFit()
+            ForEach(sparkles.indices, id: \.self) { i in
+                let s = sparkles[i]
+                FourPointStar()
+                    .fill(.white)
+                    .frame(width: s.2 * unit, height: s.2 * unit)
+                    .shadow(color: .white.opacity(0.8), radius: 4 * unit * 4)
+                    .phaseAnimator(reduceMotion ? [1.0] : [0.55, 1.0, 0.8]) { view, phase in
+                        view
+                            .scaleEffect(phase)
+                            .rotationEffect(.degrees((phase - 0.8) * 60))
+                            .opacity(0.55 + phase * 0.45)
+                            .offset(x: (phase - 0.8) * 10 * unit * 4, y: (0.8 - phase) * 14 * unit * 4)
+                    } animation: { _ in .easeInOut(duration: 1.1 + Double(i) * 0.25).delay(s.3 * 0.3) }
+                    .position(x: s.0 * unit, y: s.1 * unit)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous))
+        .shadow(color: Theme.main.opacity(0.35), radius: size * 0.12, y: size * 0.05)
+        .accessibilityLabel("Sugerly")
+    }
+}
+
+// A soft four-point star, like the sparkles on the icon.
+struct FourPointStar: Shape {
+    func path(in rect: CGRect) -> Path {
+        let c = CGPoint(x: rect.midX, y: rect.midY)
+        let r = min(rect.width, rect.height) / 2
+        var p = Path()
+        for i in 0..<8 {
+            let angle = Double(i) * .pi / 4 - .pi / 2
+            let radius = i.isMultiple(of: 2) ? r : r * 0.28
+            let point = CGPoint(x: c.x + radius * cos(angle), y: c.y + radius * sin(angle))
+            if i == 0 { p.move(to: point) } else { p.addLine(to: point) }
+        }
+        p.closeSubpath()
+        return p
     }
 }
 
