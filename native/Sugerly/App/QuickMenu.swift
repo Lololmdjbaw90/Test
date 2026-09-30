@@ -59,7 +59,7 @@ struct QuickMenu: View {
             },
             Item(title: "Settings", detail: "Account, privacy and colours", icon: "gearshape.fill", colors: [0x7CBEFF, 0x2F80E0]) { open(.settings) },
             Item(title: "What's new", detail: "The latest updates", icon: "gift.fill", colors: [0xFF9EC4, 0xE0508A]) { go(.updates) },
-            Item(title: "Help", detail: "Community rules and support", icon: "questionmark.circle.fill", colors: [0x5FD3B0, 0x16A37F]) { open(.legal(.guidelines)) },
+            Item(title: "Help & support", detail: "Chat with the Sugerly team", icon: "questionmark.bubble.fill", colors: [0x5FD3B0, 0x16A37F]) { go(.support) },
         ]
         if model.me?.isAdmin == true {
             list.append(Item(title: "Admin", detail: "Manage Sugerly", icon: "shield.lefthalf.filled", colors: [0xFFD166, 0xF0A020]) { go(.admin) })

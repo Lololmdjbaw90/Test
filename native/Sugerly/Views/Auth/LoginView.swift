@@ -199,7 +199,7 @@ enum LegalDoc: String, Identifiable, CaseIterable {
             ("No warranty", "Sugerly is provided \"as is\". We work hard to keep it running and safe, but we can't promise it will always be available or error-free. To the extent the law allows, we aren't liable for indirect or consequential losses. Nothing in these Terms limits rights you have by law as a consumer."),
             ("Apple", "If you use the iPhone or iPad app, these Terms are between you and Sugerly, not Apple. Apple isn't responsible for the app, its content, support or any claims about it, and Apple and its subsidiaries may enforce these Terms as third-party beneficiaries."),
             ("Changes", "We may update these Terms. If the changes are important we'll tell you in the app (What's new). Using Sugerly after that means you accept the new Terms."),
-            ("Contact", "Questions or requests? Email sugerlysupport@gmail.com, or use Contact us in the app (Settings → Help & legal) or on the Help page of the website. We usually reply within 2 days."),
+            ("Contact", "Questions or requests? Email sugerlysupport@gmail.com, or use the Help & support chat in the app (Settings → Help & legal, or Help & support in the menu) or on the Help page of the website. We usually reply within 2 days."),
         ]
         case .privacy: return [
             ("What we collect", "Account details you give us: email address, display name, profile picture, banner and bio. What you create: artworks, posts, reels, music, comments, messages, likes, follows and reports. If you use commissions: your orders, prices and payment status (card details go straight to Stripe; we never see or store your full card number). Artists can add a PayPal email for payouts, which only admins can see. We don't collect your location, contacts or advertising identifiers, and we don't track you across other apps or websites."),
@@ -215,7 +215,7 @@ enum LegalDoc: String, Identifiable, CaseIterable {
             ("Children", "Sugerly isn't for children under 13 and we don't knowingly collect their data. If you believe a child under 13 has an account, contact us and we'll delete it."),
             ("Security", "Data is sent over encrypted connections and protected by Firebase security rules that only let people read and change what they're allowed to. Only our payment server can mark an order as paid."),
             ("Changes", "We'll tell you in the app if this policy changes in an important way."),
-            ("Contact", "Questions or requests? Email sugerlysupport@gmail.com, or use Contact us in the app (Settings → Help & legal) or on the Help page of the website. We usually reply within 2 days."),
+            ("Contact", "Questions or requests? Email sugerlysupport@gmail.com, or use the Help & support chat in the app (Settings → Help & legal, or Help & support in the menu) or on the Help page of the website. We usually reply within 2 days."),
         ]
         case .guidelines: return [
             ("Be kind", "Sugerly is a friendly place for artists. Give feedback kindly, celebrate each other's work, and never bully, harass or threaten anyone."),
@@ -250,56 +250,3 @@ struct LegalView: View {
     }
 }
 
-// Contact the Sugerly team. Lands in Admin → Reports as a "support" request
-// (same as the website's Help page); the team answers by direct message.
-struct ContactUsSheet: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    @State private var text = ""
-    @State private var sending = false
-    @State private var error: String?
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("How can we help?", text: $text, axis: .vertical)
-                        .lineLimit(5...10)
-                } footer: {
-                    Text("Questions, problems, account or privacy requests. We'll reply with a message in Sugerly, usually within 2 days. You can also email sugerlysupport@gmail.com.")
-                }
-                if let error { Section { Text(error).foregroundStyle(.red) } }
-            }
-            .navigationTitle("Contact us")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(sending ? "Sending…" : "Send") { Task { await send() } }
-                        .disabled(sending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-        }
-    }
-
-    private func send() async {
-        guard let me = model.me else { return }
-        sending = true
-        defer { sending = false }
-        let now = FS.nowISO()
-        let request: Doc = [
-            "target_type": "support", "target_id": me.email, "target_owner_email": me.email, "target_preview": "",
-            "link": "/Profile?email=\(me.email.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? me.email)",
-            "reason": "Support request", "details": String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1000)),
-            "reporter_email": me.email, "reporter_name": me.displayName, "status": "open",
-            "created_by": me.email, "created_date": now, "updated_date": now,
-        ]
-        do {
-            try await FS.create("Report", request)
-            dismiss()
-            model.showToast("Sent! We'll reply in your messages", icon: "paperplane.fill")
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-}

@@ -443,6 +443,8 @@ final class AppModel {
         await wipe("Friendship", await rows("Friendship", [.equals("requester_email", email)]))
         await wipe("Friendship", await rows("Friendship", [.equals("receiver_email", email)]))
         await wipe("Notification", await rows("Notification", [.equals("to_email", email)]))
+        await wipe("SupportMessage", await rows("SupportMessage", [.equals("ticket_id", email.lowercased())]))
+        try? await FS.delete("SupportTicket", email.lowercased())
         for server in await rows("Community", [.contains("member_emails", email)]) {
             let id = server.str("id")
             if server.str("owner_email") == email {

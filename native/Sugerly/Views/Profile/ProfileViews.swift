@@ -1051,7 +1051,7 @@ struct SettingsView: View {
         .sheet(isPresented: $statusSheet) { StatusSheet().presentationCornerRadius(30) }
         .sheet(item: $peopleList) { kind in PeopleListSheet(kind: kind).presentationCornerRadius(30) }
         .sheet(item: $legal) { doc in LegalView(doc: doc) }
-        .sheet(isPresented: $contacting) { ContactUsSheet() }
+        .sheet(isPresented: $contacting) { NavigationStack { SupportView() }.presentationCornerRadius(30) }
         .sheet(isPresented: $editing) { EditProfileView() }
         .confirmationDialog("Log out of Sugerly?", isPresented: $confirmLogout, titleVisibility: .visible) {
             Button("Log out", role: .destructive) { model.signOut() }
@@ -1265,7 +1265,7 @@ struct SettingsView: View {
                           tint: doc == .terms ? 0x7C5CF0 : doc == .privacy ? 0x16A37F : 0xE8457C) { legal = doc }
             }
             divider
-            rowButton("Contact us", "Questions, problems or privacy requests", icon: "envelope.fill", tint: 0x3B82F6) { contacting = true }
+            rowButton("Help & support chat", "Chat with the team, follow your reports", icon: "bubble.left.and.bubble.right.fill", tint: 0x3B82F6) { contacting = true }
         }
     }
 

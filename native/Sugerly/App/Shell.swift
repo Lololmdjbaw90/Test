@@ -19,6 +19,8 @@ enum Route: Hashable {
     case server(Server)
     case channel(Server, ServerChannel)
     case voice(Server, ServerChannel)
+    case support
+    case supportTicket(String)
 }
 
 enum AppTab: Hashable {
@@ -112,6 +114,8 @@ struct RouteView: View {
         case .server(let server): ServerHubView(path: $path, initial: server).navigationTitle(server.name).navigationBarTitleDisplayMode(.inline).sugarBackground()
         case .channel(let server, let channel): ChannelChatView(server: server, channel: channel)
         case .voice(let server, let channel): VoiceRoomView(server: server, channel: channel)
+        case .support: SupportView()
+        case .supportTicket(let email): SupportTicketView(email: email)
         }
     }
 }
@@ -478,6 +482,10 @@ extension MainShell {
         case "home": tab = .home; homePath = []
         case "alerts", "social":
             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { model.showNotifications = true }
+        case "support":
+            await switching(.home)
+            let ticket = URLComponents(string: target)?.queryItems?.first { $0.name == "ticket" }?.value ?? ""
+            homePath = [ticket.isEmpty ? .support : .supportTicket(ticket)]
         default: break
         }
     }

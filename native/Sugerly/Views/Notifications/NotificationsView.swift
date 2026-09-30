@@ -259,6 +259,9 @@ struct NotificationsPopup: View {
         case "/commissions":
             let id = value("order")
             path.append(id.isEmpty ? .commissions : .commissionOrder(id))
+        case "/support":
+            let ticket = value("ticket")
+            path.append(ticket.isEmpty ? .support : .supportTicket(ticket))
         case "/reels":
             let id = value("r")
             if !id.isEmpty { Task { if let doc = try? await FS.get("Reel", id) { path.append(.reel(Reel(doc))) } } }
@@ -338,7 +341,7 @@ final class SiteTheme {
 
 struct AdminView: View {
     enum Tab: String, CaseIterable {
-        case overview = "Overview", users = "Users", content = "Content", servers = "Servers", reports = "Reports", colors = "Site"
+        case overview = "Overview", users = "Users", content = "Content", servers = "Servers", reports = "Reports", support = "Support", colors = "Site"
         var icon: String {
             switch self {
             case .overview: return "chart.bar.fill"
@@ -346,6 +349,7 @@ struct AdminView: View {
             case .content: return "photo.stack.fill"
             case .servers: return "server.rack"
             case .reports: return "flag.fill"
+            case .support: return "lifepreserver.fill"
             case .colors: return "paintpalette.fill"
             }
         }
@@ -368,6 +372,7 @@ struct AdminView: View {
     @State private var editChallenges = false
     @State private var editPrompts = false
     @State private var reports: [Doc] = []
+    @State private var reportFilter = "Open"
     @State private var loading = true
     @State private var primary = Color(hex: 0xD9577F)
     @State private var secondary = Color(hex: 0xEE8FAE)
@@ -406,6 +411,7 @@ struct AdminView: View {
                 case .content: contentList
                 case .servers: serverList
                 case .reports: reportsList
+                case .support: SupportInbox()
                 case .colors:
                     siteSettings
                     colors
@@ -747,49 +753,147 @@ struct AdminView: View {
 
     // MARK: reports
 
+    private struct ReportGroup: Identifiable {
+        var id: String
+        var reports: [Doc]
+        var first: Doc { reports[0] }
+        var open: Bool { reports.contains { $0.str("status") != "resolved" } }
+        var urgent: Bool { reports.contains { $0.bool("urgent") } }
+    }
+
+    // Reports about the same thing are shown together, urgent ones first.
+    private var reportGroups: [ReportGroup] {
+        var order: [String] = []
+        var map: [String: [Doc]] = [:]
+        for r in reports {
+            let key = r.str("target_type") == "support" ? "support:" + r.str("id") : r.str("target_type") + ":" + r.str("target_id")
+            if map[key] == nil { order.append(key) }
+            map[key, default: []].append(r)
+        }
+        let groups = order.map { ReportGroup(id: $0, reports: map[$0] ?? []) }.filter { !$0.reports.isEmpty }
+        switch reportFilter {
+        case "Open": return groups.filter(\.open).sorted { $0.urgent && !$1.urgent }
+        case "Urgent": return groups.filter { $0.open && $0.urgent }
+        case "Done": return groups.filter { !$0.open }
+        default: return groups
+        }
+    }
+
     private var reportsList: some View {
-        VStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                ForEach(["Open", "Urgent", "Done", "All"], id: \.self) { f in
+                    Chip(title: f, icon: f == "Urgent" ? "exclamationmark.triangle.fill" : f == "Done" ? "checkmark.seal.fill" : f == "Open" ? "tray.full.fill" : "square.stack.fill", active: reportFilter == f) {
+                        withAnimation(.snappy) { reportFilter = f }
+                    }
+                }
+            }
             if loading { ForEach(0..<5, id: \.self) { _ in SkeletonRow() } }
-            if !loading && reports.isEmpty { EmptyCard(icon: "checkmark.seal.fill", title: "No reports", text: "When people report posts or accounts, they show up here.") }
-            ForEach(reports.indices, id: \.self) { i in
-                let r = reports[i]
-                let resolved = r.str("status") == "resolved"
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Label(r.str("reason"), systemImage: "flag.fill").font(.jakarta(12, .bold)).foregroundStyle(Palette.danger)
-                            .padding(.horizontal, 10).padding(.vertical, 5).background(Palette.danger.opacity(0.1), in: Capsule())
-                        Text(r.str("target_type").uppercased()).font(.jakarta(11, .heavy)).foregroundStyle(Palette.muted)
-                        Spacer()
-                        if resolved { Label(r.str("resolution").isEmpty ? "Resolved" : r.str("resolution"), systemImage: "checkmark").font(.jakarta(11, .bold)).foregroundStyle(Palette.success) }
+            if !loading && reportGroups.isEmpty {
+                EmptyCard(icon: "checkmark.seal.fill", title: reportFilter == "Done" ? "Nothing yet" : "All clear", text: "When people report posts, comments, messages or accounts, they show up here.", compact: true)
+            }
+            ForEach(reportGroups) { g in
+                reportCard(g).transition(.opacity.combined(with: .scale(scale: 0.97)))
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: reportGroups.map(\.id))
+    }
+
+    private func reportCard(_ g: ReportGroup) -> some View {
+        let r = g.first
+        let type = r.str("target_type")
+        let owner = r.str("target_owner_email")
+        let reporter = r.str("reporter_email")
+        let reasons = Array(Set(g.reports.map { $0.str("reason") })).sorted()
+        let media = r.str("target_media").lowercased()
+        let removable = (r.str("target_collection").isEmpty ? collection(for: type) : r.str("target_collection")) != nil
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                if g.urgent {
+                    Label("Urgent", systemImage: "exclamationmark.triangle.fill").font(.jakarta(11, .heavy)).foregroundStyle(.white)
+                        .padding(.horizontal, 8).padding(.vertical, 4).background(Palette.danger, in: Capsule())
+                }
+                Text(type == "support" ? "HELP REQUEST" : type.uppercased()).font(.jakarta(11, .heavy)).foregroundStyle(Theme.main)
+                    .padding(.horizontal, 8).padding(.vertical, 4).background(Theme.soft, in: Capsule())
+                if g.reports.count > 1 {
+                    Text("\(g.reports.count) reports").font(.jakarta(11, .heavy)).foregroundStyle(Palette.danger)
+                }
+                Spacer()
+                if !g.open {
+                    Label(r.str("resolution").isEmpty ? "Resolved" : r.str("resolution"), systemImage: "checkmark").font(.jakarta(11, .bold)).foregroundStyle(Palette.success)
+                } else {
+                    Text(Dates.ago(r.str("created_date"))).font(.jakarta(11)).foregroundStyle(Palette.muted)
+                }
+            }
+            HStack(alignment: .top, spacing: 10) {
+                if !media.isEmpty, !media.contains(".m4a"), !media.contains(".mp4"), !media.contains(".mov"), !media.contains("audio"), !media.contains("video") {
+                    AnimatedThumb(url: r.str("target_media"), fill: true, maxPixel: 240, maxFrames: 30)
+                        .frame(width: 64, height: 64)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    if !r.str("target_preview").isEmpty {
+                        Text("“\(r.str("target_preview"))”").font(.jakarta(14)).foregroundStyle(Palette.text).lineLimit(4)
                     }
-                    HStack(alignment: .top, spacing: 10) {
-                        let media = r.str("target_media").lowercased()
-                        if !media.isEmpty, !media.contains(".m4a"), !media.contains(".mp4"), !media.contains(".mov"), !media.contains("audio"), !media.contains("video") {
-                            AnimatedThumb(url: r.str("target_media"), fill: true, maxPixel: 240, maxFrames: 30)
-                                .frame(width: 64, height: 64)
-                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        }
-                        if !r.str("target_preview").isEmpty { Text("“\(r.str("target_preview"))”").font(.jakarta(14)).foregroundStyle(Palette.text).lineLimit(3) }
+                    if type != "support", !owner.isEmpty {
+                        Text("By \(model.person(owner)?.displayName ?? owner)").font(.jakarta(12, .semibold)).foregroundStyle(Palette.text2)
                     }
-                    if !r.str("details").isEmpty { Text(r.str("details")).font(.jakarta(13)).italic().foregroundStyle(Palette.text2) }
-                    Text("By \(r.str("reporter_name").isEmpty ? r.str("reporter_email") : r.str("reporter_name")) · \(Dates.ago(r.str("created_date")))").font(.jakarta(11)).foregroundStyle(Palette.muted)
-                    if !resolved {
-                        HStack(spacing: 8) {
-                            if let target = r.str("target_collection").isEmpty ? collection(for: r.str("target_type")) : r.str("target_collection") {
-                                Button { Task { await resolve(i, remove: target) } } label: { Label("Remove", systemImage: "trash") }
-                                    .buttonStyle(GradientButtonStyle(height: 38, fullWidth: false))
-                            }
-                            Button { Task { await resolve(i, remove: nil) } } label: { Label("Dismiss", systemImage: "checkmark") }
-                                .buttonStyle(OutlineButtonStyle(height: 38))
+                }
+            }
+            if type != "support" {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(reasons, id: \.self) { reason in
+                            Label(reason, systemImage: "flag.fill").font(.jakarta(11, .bold)).foregroundStyle(Palette.danger)
+                                .padding(.horizontal, 9).padding(.vertical, 5).background(Palette.danger.opacity(0.1), in: Capsule())
                         }
                     }
                 }
-                .padding(14)
-                .background(Palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
-                .opacity(resolved ? 0.6 : 1)
             }
+            ForEach(Array(g.reports.filter { !$0.str("details").isEmpty }.prefix(3).enumerated()), id: \.offset) { _, d in
+                Text("“\(d.str("details"))” — \(d.str("reporter_name").isEmpty ? d.str("reporter_email") : d.str("reporter_name"))")
+                    .font(.jakarta(13)).italic().foregroundStyle(Palette.text2).lineLimit(4)
+            }
+            Text(g.reports.count > 1 ? "Reported by \(Set(g.reports.map { $0.str("reporter_name") }).filter { !$0.isEmpty }.sorted().prefix(3).joined(separator: ", "))" : "By \(r.str("reporter_name").isEmpty ? reporter : r.str("reporter_name")) · \(Dates.ago(r.str("created_date")))")
+                .font(.jakarta(11)).foregroundStyle(Palette.muted)
+            if g.open {
+                if type == "support" {
+                    HStack(spacing: 8) {
+                        NavigationLink(value: Route.supportTicket(reporter)) { Label("Reply in chat", systemImage: "bubble.left.and.bubble.right.fill") }
+                            .buttonStyle(GradientButtonStyle(height: 38, fullWidth: false))
+                        Button { Task { await resolve(g, action: "dismiss") } } label: { Label("Done", systemImage: "checkmark") }
+                            .buttonStyle(OutlineButtonStyle(height: 38))
+                    }
+                } else {
+                    HStack(spacing: 8) {
+                        if removable {
+                            Button { Task { await resolve(g, action: "remove") } } label: { Label("Remove", systemImage: "trash") }
+                                .buttonStyle(GradientButtonStyle(height: 38, fullWidth: false))
+                        }
+                        if !owner.isEmpty {
+                            Button { Task { await resolve(g, action: "warn") } } label: { Label("Warn", systemImage: "exclamationmark.bubble") }
+                                .buttonStyle(OutlineButtonStyle(height: 38))
+                        }
+                        Button { Task { await resolve(g, action: "dismiss") } } label: { Label("Dismiss", systemImage: "checkmark") }
+                            .buttonStyle(OutlineButtonStyle(height: 38))
+                    }
+                }
+            }
+            HStack(spacing: 14) {
+                if type != "support", !owner.isEmpty {
+                    NavigationLink(value: Route.supportTicket(owner)) { Label("Message owner", systemImage: "bubble.left.fill") }
+                }
+                if !reporter.isEmpty && type != "support" {
+                    NavigationLink(value: Route.supportTicket(reporter)) { Label("Message reporter", systemImage: "bubble.right.fill") }
+                }
+            }
+            .font(.jakarta(12, .bold))
+            .foregroundStyle(Theme.main)
         }
+        .padding(14)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(g.urgent && g.open ? Palette.danger.opacity(0.5) : Palette.border, lineWidth: g.urgent && g.open ? 1.5 : 1))
+        .opacity(g.open ? 1 : 0.65)
     }
 
     private func collection(for type: String) -> String? {
@@ -810,16 +914,41 @@ struct AdminView: View {
         reports = docs.sorted { ($0.str("status") == "resolved" ? 1 : 0, $1.str("created_date")) < ($1.str("status") == "resolved" ? 1 : 0, $0.str("created_date")) }
     }
 
-    private func resolve(_ index: Int, remove collection: String?) async {
-        guard reports.indices.contains(index), let me = model.me else { return }
-        let r = reports[index]
-        if let collection { try? await FS.delete(collection, r.str("target_id")) }
-        let resolution = collection == nil ? "Dismissed" : "Content removed"
-        try? await FS.update("Report", r.str("id"), ["status": "resolved", "resolution": resolution, "resolved_by": me.email, "updated_date": FS.nowISO()])
-        withAnimation(.snappy) {
-            reports[index]["status"] = "resolved"
-            reports[index]["resolution"] = resolution
+    // Remove: deletes it and tells the owner why. Warn: tells the owner but
+    // keeps it. Dismiss: no rule broken. Everyone who reported it sees the
+    // outcome in Help & support → My reports.
+    private func resolve(_ g: ReportGroup, action: String) async {
+        guard let me = model.me else { return }
+        let first = g.first
+        let type = first.str("target_type")
+        let owner = first.str("target_owner_email")
+        if action == "remove", let target = first.str("target_collection").isEmpty ? collection(for: type) : first.str("target_collection") {
+            try? await FS.delete(target, first.str("target_id"))
         }
+        let resolution = action == "remove" ? "Content removed" : action == "warn" ? "Warned" : type == "support" ? "Answered" : "Dismissed"
+        let note = action == "remove" ? "Thanks for reporting — we removed it."
+            : action == "warn" ? "Thanks for reporting — we warned the person who posted it."
+            : "We checked and it doesn't break our rules. If it still bothers you, you can block them."
+        let now = FS.nowISO()
+        for r in g.reports where r.str("status") != "resolved" {
+            try? await FS.update("Report", r.str("id"), ["status": "resolved", "resolution": resolution, "note": note, "resolved_by": me.email, "updated_date": now])
+        }
+        if action != "dismiss", !owner.isEmpty, owner.lowercased() != me.email.lowercased() {
+            let reason = first.str("reason").lowercased()
+            let what = type == "user" ? "profile" : type
+            let text = action == "remove"
+                ? "Hi! Your \(what) was removed because it went against our Community Guidelines (\(reason)). Please help keep Sugerly kind and safe — repeated problems can limit your account. If you think this was a mistake, just reply here."
+                : "Hi! Your \(what) was reported for \(reason). Please have a look at our Community Guidelines — repeated problems can limit your account. If you have questions, just reply here."
+            try? await Support.send(to: owner, text: text, fromTeam: true, kind: "notice", model: model)
+        }
+        let ids = Set(g.reports.map { $0.str("id") })
+        withAnimation(.snappy) {
+            for i in reports.indices where ids.contains(reports[i].str("id")) && reports[i].str("status") != "resolved" {
+                reports[i]["status"] = "resolved"
+                reports[i]["resolution"] = resolution
+            }
+        }
+        model.showToast(action == "remove" ? "Removed and owner told" : action == "warn" ? "Owner warned" : "Dismissed", icon: "checkmark.seal.fill")
     }
 
     // MARK: colours

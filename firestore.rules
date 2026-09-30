@@ -406,7 +406,24 @@ service cloud.firestore {
     // Reports of posts / people: anyone signed in can file one, only admins see them.
     match /Report/{id} {
       allow create: if signedIn() && request.resource.data.reporter_email == ownEmail();
-      allow read, update, delete: if isAdmin();
+      // You can follow your own reports (My reports); only the team sees the rest.
+      allow read: if isAdmin() || (signedIn() && resource.data.reporter_email == ownEmail());
+      allow update, delete: if isAdmin();
+    }
+
+    // Help & support chat: one conversation per person (id = their email),
+    // seen only by them and the team.
+    match /SupportTicket/{ticket} {
+      allow read: if signedIn() && (ticket == ownEmail().lower() || isAdmin());
+      allow create: if signedIn() && (isAdmin() || (ticket == ownEmail().lower() && request.resource.data.user_email == ticket));
+      allow update: if signedIn() && (isAdmin() || (ticket == ownEmail().lower() && request.resource.data.user_email == resource.data.user_email));
+      allow delete: if signedIn() && (isAdmin() || ticket == ownEmail().lower());
+    }
+    match /SupportMessage/{id} {
+      allow read: if signedIn() && (resource.data.ticket_id == ownEmail().lower() || isAdmin());
+      allow create: if signedIn() && request.resource.data.author_email == ownEmail()
+        && (isAdmin() || (request.resource.data.ticket_id == ownEmail().lower() && request.resource.data.from_team == false));
+      allow delete: if signedIn() && (isAdmin() || resource.data.ticket_id == ownEmail().lower());
     }
 
     // Invites: one record per new account (id = the new person's uid). The

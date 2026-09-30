@@ -291,70 +291,205 @@ struct ReportSheet: View {
         }
     }
 
+    struct Reason: Identifiable {
+        let title: String
+        let detail: String
+        let icon: String
+        var urgent = false
+        var id: String { title }
+    }
+
+    static let reasons: [Reason] = [
+        Reason(title: "Spam or scam", detail: "Fake offers, links, begging for coins", icon: "envelope.badge.fill"),
+        Reason(title: "Harassment or bullying", detail: "Mean, targeted or threatening someone", icon: "person.fill.xmark"),
+        Reason(title: "Hate speech", detail: "Attacks on who someone is", icon: "exclamationmark.bubble.fill"),
+        Reason(title: "Nudity or sexual content", detail: "Anything not OK for everyone", icon: "eye.slash.fill"),
+        Reason(title: "Violence or threats", detail: "Gore, threats or dangerous acts", icon: "bolt.trianglebadge.exclamationmark.fill"),
+        Reason(title: "Someone may be in danger", detail: "Self-harm or someone at risk", icon: "heart.text.square.fill", urgent: true),
+        Reason(title: "Stolen art / copyright", detail: "Posting someone else's work as theirs", icon: "paintbrush.pointed.fill"),
+        Reason(title: "Pretending to be someone else", detail: "Fake account or impersonation", icon: "theatermasks.fill"),
+        Reason(title: "Something else", detail: "Tell us below", icon: "ellipsis.bubble.fill"),
+    ]
+
     let target: Target
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    @State private var reason = Social.reportReasons[0]
+    @State private var reason: Reason?
     @State private var details = ""
+    @State private var block = false
     @State private var sending = false
+    @State private var sent = false
+    @State private var already = false
     @State private var error: String?
+
+    private var me: String { model.me?.email ?? "" }
+    private var canBlock: Bool { !target.ownerEmail.isEmpty && target.ownerEmail.lowercased() != me.lowercased() && !(model.me?.blocked.contains(target.ownerEmail.lowercased()) ?? false) }
+    private var ownerName: String { model.person(target.ownerEmail)?.displayName ?? "them" }
 
     var body: some View {
         NavigationStack {
-            Form {
-                if !target.shownPreview.isEmpty {
-                    Section("You're reporting") {
-                        HStack(alignment: .top, spacing: 12) {
-                            if target.showsPicture {
-                                AnimatedThumb(url: target.media, fill: true, maxPixel: 200, maxFrames: 30)
-                                    .frame(width: 56, height: 56)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            }
-                            Text(target.shownPreview).font(.jakarta(14)).foregroundStyle(Palette.text2).lineLimit(4)
-                        }
-                    }
-                }
-                Section("Why are you reporting this?") {
-                    Picker("Reason", selection: $reason) {
-                        ForEach(Social.reportReasons, id: \.self) { Text($0).tag($0) }
-                    }
-                    .pickerStyle(.inline)
-                    .labelsHidden()
-                }
-                Section("More details (optional)") {
-                    TextField("Tell us what happened", text: $details, axis: .vertical).lineLimit(3...6)
-                }
-                if let error { Section { Text(error).foregroundStyle(.red) } }
-                Section {
-                    Text("Our moderators review reports within 24 hours.").font(.footnote).foregroundStyle(.secondary)
+            ZStack {
+                if sent {
+                    done.transition(.scale(scale: 0.9).combined(with: .opacity))
+                } else {
+                    form.transition(.opacity)
                 }
             }
-            .navigationTitle("Report")
+            .animation(.spring(response: 0.45, dampingFraction: 0.8), value: sent)
+            .sugarBackground()
+            .navigationTitle(sent ? "" : "Report")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(sending ? "Sending…" : "Send") { Task { await send() } }.disabled(sending)
-                }
+                if !sent { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
             }
         }
+        .task { await checkAlready() }
+    }
+
+    private var form: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                if !target.shownPreview.isEmpty {
+                    HStack(alignment: .top, spacing: 12) {
+                        if target.showsPicture {
+                            AnimatedThumb(url: target.media, fill: true, maxPixel: 200, maxFrames: 30)
+                                .frame(width: 56, height: 56)
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Reporting a \(target.type)").font(.jakarta(11, .heavy)).tracking(0.6).foregroundStyle(Palette.muted)
+                            Text(target.shownPreview).font(.jakarta(14)).foregroundStyle(Palette.text).lineLimit(3)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(14)
+                    .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+                }
+                if already {
+                    Label("You already reported this. You can add more, or follow it in Help & support → My reports.", systemImage: "info.circle.fill")
+                        .font(.jakarta(13, .semibold)).foregroundStyle(Theme.main)
+                        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Theme.soft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                Text("What's wrong?").font(.display(24)).foregroundStyle(Palette.text)
+                VStack(spacing: 8) {
+                    ForEach(Self.reasons) { r in reasonRow(r) }
+                }
+                if reason?.urgent == true {
+                    Label("If someone is in danger right now, call your local emergency number (112 in Europe, 911 in the US). In the US you can call or text 988 any time.", systemImage: "phone.fill")
+                        .font(.jakarta(13, .semibold)).foregroundStyle(Palette.danger)
+                        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Palette.danger.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+                if reason != nil {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Anything else we should know?").font(.jakarta(14, .heavy)).foregroundStyle(Palette.text)
+                        TextField("Optional", text: $details, axis: .vertical)
+                            .font(.jakarta(15)).lineLimit(3...6)
+                            .padding(12)
+                            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+                        if canBlock {
+                            Toggle(isOn: $block) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Also block \(ownerName)").font(.jakarta(14, .bold)).foregroundStyle(Palette.text)
+                                    Text("They won't be able to message you or see your posts.").font(.jakarta(12)).foregroundStyle(Palette.muted)
+                                }
+                            }
+                            .tint(Theme.main)
+                            .padding(12)
+                            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        }
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
+                if let error { Text(error).font(.jakarta(13, .semibold)).foregroundStyle(Palette.danger) }
+                Button { Task { await send() } } label: {
+                    Label(sending ? "Sending…" : "Send report", systemImage: "paperplane.fill")
+                }
+                .buttonStyle(GradientButtonStyle(height: 52))
+                .disabled(reason == nil || sending)
+                .opacity(reason == nil ? 0.5 : 1)
+                Label("Reports are private. The person isn't told who reported them. Our team checks every report, usually within 24 hours.", systemImage: "lock.fill")
+                    .font(.jakarta(12)).foregroundStyle(Palette.muted)
+            }
+            .padding(18)
+            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: reason?.id)
+        }
+        .scrollDismissesKeyboard(.interactively)
+    }
+
+    private func reasonRow(_ r: Reason) -> some View {
+        let active = reason?.id == r.id
+        return Button { withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) { reason = r } } label: {
+            HStack(spacing: 12) {
+                Image(systemName: r.icon).font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(active ? .white : (r.urgent ? Palette.danger : Theme.main))
+                    .frame(width: 36, height: 36)
+                    .background(active ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(r.urgent ? Palette.danger.opacity(0.1) : Theme.soft), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(r.title).font(.jakarta(14, .bold)).foregroundStyle(Palette.text)
+                    Text(r.detail).font(.jakarta(12)).foregroundStyle(Palette.muted)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: active ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 20)).foregroundStyle(active ? Theme.main : Palette.border)
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .padding(10)
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(active ? Theme.main : Palette.border, lineWidth: active ? 2 : 1))
+        }
+        .buttonStyle(BouncyStyle(scale: 0.97))
+        .sensoryFeedback(.selection, trigger: active)
+    }
+
+    // Sent: a thank-you and what happens next.
+    private var done: some View {
+        VStack(spacing: 14) {
+            Spacer()
+            ZStack {
+                Circle().fill(Theme.soft).frame(width: 120, height: 120)
+                Image(systemName: "checkmark.seal.fill").font(.system(size: 54, weight: .bold)).foregroundStyle(Theme.gradient)
+                    .symbolEffect(.bounce, value: sent)
+            }
+            Text("Thanks for telling us").font(.display(28)).foregroundStyle(Palette.text)
+            Text("Our team will look at it soon. You can see what happened any time in Help & support → My reports.")
+                .font(.jakarta(15)).foregroundStyle(Palette.text2).multilineTextAlignment(.center)
+            if block {
+                Label("\(ownerName.capitalized) is blocked", systemImage: "hand.raised.fill")
+                    .font(.jakarta(13, .bold)).foregroundStyle(Palette.muted)
+            }
+            Spacer()
+            Button("Done") { dismiss() }.buttonStyle(GradientButtonStyle(height: 52))
+        }
+        .padding(24)
+        .sensoryFeedback(.success, trigger: sent)
+    }
+
+    private func checkAlready() async {
+        guard !me.isEmpty else { return }
+        let docs = (try? await FS.query("Report", [.equals("reporter_email", me), .equals("target_id", target.id)], limit: 1)) ?? []
+        if !docs.isEmpty { withAnimation(.snappy) { already = true } }
     }
 
     private func send() async {
-        guard let me = model.me else { return }
+        guard let me = model.me, let reason else { return }
         sending = true
         defer { sending = false }
         let report: Doc = [
             "target_type": target.type, "target_id": target.id, "target_owner_email": target.ownerEmail,
-            "target_preview": String(target.shownPreview.prefix(280)), "link": target.link, "reason": reason,
-            "target_collection": target.collection, "target_media": target.media,
-            "details": String(details.prefix(1000)), "reporter_email": me.email, "reporter_name": me.displayName,
+            "target_preview": String(target.shownPreview.prefix(280)), "link": target.link, "reason": reason.title,
+            "target_collection": target.collection, "target_media": target.media, "urgent": reason.urgent,
+            "details": String(details.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1000)), "reporter_email": me.email, "reporter_name": me.displayName,
             "status": "open", "created_by": me.email, "created_date": FS.nowISO(), "updated_date": FS.nowISO(),
         ]
         do {
             try await FS.create("Report", report)
-            dismiss()
-            model.showToast("Thanks — our team will take a look", icon: "flag.fill")
+            if block && canBlock { await Privacy.setBlocked(target.ownerEmail, true, model: model) }
+            withAnimation { sent = true }
         } catch {
             self.error = error.localizedDescription
         }
