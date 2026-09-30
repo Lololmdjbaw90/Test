@@ -110,6 +110,12 @@ final class VoiceEngine: NSObject {
         super.init()
         call.onMute = { [weak self] muted in self?.setMuted(muted) }
         call.onEnd = { [weak self] in Task { await self?.leave() } }
+        // Whole-screen sharing runs in the broadcast extension; it says here
+        // when it starts and stops.
+        let broadcast = ScreenBroadcast.shared
+        broadcast.onStarted = { [weak self] in self?.broadcastStarted() }
+        broadcast.onStopped = { [weak self] in self?.broadcastStopped() }
+        broadcast.listen()
     }
 
     var isConnected: Bool { room != nil && !connecting }
@@ -202,6 +208,9 @@ final class VoiceEngine: NSObject {
         }
         connecting = false
         joinedAt = Date()
+        // Your screen can be shared from now on (Share screen, or the
+        // broadcast button in Control Center).
+        ScreenBroadcast.shared.setInCall(true)
         call.connected()
         Chime.play(.join)
         refreshParticipants()
@@ -216,7 +225,9 @@ final class VoiceEngine: NSObject {
         levelLoop = nil
         call.end()
         if cameraOn { await cameraCapturer?.stopCapture() }
-        if sharingScreen { RPScreenRecorder.shared().stopCapture { _ in } }
+        if sharingScreen { ScreenBroadcast.shared.requestStop() }
+        ScreenBroadcast.shared.frames.attach(nil, nil)
+        ScreenBroadcast.shared.setInCall(false)
         cameraCapturer = nil
         screenCapturer = nil
         cameraOn = false
@@ -497,45 +508,40 @@ final class VoiceEngine: NSObject {
         await toggleCamera()
     }
 
-    // Shares what's on your screen in Sugerly (iOS asks first).
+    // Shares your whole screen, other apps too: opens iPhone's "Start
+    // Broadcast" sheet for Sugerly. (Recording only Sugerly stopped as soon
+    // as you left the app.)
     func toggleScreenShare() {
         if sharingScreen { stopScreenShare(); return }
         guard room != nil else { return }
-        let recorder = RPScreenRecorder.shared()
-        guard recorder.isAvailable else {
-            error = "Screen sharing isn't available right now."
-            return
-        }
-        if cameraOn { stopCamera() }
-        let source = ensureVideo()
-        source.adaptOutputFormat(toWidth: 720, height: 1280, fps: 15)
-        let capturer = RTCVideoCapturer(delegate: source)
-        screenCapturer = capturer
-        recorder.isMicrophoneEnabled = false
-        recorder.startCapture(handler: { @Sendable buffer, type, failure in
-            guard failure == nil, type == .video, let pixels = CMSampleBufferGetImageBuffer(buffer) else { return }
-            let time = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(buffer))
-            let frame = RTCVideoFrame(buffer: RTCCVPixelBuffer(pixelBuffer: pixels), rotation: ._0, timeStampNs: Int64(time * 1_000_000_000))
-            source.capturer(capturer, didCapture: frame)
-        }, completionHandler: { [weak self] failure in
-            Task { @MainActor in
-                guard let self else { return }
-                if let failure {
-                    self.error = "Couldn't share your screen: \(failure.localizedDescription)"
-                    self.screenCapturer = nil
-                    return
-                }
-                self.sharingScreen = true
-                self.sendVideo(true)
-                self.pushPresence()
-                self.refreshParticipants()
-            }
-        })
+        ScreenBroadcast.shared.setInCall(true)
+        ScreenBroadcast.shared.showPicker()
     }
 
     func stopScreenShare() {
-        RPScreenRecorder.shared().stopCapture { _ in }
+        ScreenBroadcast.shared.requestStop()
+        broadcastStopped()
+    }
+
+    // The broadcast began: its frames now go out like a camera would.
+    private func broadcastStarted() {
+        guard room != nil else { ScreenBroadcast.shared.requestStop(); return }
+        if cameraOn { stopCamera() }
+        let source = ensureVideo()
+        source.adaptOutputFormat(toWidth: 720, height: 1280, fps: 12)
+        let capturer = RTCVideoCapturer(delegate: source)
+        screenCapturer = capturer
+        ScreenBroadcast.shared.frames.attach(source, capturer)
+        sharingScreen = true
+        sendVideo(true)
+        pushPresence()
+        refreshParticipants()
+    }
+
+    private func broadcastStopped() {
+        ScreenBroadcast.shared.frames.attach(nil, nil)
         screenCapturer = nil
+        guard sharingScreen else { return }
         sharingScreen = false
         if !cameraOn { sendVideo(false) }
         pushPresence()

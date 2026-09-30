@@ -73,6 +73,9 @@ final class CallCenter {
     var current: CallInfo?
     var showScreen = false
     var error: String?
+    // While your call rings: why their phone can't ring if Sugerly is
+    // closed there (nil when it could, or while that's being checked).
+    var ringNote: String?
 
     @ObservationIgnored private weak var voice: VoiceEngine?
     @ObservationIgnored private var me: UserProfile?
@@ -97,6 +100,7 @@ final class CallCenter {
         current = nil
         showScreen = false
         error = nil
+        ringNote = nil
         me = nil
         dismissed = []
         merged = []
@@ -146,8 +150,13 @@ final class CallCenter {
             current = call
             // Rings their phone even when Sugerly is closed there (iPhone's
             // own call screen). Without the server set up it still rings in
-            // the app.
-            Task { _ = try? await Payments.call("call-ring", ["call_id": call.id]) }
+            // the app, and the call screen says what's missing.
+            ringNote = nil
+            let ringing = call.id
+            Task { [weak self] in
+                let note = await Self.ringPhones(ringing)
+                if self?.current?.id == ringing { self?.ringNote = note }
+            }
             withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { showScreen = true }
             await voice.join(room(call), me: me)
             ringback(call.id)
@@ -205,6 +214,7 @@ final class CallCenter {
         // A call given up for theirs: nothing to end or report here.
         if merged.contains(callId) { return }
         ringTask?.cancel()
+        ringNote = nil
         withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) { showScreen = false }
         defer { current = nil }
         guard let me, let doc = try? await FS.get("Call", callId) else { return }
@@ -364,6 +374,27 @@ final class CallCenter {
     }
 
     private func stopRinging() { ringTask?.cancel() }
+
+    // Asks the server to ring the others' phones. Returns a short reason
+    // when a closed Sugerly can't be rung, nil when it went through.
+    private static func ringPhones(_ callId: String) async -> String? {
+        let result: [String: Any]
+        do {
+            result = try await Payments.call("call-ring", ["call_id": callId])
+        } catch {
+            return "Their phone only rings while Sugerly is open (the call server isn't reachable yet)."
+        }
+        if (result["setup"] as? Bool) == false {
+            return "Their phone only rings while Sugerly is open (the Apple call key isn't set up on the website)."
+        }
+        let sent = (result["sent"] as? Int) ?? (result["sent"] as? Double).map(Int.init) ?? 0
+        if sent > 0 { return nil }
+        let failures = (result["failures"] as? [String]) ?? []
+        if let reason = failures.first {
+            return "Apple couldn't ring their phone (\(reason))."
+        }
+        return "Their phone only rings while Sugerly is open until they open the new Sugerly once."
+    }
 
     private static func sameChat(_ a: CallInfo, _ b: CallInfo) -> Bool {
         if !a.conversationId.isEmpty && a.conversationId == b.conversationId { return true }
@@ -782,6 +813,15 @@ struct CallScreen: View {
                 .padding(.horizontal, 14).padding(.vertical, 10)
                 .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            if alone, call?.status == "ringing", let note = calls.ringNote {
+                Label(note, systemImage: "bell.slash.fill")
+                    .font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.75))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .frame(maxWidth: .infinity)
+                    .background(.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .transition(.opacity)
             }
             if let error = voice.error ?? calls.error {
                 Label(error, systemImage: "exclamationmark.triangle.fill")

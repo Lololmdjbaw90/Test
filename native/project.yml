@@ -28,11 +28,17 @@ targets:
     dependencies:
       - package: WebRTC
       - target: SugerlyWidgets
+      - target: SugerlyBroadcast
     entitlements:
       path: Support/Sugerly.entitlements
+      # XcodeGen writes the entitlements file from this list on every build,
+      # so everything the app needs must be here (not only in the file).
       properties:
         com.apple.security.application-groups:
           - group.com.mimilocks.app
+        # Call pushes (PushKit): calls ring while Sugerly is closed. The App
+        # Store export switches this to production.
+        aps-environment: development
     info:
       path: Support/Info.plist
       properties:
@@ -130,6 +136,35 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mimilocks.app.widgets
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Automatic
+        SKIP_INSTALL: YES
+  # Sharing your whole screen in a call (other apps too): iOS runs this
+  # while you broadcast and it passes the frames to the app.
+  SugerlyBroadcast:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: SugerlyBroadcast
+    entitlements:
+      path: SugerlyBroadcast/SugerlyBroadcast.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.mimilocks.app
+    info:
+      path: SugerlyBroadcast/Info.plist
+      properties:
+        CFBundleDisplayName: Sugerly
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.broadcast-services-upload
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SampleHandler
+          RPBroadcastProcessMode: RPBroadcastProcessModeSampleBuffer
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mimilocks.app.broadcast
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_STYLE: Automatic
