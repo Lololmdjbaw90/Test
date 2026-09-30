@@ -41,8 +41,11 @@ struct SugerlyApp: App {
 struct RootView: View {
     @Environment(AppModel.self) private var model
     private var site = SiteTheme.shared
+    private var connection = Connection.shared
 
     @State private var colorFlash = false
+    // Tapping the no-internet card hides it until the next time it drops.
+    @State private var offlineHidden = false
 
     // Your own colours win; then the admin's site colours, unless you
     // picked one of the preset accents.
@@ -95,11 +98,16 @@ struct RootView: View {
                 BannedView(message: message).transition(.opacity)
             case .offline(let message):
                 VStack(spacing: 16) {
-                    Image(systemName: "wifi.slash")
-                        .font(.system(size: 44, weight: .bold))
-                        .foregroundStyle(Theme.gradient)
+                    Image("MimiOffline")
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                        .frame(height: 220)
+                        .accessibilityHidden(true)
                     Text("You're offline").font(.display(30))
                     Text(message).font(.jakarta(15)).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    Text("Sugerly will open by itself once you're back online.")
+                        .font(.jakarta(13)).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
                     Button("Try again") { Task { await model.start() } }
                         .buttonStyle(GradientButtonStyle())
                 }
@@ -111,6 +119,23 @@ struct RootView: View {
                 .opacity(colorFlash ? 0.22 : 0)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
+            if connection.offline && !offlineHidden && model.phase == .signedIn {
+                VStack {
+                    OfflineNotice()
+                        .onTapGesture { withAnimation(.easeOut(duration: 0.25)) { offlineHidden = true } }
+                        .padding(.top, 6)
+                    Spacer()
+                }
+                .transition(.opacity)
+                .zIndex(10)
+            }
+        }
+        .onChange(of: connection.offline) { _, offline in
+            if !offline {
+                offlineHidden = false
+                // Opened with no internet: get going as soon as it's back.
+                if case .offline(_) = model.phase { Task { await model.start() } }
+            }
         }
         .onChange(of: themeKey, initial: true) { old, _ in applyTheme(animated: old != themeKey && model.phase == .signedIn) }
         .tint(Theme.main)

@@ -317,6 +317,8 @@ struct BannerPatternView: View {
 
     var body: some View {
         Canvas { ctx, size in
+            // Nothing ever draws past the banner's edges.
+            ctx.clip(to: Path(CGRect(origin: .zero, size: size)))
             let ink = GraphicsContext.Shading.color(.white.opacity(0.22))
             switch pattern {
             case "dots":
@@ -328,10 +330,13 @@ struct BannerPatternView: View {
                     y += 24; row += 1
                 }
             case "stripes":
-                var x: CGFloat = -size.height
-                while x < size.width {
+                // Each stripe runs well past the top and bottom, so their
+                // cut-off ends never show inside the banner.
+                let reach = size.height + 40
+                var x: CGFloat = -reach
+                while x < size.width + 20 {
                     var p = Path()
-                    p.move(to: CGPoint(x: x, y: size.height)); p.addLine(to: CGPoint(x: x + size.height, y: 0))
+                    p.move(to: CGPoint(x: x, y: size.height + 20)); p.addLine(to: CGPoint(x: x + reach, y: -20))
                     ctx.stroke(p, with: ink, lineWidth: 10); x += 34
                 }
             case "checks":
@@ -356,9 +361,9 @@ struct BannerPatternView: View {
                 var y: CGFloat = 14
                 while y < size.height + 20 {
                     var p = Path()
-                    p.move(to: CGPoint(x: 0, y: y))
-                    var x: CGFloat = 0
-                    while x < size.width {
+                    p.move(to: CGPoint(x: -40, y: y))
+                    var x: CGFloat = -40
+                    while x < size.width + 40 {
                         p.addQuadCurve(to: CGPoint(x: x + 20, y: y), control: CGPoint(x: x + 10, y: y - 8))
                         p.addQuadCurve(to: CGPoint(x: x + 40, y: y), control: CGPoint(x: x + 30, y: y + 8))
                         x += 40
@@ -375,6 +380,7 @@ struct BannerPatternView: View {
         // A fresh drawing for each pattern: without this the first one you
         // picked stayed on screen and you couldn't change it.
         .id(pattern)
+        .clipped()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }

@@ -33,12 +33,13 @@ struct Avatar: View {
             }
             .frame(width: size, height: size)
             .clipShape(Circle())
-            .padding(ring || nitro ? max(2, size * 0.05) : 0)
+            // The ring, a see-through gap, then the picture. Nothing is drawn
+            // on top of anything else, so no thin coloured lines show at the
+            // picture's edge.
+            .padding(ringPad)
             .background {
-                if nitro { NitroRing() } else if ring { Circle().fill(Theme.gradient) }
-            }
-            .overlay {
-                if ring || nitro { Circle().strokeBorder(Palette.surface, lineWidth: max(1.5, size * 0.035)).padding(max(2, size * 0.05) - max(1.5, size * 0.035)) }
+                if nitro { NitroRing(lineWidth: ringWidth) }
+                else if ring { Circle().strokeBorder(Theme.gradient, lineWidth: ringWidth) }
             }
 
             if let presence, presence != .offline {
@@ -66,6 +67,8 @@ struct Avatar: View {
     }
 
     private var pixel: CGFloat { min(400, max(96, size * 3)) }
+    private var ringPad: CGFloat { ring || nitro ? max(3, (size * 0.07).rounded()) : 0 }
+    private var ringWidth: CGFloat { max(1.5, ringPad * 0.6) }
     // Big GIF pictures (profile headers) play at full quality.
     private var live: Bool { size >= 72 && AnimatedImages.looksAnimated(url) }
 
@@ -506,24 +509,22 @@ enum Moderation {
 
 // Nitro's animated rainbow-candy ring around a profile picture.
 struct NitroRing: View {
+    var lineWidth: CGFloat = 3
     @State private var spin = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
-        // The glow sits still underneath; only the colours turn. (The glow
-        // used to spin too, which redrew it every frame on every MimiPlus
-        // picture in a list and made scrolling stutter.)
+        // A thin ring whose colours slowly turn. Only the turning is animated
+        // (never where the ring sits), so it can't drift or wobble when a
+        // list scrolls or a page opens.
         Circle()
-            .fill(Color(hex: 0xB19CFF))
-            .shadow(color: Color(hex: 0xB19CFF).opacity(0.5), radius: 4)
-            .overlay {
-                Circle()
-                    .fill(AngularGradient(colors: [Color(hex: 0xFF7AA2), Color(hex: 0xB19CFF), Color(hex: 0x7CBEFF), Color(hex: 0xFFD166), Color(hex: 0xFF7AA2)], center: .center))
-                    .rotationEffect(.degrees(spin ? 360 : 0))
+            .strokeBorder(AngularGradient(colors: [Color(hex: 0xFF7AA2), Color(hex: 0xB19CFF), Color(hex: 0x7CBEFF), Color(hex: 0xFFD166), Color(hex: 0xFF7AA2)], center: .center), lineWidth: lineWidth)
+            .rotationEffect(.degrees(spin ? 360 : 0))
+            .animation(reduceMotion ? nil : Animation.linear(duration: 6).repeatForever(autoreverses: false), value: spin)
+            .onAppear { spin = true }
+            .onDisappear {
+                var still = Transaction()
+                still.disablesAnimations = true
+                withTransaction(still) { spin = false }
             }
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.linear(duration: 6).repeatForever(autoreverses: false)) { spin = true }
-            }
-            .onDisappear { spin = false }
     }
 }

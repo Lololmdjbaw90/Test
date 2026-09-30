@@ -680,8 +680,11 @@ struct EditProfileView: View {
             case nil: Avatar(url: model.me?.picture ?? "", name: name, size: 104)
             }
         }
-        .padding(nitro ? 5 : 4)
-        .background { if nitro { NitroRing() } else { Circle().fill(Palette.bg) } }
+        .padding(nitro ? 7 : 4)
+        .background {
+            Circle().fill(Palette.bg)
+            if nitro { NitroRing(lineWidth: 4) }
+        }
     }
 
     private func nitroOnly(_ action: () -> Void) {
