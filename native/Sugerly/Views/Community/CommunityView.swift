@@ -344,6 +344,15 @@ struct CommunityView: View {
             SearchView { route in path.append(route) }.presentationCornerRadius(34)
         }
         .task { if store.posts.isEmpty { await store.load() } }
+        // Saved: bring in saved posts that aren't among the loaded pages yet.
+        .task(id: feed == .saved ? (model.me?.savedPosts ?? []) : []) {
+            guard feed == .saved, let ids = model.me?.savedPosts else { return }
+            let have = Set(store.posts.map(\.id))
+            let missing = ids.filter { !have.contains($0) }
+            guard !missing.isEmpty, let docs = try? await FS.getMany("CommunityPost", Array(missing.suffix(100))) else { return }
+            let fresh = docs.values.map { Post($0) }.filter { p in !store.posts.contains { $0.id == p.id } }
+            withAnimation(.snappy) { store.posts.append(contentsOf: fresh) }
+        }
         .onAppear { appeared = true }
     }
 

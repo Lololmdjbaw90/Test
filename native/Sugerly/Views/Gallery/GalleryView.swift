@@ -110,6 +110,15 @@ struct GalleryView: View {
         .sugarBackground()
         .refreshable { await load() }
         .task { if artworks.isEmpty { await load() } }
+        // Saved: bring in saved pieces that aren't among the loaded ones yet.
+        .task(id: sort == .saved ? (model.me?.savedArtworks ?? []) : []) {
+            guard sort == .saved, let ids = model.me?.savedArtworks else { return }
+            let have = Set(artworks.map(\.id))
+            let missing = ids.filter { !have.contains($0) }
+            guard !missing.isEmpty, let docs = try? await FS.getMany("Artwork", Array(missing.suffix(100))) else { return }
+            let fresh = docs.values.map { Artwork($0) }.filter { a in !artworks.contains { $0.id == a.id } }
+            withAnimation(.snappy) { artworks.append(contentsOf: fresh) }
+        }
         .dropRemoved($artworks)
         .onReceive(NotificationCenter.default.publisher(for: ArtworkEvents.changed)) { note in
             guard let artwork = note.object as? Artwork else { return }

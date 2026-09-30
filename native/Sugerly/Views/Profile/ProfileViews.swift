@@ -84,6 +84,7 @@ struct ProfileContent: View {
     @State private var reels: [Reel] = []
     @State private var savedPosts: [Post] = []
     @State private var savedReels: [Reel] = []
+    @State private var savedArt: [Artwork] = []
     @State private var loading = true
     @State private var tab: Tab = .posts
     @State private var editing = false
@@ -125,8 +126,9 @@ struct ProfileContent: View {
         }
         .sugarBackground()
         .onAppear { appeared = true }
-        .refreshable { await load() }
+        .refreshable { await load(); await loadSaved() }
         .task(id: person.email) { await load() }
+        .task(id: savedKey) { await loadSaved() }
         .dropRemoved($posts)
         .dropRemoved($reels)
         .sheet(isPresented: $editing) { EditProfileView() }
@@ -335,7 +337,7 @@ struct ProfileContent: View {
                 if reels.isEmpty { EmptyCard(icon: "play.rectangle.fill", title: "No reels yet", text: isMe ? "Tap + → Create a reel." : "Nothing to see here yet.") }
                 reelGrid(reels)
             case .saved:
-                if savedPosts.isEmpty && savedReels.isEmpty { EmptyCard(icon: "bookmark.fill", title: "Nothing saved", text: "Tap the bookmark on any post or reel to keep it here.") }
+                if savedPosts.isEmpty && savedReels.isEmpty && savedArt.isEmpty { EmptyCard(icon: "bookmark.fill", title: "Nothing saved", text: "Tap the bookmark on any post, reel or fan art to keep it here.") }
                 if !savedReels.isEmpty {
                     Label("Reels", systemImage: "play.rectangle.fill").font(.jakarta(13, .heavy)).foregroundStyle(Palette.text2)
                     reelGrid(savedReels)
@@ -343,6 +345,10 @@ struct ProfileContent: View {
                 if !savedPosts.isEmpty {
                     Label("Posts", systemImage: "square.grid.2x2.fill").font(.jakarta(13, .heavy)).foregroundStyle(Palette.text2).padding(.top, 6)
                     postGrid(savedPosts)
+                }
+                if !savedArt.isEmpty {
+                    Label("Fan art", systemImage: "paintpalette.fill").font(.jakarta(13, .heavy)).foregroundStyle(Palette.text2).padding(.top, 6)
+                    artGrid(savedArt)
                 }
             }
         }
@@ -364,6 +370,20 @@ struct ProfileContent: View {
                         .onAppear { if reel.id == list.last?.id && tab == .reels { Task { await moreReels() } } }
                     }
                 }
+    }
+
+    private func artGrid(_ list: [Artwork]) -> some View {
+        LazyVGrid(columns: columns, spacing: 4) {
+            ForEach(list) { art in
+                Button { path.append(.artwork(art)) } label: {
+                    Rectangle().fill(Palette.surface2)
+                        .aspectRatio(1, contentMode: .fit)
+                        .overlay { RemoteImage(url: art.imageURL) }
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(BouncyStyle(scale: 0.95))
+            }
+        }
     }
 
     private func postGrid(_ list: [Post]) -> some View {
@@ -398,7 +418,12 @@ struct ProfileContent: View {
         reels = (await reelDocs ?? []).map(Reel.init)
         if let n = await followerCount { followers = n }
         for post in posts where !store.posts.contains(where: { $0.id == post.id }) { store.posts.append(post) }
-        if isMe { await loadSaved() }
+    }
+
+    // Changes whenever you save or unsave something, so the Saved tab follows along.
+    private var savedKey: String {
+        guard isMe, let me = model.me else { return "" }
+        return [me.savedPosts.joined(separator: ","), me.savedReels.joined(separator: ","), me.savedArtworks.joined(separator: ",")].joined(separator: "|")
     }
 
     // Older posts and reels load as you reach the end of the grid.
@@ -420,19 +445,40 @@ struct ProfileContent: View {
         reels += docs.map(Reel.init).filter { !known.contains($0.id) }
     }
 
-    // Your saved posts and reels (fetched by id, newest saves first).
+    // Your saved posts, reels and fan art (newest saves first). Unsaved ones
+    // go at once; new ones are fetched together in one request per kind.
     private func loadSaved() async {
-        var foundPosts: [Post] = []
-        for id in person.savedPosts.reversed().prefix(30) {
-            if let hit = store.posts.first(where: { $0.id == id }) { foundPosts.append(hit) }
-            else if let doc = try? await FS.get("CommunityPost", id) { foundPosts.append(Post(doc)) }
+        guard isMe, let me = model.me else { return }
+        let postIds = Array(me.savedPosts.reversed().prefix(60))
+        let reelIds = Array(me.savedReels.reversed().prefix(60))
+        let artIds = Array(me.savedArtworks.reversed().prefix(60))
+        withAnimation(.snappy) {
+            savedPosts = savedPosts.filter { postIds.contains($0.id) }
+            savedReels = savedReels.filter { reelIds.contains($0.id) }
+            savedArt = savedArt.filter { artIds.contains($0.id) }
         }
-        var foundReels: [Reel] = []
-        for id in person.savedReels.reversed().prefix(30) {
-            if let doc = try? await FS.get("Reel", id) { foundReels.append(Reel(doc)) }
+        func missing(_ ids: [String], _ have: [String]) -> [String] { ids.filter { !have.contains($0) } }
+        let knownPosts = store.posts.filter { postIds.contains($0.id) }
+        async let postFetch = try? FS.getMany("CommunityPost", missing(postIds, (savedPosts + knownPosts).map(\.id)))
+        async let reelFetch = try? FS.getMany("Reel", missing(reelIds, savedReels.map(\.id)))
+        async let artFetch = try? FS.getMany("Artwork", missing(artIds, savedArt.map(\.id)))
+        let postDocs: [String: Doc] = (await postFetch) ?? [:]
+        let reelDocs: [String: Doc] = (await reelFetch) ?? [:]
+        let artDocs: [String: Doc] = (await artFetch) ?? [:]
+        var postsById: [String: Post] = [:]
+        for post in savedPosts + knownPosts { postsById[post.id] = post }
+        for (id, doc) in postDocs { postsById[id] = Post(doc) }
+        var reelsById: [String: Reel] = [:]
+        for reel in savedReels { reelsById[reel.id] = reel }
+        for (id, doc) in reelDocs { reelsById[id] = Reel(doc) }
+        var artById: [String: Artwork] = [:]
+        for art in savedArt { artById[art.id] = art }
+        for (id, doc) in artDocs { artById[id] = Artwork(doc) }
+        withAnimation(.snappy) {
+            savedPosts = postIds.compactMap { postsById[$0] }
+            savedReels = reelIds.compactMap { reelsById[$0] }
+            savedArt = artIds.compactMap { artById[$0] }
         }
-        savedPosts = foundPosts
-        savedReels = foundReels
     }
 
     private func toggleFollow() {
