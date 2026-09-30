@@ -103,7 +103,7 @@ struct ServerSettingsView: View {
             PhotosPicker(selection: $bannerItem, matching: .images) {
                 ZStack {
                     if let bannerImage { Image(uiImage: bannerImage).resizable().scaledToFill() }
-                    else if !store.server.bannerURL.isEmpty { RemoteImage(url: store.server.bannerURL) }
+                    else if !store.server.bannerURL.isEmpty { RemoteImage(url: store.server.bannerURL, live: true) }
                     else { Theme.gradient }
                     Label("Change banner", systemImage: "photo").font(.jakarta(12, .bold)).foregroundStyle(.white)
                         .padding(.horizontal, 12).frame(height: 30).background(.black.opacity(0.35), in: Capsule())

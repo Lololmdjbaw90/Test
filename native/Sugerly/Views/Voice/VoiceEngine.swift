@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 import AVFoundation
 import AudioToolbox
+import ReplayKit
 import WebRTC
 
 // Voice channels, compatible with the website: a WebRTC mesh between everyone
@@ -34,6 +35,7 @@ final class VoiceEngine: NSObject {
         var isSelf: Bool
         var connected: Bool
         var level: Double = 0 // 0…1, how loud they are right now
+        var video = ""        // "", "camera" or "screen"
     }
 
     var room: Room?
@@ -47,6 +49,17 @@ final class VoiceEngine: NSObject {
     var speaker = true
     var ping: Int?
     var systemCall = false
+
+    // Video: your camera or your screen, and everyone else's picture.
+    var cameraOn = false
+    var sharingScreen = false
+    var frontCamera = true
+    var remoteVideo: [String: RTCVideoTrack] = [:]   // by peer id
+    private(set) var localVideo: RTCVideoTrack?
+    @ObservationIgnored private var videoSource: RTCVideoSource?
+    @ObservationIgnored private var cameraCapturer: RTCCameraVideoCapturer?
+    @ObservationIgnored private var screenCapturer: RTCVideoCapturer?
+    private var videoState: String { sharingScreen ? "screen" : cameraOn ? "camera" : "" }
 
     private var selfId = ""
     private var email = ""
@@ -74,6 +87,8 @@ final class VoiceEngine: NSObject {
         var lastSeen = Date()
         var remoteTrack: RTCAudioTrack?
         var level = 0.0
+        var video: RTCRtpTransceiver?   // the lane pictures travel on
+        var videoKind = ""              // what they're showing ("", "camera", "screen")
         init(id: String, email: String) { self.id = id; self.email = email }
     }
     private var peers: [String: Peer] = [:]
@@ -188,6 +203,15 @@ final class VoiceEngine: NSObject {
         levelLoop?.cancel()
         levelLoop = nil
         call.end()
+        if cameraOn { cameraCapturer?.stopCapture() }
+        if sharingScreen { RPScreenRecorder.shared().stopCapture { _ in } }
+        cameraCapturer = nil
+        screenCapturer = nil
+        cameraOn = false
+        sharingScreen = false
+        localVideo = nil
+        videoSource = nil
+        remoteVideo = [:]
         selfLevel = 0
         speakingSelf = false
         for peer in peers.values { peer.pc?.close() }
@@ -253,14 +277,15 @@ final class VoiceEngine: NSObject {
             "channel_id": room?.id ?? "", "community_id": room?.serverId ?? "", "room_type": room?.kind ?? "channel",
             "peer_id": selfId, "user_email": email,
             "user": ["display_name": name, "profile_picture": picture, "email": email] as [String: Any],
-            "muted": muted, "deafened": deafened, "video": NSNull(),
+            "muted": muted, "deafened": deafened, "video": videoState.isEmpty ? NSNull() as Any : videoState as Any,
             "last_active": Int(Date().timeIntervalSince1970 * 1000),
         ]
     }
 
     private func pushPresence() {
         guard let presenceId else { return }
-        let fields: Doc = ["muted": muted, "deafened": deafened, "last_active": Int(Date().timeIntervalSince1970 * 1000)]
+        let fields: Doc = ["muted": muted, "deafened": deafened, "video": videoState.isEmpty ? NSNull() as Any : videoState as Any,
+                           "last_active": Int(Date().timeIntervalSince1970 * 1000)]
         Task { try? await FS.update("VoicePresence", presenceId, fields) }
     }
 
@@ -296,6 +321,7 @@ final class VoiceEngine: NSObject {
             peer.picture = info.picture
             peer.muted = info.muted
             peer.deafened = info.deafened
+            peer.videoKind = info.video
             peer.lastSeen = Date()
             peers[info.peerId] = peer
             // The lower id starts the connection (same rule as the website).
@@ -309,6 +335,7 @@ final class VoiceEngine: NSObject {
             peer.pc?.close()
             if let pc = peer.pc { byConnection[ObjectIdentifier(pc)] = nil }
             peers[id] = nil
+            remoteVideo[id] = nil
             Chime.play(.leave)
         }
         refreshParticipants()
@@ -340,6 +367,8 @@ final class VoiceEngine: NSObject {
                 await setRemote(pc, RTCSessionDescription(type: type, sdp: sdp))
                 for c in peer.pendingIce { await addIce(pc, c) }
                 peer.pendingIce = []
+                if type == .offer { adoptVideoLane(peer, pc) }
+                if let picture = peer.video?.receiver.track as? RTCVideoTrack { remoteVideo[peer.id] = picture }
                 if type == .offer {
                     if let answer = await makeAnswer(pc) {
                         await setLocal(pc, answer)
@@ -379,8 +408,125 @@ final class VoiceEngine: NSObject {
         byConnection[ObjectIdentifier(pc)] = peer.id
         if let localTrack { pc.add(localTrack, streamIds: ["mic"]) }
         if peer.initiator {
+            // A picture lane from the start, so turning the camera or screen
+            // on later needs no new handshake.
+            let setup = RTCRtpTransceiverInit()
+            setup.direction = .sendRecv
+            setup.streamIds = ["video"]
+            peer.video = pc.addTransceiver(of: .video, init: setup)
+            peer.video?.sender.track = videoState.isEmpty ? nil : localVideo
             Task { await self.offer(peer) }
         }
+    }
+
+    // The other side offered a picture lane: send ours back on it too.
+    private func adoptVideoLane(_ peer: Peer, _ pc: RTCPeerConnection) {
+        guard peer.video == nil, let lane = pc.transceivers.first(where: { $0.mediaType == .video }) else { return }
+        lane.setDirection(.sendRecv, error: nil)
+        lane.sender.track = videoState.isEmpty ? nil : localVideo
+        peer.video = lane
+    }
+
+    // MARK: camera and screen
+
+    private func ensureVideo() -> RTCVideoSource {
+        if let videoSource { return videoSource }
+        let source = factory.videoSource()
+        videoSource = source
+        localVideo = factory.videoTrack(with: source, trackId: "video-\(selfId)")
+        return source
+    }
+
+    private func sendVideo(_ on: Bool) {
+        for peer in peers.values { peer.video?.sender.track = on ? localVideo : nil }
+    }
+
+    func toggleCamera() async {
+        if cameraOn { stopCamera(); return }
+        guard room != nil else { return }
+        guard await AVCaptureDevice.requestAccess(for: .video) else {
+            error = "Camera access is off — turn it on in Settings → Sugerly."
+            return
+        }
+        if sharingScreen { stopScreenShare() }
+        let source = ensureVideo()
+        source.adaptOutputFormat(toWidth: 640, height: 480, fps: 24)
+        let devices = RTCCameraVideoCapturer.captureDevices()
+        guard let device = devices.first(where: { $0.position == (frontCamera ? .front : .back) }) ?? devices.first else {
+            error = "No camera found."
+            return
+        }
+        let formats = RTCCameraVideoCapturer.supportedFormats(for: device)
+        func width(_ f: AVCaptureDevice.Format) -> Int { Int(CMVideoFormatDescriptionGetDimensions(f.formatDescription).width) }
+        guard let format = formats.min(by: { abs(width($0) - 640) < abs(width($1) - 640) }) else { return }
+        let fps = Int(min(24, format.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? 24))
+        let capturer = cameraCapturer ?? RTCCameraVideoCapturer(delegate: source)
+        capturer.startCapture(with: device, format: format, fps: fps)
+        cameraCapturer = capturer
+        cameraOn = true
+        sendVideo(true)
+        pushPresence()
+        refreshParticipants()
+    }
+
+    func stopCamera() {
+        cameraCapturer?.stopCapture()
+        cameraOn = false
+        if !sharingScreen { sendVideo(false) }
+        pushPresence()
+        refreshParticipants()
+    }
+
+    func flipCamera() async {
+        frontCamera.toggle()
+        guard cameraOn else { return }
+        cameraOn = false
+        await toggleCamera()
+    }
+
+    // Shares what's on your screen in Sugerly (iOS asks first).
+    func toggleScreenShare() {
+        if sharingScreen { stopScreenShare(); return }
+        guard room != nil else { return }
+        let recorder = RPScreenRecorder.shared()
+        guard recorder.isAvailable else {
+            error = "Screen sharing isn't available right now."
+            return
+        }
+        if cameraOn { stopCamera() }
+        let source = ensureVideo()
+        source.adaptOutputFormat(toWidth: 720, height: 1280, fps: 15)
+        let capturer = RTCVideoCapturer(delegate: source)
+        screenCapturer = capturer
+        recorder.isMicrophoneEnabled = false
+        recorder.startCapture(handler: { @Sendable buffer, type, failure in
+            guard failure == nil, type == .video, let pixels = CMSampleBufferGetImageBuffer(buffer) else { return }
+            let time = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(buffer))
+            let frame = RTCVideoFrame(buffer: RTCCVPixelBuffer(pixelBuffer: pixels), rotation: ._0, timeStampNs: Int64(time * 1_000_000_000))
+            source.capturer(capturer, didCapture: frame)
+        }, completionHandler: { [weak self] failure in
+            Task { @MainActor in
+                guard let self else { return }
+                if let failure {
+                    self.error = "Couldn't share your screen: \(failure.localizedDescription)"
+                    self.screenCapturer = nil
+                    return
+                }
+                self.sharingScreen = true
+                self.sendVideo(true)
+                self.pushPresence()
+                self.refreshParticipants()
+            }
+        })
+    }
+
+    func stopScreenShare() {
+        RPScreenRecorder.shared().stopCapture { _ in }
+        screenCapturer = nil
+        sharingScreen = false
+        if !cameraOn { sendVideo(false) }
+        pushPresence()
+        refreshParticipants()
     }
 
     private func offer(_ peer: Peer, restart: Bool = false) async {
@@ -430,6 +576,12 @@ final class VoiceEngine: NSObject {
         guard let id = byConnection[pcId], let peer = peers[id] else { return }
         peer.remoteTrack = track
         track.isEnabled = !deafened
+        refreshParticipants()
+    }
+
+    fileprivate func gotVideo(_ pcId: ObjectIdentifier, _ track: RTCVideoTrack) {
+        guard let id = byConnection[pcId] else { return }
+        remoteVideo[id] = track
         refreshParticipants()
     }
 
@@ -499,11 +651,11 @@ final class VoiceEngine: NSObject {
 
     private func refreshParticipants() {
         guard room != nil else { participants = []; return }
-        var list = [Participant(id: selfId, email: email, name: name, picture: picture, muted: muted, deafened: deafened, speaking: speakingSelf, isSelf: true, connected: true, level: Self.shown(selfLevel))]
+        var list = [Participant(id: selfId, email: email, name: name, picture: picture, muted: muted, deafened: deafened, speaking: speakingSelf, isSelf: true, connected: true, level: Self.shown(selfLevel), video: videoState)]
         for peer in peers.values.sorted(by: { $0.name < $1.name }) where !peer.email.isEmpty {
             let connected = peer.pc.map { $0.iceConnectionState == .connected || $0.iceConnectionState == .completed } ?? false
             list.append(Participant(id: peer.id, email: peer.email, name: peer.name.isEmpty ? String(peer.email.split(separator: "@").first ?? "") : peer.name,
-                                    picture: peer.picture, muted: peer.muted, deafened: peer.deafened, speaking: peer.speaking, isSelf: false, connected: connected, level: Self.shown(peer.level)))
+                                    picture: peer.picture, muted: peer.muted, deafened: peer.deafened, speaking: peer.speaking, isSelf: false, connected: connected, level: Self.shown(peer.level), video: peer.videoKind))
         }
         if list != participants { participants = list }
     }
@@ -531,6 +683,10 @@ extension VoiceEngine: RTCPeerConnectionDelegate {
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {}
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd rtpReceiver: RTCRtpReceiver, streams mediaStreams: [RTCMediaStream]) {
         let id = ObjectIdentifier(peerConnection)
+        if let video = rtpReceiver.track as? RTCVideoTrack {
+            Task { @MainActor in self.gotVideo(id, video) }
+            return
+        }
         guard let track = rtpReceiver.track as? RTCAudioTrack else { return }
         Task { @MainActor in self.gotTrack(id, track) }
     }

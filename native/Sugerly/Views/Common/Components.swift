@@ -23,7 +23,9 @@ struct Avatar: View {
         let own = imageURL == url ? image : nil
         ZStack(alignment: .bottomTrailing) {
             Group {
-                if let shown = own ?? (url.isEmpty ? nil : (AnimatedImages.looksAnimated(url) ? AnimatedImages.cached(url, maxPixel: pixel) : MemoryImages.get(url))) {
+                if live {
+                    FullGIF(url: url)
+                } else if let shown = own ?? (url.isEmpty ? nil : (AnimatedImages.looksAnimated(url) ? AnimatedImages.cached(url, maxPixel: pixel) : MemoryImages.get(url))) {
                     LoadedImage(image: shown)
                 } else {
                     initial
@@ -52,7 +54,7 @@ struct Avatar: View {
         .accessibilityHidden(true)
         .task(id: url) {
             if imageURL != url { image = nil; imageURL = url }
-            guard !url.isEmpty else { return }
+            guard !url.isEmpty, !live else { return }
             let target = url
             if AnimatedImages.looksAnimated(target) {
                 if let loaded = await AnimatedImages.load(target, maxPixel: pixel), target == url { image = loaded }
@@ -64,6 +66,8 @@ struct Avatar: View {
     }
 
     private var pixel: CGFloat { min(400, max(96, size * 3)) }
+    // Big GIF pictures (profile headers) play at full quality.
+    private var live: Bool { size >= 72 && AnimatedImages.looksAnimated(url) }
 
     private var initial: some View {
         ZStack {
@@ -157,12 +161,22 @@ enum MemoryImages {
 struct RemoteImage: View {
     var url: String
     var contentMode: ContentMode = .fill
+    // Banners: GIFs play at full quality instead of a shrunk copy.
+    var live = false
     @State private var image: UIImage?
     @State private var failed = false
 
     private var animated: Bool { AnimatedImages.looksAnimated(url) }
 
     var body: some View {
+        if live && animated {
+            FullGIF(url: url, fill: contentMode == .fill)
+        } else {
+            still
+        }
+    }
+
+    @ViewBuilder private var still: some View {
         let shown = image ?? (animated ? AnimatedImages.cached(url, maxPixel: 720) : MemoryImages.get(url))
         Group {
             if let shown {

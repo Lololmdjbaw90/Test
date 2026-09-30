@@ -321,6 +321,7 @@ struct VoicePresenceInfo: Identifiable, Hashable {
     var muted: Bool
     var deafened: Bool
     var lastActive: Double
+    var video: String      // "", "camera" or "screen"
 
     init(_ d: Doc) {
         id = d.str("id")
@@ -333,5 +334,6 @@ struct VoicePresenceInfo: Identifiable, Hashable {
         muted = d.bool("muted")
         deafened = d.bool("deafened")
         lastActive = ReelText.num(d["last_active"]) ?? 0
+        video = d.str("video")
     }
 }

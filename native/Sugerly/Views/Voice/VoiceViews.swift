@@ -205,7 +205,7 @@ struct VoiceDock: View {
                             .frame(width: 36, height: 36).background(Palette.success, in: Circle())
                             .symbolEffect(.variableColor.iterative, isActive: true)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(voice.connecting ? "Connecting…" : room.isCall ? "In a call · tap to open" : "Voice connected").font(.jakarta(12, .heavy)).foregroundStyle(Palette.success)
+                            Text(voice.connecting ? "Connecting…" : voice.sharingScreen ? "Sharing your screen" : room.isCall ? "In a call · tap to open" : "Voice connected").font(.jakarta(12, .heavy)).foregroundStyle(voice.sharingScreen ? Theme.main : Palette.success)
                             Text(room.isCall ? room.name : "\(room.name) · \(room.serverName)").font(.jakarta(12, .semibold)).foregroundStyle(Palette.text2).lineLimit(1)
                         }
                         Spacer(minLength: 0)
@@ -221,6 +221,15 @@ struct VoiceDock: View {
                     }
                 }
                 .buttonStyle(.plain)
+                if voice.sharingScreen {
+                    Button { voice.stopScreenShare() } label: {
+                        Image(systemName: "rectangle.on.rectangle.slash").font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
+                            .frame(width: 36, height: 36).background(Theme.main, in: Circle())
+                    }
+                    .buttonStyle(BouncyStyle())
+                    .accessibilityLabel("Stop sharing")
+                    .transition(.scale.combined(with: .opacity))
+                }
                 Button { voice.toggleMute() } label: {
                     Image(systemName: voice.muted ? "mic.slash.fill" : "mic.fill").font(.system(size: 15, weight: .bold))
                         .foregroundStyle(voice.muted ? Palette.danger : Palette.text2)
@@ -237,6 +246,7 @@ struct VoiceDock: View {
             .padding(.vertical, 8)
             .glassPill(cornerRadius: 26)
             .padding(.horizontal, 14)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: voice.sharingScreen)
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .sheet(isPresented: $expanded) {
                 NavigationStack {

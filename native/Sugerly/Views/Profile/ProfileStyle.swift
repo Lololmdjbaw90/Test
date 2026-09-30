@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import ImageIO
 
 // MARK: - Name styles (same ids as the website's NameStylePicker)
 
@@ -912,10 +913,51 @@ enum Cropping {
         return StickerKit.normalized(UIImage(cgImage: part), maxSide: maxSide)
     }
 
-    // Crops every frame of a GIF and builds a new GIF.
+    // Crops a GIF frame by frame at full quality: every frame and its own
+    // timing are kept, and only one frame is in memory at a time. When
+    // nothing was cut away the original file is kept untouched.
     nonisolated static func cropGIF(_ data: Data, _ unit: CGRect, maxSide: CGFloat) -> Data? {
-        guard let animated = AnimatedImages.decode(data, maxPixel: 900, maxFrames: 80), let frames = animated.images, !frames.isEmpty else { return nil }
-        let cropped = frames.map { crop($0, unit, maxSide: maxSide) }
-        return GifKit.encode(cropped, delay: animated.duration / Double(frames.count))
+        let limit = 15 * 1024 * 1024
+        guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+              CGImageSourceGetCount(source) > 0,
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let w = props[kCGImagePropertyPixelWidth] as? Int, let h = props[kCGImagePropertyPixelHeight] as? Int else { return nil }
+        let whole = unit.minX <= 0.01 && unit.minY <= 0.01 && unit.maxX >= 0.99 && unit.maxY >= 0.99
+        if whole && data.count <= limit && CGFloat(max(w, h)) <= maxSide * 1.6 { return data }
+        var side = maxSide
+        for _ in 0..<4 {
+            if let out = recode(source, unit, width: w, height: h, maxSide: side), out.count <= limit { return out }
+            side *= 0.8
+        }
+        return nil
+    }
+
+    nonisolated private static func recode(_ source: CGImageSource, _ unit: CGRect, width w: Int, height h: Int, maxSide: CGFloat) -> Data? {
+        let rect = CGRect(x: unit.minX * CGFloat(w), y: unit.minY * CGFloat(h), width: unit.width * CGFloat(w), height: unit.height * CGFloat(h)).integral
+            .intersection(CGRect(x: 0, y: 0, width: w, height: h))
+        guard !rect.isEmpty, let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        let scale = min(1, maxSide / max(rect.width, rect.height))
+        let outW = max(1, Int((rect.width * scale).rounded())), outH = max(1, Int((rect.height * scale).rounded()))
+        let count = min(CGImageSourceGetCount(source), 600)
+        let out = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(out, "com.compuserve.gif" as CFString, count, nil) else { return nil }
+        CGImageDestinationSetProperties(destination, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0]] as CFDictionary)
+        var added = 0
+        for i in 0..<count {
+            autoreleasepool {
+                guard let frame = CGImageSourceCreateImageAtIndex(source, i, [kCGImageSourceShouldCache: false] as CFDictionary),
+                      let part = frame.cropping(to: rect),
+                      let context = CGContext(data: nil, width: outW, height: outH, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                                              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+                context.interpolationQuality = .high
+                context.draw(part, in: CGRect(x: 0, y: 0, width: outW, height: outH))
+                guard let scaled = context.makeImage() else { return }
+                let delay = AnimatedImages.frameDelay(source, i)
+                CGImageDestinationAddImage(destination, scaled, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: delay, kCGImagePropertyGIFUnclampedDelayTime: delay]] as CFDictionary)
+                added += 1
+            }
+        }
+        guard added > 0, CGImageDestinationFinalize(destination) else { return nil }
+        return out as Data
     }
 }

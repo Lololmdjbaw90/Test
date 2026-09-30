@@ -438,7 +438,7 @@ struct ServerPanel: View {
                         Circle().fill(.white.opacity(0.25)).frame(width: 120).blur(radius: 30).offset(x: 90, y: -30)
                     }
                 } else {
-                    RemoteImage(url: store.server.bannerURL)
+                    RemoteImage(url: store.server.bannerURL, live: true)
                 }
             }
             .frame(height: 100)

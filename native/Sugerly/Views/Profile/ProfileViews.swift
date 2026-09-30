@@ -143,7 +143,7 @@ struct ProfileContent: View {
                     Circle().fill(.white.opacity(0.25)).frame(width: 180).blur(radius: 40).offset(x: 120, y: -40)
                     Circle().fill(Theme.lavender.opacity(0.5)).frame(width: 160).blur(radius: 50).offset(x: -120, y: 40)
                 } else {
-                    RemoteImage(url: person.banner)
+                    RemoteImage(url: person.banner, live: true)
                 }
                 if !person.bannerPattern.isEmpty { BannerPatternView(pattern: person.bannerPattern) }
                 if person.isNitro && !person.profileEffect.isEmpty {
@@ -607,10 +607,10 @@ struct EditProfileView: View {
     @ViewBuilder private var bannerPreview: some View {
         switch banner {
         case .image(let img)?: Image(uiImage: img).resizable().scaledToFill()
-        case .gif(_, let img)?: LoadedImage(image: img)
-        case .link(let url)?: RemoteImage(url: url)
+        case .gif(let data, _)?: LiveGIF(data: data)
+        case .link(let url)?: RemoteImage(url: url, live: true)
         case nil:
-            if !removeBanner, let url = model.me?.banner, !url.isEmpty { RemoteImage(url: url) } else { bannerGradient }
+            if !removeBanner, let url = model.me?.banner, !url.isEmpty { RemoteImage(url: url, live: true) } else { bannerGradient }
         }
     }
 
@@ -627,7 +627,7 @@ struct EditProfileView: View {
         Group {
             switch avatar {
             case .image(let img)?: Image(uiImage: img).resizable().scaledToFill().frame(width: 104, height: 104).clipShape(Circle())
-            case .gif(_, let img)?: LoadedImage(image: img).frame(width: 104, height: 104).clipShape(Circle())
+            case .gif(let data, _)?: LiveGIF(data: data).frame(width: 104, height: 104).clipShape(Circle())
             case .link(let url)?: Avatar(url: url, name: name, size: 104)
             case nil: Avatar(url: model.me?.picture ?? "", name: name, size: 104)
             }
@@ -652,7 +652,7 @@ struct EditProfileView: View {
     private func applyCrop(_ job: CropJob, _ rect: CGRect) async {
         let side: CGFloat = job.avatar ? 600 : 1500
         if let gif = job.gif {
-            let gifSide: CGFloat = job.avatar ? 320 : 720
+            let gifSide: CGFloat = job.avatar ? 512 : 1200
             if let data = await Task.detached(priority: .userInitiated, operation: { Cropping.cropGIF(gif, rect, maxSide: gifSide) }).value,
                let preview = AnimatedImages.decode(data, maxPixel: gifSide) {
                 withAnimation(.snappy) { if job.avatar { avatar = .gif(data, preview) } else { banner = .gif(data, preview); removeBanner = false } }
