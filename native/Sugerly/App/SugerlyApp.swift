@@ -63,7 +63,10 @@ struct RootView: View {
             custom = nil
         }
         AppIconSync.match(model.accent, custom: custom?.main)
-        guard animated else {
+        // During a call the colours switch at once: fading every view on the
+        // screen to the new colour kept the phone busy and froze the call's
+        // picture and buttons for a moment.
+        guard animated && !VoiceEngine.live else {
             Theme.accent = model.accent
             Theme.custom = custom
             return
@@ -148,7 +151,7 @@ struct RootView: View {
         // Light / dark: the whole screen (open pages and sheets too) fades
         // over to the new colours instead of snapping.
         .onChange(of: model.colorScheme, initial: true) { old, new in
-            ThemeFade.apply(new, animated: old != new)
+            ThemeFade.apply(new, animated: old != new && !VoiceEngine.live)
         }
         .animation(.smooth(duration: 0.35), value: model.phase)
         .animation(.smooth(duration: 0.5), value: model.needsSetup)

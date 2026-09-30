@@ -75,6 +75,9 @@ final class CallCenter {
     @ObservationIgnored private var me: UserProfile?
     @ObservationIgnored private var ringTask: Task<Void, Never>?
     @ObservationIgnored private var dismissed = Set<String>()
+    // Your own calls given up because the other person called you at the
+    // same moment (both of you end up in their call instead).
+    @ObservationIgnored private var merged = Set<String>()
 
     func attach(voice: VoiceEngine) {
         self.voice = voice
@@ -89,6 +92,11 @@ final class CallCenter {
     func start(_ conversation: Conversation, model: AppModel) async {
         guard let me = model.me, let voice else { return }
         self.me = me
+        // They're already calling you from this chat: calling back answers it.
+        if let ringing = incoming, ringing.conversationId == conversation.id, ringing.ringing {
+            await accept(ringing, me: me)
+            return
+        }
         if voice.room != nil { await voice.leave() }
         let members = Array(Set(conversation.members.isEmpty ? [me.email] : conversation.members + [me.email])).sorted()
         var names: [String: String] = [:]
@@ -162,6 +170,8 @@ final class CallCenter {
     // Leaving: end the call when nobody else is left (always for 1:1 calls)
     // and post the summary message once.
     private func left(_ callId: String) async {
+        // A call given up for theirs: nothing to end or report here.
+        if merged.contains(callId) { return }
         ringTask?.cancel()
         withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) { showScreen = false }
         defer { current = nil }
@@ -226,6 +236,22 @@ final class CallCenter {
             c.callerEmail != me.email && c.ringing && !c.declinedBy.contains(me.email) && !c.joined.contains(me.email)
                 && c.id != current?.id && !dismissed.contains(c.id)
         }
+        // You both called each other at the same moment: the call started
+        // first wins and both of you end up in it, connected straight away,
+        // instead of two calls ringing past each other.
+        if let theirs = ringingMe, let mine = current, mine.callerEmail == me.email, mine.status == "ringing",
+           Self.sameChat(mine, theirs) {
+            if (mine.startedAt, mine.id) < (theirs.startedAt, theirs.id) {
+                dismissed.insert(theirs.id)   // they'll join this one
+            } else {
+                merged.insert(mine.id)
+                dismissed.insert(mine.id)
+                try? await FS.update("Call", mine.id, ["status": "ended", "ended_at": Int(Date().timeIntervalSince1970 * 1000),
+                                                     "merged_into": theirs.id, "updated_date": FS.nowISO()])
+                await accept(theirs, me: me)
+            }
+            return
+        }
         if let ringingMe {
             if incoming?.id != ringingMe.id {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { incoming = ringingMe }
@@ -262,6 +288,11 @@ final class CallCenter {
     }
 
     private func stopRinging() { ringTask?.cancel() }
+
+    private static func sameChat(_ a: CallInfo, _ b: CallInfo) -> Bool {
+        if !a.conversationId.isEmpty && a.conversationId == b.conversationId { return true }
+        return !a.isGroup && !b.isGroup && Set(a.members) == Set(b.members)
+    }
 }
 
 // MARK: - Incoming call banner
@@ -329,6 +360,8 @@ struct CallScreen: View {
     @Environment(VoiceEngine.self) private var voice
     @State private var ringing = false
     @State private var ending = false
+    // The big picture shows all of it by default; double-tap to fill.
+    @State private var stageFill = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var me: String { model.me?.email ?? "" }
@@ -346,12 +379,18 @@ struct CallScreen: View {
     var body: some View {
         ZStack {
             background
-            if let shown = stage {
-                stageView(shown.0, shown.1).transition(.opacity)
-            }
             VStack(spacing: 0) {
                 topBar
-                if stage == nil {
+                if let shown = stage {
+                    // Their camera or screen sits between the top bar and the
+                    // buttons, whole and uncovered (it used to fill the screen
+                    // behind the buttons, which hid most of them).
+                    stageView(shown.0, shown.1)
+                        .padding(.horizontal, 10)
+                        .padding(.top, 8)
+                        .padding(.bottom, 12)
+                        .transition(.opacity)
+                } else {
                     ScrollView {
                         VStack(spacing: 20) {
                             if alone {
@@ -365,11 +404,9 @@ struct CallScreen: View {
                         .padding(.vertical, 24).frame(maxWidth: .infinity)
                     }
                     .scrollBounceBehavior(.basedOnSize)
-                } else {
-                    Spacer(minLength: 0)
                 }
                 notices
-                controls
+                if stage != nil { compactControls } else { controls }
             }
             .padding(.bottom, 20)
             .animation(.spring(response: 0.45, dampingFraction: 0.85), value: alone)
@@ -559,12 +596,13 @@ struct CallScreen: View {
         .animation(.spring(response: 0.22, dampingFraction: 0.7), value: p.speaking)
     }
 
-    // Their camera or screen, full screen, with their name at the bottom.
+    // Their camera or screen, with their name at the bottom. Double-tap (or
+    // the corner button) to switch between the whole picture and filling.
     private func stageView(_ p: VoiceEngine.Participant, _ track: RTCVideoTrack) -> some View {
         ZStack(alignment: .bottomLeading) {
             Color.black
-            VideoTrackView(track: track, fill: p.video == "camera")
-            LinearGradient(colors: [.black.opacity(0.55), .clear, .clear, .black.opacity(0.75)], startPoint: .top, endPoint: .bottom)
+            VideoTrackView(track: track, fill: stageFill && p.video == "camera")
+            LinearGradient(colors: [.clear, .clear, .black.opacity(0.55)], startPoint: .top, endPoint: .bottom)
                 .allowsHitTesting(false)
             HStack(spacing: 8) {
                 Avatar(url: model.person(p.email)?.picture ?? p.picture, name: p.name, size: 26)
@@ -575,10 +613,62 @@ struct CallScreen: View {
             .foregroundStyle(.white)
             .padding(.leading, 6).padding(.trailing, 12).padding(.vertical, 6)
             .background(.ultraThinMaterial, in: Capsule())
-            .padding(.leading, 18)
-            .padding(.bottom, 330)
+            .padding(12)
         }
-        .ignoresSafeArea()
+        .overlay(alignment: .bottomTrailing) {
+            if p.video == "camera" {
+                Button { withAnimation(.snappy) { stageFill.toggle() } } label: {
+                    Image(systemName: stageFill ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
+                        .frame(width: 36, height: 36).background(.ultraThinMaterial, in: Circle())
+                }
+                .buttonStyle(BouncyStyle(scale: 0.85))
+                .accessibilityLabel(stageFill ? "Show the whole picture" : "Fill the screen")
+                .padding(12)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .onTapGesture(count: 2) { if p.video == "camera" { withAnimation(.snappy) { stageFill.toggle() } } }
+    }
+
+    // One slim row of buttons while a picture is showing, so it gets the room.
+    private var compactControls: some View {
+        HStack(spacing: 10) {
+            roundControl(voice.muted ? "mic.slash.fill" : "mic.fill", on: voice.muted, label: voice.muted ? "Unmute" : "Mute") { voice.toggleMute() }
+            roundControl(voice.cameraOn ? "video.fill" : "video.slash.fill", on: voice.cameraOn, label: "Camera") { Task { await voice.toggleCamera() } }
+            roundControl("rectangle.on.rectangle", on: voice.sharingScreen, label: voice.sharingScreen ? "Stop share" : "Share screen") { voice.toggleScreenShare() }
+            roundControl(voice.speaker ? "speaker.wave.3.fill" : "speaker.fill", on: voice.speaker, label: "Speaker") { voice.toggleSpeaker() }
+            Button {
+                guard !ending else { return }
+                ending = true
+                Task { await calls.hangUp(); ending = false }
+            } label: {
+                Image(systemName: "phone.down.fill").font(.system(size: 20, weight: .bold)).foregroundStyle(.white)
+                    .frame(width: 54, height: 54)
+                    .background(Palette.danger, in: Circle())
+            }
+            .buttonStyle(BouncyStyle(scale: 0.88))
+            .disabled(ending)
+            .accessibilityLabel("End call")
+        }
+        .padding(10)
+        .background(.ultraThinMaterial.opacity(0.9), in: Capsule())
+        .overlay(Capsule().strokeBorder(.white.opacity(0.1), lineWidth: 1))
+        .padding(.horizontal, 16)
+    }
+
+    private func roundControl(_ icon: String, on: Bool, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.system(size: 19, weight: .bold))
+                .foregroundStyle(on ? Color(hex: 0x1A0E15) : .white)
+                .frame(width: 54, height: 54)
+                .background(on ? Color.white : Color.white.opacity(0.14), in: Circle())
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(BouncyStyle(scale: 0.85))
+        .accessibilityLabel(label)
+        .sensoryFeedback(.impact(weight: .light), trigger: on)
     }
 
     // Your own camera in a small corner card; tap the arrows to flip it.
@@ -719,7 +809,8 @@ struct VideoTrackView: UIViewRepresentable {
         let view = RTCMTLVideoView(frame: .zero)
         view.videoContentMode = fill ? .scaleAspectFill : .scaleAspectFit
         view.clipsToBounds = true
-        track.add(view)
+        view.backgroundColor = .black
+        VideoRelay.relay(for: track).attach(view)
         context.coordinator.track = track
         return view
     }
@@ -728,17 +819,94 @@ struct VideoTrackView: UIViewRepresentable {
         view.videoContentMode = fill ? .scaleAspectFill : .scaleAspectFit
         view.transform = mirror ? CGAffineTransform(scaleX: -1, y: 1) : .identity
         if context.coordinator.track !== track {
-            context.coordinator.track?.remove(view)
-            track.add(view)
+            if let old = context.coordinator.track { VideoRelay.existing(for: old)?.detach(view) }
+            VideoRelay.relay(for: track).attach(view)
             context.coordinator.track = track
         }
     }
 
     static func dismantleUIView(_ view: RTCMTLVideoView, coordinator: Coordinator) {
-        coordinator.track?.remove(view)
+        if let track = coordinator.track { VideoRelay.existing(for: track)?.detach(view) }
     }
 
     final class Coordinator { var track: RTCVideoTrack? }
+}
+
+// Passes a call's live picture to whichever views show it and keeps the
+// last frame. A shared screen only sends a new frame when something on it
+// changes, so a view opened later (reopening the call screen) stayed black
+// until then; now it shows the last picture straight away.
+final class VideoRelay: NSObject, RTCVideoRenderer {
+    private static let registry = NSLock()
+    private static var relays: [ObjectIdentifier: VideoRelay] = [:]
+
+    static func relay(for track: RTCVideoTrack) -> VideoRelay {
+        registry.lock()
+        defer { registry.unlock() }
+        if let known = relays[ObjectIdentifier(track)] { return known }
+        let made = VideoRelay(track)
+        relays[ObjectIdentifier(track)] = made
+        track.add(made)
+        return made
+    }
+
+    static func existing(for track: RTCVideoTrack) -> VideoRelay? {
+        registry.lock()
+        defer { registry.unlock() }
+        return relays[ObjectIdentifier(track)]
+    }
+
+    // Leaving a call: let go of every picture.
+    static func forgetAll() {
+        registry.lock()
+        let all = Array(relays.values)
+        relays = [:]
+        registry.unlock()
+        for relay in all { relay.track.remove(relay) }
+    }
+
+    // Held so its address is never reused by another track while listed.
+    private let track: RTCVideoTrack
+    private let lock = NSLock()
+    private var views: [RTCVideoRenderer] = []
+    private var lastFrame: RTCVideoFrame?
+    private var size = CGSize.zero
+
+    private init(_ track: RTCVideoTrack) {
+        self.track = track
+        super.init()
+    }
+
+    func attach(_ view: RTCVideoRenderer) {
+        lock.lock()
+        views.append(view)
+        let frame = lastFrame, known = size
+        lock.unlock()
+        if known != .zero { view.setSize(known) }
+        if let frame { view.renderFrame(frame) }
+    }
+
+    func detach(_ view: RTCVideoRenderer) {
+        lock.lock()
+        views.removeAll { $0 === view }
+        lock.unlock()
+    }
+
+    func setSize(_ size: CGSize) {
+        lock.lock()
+        self.size = size
+        let list = views
+        lock.unlock()
+        for view in list { view.setSize(size) }
+    }
+
+    func renderFrame(_ frame: RTCVideoFrame?) {
+        lock.lock()
+        if let frame { lastFrame = frame }
+        let list = views
+        lock.unlock()
+        for view in list { view.renderFrame(frame) }
+    }
 }
 
 // Apple's picker for AirPods, Bluetooth and the phone speaker.

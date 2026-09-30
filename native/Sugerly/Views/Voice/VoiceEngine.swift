@@ -212,6 +212,7 @@ final class VoiceEngine: NSObject {
         localVideo = nil
         videoSource = nil
         remoteVideo = [:]
+        VideoRelay.forgetAll()
         selfLevel = 0
         speakingSelf = false
         for peer in peers.values { peer.pc?.close() }

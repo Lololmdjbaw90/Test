@@ -120,6 +120,9 @@ enum AppIconSync {
         pending = Task { @MainActor in
             // Wait a moment so trying colours quickly only changes it once.
             try? await Task.sleep(for: .milliseconds(800))
+            // Not in the middle of a call: iOS shows a pop-up for the new
+            // icon, which got in the way. It changes once the call is over.
+            while VoiceEngine.live && !Task.isCancelled { try? await Task.sleep(for: .seconds(2)) }
             let app = UIApplication.shared
             guard !Task.isCancelled, app.supportsAlternateIcons, app.alternateIconName != name,
                   app.applicationState == .active else { return }
