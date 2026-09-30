@@ -81,9 +81,9 @@ export const handler = (event) => handle(event, async () => {
   const call = await getDoc("Call", id);
   if (!call) throw new Problem(404, "That call doesn't exist.");
   if (String(call.caller_email || "").toLowerCase() !== user.email) throw new Problem(403, "Only the caller can ring.");
-  if (call.status !== "ringing") return { sent: 0 };
+  if (call.status !== "ringing") return { sent: 0, devices: 0, failures: [] };
   const auth = apnsToken();
-  if (!auth) return { sent: 0, setup: false };
+  if (!auth) return { sent: 0, setup: false, devices: 0, failures: [] };
 
   const payload = {
     aps: {},
@@ -99,10 +99,13 @@ export const handler = (event) => handle(event, async () => {
     .filter((e) => e && e !== user.email)
     .slice(0, 25);
   let sent = 0;
+  let devices = 0;
+  const failures = [];
   await Promise.all(others.map(async (email) => {
     const device = await getDoc("PushToken", email).catch(() => null);
     const address = String(device?.voip_token || "").replace(/[^0-9a-f]/gi, "");
     if (!address) return;
+    devices += 1;
     const first = device.env === "sandbox" ? "sandbox" : "production";
     let result = await send(HOSTS[first], address, payload, auth);
     // A test build's address only works on Apple's test server (and back).
@@ -110,7 +113,12 @@ export const handler = (event) => handle(event, async () => {
       result = await send(HOSTS[first === "sandbox" ? "production" : "sandbox"], address, payload, auth);
     }
     if (result.status === 200) sent += 1;
-    else console.log(`Call push not delivered: ${result.status} ${result.reason}`);
+    else {
+      // Apple's reason (e.g. InvalidProviderToken, TopicDisallowed) so the
+      // caller's app can say what's wrong.
+      failures.push(result.reason || `status ${result.status}`);
+      console.log(`Call push not delivered: ${result.status} ${result.reason}`);
+    }
   }));
-  return { sent };
+  return { sent, setup: true, devices, failures };
 });
