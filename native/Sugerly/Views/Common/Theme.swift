@@ -488,7 +488,7 @@ struct FourPointStar: Shape {
         let r = min(rect.width, rect.height) / 2
         var p = Path()
         for i in 0..<8 {
-            let angle = Double(i) * .pi / 4 - .pi / 2
+            let angle = CGFloat(i) * .pi / 4 - .pi / 2
             let radius = i.isMultiple(of: 2) ? r : r * 0.2
             let point = CGPoint(x: c.x + radius * cos(angle), y: c.y + radius * sin(angle))
             if i == 0 { p.move(to: point) } else { p.addLine(to: point) }
