@@ -25,6 +25,9 @@ final class AppModel {
     var soundRequest: Track?
     // A brand-new account sees the welcome setup before the app.
     var needsSetup = false
+    // The soft "see you soon" screen shown over everything while logging out.
+    var goodbye = false
+    @ObservationIgnored private var leaving = false
 
     private var auth: AuthClient { AuthClient.shared }
 
@@ -376,9 +379,48 @@ final class AppModel {
     }
 
     func signOut() {
-        auth.signOut()
+        guard !leaving else { return }
+        Task { await leaveGently { self.auth.signOut() } }
+    }
+
+    // Logging out without a jolt: pop-ups and sheets slide away as usual, a
+    // calm goodbye screen fades in, the account is cleared behind it, and it
+    // fades out onto the login page. (It used to cut straight to the login
+    // page while everything closed at once.)
+    private func leaveGently(_ finish: (() -> Void)? = nil) async {
+        leaving = true
+        defer { leaving = false }
+        withAnimation(.easeOut(duration: 0.25)) {
+            showMenu = false
+            showNotifications = false
+        }
+        // Let the "Log out?" question finish closing, then slide sheets down.
+        try? await Task.sleep(for: .milliseconds(300))
+        if closeSheets(animated: true) { try? await Task.sleep(for: .milliseconds(380)) }
+        withAnimation(.easeInOut(duration: 0.35)) { goodbye = true }
+        try? await Task.sleep(for: .milliseconds(420))
+        finish?()
         resetForNextAccount()
-        phase = .signedOut
+        var quiet = Transaction()
+        quiet.disablesAnimations = true
+        withTransaction(quiet) { phase = .signedOut }
+        try? await Task.sleep(for: .milliseconds(200))
+        withAnimation(.easeOut(duration: 0.45)) { goodbye = false }
+    }
+
+    // Closes whatever UIKit is showing on top (sheets, full-screen pages).
+    // Says whether anything was open.
+    @discardableResult
+    private func closeSheets(animated: Bool) -> Bool {
+        var any = false
+        for scene in UIApplication.shared.connectedScenes {
+            for window in (scene as? UIWindowScene)?.windows ?? [] {
+                guard let root = window.rootViewController, root.presentedViewController != nil else { continue }
+                any = true
+                root.dismiss(animated: animated)
+            }
+        }
+        return any
     }
 
     // Everything tied to the account that just left: close every page and
@@ -410,12 +452,8 @@ final class AppModel {
         }
         WidgetBridge.clear()
         Alerts.shared.setBadge(0)
-        // Sheets and full-screen pages are shown by UIKit; close them all.
-        for scene in UIApplication.shared.connectedScenes {
-            for window in (scene as? UIWindowScene)?.windows ?? [] {
-                window.rootViewController?.dismiss(animated: false)
-            }
-        }
+        // Anything still open closes at once (it's behind the goodbye screen).
+        closeSheets(animated: false)
     }
 
     // Same as the website (src/lib/safety.js): checks the password (which also
@@ -462,8 +500,7 @@ final class AppModel {
         try? await FS.delete("User", me.id)
 
         try await auth.deleteAccount()
-        resetForNextAccount()
-        phase = .signedOut
+        await leaveGently()
     }
 }
 

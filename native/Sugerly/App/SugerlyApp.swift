@@ -129,6 +129,9 @@ struct RootView: View {
                 .transition(.opacity)
                 .zIndex(10)
             }
+            if model.goodbye {
+                GoodbyeCover().transition(.opacity).zIndex(20)
+            }
         }
         .onChange(of: connection.offline) { _, offline in
             if !offline {
@@ -177,6 +180,21 @@ struct BannedView: View {
         .frame(maxWidth: 520)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .sugarBackground()
+    }
+}
+
+// Fades in over the app while logging out, then fades away onto the login
+// page, so leaving is one calm cross-fade.
+struct GoodbyeCover: View {
+    var body: some View {
+        VStack(spacing: 14) {
+            MimiBuddy(icon: "hand.wave.fill", mood: .happy, size: 130, animated: false)
+            Text("See you soon!").font(.display(30)).foregroundStyle(Palette.text)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .sugarBackground()
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 }
 
