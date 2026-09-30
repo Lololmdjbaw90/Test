@@ -483,8 +483,6 @@ struct CommunityView: View {
                     Button { path.append(.person(email)) } label: {
                         VStack(spacing: 6) {
                             Avatar(url: person?.picture ?? "", name: person?.displayName ?? email, size: 62, online: person?.isOnline ?? false)
-                                .padding(3)
-                                .overlay(Circle().strokeBorder(AngularGradient(colors: [Theme.main, Theme.light, Color(hex: 0xFFD166), Theme.main], center: .center), lineWidth: 3))
                             Text(person?.displayName ?? "").font(.jakarta(12, .semibold)).foregroundStyle(Palette.text).lineLimit(1).frame(width: 70)
                         }
                     }

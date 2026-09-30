@@ -301,8 +301,6 @@ struct GalleryView: View {
                         Button { path.append(.person(entry.email)) } label: {
                             VStack(spacing: 6) {
                                 Avatar(url: model.person(entry.email)?.picture ?? art?.authorPicture ?? "", name: model.name(entry.email, art?.authorName ?? ""), size: 58)
-                                    .padding(3)
-                                    .overlay(Circle().strokeBorder(Theme.gradient, lineWidth: 2.5))
                                 Text(model.name(entry.email, art?.authorName ?? "")).font(.jakarta(11, .bold)).foregroundStyle(Palette.text).lineLimit(1)
                                 Text("\(entry.count) piece\(entry.count == 1 ? "" : "s")").font(.jakarta(10, .semibold)).foregroundStyle(Palette.muted)
                             }

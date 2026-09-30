@@ -167,7 +167,6 @@ struct ChatView: View {
     private var emptyState: some View {
         VStack(spacing: 12) {
             Avatar(url: conversation.picture(model), name: conversation.title(model), size: 88)
-                .overlay(Circle().strokeBorder(Theme.gradient, lineWidth: 3))
                 .shadow(color: Theme.pink.opacity(0.3), radius: 14, y: 6)
             Text(conversation.title(model)).font(.display(28)).foregroundStyle(Palette.text)
             Label("Messages here are just between you\(conversation.isGroup ? " all" : " two")", systemImage: "lock.fill")

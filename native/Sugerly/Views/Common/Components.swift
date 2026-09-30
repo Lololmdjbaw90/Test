@@ -10,6 +10,8 @@ struct Avatar: View {
     var name: String
     var size: CGFloat = 40
     var online = false
+    // No longer drawn: profile pictures have no ring around them. Kept so
+    // existing callers still compile.
     var ring = false
     var nitro = false
     // Idle / do-not-disturb badge instead of the plain green dot.
@@ -33,14 +35,6 @@ struct Avatar: View {
             }
             .frame(width: size, height: size)
             .clipShape(Circle())
-            // The ring, a see-through gap, then the picture. Nothing is drawn
-            // on top of anything else, so no thin coloured lines show at the
-            // picture's edge.
-            .padding(ringPad)
-            .background {
-                if nitro { NitroRing(lineWidth: ringWidth) }
-                else if ring { Circle().strokeBorder(Theme.gradient, lineWidth: ringWidth) }
-            }
 
             if let presence, presence != .offline {
                 PresenceDot(presence: presence, size: max(11, size * 0.3))
@@ -67,8 +61,6 @@ struct Avatar: View {
     }
 
     private var pixel: CGFloat { min(400, max(96, size * 3)) }
-    private var ringPad: CGFloat { ring || nitro ? max(3, (size * 0.07).rounded()) : 0 }
-    private var ringWidth: CGFloat { max(1.5, ringPad * 0.6) }
     // Big GIF pictures (profile headers) play at full quality.
     private var live: Bool { size >= 72 && AnimatedImages.looksAnimated(url) }
 
@@ -504,27 +496,5 @@ enum Moderation {
     static func hasLink(_ text: String) -> Bool {
         let pattern = #"(https?://|www\.)\S+|\b[a-z0-9-]+\.(com|net|org|io|co|gg|ly|me|app|xyz|link|shop|site)\b"#
         return text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
-    }
-}
-
-// Nitro's animated rainbow-candy ring around a profile picture.
-struct NitroRing: View {
-    var lineWidth: CGFloat = 3
-    @State private var spin = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    var body: some View {
-        // A thin ring whose colours slowly turn. Only the turning is animated
-        // (never where the ring sits), so it can't drift or wobble when a
-        // list scrolls or a page opens.
-        Circle()
-            .strokeBorder(AngularGradient(colors: [Color(hex: 0xFF7AA2), Color(hex: 0xB19CFF), Color(hex: 0x7CBEFF), Color(hex: 0xFFD166), Color(hex: 0xFF7AA2)], center: .center), lineWidth: lineWidth)
-            .rotationEffect(.degrees(spin ? 360 : 0))
-            .animation(reduceMotion ? nil : Animation.linear(duration: 6).repeatForever(autoreverses: false), value: spin)
-            .onAppear { spin = true }
-            .onDisappear {
-                var still = Transaction()
-                still.disablesAnimations = true
-                withTransaction(still) { spin = false }
-            }
     }
 }

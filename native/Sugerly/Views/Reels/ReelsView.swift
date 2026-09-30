@@ -767,7 +767,7 @@ struct ReelPage: View {
         VStack(spacing: 14) {
             Button { path.append(.person(reel.authorEmail)) } label: {
                 Avatar(url: author?.picture ?? reel.authorPicture, name: author?.displayName ?? reel.authorName, size: 54, nitro: author?.isNitro ?? false)
-                    .overlay(Circle().strokeBorder(.white, lineWidth: (author?.isNitro ?? false) ? 0 : 2.5))
+                    .overlay(Circle().strokeBorder(.white, lineWidth: 2.5))
                     .overlay(alignment: .bottom) {
                         if (!following || justFollowed) && reel.authorEmail != me {
                             Image(systemName: justFollowed ? "checkmark" : "plus").font(.system(size: 12, weight: .black))
