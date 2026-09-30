@@ -439,9 +439,9 @@ struct BrandLogo: View {
     }
 }
 
-// The app icon (Mimi peeking up from the bottom) in your colour, with
-// sparkles that twinkle and drift a little — the home screen icon can't
-// move, this can.
+// The app icon (the polka-dot S with Mimi peeking over it) in your colour,
+// with sparkles that twinkle and drift a little — the home screen icon
+// can't move, this can.
 struct AppBadge: View {
     var size: CGFloat = 120
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -452,7 +452,7 @@ struct AppBadge: View {
     }
 
     // Same spots as the home screen icon (x, y, size out of 1024).
-    private let sparkles: [(CGFloat, CGFloat, CGFloat, Double)] = [(206, 214, 184, 0), (820, 168, 128, 0.5), (884, 330, 68, 1.0), (120, 402, 60, 1.5)]
+    private let sparkles: [(CGFloat, CGFloat, CGFloat, Double)] = [(846, 170, 124, 0), (930, 296, 52, 0.5), (130, 250, 76, 1.0)]
 
     var body: some View {
         let unit = size / 1024
@@ -461,7 +461,7 @@ struct AppBadge: View {
             ForEach(sparkles.indices, id: \.self) { i in
                 let s = sparkles[i]
                 FourPointStar()
-                    .fill(Theme.main)
+                    .fill(.white)
                     .frame(width: s.2 * unit, height: s.2 * unit)
                     .shadow(color: .white.opacity(0.9), radius: 6 * unit * 4)
                     .phaseAnimator(reduceMotion ? [1.0] : [0.55, 1.0, 0.8]) { view, phase in
@@ -489,7 +489,7 @@ struct FourPointStar: Shape {
         var p = Path()
         for i in 0..<8 {
             let angle = CGFloat(i) * .pi / 4 - .pi / 2
-            let radius = i.isMultiple(of: 2) ? r : r * 0.2
+            let radius = i.isMultiple(of: 2) ? r : r * 0.28
             let point = CGPoint(x: c.x + radius * cos(angle), y: c.y + radius * sin(angle))
             if i == 0 { p.move(to: point) } else { p.addLine(to: point) }
         }
