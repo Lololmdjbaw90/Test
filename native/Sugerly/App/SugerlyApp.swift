@@ -129,8 +129,11 @@ struct RootView: View {
                 .transition(.opacity)
                 .zIndex(10)
             }
+            if model.settingUp {
+                SettingUpCover().transition(.opacity).zIndex(20)
+            }
             if model.goodbye {
-                GoodbyeCover().transition(.opacity).zIndex(20)
+                GoodbyeCover().transition(.opacity).zIndex(21)
             }
         }
         .onChange(of: connection.offline) { _, offline in
@@ -195,6 +198,40 @@ struct GoodbyeCover: View {
         .sugarBackground()
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+}
+
+// Shown while logging in: the app gets ready behind it.
+struct SettingUpCover: View {
+    @State private var dot = 0
+
+    var body: some View {
+        VStack(spacing: 14) {
+            MimiBuddy(icon: "sparkles", mood: .happy, size: 130, animated: false)
+            Text("Setting things up for you").font(.display(28)).foregroundStyle(Palette.text)
+                .multilineTextAlignment(.center)
+            HStack(spacing: 8) {
+                ForEach(0..<3, id: \.self) { i in
+                    Circle().fill(Theme.main)
+                        .frame(width: 9, height: 9)
+                        .opacity(dot == i ? 1 : 0.3)
+                        .scaleEffect(dot == i ? 1.15 : 0.9)
+                }
+            }
+            .animation(.easeInOut(duration: 0.3), value: dot)
+        }
+        .padding(.horizontal, 30)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .sugarBackground()
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Setting things up for you")
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(380))
+                dot = (dot + 1) % 3
+            }
+        }
     }
 }
 

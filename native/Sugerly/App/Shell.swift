@@ -265,7 +265,12 @@ struct MainShell: View {
                 currentPathBinding.wrappedValue.append(route)
             }, open: { sheet in
                 closeMenu()
-                menuSheet = sheet
+                // Let the menu finish fading away first: closing it and
+                // sliding a page up in the same moment made both stutter.
+                Task {
+                    try? await Task.sleep(for: .milliseconds(220))
+                    menuSheet = sheet
+                }
             })
             .transition(.opacity)
             .zIndex(6)
@@ -399,7 +404,9 @@ struct MainShell: View {
         .task {
             // First the notifications question (only ever asked once), then
             // the daily reward. On a new account both used to pop up at the
-            // same moment and the reward sheet could get stuck.
+            // same moment and the reward sheet could get stuck. Nothing pops
+            // up while the "Setting things up" screen is still showing.
+            while model.settingUp { try? await Task.sleep(for: .milliseconds(200)) }
             try? await Task.sleep(for: .seconds(1))
             await Alerts.shared.requestPermission()
             try? await Task.sleep(for: .seconds(1.5))

@@ -186,6 +186,8 @@ struct ProfileEffectLayer: View {
     let effect: String
     var color = ""
     var amount = 0
+    // Stops moving (and redrawing) while something covers it, like Settings.
+    var paused = false
 
     private var icon: String { ProfileEffect.all.first { $0.id == effect }?.icon ?? "sparkle" }
     private var count: Int { amount > 0 ? min(40, amount) : 16 }
@@ -200,7 +202,7 @@ struct ProfileEffectLayer: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: paused)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             Canvas { context, size in
                 guard let symbol = context.resolveSymbol(id: 0) else { return }

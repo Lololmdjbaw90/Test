@@ -498,42 +498,19 @@ struct FourPointStar: Shape {
 }
 
 // Colourful confetti for rewards.
-struct ConfettiView: View {
-    @State private var fall = false
-    // Picked once: before, every redraw of the screen around it (like the
-    // coins counting up) gave the pieces new spots, so they jumped about.
-    @State private var pieces = (0..<36).map { _ in (x: Double.random(in: -160...160), delay: Double.random(in: 0...0.25), rot: Double.random(in: 0...360), color: [Color(hex: 0xFF7AA2), Color(hex: 0xB19CFF), Color(hex: 0xFFD166), Color(hex: 0x5FD3B0), Color(hex: 0x7CBEFF)].randomElement()!) }
-    var body: some View {
-        ZStack {
-            ForEach(0..<pieces.count, id: \.self) { i in
-                let p = pieces[i]
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(p.color)
-                    .frame(width: 7, height: 11)
-                    .rotationEffect(.degrees(fall ? p.rot + 540 : p.rot))
-                    .offset(x: fall ? p.x : p.x * 0.2, y: fall ? 260 : -30)
-                    .opacity(fall ? 0 : 1)
-                    .animation(.easeOut(duration: 1.6).delay(p.delay), value: fall)
-            }
-        }
-        .allowsHitTesting(false)
-        .onAppear { fall = true }
-    }
-}
-
-// A burst of sparkles flying out and twinkling away (for rewards). Their
+// A small, soft burst of sparkles for rewards: a few little stars pop out
+// above and to the sides, then fade. (It used to be confetti plus big
+// glowing stars flying everywhere, over the text and other cards.) Their
 // spots are picked once, so they never jump when the screen updates.
 struct SparkleBurst: View {
-    var radius: CGFloat = 130
+    var radius: CGFloat = 80
     struct Piece { var dx: CGFloat; var dy: CGFloat; var distance: CGFloat; var size: CGFloat; var delay: Double; var white: Bool }
-    @State private var pieces: [Piece] = (0..<16).map { i in
-        // Fanned out above and to the sides only, so they never cover the
-        // text underneath.
-        let angle: Double = -Double.pi * (0.08 + 0.84 * Double(i) / 15) + Double.random(in: -0.06...0.06)
+    @State private var pieces: [Piece] = (0..<8).map { i in
+        let angle: Double = -Double.pi * (0.12 + 0.76 * Double(i) / 7) + Double.random(in: -0.05...0.05)
         let x: Double = cos(angle)
         let y: Double = sin(angle)
-        return Piece(dx: CGFloat(x), dy: CGFloat(y), distance: CGFloat.random(in: 0.55...1.0),
-                     size: CGFloat.random(in: 12...26), delay: Double.random(in: 0...0.18), white: i % 3 == 0)
+        return Piece(dx: CGFloat(x), dy: CGFloat(y), distance: CGFloat.random(in: 0.7...1.0),
+                     size: CGFloat.random(in: 8...14), delay: Double(i % 4) * 0.03, white: i % 2 == 0)
     }
     @State private var go = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -543,26 +520,25 @@ struct SparkleBurst: View {
             ForEach(pieces.indices, id: \.self) { i in
                 let p = pieces[i]
                 FourPointStar()
-                    .fill(p.white ? AnyShapeStyle(Color.white) : AnyShapeStyle(Theme.gradient))
+                    .fill(p.white ? AnyShapeStyle(Color.white) : AnyShapeStyle(Theme.main))
                     .frame(width: p.size, height: p.size)
-                    .shadow(color: .white.opacity(0.9), radius: 3)
                     .phaseAnimator([0, 1, 2], trigger: go) { view, phase in
-                        let reach: CGFloat = phase == 0 ? 0 : radius * p.distance * (phase == 2 ? 1.15 : 1)
+                        let reach: CGFloat = phase == 0 ? 0 : radius * p.distance
                         return view
-                            .scaleEffect(phase == 1 ? 1 : 0.3)
-                            .rotationEffect(.degrees(phase == 0 ? 0 : phase == 1 ? 45 : 110))
+                            .scaleEffect(phase == 1 ? 1 : 0.4)
                             .opacity(phase == 1 ? 1 : 0)
                             .offset(x: p.dx * reach, y: p.dy * reach)
                     } animation: { phase in
                         switch phase {
-                        case 1: return .spring(response: 0.45, dampingFraction: 0.6).delay(p.delay)
-                        case 2: return .easeIn(duration: 0.8).delay(0.35)
+                        case 1: return .easeOut(duration: 0.45).delay(p.delay)
+                        case 2: return .easeIn(duration: 0.4).delay(0.15)
                         default: return .linear(duration: 0.01)
                         }
                     }
             }
         }
         .allowsHitTesting(false)
+        .accessibilityHidden(true)
         .onAppear { if !reduceMotion { go.toggle() } }
     }
 }

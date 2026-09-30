@@ -322,7 +322,8 @@ final class RenderBox: @unchecked Sendable {
     var scale: CGFloat = 1
     var overlays: [CIImage] = []
     var timed: [Timed] = []     // overlays that show only part of the time
-    var trimStart: Double = 0
+    var trimStart: Double = 0   // where the reel starts in the video being rendered
+    var rate: Double = 1        // speed: 2 means one second of video per half second
 }
 
 // MARK: - Reel Studio
@@ -363,6 +364,8 @@ struct ReelStudioView: View {
     @State private var duration: Double = 0
     @State private var trimStart: Double = 0
     @State private var trimEnd: Double = 0
+    // Playback speed of the whole video (0.5x slow motion … 3x fast).
+    @State private var speed: Double = 1
     @State private var thumbs: [UIImage] = []
     @State private var look = ReelLook()
     @State private var stickers: [TextSticker] = []
@@ -393,10 +396,11 @@ struct ReelStudioView: View {
     @State private var resumeAfterScrub = false
 
     enum EditTool: String, CaseIterable {
-        case trim = "Trim", timeline = "Timeline", crop = "Crop", filters = "Filters", adjust = "Adjust", text = "Text", stickers = "Stickers", draw = "Draw", sound = "Sound"
+        case trim = "Trim", speed = "Speed", timeline = "Timeline", crop = "Crop", filters = "Filters", adjust = "Adjust", text = "Text", stickers = "Stickers", draw = "Draw", sound = "Sound"
         var icon: String {
             switch self {
             case .trim: return "scissors"
+            case .speed: return "speedometer"
             case .timeline: return "film.stack"
             case .crop: return "crop"
             case .filters: return "camera.filters"
@@ -612,7 +616,7 @@ struct ReelStudioView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(EditTool.allCases.filter { $0 != .trim || asset != nil }, id: \.self) { t in
+                    ForEach(EditTool.allCases.filter { ($0 != .trim && $0 != .speed) || asset != nil }, id: \.self) { t in
                         Button {
                             withAnimation(.snappy) { tool = t }
                             if t == .text { checkpoint(); editingText = TextSticker(text: "") }
@@ -677,6 +681,8 @@ struct ReelStudioView: View {
     @ViewBuilder
     private var toolPanel: some View {
         switch tool {
+        case .speed:
+            speedPanel
         case .trim:
             if asset != nil {
                 TrimBar(thumbs: thumbs, duration: duration, start: $trimStart, end: $trimEnd,
@@ -878,7 +884,7 @@ struct ReelStudioView: View {
                         .frame(width: 96, height: 170)
                         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(asset != nil ? "\(Int(trimEnd - trimStart))s video" : "Slideshow of \(photos.count) pictures").font(.jakarta(13, .bold)).foregroundStyle(Theme.pink)
+                            Text(asset != nil ? "\(Int(((trimEnd - trimStart) / speed).rounded()))s video" : "Slideshow of \(photos.count) pictures").font(.jakarta(13, .bold)).foregroundStyle(Theme.pink)
                             TextField("Write a caption… #tags", text: $caption, axis: .vertical)
                                 .font(.jakarta(15)).foregroundStyle(.white).lineLimit(4...8)
                         }
@@ -1015,7 +1021,7 @@ struct ReelStudioView: View {
                                      trimStart: trimStart, trimEnd: trimEnd, sound: sound, soundVolume: soundVolume,
                                      originalVolume: originalVolume, video: asset != nil ? videoURL : nil,
                                      photos: asset == nil ? photos : [], cover: thumbs.first, stickers: stickers, strokes: strokes, videoCrop: videoCrop,
-                                     slideSeconds: asset == nil ? slideSeconds : [])
+                                     slideSeconds: asset == nil ? slideSeconds : [], speed: asset != nil ? speed : 1)
         draftId = Drafts.saveReel(id: draftId, state)
         drafts = Drafts.reels()
         model.showToast("Saved to drafts", icon: "tray.and.arrow.down.fill")
@@ -1031,6 +1037,7 @@ struct ReelStudioView: View {
             await openVideo(url)
             trimStart = min(d.trimStart, max(0, duration - 1))
             trimEnd = min(duration, max(trimStart + 1, d.trimEnd))
+            setSpeed(d.speed ?? 1)
             player.volume = Float(originalVolume)
             muteOriginal = originalVolume < 0.02
         } else {
@@ -1049,6 +1056,46 @@ struct ReelStudioView: View {
         applyPreviewFilter()
     }
 
+    // MARK: speed
+
+    private static let speeds: [Double] = [0.5, 0.75, 1, 1.5, 2, 3]
+
+    private static func speedText(_ v: Double) -> String { String(format: "%gx", v) }
+
+    private var speedPanel: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 6) {
+                ForEach(Self.speeds, id: \.self) { v in
+                    let on = abs(speed - v) < 0.01
+                    Button { setSpeed(v) } label: {
+                        Text(Self.speedText(v)).font(.jakarta(14, .heavy))
+                            .foregroundStyle(on ? Color(hex: 0x2A1620) : .white)
+                            .frame(maxWidth: .infinity).frame(height: 42)
+                            .background(on ? Color.white : Color.white.opacity(0.1), in: Capsule())
+                    }
+                    .buttonStyle(BouncyStyle(scale: 0.9))
+                    .accessibilityLabel("Speed \(Self.speedText(v))")
+                    .accessibilityAddTraits(on ? .isSelected : [])
+                }
+            }
+            Text(abs(speed - 1) < 0.01 ? "Normal speed" : "\(speed < 1 ? "Slow motion" : "Faster") · \(Int(((trimEnd - trimStart) / speed).rounded()))s video")
+                .font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.7))
+                .contentTransition(.numericText())
+        }
+        .padding(.horizontal, 16)
+        .sensoryFeedback(.selection, trigger: speed)
+    }
+
+    // The preview plays at the new speed straight away; posting makes the
+    // video itself that speed.
+    private func setSpeed(_ value: Double) {
+        withAnimation(.snappy) { speed = value }
+        // Reels stay 60 seconds at most, even in slow motion.
+        if (trimEnd - trimStart) / value > 60 { trimEnd = trimStart + 60 * value }
+        player.defaultRate = Float(value)
+        if player.rate != 0 { player.rate = Float(value) }
+    }
+
     private func openVideo(_ url: URL) async {
         let a = AVURLAsset(url: url)
         let seconds = (try? await a.load(.duration).seconds) ?? 0
@@ -1059,6 +1106,7 @@ struct ReelStudioView: View {
         duration = seconds
         trimStart = 0
         trimEnd = min(seconds, 60)
+        speed = 1
         photos = []
         slideSeconds = []
         playhead = 0
@@ -1068,7 +1116,10 @@ struct ReelStudioView: View {
         timelineThumbKey = ""
         tool = .trim
         let item = AVPlayerItem(asset: a)
+        // Voices keep their normal pitch when sped up or slowed down.
+        item.audioTimePitchAlgorithm = .spectral
         player.replaceCurrentItem(with: item)
+        player.defaultRate = 1
         applyPreviewFilter()
         loopPreview()
         player.play()
@@ -1387,7 +1438,7 @@ struct ReelStudioView: View {
                 if let cover = await coverImage(asset), let jpeg = ImageTools.jpeg(cover, maxSide: 1080) {
                     coverURL = try await StorageClient.upload(jpeg, contentType: "image/jpeg", fileExtension: "jpg")
                 }
-                length = trimEnd - trimStart
+                length = min(trimEnd - trimStart, 60 * speed) / speed
             } else {
                 status = "Uploading pictures…"
                 for (i, photo) in photos.enumerated() {
@@ -1553,14 +1604,28 @@ struct ReelStudioView: View {
         box.look = look
         box.crop = videoCrop
         box.trimStart = trimStart
-        let composition = AVMutableVideoComposition(asset: asset) { request in
+        // Reels stay 60 seconds at most, even in slow motion.
+        let end = min(trimEnd, trimStart + 60 * speed)
+        var range: CMTimeRange? = end > trimStart + 0.05
+            ? CMTimeRange(start: CMTime(seconds: max(0, trimStart), preferredTimescale: 600), end: CMTime(seconds: end, preferredTimescale: 600))
+            : nil
+        // Speed: the kept part goes into its own composition, stretched or
+        // squeezed in time; filters and stickers then work on that.
+        var source: AVAsset = asset
+        if abs(speed - 1) > 0.01, let kept = range {
+            source = try await Self.speedComposition(asset, range: kept, rate: speed)
+            range = nil
+            box.trimStart = 0
+            box.rate = speed
+        }
+        let composition = AVMutableVideoComposition(asset: source) { request in
             var img = request.sourceImage
             if let crop = box.crop { img = VideoCrop.cut(img, crop) }
             if box.scale < 1 { img = img.transformed(by: CGAffineTransform(scaleX: box.scale, y: box.scale)) }
             img = box.look.apply(img)
             for overlay in box.overlays { img = overlay.composited(over: img) }
             // Timeline overlays: only while they're meant to show.
-            let t = request.compositionTime.seconds - box.trimStart
+            let t = (request.compositionTime.seconds - box.trimStart) * box.rate
             for item in box.timed where t >= item.start - 0.01 && (item.end.map { t < $0 } ?? true) {
                 img = item.image.composited(over: img)
             }
@@ -1578,20 +1643,20 @@ struct ReelStudioView: View {
         }
 
         let out = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
-        guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else {
+        guard let session = AVAssetExportSession(asset: source, presetName: AVAssetExportPresetHighestQuality) else {
             throw APIError(message: "Couldn't make the video on this device.")
         }
         session.videoComposition = composition
         session.outputURL = out
         session.outputFileType = .mp4
         session.shouldOptimizeForNetworkUse = true
+        // Voices keep their normal pitch at other speeds.
+        session.audioTimePitchAlgorithm = .spectral
         // A start after the end is an invalid range, which AVFoundation throws on.
-        if trimEnd > trimStart + 0.05 {
-            session.timeRange = CMTimeRange(start: CMTime(seconds: max(0, trimStart), preferredTimescale: 600), end: CMTime(seconds: trimEnd, preferredTimescale: 600))
-        }
+        if let range { session.timeRange = range }
         if muteOriginal || originalVolume < 0.99 {
             let mix = AVMutableAudioMix()
-            let tracks = (try? await asset.loadTracks(withMediaType: .audio)) ?? []
+            let tracks = (try? await source.loadTracks(withMediaType: .audio)) ?? []
             let volume = Float(muteOriginal ? 0 : originalVolume)
             mix.inputParameters = tracks.map { track in
                 let p = AVMutableAudioMixInputParameters(track: track)
@@ -1607,6 +1672,27 @@ struct ReelStudioView: View {
             throw APIError(message: session.error?.localizedDescription ?? "Couldn't make the video.")
         }
         return out
+    }
+}
+
+extension ReelStudioView {
+    // The kept part of the video (picture and sound), played `rate` times
+    // as fast: 2 makes it half as long, 0.5 twice as long.
+    static func speedComposition(_ asset: AVURLAsset, range: CMTimeRange, rate: Double) async throws -> AVMutableComposition {
+        let made = AVMutableComposition()
+        guard let video = try await asset.loadTracks(withMediaType: .video).first,
+              let track = made.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            throw APIError(message: "Couldn't change the speed of this video.")
+        }
+        try track.insertTimeRange(range, of: video, at: .zero)
+        track.preferredTransform = try await video.load(.preferredTransform)
+        for audio in try await asset.loadTracks(withMediaType: .audio) {
+            guard let sound = made.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else { continue }
+            try? sound.insertTimeRange(range, of: audio, at: .zero)
+        }
+        made.scaleTimeRange(CMTimeRange(start: .zero, duration: range.duration),
+                            toDuration: CMTimeMultiplyByFloat64(range.duration, multiplier: 1 / rate))
+        return made
     }
 }
 

@@ -149,7 +149,8 @@ struct ProfileContent: View {
                 }
                 if !person.bannerPattern.isEmpty { BannerPatternView(pattern: person.bannerPattern) }
                 if person.isNitro && !person.profileEffect.isEmpty {
-                    ProfileEffectLayer(effect: person.profileEffect, color: person.effectColor, amount: person.effectAmount)
+                    ProfileEffectLayer(effect: person.profileEffect, color: person.effectColor, amount: person.effectAmount,
+                                       paused: settings || editing || shop || statusSheet)
                 }
             }
             .frame(height: 170)

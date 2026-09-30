@@ -354,6 +354,13 @@ struct PatternBackground: View {
     }
 }
 
+// Previews already drawn this session, per look (dark mode + colours), so
+// opening Settings again shows them straight away.
+@MainActor
+private enum BackgroundPreviews {
+    static var drawn: [String: [AppBackground: UIImage]] = [:]
+}
+
 // The picker in Settings: small live previews of each background.
 struct BackgroundPicker: View {
     @AppStorage(AppBackground.storageKey) private var choice = AppBackground.dots.rawValue
@@ -399,18 +406,30 @@ struct BackgroundPicker: View {
             }
             .tint(Theme.main)
         }
-        .task(id: "\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)") { drawPreviews() }
+        .task(id: previewKey) { await drawPreviews() }
     }
 
-    private func drawPreviews() {
+    private var previewKey: String { "\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)" }
+
+    // Drawing all of them at once, while Settings was still sliding open,
+    // made the page stutter. Now: reuse ones already drawn, otherwise wait
+    // until the page is open and draw one per frame, each fading in.
+    private func drawPreviews() async {
+        let key = previewKey
+        if let ready = BackgroundPreviews.drawn[key] { previews = ready; return }
+        previews = [:]
+        try? await Task.sleep(for: .milliseconds(450))
         var drawn: [AppBackground: UIImage] = [:]
         for kind in AppBackground.allCases where kind != .off {
+            guard !Task.isCancelled else { return }
             let renderer = ImageRenderer(content: PatternBackground(kind: kind, animated: false)
                 .frame(width: 74, height: 104)
                 .environment(\.colorScheme, scheme))
             renderer.scale = scale
             drawn[kind] = renderer.uiImage
+            withAnimation(.easeOut(duration: 0.2)) { previews = drawn }
+            try? await Task.sleep(for: .milliseconds(16))
         }
-        previews = drawn
+        BackgroundPreviews.drawn[key] = drawn
     }
 }

@@ -142,6 +142,7 @@ enum Drafts {
         var strokes: [Stroke]
         var crop: [Double]? = nil
         var slideSeconds: [Double]? = nil
+        var speed: Double? = nil
     }
 
     static func reels() -> [Reel] { list("reels", as: Reel.self).sorted { $0.saved > $1.saved } }
@@ -175,6 +176,7 @@ enum Drafts {
         var strokes: [DrawStroke]
         var videoCrop: CGRect? = nil
         var slideSeconds: [Double] = []
+        var speed: Double = 1
     }
 
     @discardableResult
@@ -216,7 +218,8 @@ enum Drafts {
                          soundVolume: state.soundVolume, originalVolume: state.originalVolume,
                          videoFile: videoFile, photoCount: state.photos.count, stickers: stickers, strokes: strokes,
                          crop: state.videoCrop.map { [Double($0.minX), Double($0.minY), Double($0.width), Double($0.height)] },
-                         slideSeconds: state.slideSeconds.isEmpty ? nil : state.slideSeconds)
+                         slideSeconds: state.slideSeconds.isEmpty ? nil : state.slideSeconds,
+                         speed: state.speed == 1 ? nil : state.speed)
         write(draft, kind: "reels", id: id)
         return id
     }

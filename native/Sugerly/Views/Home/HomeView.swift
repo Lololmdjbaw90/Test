@@ -85,12 +85,7 @@ struct DailyRewardButton: View {
         }
         .buttonStyle(BouncyStyle(scale: 0.96))
         .overlay {
-            if confetti {
-                ZStack {
-                    ConfettiView()
-                    SparkleBurst(radius: 110)
-                }
-            }
+            if confetti { SparkleBurst(radius: 70) }
         }
         .sensoryFeedback(.success, trigger: status.claimed)
         .onAppear { wiggle = true }
@@ -124,12 +119,7 @@ struct DailyRewardSheet: View {
             }
             .padding(.top, 34)
             .overlay {
-                if reward != nil {
-                    ZStack {
-                        ConfettiView()
-                        SparkleBurst(radius: 140)
-                    }
-                }
+                if reward != nil { SparkleBurst(radius: 95) }
             }
 
             Text(reward == nil ? "Daily reward!" : "+\(reward ?? 0) coins").font(.display(38)).foregroundStyle(Theme.gradient)
@@ -257,6 +247,7 @@ struct HomeView: View {
                 let started = Date()
                 while !loaded && Date().timeIntervalSince(started) < 0.7 { try? await Task.sleep(for: .milliseconds(40)) }
                 appeared = true
+                model.shellReady = true
                 await first.value
             } else if Date().timeIntervalSince(lastLoad) > 60 {
                 // Coming back later: freshen up quietly, no replay.

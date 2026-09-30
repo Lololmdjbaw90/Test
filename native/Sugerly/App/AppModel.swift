@@ -27,6 +27,11 @@ final class AppModel {
     var needsSetup = false
     // The soft "see you soon" screen shown over everything while logging out.
     var goodbye = false
+    // "Setting things up for you" over everything while logging in, so the
+    // app's first pages build and load behind it instead of popping in.
+    var settingUp = false
+    // Home says when its first look has loaded (ends the setting-up screen).
+    @ObservationIgnored var shellReady = false
     @ObservationIgnored private var leaving = false
 
     private var auth: AuthClient { AuthClient.shared }
@@ -56,13 +61,13 @@ final class AppModel {
     func signIn(email: String, password: String) async throws {
         try await auth.signIn(email: email, password: password)
         try await loadProfile()
-        phase = entryPhase
+        await enterGently { self.phase = self.entryPhase }
     }
 
     func signUp(name: String, email: String, password: String) async throws {
         try await auth.signUp(email: email, password: password, name: name)
         try await loadProfile(newName: name)
-        phase = entryPhase
+        await enterGently { self.phase = self.entryPhase }
     }
 
     // Banned accounts see the ban screen instead of the app.
@@ -376,6 +381,29 @@ final class AppModel {
     var myColors: (main: UInt32, light: UInt32)? {
         guard let me, let main = SiteTheme.hex(me.accentMain) else { return nil }
         return (main, SiteTheme.hex(me.accentSub) ?? main)
+    }
+
+    // After the welcome setup: into the app through the same calm screen.
+    func finishSetup() async {
+        await enterGently { self.needsSetup = false }
+    }
+
+    // The setting-up screen fades in, the app switches behind it, and it
+    // fades away once Home has loaded (never longer than a few seconds).
+    private func enterGently(_ change: () -> Void) async {
+        guard !settingUp else { change(); return }
+        shellReady = false
+        withAnimation(.easeInOut(duration: 0.3)) { settingUp = true }
+        try? await Task.sleep(for: .milliseconds(320))
+        var quiet = Transaction()
+        quiet.disablesAnimations = true
+        withTransaction(quiet) { change() }
+        let started = Date()
+        try? await Task.sleep(for: .milliseconds(900))
+        while !shellReady && phase == .signedIn && !needsSetup && Date().timeIntervalSince(started) < 3.5 {
+            try? await Task.sleep(for: .milliseconds(120))
+        }
+        withAnimation(.easeOut(duration: 0.45)) { settingUp = false }
     }
 
     func signOut() {

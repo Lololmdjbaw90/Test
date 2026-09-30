@@ -463,8 +463,7 @@ struct WelcomeSetupView: View {
                 .clipShape(Circle())
                 .overlay(Circle().strokeBorder(Theme.gradient, lineWidth: 4))
             }
-            .overlay { ConfettiView() }
-            .overlay { SparkleBurst(radius: 150) }
+            .overlay { SparkleBurst(radius: 100) }
             Text("You're all set!").font(.display(40)).foregroundStyle(Theme.gradient)
             Text("Welcome to Sugerly, \(name). Here's a little gift to get you started.")
                 .font(.jakarta(15)).foregroundStyle(Palette.text2).multilineTextAlignment(.center).padding(.horizontal, 30)
@@ -479,7 +478,7 @@ struct WelcomeSetupView: View {
             .sensoryFeedback(.success, trigger: coins == 50)
             Spacer()
             Button("Start exploring") {
-                withAnimation(.smooth(duration: 0.5)) { model.needsSetup = false }
+                Task { await model.finishSetup() }
             }
             .buttonStyle(GradientButtonStyle(height: 56))
             .frame(maxWidth: 520)
@@ -572,6 +571,6 @@ struct WelcomeSetupView: View {
         try? await model.updateMe(["onboarding_completed": true])
         saving = false
         Theme.accent = model.accent
-        withAnimation(.smooth(duration: 0.5)) { model.needsSetup = false }
+        await model.finishSetup()
     }
 }
