@@ -147,11 +147,8 @@ targets:
     platform: iOS
     sources:
       - path: SugerlyBroadcast
-    entitlements:
-      path: SugerlyBroadcast/SugerlyBroadcast.entitlements
-      properties:
-        com.apple.security.application-groups:
-          - group.com.mimilocks.app
+    # No special permissions: frames go to the app over a private link
+    # inside the phone, not through a shared app-group folder.
     info:
       path: SugerlyBroadcast/Info.plist
       properties:

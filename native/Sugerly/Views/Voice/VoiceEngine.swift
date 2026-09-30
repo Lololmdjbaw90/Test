@@ -115,7 +115,6 @@ final class VoiceEngine: NSObject {
         let broadcast = ScreenBroadcast.shared
         broadcast.onStarted = { [weak self] in self?.broadcastStarted() }
         broadcast.onStopped = { [weak self] in self?.broadcastStopped() }
-        broadcast.listen()
     }
 
     var isConnected: Bool { room != nil && !connecting }
@@ -210,7 +209,7 @@ final class VoiceEngine: NSObject {
         joinedAt = Date()
         // Your screen can be shared from now on (Share screen, or the
         // broadcast button in Control Center).
-        ScreenBroadcast.shared.setInCall(true)
+        ScreenBroadcast.shared.open()
         call.connected()
         Chime.play(.join)
         refreshParticipants()
@@ -227,7 +226,7 @@ final class VoiceEngine: NSObject {
         if cameraOn { await cameraCapturer?.stopCapture() }
         if sharingScreen { ScreenBroadcast.shared.requestStop() }
         ScreenBroadcast.shared.frames.attach(nil, nil)
-        ScreenBroadcast.shared.setInCall(false)
+        ScreenBroadcast.shared.close()
         cameraCapturer = nil
         screenCapturer = nil
         cameraOn = false
@@ -514,7 +513,7 @@ final class VoiceEngine: NSObject {
     func toggleScreenShare() {
         if sharingScreen { stopScreenShare(); return }
         guard room != nil else { return }
-        ScreenBroadcast.shared.setInCall(true)
+        ScreenBroadcast.shared.open()
         ScreenBroadcast.shared.showPicker()
     }
 
