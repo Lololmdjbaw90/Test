@@ -151,7 +151,7 @@ struct ChannelChatView: View {
             Button(role: .destructive) { confirmDelete = message } label: { Label("Delete message", systemImage: "trash") }
         }
         if message.authorEmail != me {
-            Button { reporting = ReportSheet.Target(id: message.id, type: "message", ownerEmail: message.authorEmail, preview: message.text, link: "/CommunityChat?id=\(server.id)") } label: { Label("Report", systemImage: "flag") }
+            Button { reporting = ReportSheet.Target(id: message.id, type: "server message", ownerEmail: message.authorEmail, preview: message.text, link: "/CommunityChat?id=\(server.id)", collection: "ChannelMessage", media: message.imageURL) } label: { Label("Report", systemImage: "flag") }
         }
     }
 

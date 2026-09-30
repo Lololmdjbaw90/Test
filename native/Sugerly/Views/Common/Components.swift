@@ -269,6 +269,26 @@ struct ReportSheet: View {
         var ownerEmail: String
         var preview: String
         var link: String
+        // Where it's stored (so moderators remove the right thing) and any
+        // GIF, sticker, picture, voice note or video it holds.
+        var collection = ""
+        var media = ""
+
+        private var mediaKind: String {
+            let lower = media.lowercased()
+            if media.isEmpty { return "" }
+            if lower.contains(".m4a") || lower.contains("audio") { return "Voice note" }
+            if lower.contains(".mp4") || lower.contains(".mov") || lower.contains("video") { return "Video" }
+            return AnimatedImages.looksAnimated(media) ? "GIF / sticker" : "Picture"
+        }
+
+        var showsPicture: Bool { mediaKind == "GIF / sticker" || mediaKind == "Picture" }
+
+        var shownPreview: String {
+            let text = preview.trimmingCharacters(in: .whitespacesAndNewlines)
+            if mediaKind.isEmpty { return text }
+            return text.isEmpty ? mediaKind : "\(text) (+ \(mediaKind.lowercased()))"
+        }
     }
 
     let target: Target
@@ -282,6 +302,18 @@ struct ReportSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                if !target.shownPreview.isEmpty {
+                    Section("You're reporting") {
+                        HStack(alignment: .top, spacing: 12) {
+                            if target.showsPicture {
+                                AnimatedThumb(url: target.media, fill: true, maxPixel: 200, maxFrames: 30)
+                                    .frame(width: 56, height: 56)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            }
+                            Text(target.shownPreview).font(.jakarta(14)).foregroundStyle(Palette.text2).lineLimit(4)
+                        }
+                    }
+                }
                 Section("Why are you reporting this?") {
                     Picker("Reason", selection: $reason) {
                         ForEach(Social.reportReasons, id: \.self) { Text($0).tag($0) }
@@ -314,7 +346,8 @@ struct ReportSheet: View {
         defer { sending = false }
         let report: Doc = [
             "target_type": target.type, "target_id": target.id, "target_owner_email": target.ownerEmail,
-            "target_preview": String(target.preview.prefix(280)), "link": target.link, "reason": reason,
+            "target_preview": String(target.shownPreview.prefix(280)), "link": target.link, "reason": reason,
+            "target_collection": target.collection, "target_media": target.media,
             "details": String(details.prefix(1000)), "reporter_email": me.email, "reporter_name": me.displayName,
             "status": "open", "created_by": me.email, "created_date": FS.nowISO(), "updated_date": FS.nowISO(),
         ]

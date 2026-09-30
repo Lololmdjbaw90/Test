@@ -36,7 +36,7 @@ final class PostsStore {
             for c in (await comments ?? []) {
                 let post = c.str("post_id")
                 if latest[post] == nil, c.str("parent_id").isEmpty, !c.str("content").isEmpty {
-                    latest[post] = CommentPreview(email: c.str("user_email").lowercased(), name: c.str("user_display_name"), text: c.str("content"))
+                    latest[post] = CommentPreview(id: c.str("id"), email: c.str("user_email").lowercased(), name: c.str("user_display_name"), text: c.str("content"))
                 }
             }
             latestComment = latest
@@ -108,6 +108,7 @@ final class PostsStore {
 }
 
 struct CommentPreview {
+    var id = ""
     var email: String
     var name: String
     var text: String
@@ -953,6 +954,11 @@ struct PostCard: View {
                     .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .contextMenu {
+                    if top.email != me, !top.id.isEmpty {
+                        Button { reporting = ReportSheet.Target(id: top.id, type: "comment", ownerEmail: top.email, preview: top.text, link: "/Community?post=\(post.id)", collection: "CommunityComment") } label: { Label("Report comment", systemImage: "flag") }
+                    }
+                }
             }
             if openable {
                 Button { open() } label: {
@@ -1236,7 +1242,7 @@ struct CommentsScreen<Header: View>: View {
     }
 
     private func report(_ c: Comment) {
-        reporting = ReportSheet.Target(id: c.id, type: "comment", ownerEmail: c.authorEmail, preview: c.text, link: link)
+        reporting = ReportSheet.Target(id: c.id, type: "comment", ownerEmail: c.authorEmail, preview: c.text, link: link, collection: collection, media: c.gifURL)
     }
 
     private func delete(_ c: Comment) {
@@ -1327,7 +1333,7 @@ struct CommentRow: View {
             .sensoryFeedback(.impact(weight: .light), trigger: liked)
         }
         .contextMenu {
-            Button { UIPasteboard.general.string = comment.text } label: { Label("Copy", systemImage: "doc.on.doc") }
+            if !comment.text.isEmpty { Button { UIPasteboard.general.string = comment.text } label: { Label("Copy", systemImage: "doc.on.doc") } }
             if comment.authorEmail != me { Button(action: onReport) { Label("Report", systemImage: "flag") } }
             if comment.authorEmail == me || model.me?.isAdmin == true { Button(role: .destructive, action: onDelete) { Label("Delete", systemImage: "trash") } }
         }

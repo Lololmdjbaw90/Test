@@ -218,7 +218,7 @@ struct ChatView: View {
         if message.authorEmail == me {
             Button(role: .destructive) { confirmDelete = message } label: { Label("Delete message", systemImage: "trash") }
         } else {
-            Button { reporting = ReportSheet.Target(id: message.id, type: "message", ownerEmail: message.authorEmail, preview: message.text, link: "/DirectMessages") } label: { Label("Report", systemImage: "flag") }
+            Button { reporting = ReportSheet.Target(id: message.id, type: "message", ownerEmail: message.authorEmail, preview: message.text, link: "/DirectMessages", collection: "DirectMessage", media: [message.imageURL, message.audioURL, message.videoURL].first(where: { !$0.isEmpty }) ?? "") } label: { Label("Report", systemImage: "flag") }
         }
     }
 

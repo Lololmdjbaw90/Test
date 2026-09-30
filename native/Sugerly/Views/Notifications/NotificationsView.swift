@@ -762,12 +762,20 @@ struct AdminView: View {
                         Spacer()
                         if resolved { Label(r.str("resolution").isEmpty ? "Resolved" : r.str("resolution"), systemImage: "checkmark").font(.jakarta(11, .bold)).foregroundStyle(Palette.success) }
                     }
-                    if !r.str("target_preview").isEmpty { Text("“\(r.str("target_preview"))”").font(.jakarta(14)).foregroundStyle(Palette.text).lineLimit(3) }
+                    HStack(alignment: .top, spacing: 10) {
+                        let media = r.str("target_media").lowercased()
+                        if !media.isEmpty, !media.contains(".m4a"), !media.contains(".mp4"), !media.contains(".mov"), !media.contains("audio"), !media.contains("video") {
+                            AnimatedThumb(url: r.str("target_media"), fill: true, maxPixel: 240, maxFrames: 30)
+                                .frame(width: 64, height: 64)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                        if !r.str("target_preview").isEmpty { Text("“\(r.str("target_preview"))”").font(.jakarta(14)).foregroundStyle(Palette.text).lineLimit(3) }
+                    }
                     if !r.str("details").isEmpty { Text(r.str("details")).font(.jakarta(13)).italic().foregroundStyle(Palette.text2) }
                     Text("By \(r.str("reporter_name").isEmpty ? r.str("reporter_email") : r.str("reporter_name")) · \(Dates.ago(r.str("created_date")))").font(.jakarta(11)).foregroundStyle(Palette.muted)
                     if !resolved {
                         HStack(spacing: 8) {
-                            if let target = collection(for: r.str("target_type")) {
+                            if let target = r.str("target_collection").isEmpty ? collection(for: r.str("target_type")) : r.str("target_collection") {
                                 Button { Task { await resolve(i, remove: target) } } label: { Label("Remove", systemImage: "trash") }
                                     .buttonStyle(GradientButtonStyle(height: 38, fullWidth: false))
                             }

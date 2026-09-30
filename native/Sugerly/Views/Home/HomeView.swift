@@ -699,7 +699,7 @@ struct TrackRow: View {
             if reportable {
                 Menu {
                     Button {
-                        reporting = ReportSheet.Target(id: track.id, type: "music", ownerEmail: track.authorEmail, preview: track.title, link: "/Music")
+                        reporting = ReportSheet.Target(id: track.id, type: "music", ownerEmail: track.authorEmail, preview: track.title, link: "/Music", collection: "MusicReview")
                     } label: { Label("Report", systemImage: "flag") }
                 } label: {
                     Image(systemName: "ellipsis").font(.system(size: 15, weight: .bold)).foregroundStyle(Palette.muted)
