@@ -218,12 +218,14 @@ struct ArtPromptCard: View {
             Spacer(minLength: 0)
             ZStack {
                 Circle().fill(.white.opacity(0.2)).frame(width: 86, height: 86)
+                // A gentle swing in place (no bobbing up and down).
                 Image(systemName: prompt.icon).font(.system(size: 38, weight: .bold)).foregroundStyle(.white)
-                    .offset(y: float ? -6 : 4)
-                    .rotationEffect(.degrees(float ? -6 : 6))
-                    .animation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true), value: float)
-                Twinkle(size: 14).offset(x: 30, y: -34)
+                    .rotationEffect(.degrees(float ? -10 : 10))
+                    .animation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true), value: float)
             }
+            .frame(width: 86, height: 86)
+            .overlay(alignment: .topTrailing) { Twinkle(size: 12).offset(x: 10, y: -8) }
+            .padding(.trailing, 6)
         }
         .padding(18)
         .background {

@@ -463,9 +463,16 @@ struct HomeView: View {
                 .foregroundStyle(Palette.muted)
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(greeting),").font(.display(40)).foregroundStyle(Palette.text)
-                Text(me?.displayName ?? "").font(.display(40)).foregroundStyle(Theme.gradient)
-                    .shadow(color: Theme.pink.opacity(0.25), radius: 10, y: 4)
-                    .overlay(alignment: .topTrailing) { Twinkle(size: 14).offset(x: 22, y: -2) }
+                // The sparkles sit beside the name (they used to be drawn
+                // on top of it).
+                HStack(alignment: .top, spacing: 6) {
+                    Text(me?.displayName ?? "").font(.display(40)).foregroundStyle(Theme.gradient)
+                        .shadow(color: Theme.pink.opacity(0.25), radius: 10, y: 4)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.7)
+                    Twinkle(size: 13).padding(.top, 8)
+                    Spacer(minLength: 0)
+                }
             }
             Text("Here's what's happening across Sugerly today — fresh art, new tracks and friends online.")
                 .font(.jakarta(15)).foregroundStyle(Palette.text2)

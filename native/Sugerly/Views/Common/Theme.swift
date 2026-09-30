@@ -463,12 +463,12 @@ struct AppBadge: View {
                 FourPointStar()
                     .fill(.white)
                     .frame(width: s.2 * unit, height: s.2 * unit)
+                    // They twinkle and turn in place (no drifting up and down).
                     .phaseAnimator(reduceMotion ? [1.0] : [0.55, 1.0, 0.8]) { view, phase in
                         view
                             .scaleEffect(phase)
-                            .rotationEffect(.degrees((phase - 0.8) * 60))
+                            .rotationEffect(.degrees(phase * 90))
                             .opacity(0.55 + phase * 0.45)
-                            .offset(x: (phase - 0.8) * 10 * unit * 4, y: (0.8 - phase) * 14 * unit * 4)
                     } animation: { _ in .easeInOut(duration: 1.1 + Double(i) * 0.25).delay(s.3 * 0.3) }
                     .position(x: s.0 * unit, y: s.1 * unit)
             }
@@ -527,7 +527,9 @@ struct SparkleBurst: View {
     var radius: CGFloat = 130
     struct Piece { var dx: CGFloat; var dy: CGFloat; var distance: CGFloat; var size: CGFloat; var delay: Double; var white: Bool }
     @State private var pieces: [Piece] = (0..<16).map { i in
-        let angle: Double = Double(i) / 16 * 2 * Double.pi + Double.random(in: -0.15...0.15)
+        // Fanned out above and to the sides only, so they never cover the
+        // text underneath.
+        let angle: Double = -Double.pi * (0.08 + 0.84 * Double(i) / 15) + Double.random(in: -0.06...0.06)
         let x: Double = cos(angle)
         let y: Double = sin(angle)
         return Piece(dx: CGFloat(x), dy: CGFloat(y), distance: CGFloat.random(in: 0.55...1.0),
@@ -648,24 +650,29 @@ struct SkeletonRow: View {
 }
 
 // Little sparkles that twinkle in turn (for greetings and empty states).
+// All three stay inside their own little box, so they never sit on top of
+// the text next to them; they twinkle and turn in place.
 struct Twinkle: View {
     var size: CGFloat = 16
     var body: some View {
-        ZStack {
-            sparkle(size, x: 0, y: 0, delay: 0)
-            sparkle(size * 0.6, x: size * 0.9, y: size * 0.7, delay: 0.4)
-            sparkle(size * 0.45, x: -size * 0.6, y: size * 0.9, delay: 0.8)
+        ZStack(alignment: .topLeading) {
+            sparkle(size, x: size * 0.45, y: 0, delay: 0)
+            sparkle(size * 0.6, x: size * 1.45, y: size * 0.75, delay: 0.4)
+            sparkle(size * 0.45, x: 0, y: size * 1.15, delay: 0.8)
         }
+        .frame(width: size * 2.1, height: size * 1.65, alignment: .topLeading)
         .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     private func sparkle(_ s: CGFloat, x: CGFloat, y: CGFloat, delay: Double) -> some View {
         Image(systemName: "sparkle")
             .font(.system(size: s, weight: .bold))
             .foregroundStyle(Theme.gradient)
-            .offset(x: x, y: y)
+            .frame(width: s, height: s)
             .phaseAnimator([0.35, 1.0]) { view, phase in
-                view.scaleEffect(phase).opacity(phase)
+                view.scaleEffect(phase).opacity(phase).rotationEffect(.degrees(phase * 45))
             } animation: { _ in .easeInOut(duration: 0.9).delay(delay) }
+            .offset(x: x, y: y)
     }
 }

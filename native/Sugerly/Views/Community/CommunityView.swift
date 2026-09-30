@@ -264,7 +264,7 @@ struct CommunityView: View {
                                         if i == 0 {
                                             Image(systemName: "crown.fill").font(.system(size: 15, weight: .bold)).foregroundStyle(Color(hex: 0xF0A020))
                                                 .offset(y: -13)
-                                                .phaseAnimator([false, true]) { v, up in v.offset(y: up ? -3 : 0).rotationEffect(.degrees(up ? -8 : 8)) } animation: { _ in .easeInOut(duration: 0.9) }
+                                                .phaseAnimator([false, true]) { v, tilt in v.rotationEffect(.degrees(tilt ? -10 : 10)) } animation: { _ in .easeInOut(duration: 1.1) }
                                         }
                                     }
                                 Text(person?.displayName ?? "").font(.jakarta(11, .bold)).foregroundStyle(Palette.text).lineLimit(1)

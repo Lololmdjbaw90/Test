@@ -76,6 +76,8 @@ struct QuickMenu: View {
                 panel
                     .frame(width: width)
                     .frame(maxHeight: .infinity)
+                    // Nothing inside the menu can spill past its edge.
+                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 30, bottomLeadingRadius: 30, style: .continuous))
                     .background {
                         UnevenRoundedRectangle(topLeadingRadius: 30, bottomLeadingRadius: 30, style: .continuous)
                             .fill(Palette.bg)
@@ -140,6 +142,8 @@ struct QuickMenu: View {
                 }
             }
             .background(Palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            // Rows slide in and squish when pressed: keep them inside the card.
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
         }
     }

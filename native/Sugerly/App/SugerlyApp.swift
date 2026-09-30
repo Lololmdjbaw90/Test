@@ -160,7 +160,7 @@ struct SplashView: View {
     var body: some View {
         VStack(spacing: 16) {
             AppBadge(size: 132)
-                .scaleEffect(pulse ? 1.04 : 0.97)
+                .rotationEffect(.degrees(pulse ? 5 : -5))
             BrandLogo(height: 58)
             ProgressView().tint(Theme.main)
         }
