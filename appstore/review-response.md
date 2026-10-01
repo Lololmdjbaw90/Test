@@ -141,6 +141,9 @@ an app that supports iPhone. Test on a physical iPhone as well.
    that it cannot log back in and that deletion actually completes.
 10. Verify Home/Settings scrolling, keyboard navigation, reel controls,
     portrait/landscape iPad layouts, media permissions and offline recovery.
+    In a chat, verify there is exactly one Back button. Type a draft, go back,
+    and confirm the bottom dock returns and every page remains reachable.
+    Reopen the chat several times and test the left-edge Back swipe too.
     Record failures and fix them before marking a device as passed.
 
 QA results to complete: device/model; exact OS; app build; test date; each
