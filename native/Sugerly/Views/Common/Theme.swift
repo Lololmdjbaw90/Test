@@ -397,6 +397,7 @@ struct LevelInfo {
 struct XPBar: View {
     let info: LevelInfo
     @State private var shown = 0.0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
         VStack(spacing: 6) {
             HStack {
@@ -414,7 +415,12 @@ struct XPBar: View {
             }
             .frame(height: 8)
         }
-        .onAppear { withAnimation(.spring(response: 1.1, dampingFraction: 0.85).delay(0.2)) { shown = info.progress } }
+        .onAppear { updateProgress() }
+        .onChange(of: info.progress) { _, _ in updateProgress() }
+    }
+
+    private func updateProgress() {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.35)) { shown = info.progress }
     }
 }
 
@@ -628,11 +634,13 @@ struct SkeletonRow: View {
     }
 }
 
-// Little sparkles that twinkle in turn (for greetings and empty states).
+// Little sparkles that enter once (for greetings and empty states).
 // All three stay inside their own little box, so they never sit on top of
 // the text next to them; they twinkle and turn in place.
 struct Twinkle: View {
     var size: CGFloat = 16
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var appeared = false
     var body: some View {
         ZStack(alignment: .topLeading) {
             sparkle(size, x: size * 0.45, y: 0, delay: 0)
@@ -642,6 +650,7 @@ struct Twinkle: View {
         .frame(width: size * 2.1, height: size * 1.65, alignment: .topLeading)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+        .onAppear { appeared = true }
     }
 
     private func sparkle(_ s: CGFloat, x: CGFloat, y: CGFloat, delay: Double) -> some View {
@@ -649,9 +658,10 @@ struct Twinkle: View {
             .font(.system(size: s, weight: .bold))
             .foregroundStyle(Theme.gradient)
             .frame(width: s, height: s)
-            .phaseAnimator([0.35, 1.0]) { view, phase in
-                view.scaleEffect(phase).opacity(phase).rotationEffect(.degrees(phase * 45))
-            } animation: { _ in .easeInOut(duration: 0.9).delay(delay) }
+            .scaleEffect(appeared || reduceMotion ? 1 : 0.8)
+            .opacity(appeared || reduceMotion ? 1 : 0.7)
+            .rotationEffect(.degrees(appeared || reduceMotion ? 0 : -12))
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.3).delay(delay * 0.25), value: appeared)
             .offset(x: x, y: y)
     }
 }

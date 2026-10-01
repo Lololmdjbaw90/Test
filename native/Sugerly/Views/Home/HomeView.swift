@@ -97,6 +97,7 @@ struct DailyRewardButton: View {
 struct DailyRewardSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var reward: Int?
     @State private var bounce = false
     @State private var claiming = false
@@ -113,9 +114,8 @@ struct DailyRewardSheet: View {
                     .frame(width: 118, height: 118)
                     .background(Theme.gradient, in: RoundedRectangle(cornerRadius: 36, style: .continuous))
                     .shadow(color: Theme.pink.opacity(0.5), radius: 20, y: 10)
-                    .scaleEffect(bounce ? 1.06 : 0.96)
-                    .rotationEffect(.degrees(bounce ? 4 : -4))
-                    .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: bounce)
+                    .scaleEffect(bounce || reduceMotion ? 1 : 0.92)
+                    .animation(reduceMotion ? nil : .spring(response: 0.45, dampingFraction: 0.75), value: bounce)
                     .contentTransition(.symbolEffect(.replace))
             }
             .padding(.top, 34)
@@ -200,6 +200,8 @@ struct HomeView: View {
     @State private var loading = false
     @State private var loaded = false
     @State private var appeared = false
+    @State private var showActivity = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var lastLoad = Date.distantPast
     @State private var tagSearch: String?
     @AppStorage("sugerly.dismissedAnnouncement") private var dismissedAnnouncement = ""
@@ -211,25 +213,26 @@ struct HomeView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 30) {
+            LazyVStack(alignment: .leading, spacing: 24) {
                 announcementBanner
-                StoriesRow(reels: reels, path: $path, compose: compose).homeSection(appeared, 0)
-                hero.homeSection(appeared, 1)
-                HomeComposerBar(compose: compose).homeSection(appeared, 2)
+                hero.homeSection(appeared, 0)
+                HomeComposerBar(compose: compose).homeSection(appeared, 1)
+                StoriesRow(reels: reels, path: $path, compose: compose).homeSection(appeared, 2)
                 quickLinks.homeSection(appeared, 3)
-                ArtPromptCard(compose: compose).homeSection(appeared, 4)
-                InlineExtras(part: .top).homeSection(appeared, 5)
-                HappeningNow(posts: posts.posts, artworks: artworks, reels: reels, tracks: tracks, path: $path).homeSection(appeared, 6)
-                featured.homeSection(appeared, 7)
-                if !reels.isEmpty { reelStrip.homeSection(appeared, 8).transition(.opacity) }
-                SuggestedPeople(path: $path).homeSection(appeared, 9)
-                community.homeSection(appeared, 10)
+                community.homeSection(appeared, 4)
+                if !reels.isEmpty { reelStrip.homeSection(appeared, 5) }
+                featured.homeSection(appeared, 6)
+                HappeningNow(posts: posts.posts, artworks: artworks, reels: reels, tracks: tracks, path: $path).homeSection(appeared, 7)
+                DailyRewardButton().homeSection(appeared, 8)
+                ArtPromptCard(compose: compose).homeSection(appeared, 9)
+                SuggestedPeople(path: $path).homeSection(appeared, 10)
                 TrendingTags(posts: posts.posts, reels: reels) { tagSearch = $0 }.homeSection(appeared, 11)
                 freshTracks.homeSection(appeared, 12)
                 artists.homeSection(appeared, 13)
                 friendsRow.homeSection(appeared, 14)
                 yourServers.homeSection(appeared, 15)
-                InlineExtras(part: .bottom).homeSection(appeared, 16)
+                InlineExtras(part: .top).homeSection(appeared, 16)
+                InlineExtras(part: .bottom).homeSection(appeared, 17)
                 Label("Last activity \(Dates.ago(posts.posts.first?.created ?? ""))", systemImage: "sparkles")
                     .font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
                     .frame(maxWidth: .infinity)
@@ -301,6 +304,7 @@ struct HomeView: View {
             HStack(spacing: 10) {
                 Image(systemName: "megaphone.fill").font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
                     .symbolEffect(.bounce, options: .repeat(2), value: appeared)
+                    .symbolEffectsRemoved(reduceMotion)
                 Text(site.announcement).font(.jakarta(14, .bold)).foregroundStyle(.white).frame(maxWidth: .infinity, alignment: .leading)
                 Button { withAnimation(.snappy) { dismissedAnnouncement = site.announcement } } label: {
                     Image(systemName: "xmark").font(.system(size: 12, weight: .heavy)).foregroundStyle(.white.opacity(0.85)).frame(width: 28, height: 28)
@@ -339,7 +343,7 @@ struct HomeView: View {
                             .frame(width: 50, height: 50)
                             .background(LinearGradient(colors: item.2.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 17, style: .continuous))
                             .shadow(color: Color(hex: item.2[1]).opacity(0.35), radius: 10, y: 5)
-                        Text(item.0).font(.jakarta(12, .bold)).foregroundStyle(Palette.text2)
+                        Text(item.0).font(.display(14, relativeTo: .caption)).foregroundStyle(Palette.text2)
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -449,38 +453,72 @@ struct HomeView: View {
 
     private var hero: some View {
         let me = model.me
+        let name = me?.displayName ?? ""
         let info = LevelInfo(xp: me?.xp ?? 0)
         let friends = mutualFriends
-        return VStack(alignment: .leading, spacing: 16) {
-            Text(Date().formatted(.dateTime.weekday(.wide).month(.wide).day()).uppercased())
-                .font(.jakarta(12, .bold))
-                .tracking(1.4)
-                .foregroundStyle(Palette.muted)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(greeting),").font(.display(40)).foregroundStyle(Palette.text)
-                // The sparkles sit beside the name (they used to be drawn
-                // on top of it).
-                HStack(alignment: .top, spacing: 6) {
-                    Text(me?.displayName ?? "").font(.display(40)).foregroundStyle(Theme.gradient)
-                        .shadow(color: Theme.pink.opacity(0.25), radius: 10, y: 4)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.7)
-                    Twinkle(size: 13).padding(.top, 8)
-                    Spacer(minLength: 0)
+        return VStack(alignment: .leading, spacing: 14) {
+            Text(Date().formatted(.dateTime.weekday(.wide).month(.abbreviated).day()).uppercased())
+                .font(.jakarta(10, .bold)).tracking(1)
+                .foregroundStyle(Theme.main)
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(greeting),").font(.display(24)).foregroundStyle(Palette.text)
+                    HStack(alignment: .top, spacing: 6) {
+                        Text(name.isEmpty ? "creator" : name)
+                            .font(.display(32)).foregroundStyle(Theme.gradient)
+                            .lineLimit(2).minimumScaleFactor(0.8)
+                        Twinkle(size: 10).padding(.top, 5)
+                    }
+                    Text("Make something. Find your people.")
+                        .font(.jakarta(13)).foregroundStyle(Palette.text2)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Button { model.tabRequest = .me } label: {
+                    Avatar(url: me?.picture ?? "", name: me?.displayName ?? "", size: 56)
+                        .padding(4)
+                        .background(Theme.gradient, in: Circle())
+                        .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
+                }
+                .buttonStyle(BouncyStyle(scale: 0.94))
+                .accessibilityLabel("Your profile")
             }
-            Text("Here's what's happening across Sugerly today — fresh art, new tracks and friends online.")
-                .font(.jakarta(15)).foregroundStyle(Palette.text2)
-            DailyRewardButton()
-            HStack(spacing: 10) {
-                stat("\(info.level)", "LEVEL", info.title, info.color)
-                stat(Self.compact(me?.coins ?? 0), "COINS", "MimiCoins", Palette.text)
-                stat("\(friends.count)", "FRIENDS", "\(friends.filter { model.person($0)?.isOnline == true }.count) online", Palette.text)
+            Button {
+                withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.9)) { showActivity.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Label("Your activity", systemImage: "heart.text.square.fill")
+                    Spacer(minLength: 0)
+                    Text("Lv. \(info.level) · \(Self.compact(me?.coins ?? 0)) coins")
+                        .foregroundStyle(Palette.text2).lineLimit(1)
+                    Image(systemName: "chevron.down").rotationEffect(.degrees(showActivity ? 180 : 0))
+                }
+                .font(.jakarta(12, .bold)).foregroundStyle(Theme.main)
+                .frame(minHeight: 44).contentShape(Rectangle())
             }
-            XPBar(info: info)
+            .buttonStyle(BouncyStyle(scale: 0.98))
+            .accessibilityIdentifier("home-activity-toggle")
+            .accessibilityLabel("Your activity")
+            .accessibilityValue(showActivity ? "Expanded" : "Collapsed")
+            if showActivity {
+                HStack(spacing: 10) {
+                    stat("\(info.level)", "LEVEL", info.title, info.color)
+                    stat(Self.compact(me?.coins ?? 0), "COINS", "MimiCoins", Palette.text)
+                    stat("\(friends.count)", "FRIENDS", "\(friends.filter { model.person($0)?.isOnline == true }.count) online", Palette.text)
+                }
+                XPBar(info: info)
+            }
         }
-        .padding(22)
-        .sugarCard(radius: 32)
+        .padding(18)
+        .background {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(LinearGradient(colors: [Palette.surface, Theme.soft], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .overlay(alignment: .topTrailing) {
+                    Image(systemName: "sparkles").font(.system(size: 90, weight: .light))
+                        .foregroundStyle(Theme.main.opacity(0.06)).offset(x: 20, y: -20)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(Theme.main.opacity(0.16), lineWidth: 1))
+        }
     }
 
     private func stat(_ value: String, _ label: String, _ sub: String, _ color: Color) -> some View {
@@ -741,8 +779,8 @@ private extension View {
     }
 }
 
-// Each lazy section enters once. Scrolling never fades content away or
-// continuously scales cards/images, and returning Home doesn't replay it.
+// Only the first four sections enter; the rest stay still during scrolling.
+// Content is always visible, including when lazy sections are recreated.
 private struct HomeSectionEntrance: ViewModifier {
     let shown: Bool
     let index: Int
@@ -751,13 +789,13 @@ private struct HomeSectionEntrance: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .offset(y: entered || reduceMotion ? 0 : 12)
+            .offset(y: entered || reduceMotion || index >= 4 ? 0 : 8)
             .onAppear { enter() }
             .onChange(of: shown) { _, _ in enter() }
     }
 
     private func enter() {
-        guard shown, !entered else { return }
+        guard shown, !entered, index < 4 else { return }
         withAnimation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.9).delay(Double(min(index, 3)) * 0.025)) {
             entered = true
         }

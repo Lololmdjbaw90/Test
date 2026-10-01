@@ -77,6 +77,9 @@ jobs:
           if [ -d native/InteractionTests.xcresult ]; then
             xcrun xcresulttool export attachments --path native/InteractionTests.xcresult --output-path native/test-screenshots || true
           fi
+          if [ -d native/HomeIPadTests.xcresult ]; then
+            xcrun xcresulttool export attachments --path native/HomeIPadTests.xcresult --output-path native/test-screenshots-ipad || true
+          fi
 
       - name: Save interaction results
         if: always()
@@ -88,6 +91,7 @@ jobs:
             native/HomeIPadTests.xcresult
             native/simulator-test.log
             native/test-screenshots
+            native/test-screenshots-ipad
 
       # Let Xcode manage signing; do not revoke account-wide certificates.
       - name: Archive (signed)
