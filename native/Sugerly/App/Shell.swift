@@ -539,7 +539,10 @@ struct SugarTabBar: View {
     var onCreate: () -> Void
     @Namespace private var lens
     @State private var plusSpin = false
-    @Environment(AppModel.self) private var model
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var showLabels: Bool { sizeClass == .regular }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -564,7 +567,7 @@ struct SugarTabBar: View {
             .accessibilityLabel("Create")
             item(.reels, "Reels", "film.stack", "film.stack.fill")
             item(.chat, "Chat", "bubble.left", "bubble.left.fill", badge: unread)
-            meItem
+            item(.me, "Profile", "person.crop.circle", "person.crop.circle.fill")
         }
         .padding(.horizontal, 6)
         .frame(height: 70)
@@ -582,9 +585,13 @@ struct SugarTabBar: View {
         return Button { select(t) } label: {
             VStack(spacing: 3) {
                 Image(systemName: active ? filled : icon)
-                    .font(.system(size: 19, weight: .medium))
-                    .symbolEffect(.bounce.up, value: active)
-                Text(title).font(.jakarta(10, .bold)).lineLimit(1).minimumScaleFactor(0.65)
+                    .font(.system(size: showLabels ? 22 : 25, weight: .semibold))
+                    .symbolEffect(.bounce.up, options: .nonRepeating, value: active)
+                    .symbolEffectsRemoved(reduceMotion)
+                    .accessibilityHidden(true)
+                if showLabels {
+                    Text(title).font(.display(12, relativeTo: .caption)).lineLimit(1)
+                }
             }
             .foregroundStyle(active ? (dark ? AnyShapeStyle(Color.white) : AnyShapeStyle(Theme.main)) : AnyShapeStyle(dark ? Color.white.opacity(0.6) : Palette.muted))
             .frame(maxWidth: .infinity)
@@ -596,25 +603,7 @@ struct SugarTabBar: View {
         .buttonStyle(BouncyStyle(scale: 0.88))
         .sensoryFeedback(.selection, trigger: active)
         .accessibilityLabel(title)
-    }
-
-    private var meItem: some View {
-        let active = tab == .me
-        return Button { select(.me) } label: {
-            VStack(spacing: 3) {
-                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 22)
-                    .overlay(Circle().strokeBorder(active ? Theme.main : Color.clear, lineWidth: 1.5))
-                Text("Me").font(.jakarta(10, .bold))
-            }
-            .foregroundStyle(active ? (dark ? AnyShapeStyle(Color.white) : AnyShapeStyle(Theme.main)) : AnyShapeStyle(dark ? Color.white.opacity(0.6) : Palette.muted))
-            .frame(maxWidth: .infinity)
-            .frame(height: 56)
-            .background { lensView(active) }
-            .contentShape(Capsule())
-        }
-        .buttonStyle(BouncyStyle(scale: 0.88))
-        .sensoryFeedback(.selection, trigger: active)
-        .accessibilityLabel("Your profile")
+        .accessibilityAddTraits(active ? [.isSelected] : [])
     }
 
     @ViewBuilder
