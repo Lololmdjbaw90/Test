@@ -12,7 +12,6 @@ struct StoriesRow: View {
     var compose: (Composer) -> Void
     @Environment(AppModel.self) private var model
     @AppStorage("sugerly.storiesSeen") private var seenRaw = ""
-    @State private var spin = false
 
     struct Story: Identifiable {
         var email: String
@@ -69,7 +68,6 @@ struct StoriesRow: View {
             .padding(.horizontal, 2)
         }
         .scrollClipDisabled()
-        .onAppear { spin = true }
     }
 
     private func bubble(_ story: Story) -> some View {
@@ -93,8 +91,6 @@ struct StoriesRow: View {
                             Circle().strokeBorder(Palette.success, lineWidth: 3)
                         } else if fresh {
                             Circle().strokeBorder(AngularGradient(colors: [Theme.main, Theme.light, Color(hex: 0xFFD166), Theme.main], center: .center), lineWidth: 3.2)
-                                .rotationEffect(.degrees(spin ? 360 : 0))
-                                .animation(.linear(duration: 4).repeatForever(autoreverses: false), value: spin)
                         } else {
                             Circle().strokeBorder(Palette.border, lineWidth: 2)
                         }
@@ -165,6 +161,7 @@ struct HomeComposerBar: View {
 struct ArtPromptCard: View {
     var compose: (Composer) -> Void
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var float = false
     @State private var editing = false
 
@@ -220,8 +217,7 @@ struct ArtPromptCard: View {
                 Circle().fill(.white.opacity(0.2)).frame(width: 86, height: 86)
                 // A gentle swing in place (no bobbing up and down).
                 Image(systemName: prompt.icon).font(.system(size: 38, weight: .bold)).foregroundStyle(.white)
-                    .rotationEffect(.degrees(float ? -10 : 10))
-                    .animation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true), value: float)
+                    .symbolEffect(.bounce, options: .repeat(2), value: float && !reduceMotion)
             }
             .frame(width: 86, height: 86)
             .overlay(alignment: .topTrailing) { Twinkle(size: 12).offset(x: 10, y: -8) }
@@ -255,6 +251,7 @@ struct HappeningNow: View {
     let tracks: [Track]
     @Binding var path: [Route]
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pulse = false
 
     struct Item: Identifiable {
@@ -304,7 +301,7 @@ struct HappeningNow: View {
                     Circle().fill(Palette.success).frame(width: 10, height: 10)
                         .overlay(Circle().stroke(Palette.success.opacity(0.5), lineWidth: 2).scaleEffect(pulse ? 2.2 : 1).opacity(pulse ? 0 : 1))
                         .offset(x: 28, y: -2)
-                        .animation(.easeOut(duration: 1.3).repeatForever(autoreverses: false), value: pulse)
+                        .animation(reduceMotion ? nil : .easeOut(duration: 1.3).repeatCount(2, autoreverses: false), value: pulse)
                 }
                 VStack(spacing: 0) {
                     ForEach(Array(list.enumerated()), id: \.element.id) { i, item in
@@ -317,7 +314,7 @@ struct HappeningNow: View {
                 }
                 .sugarCard(radius: 26, padding: 6)
             }
-            .onAppear { pulse = true }
+            .onAppear { pulse = !reduceMotion }
         }
     }
 

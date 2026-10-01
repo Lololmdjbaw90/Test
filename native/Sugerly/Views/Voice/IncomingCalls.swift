@@ -75,13 +75,14 @@ final class IncomingCalls: NSObject, PKPushRegistryDelegate {
     nonisolated func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload,
                                   for type: PKPushType, completion: @escaping () -> Void) {
         let info = payload.dictionaryPayload
-        MainActor.assumeIsolated { self.ring(info) }
-        completion()
+        guard type == .voIP else { completion(); return }
+        // Finish the PushKit delivery only after CallKit finishes reporting.
+        MainActor.assumeIsolated { self.ring(info, completion: completion) }
     }
 
     // MARK: ringing
 
-    private func ring(_ info: [AnyHashable: Any]) {
+    private func ring(_ info: [AnyHashable: Any], completion: @escaping () -> Void) {
         let callId = info["call_id"] as? String ?? ""
         let group = (info["is_group"] as? Bool) ?? false
         let groupName = info["group_name"] as? String ?? ""
@@ -91,15 +92,20 @@ final class IncomingCalls: NSObject, PKPushRegistryDelegate {
         let calls = CallCenter.shared
         // iOS requires every call push to show the call screen, even a
         // repeated one or one you're already in; those end straight away.
-        let repeated = callId.isEmpty || bridge.isRinging(callId) || calls.current?.id == callId
-        let reported = bridge.reportIncoming(callId: repeated ? "" : callId, title: title)
-        if repeated {
-            bridge.endReported(reported, reason: .remoteEnded)
-            return
+        let startedAt = (info["started_at"] as? NSNumber)?.doubleValue ?? 0
+        let now = Date().timeIntervalSince1970 * 1000
+        let expired = startedAt <= 0 || now - startedAt >= CallCenter.ringMs || startedAt - now > 5_000
+        let repeated = callId.isEmpty || expired || !AuthClient.shared.hasSession || bridge.isRinging(callId) || calls.current?.id == callId
+        bridge.reportIncoming(callId: repeated ? "" : callId, title: title) { [weak self] reported, error in
+            defer { completion() }
+            guard error == nil else { return }
+            if repeated {
+                bridge.endReported(reported, reason: .remoteEnded)
+                return
+            }
+            calls.systemRinging(callId)
+            self?.watch(callId)
         }
-        // iPhone's call screen rings now; the in-app banner steps aside.
-        calls.systemRinging(callId)
-        watch(callId)
     }
 
     // While it rings: stop when the caller hangs up, someone else picks up

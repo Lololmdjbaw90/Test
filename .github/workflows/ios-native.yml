@@ -53,6 +53,10 @@ jobs:
         timeout-minutes: 18
         run: bash scripts/test-native-interactions.sh
 
+      - name: Test Home scrolling on iPad
+        timeout-minutes: 10
+        run: bash scripts/test-native-interactions.sh iPad HomeIPadTests
+
       - name: Export interaction screenshots
         if: always()
         working-directory: native
@@ -68,6 +72,7 @@ jobs:
           name: native-interaction-results
           path: |
             native/InteractionTests.xcresult
+            native/HomeIPadTests.xcresult
             native/simulator-test.log
             native/test-screenshots
 

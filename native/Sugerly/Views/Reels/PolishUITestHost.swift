@@ -24,6 +24,7 @@ struct PolishUITestHost: View {
         return store
     }()
     @State private var notes = NotificationsStore()
+    @State private var player = Player()
     private let art = Artwork(["id": "ui-art", "title": "Pink sketch", "user_display_name": "Luna", "user_email": "fixture@example.invalid"])
 
     var body: some View {
@@ -33,6 +34,7 @@ struct PolishUITestHost: View {
                 Text("Fanart").tag(1)
                 Text("Community").tag(2)
                 Text("Wall").tag(3)
+                Text("Home").tag(4)
             }.pickerStyle(.segmented).padding()
             if tab == 0 {
                 Text(stickers.first.map { String(format: "%.2f,%.2f", $0.start, $0.end ?? 10) } ?? "Deleted")
@@ -55,9 +57,14 @@ struct PolishUITestHost: View {
                 NavigationStack(path: $path) {
                     CommunityView(path: $path, compose: {}).environment(posts).environment(notes)
                 }
-            } else {
+            } else if tab == 3 {
                 NavigationStack(path: $path) {
                     GalleryView(path: $path, initialArtworks: [art])
+                }
+            } else {
+                NavigationStack(path: $path) {
+                    HomeView(path: $path, compose: { _ in }, loadContent: false)
+                        .environment(posts).environment(notes).environment(player)
                 }
             }
         }

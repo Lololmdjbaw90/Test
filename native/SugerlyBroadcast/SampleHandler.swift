@@ -5,7 +5,7 @@ import ReplayKit
 
 // Sugerly's screen broadcast. While you share your screen in a call, iOS
 // runs this little extension and hands it every frame of the whole phone
-// screen (other apps and the home screen too). About ten times a second it
+// screen (other apps and the home screen too). At most fifteen times a second it
 // sends the newest frame as a small JPEG to Sugerly over a private link
 // inside the phone (127.0.0.1), and Sugerly sends it into the call
 // (ScreenBroadcast.swift). Sugerly only listens during a call, so there's
@@ -14,9 +14,11 @@ final class SampleHandler: RPBroadcastSampleHandler {
     private static let port: NWEndpoint.Port = 47_318
     private let context = CIContext(options: [.cacheIntermediates: false])
     private let queue = DispatchQueue(label: "sugerly.broadcast.link")
+    private let lock = NSLock()
     private var connection: NWConnection?
     private var lastFrame: CFAbsoluteTime = 0
-    // Only touched on `queue`.
+    // The admission gate is shared with ReplayKit's sample callbacks. Reserve
+    // one frame BEFORE encoding so a slow socket cannot queue JPEGs/buffers.
     private var ready = false
     private var sending = false
     private var finished = false
@@ -28,7 +30,9 @@ final class SampleHandler: RPBroadcastSampleHandler {
             guard let self else { return }
             switch state {
             case .ready:
+                self.lock.lock()
                 self.ready = true
+                self.lock.unlock()
                 self.watchForEnd(link)
             case .waiting, .failed:
                 self.stop("Start a Sugerly call first, then share your screen.")
@@ -40,8 +44,11 @@ final class SampleHandler: RPBroadcastSampleHandler {
     }
 
     override func broadcastFinished() {
+        lock.lock()
+        finished = true
+        ready = false
+        lock.unlock()
         queue.async { [self] in
-            finished = true
             connection?.cancel()
         }
     }
@@ -49,8 +56,28 @@ final class SampleHandler: RPBroadcastSampleHandler {
     override func processSampleBuffer(_ sampleBuffer: CMSampleBuffer, with sampleBufferType: RPSampleBufferType) {
         guard sampleBufferType == .video else { return }
         let now = CFAbsoluteTimeGetCurrent()
-        guard now - lastFrame >= 0.09, let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        lock.lock()
+        guard ready, !finished, !sending, now - lastFrame >= 1.0 / 15 else { lock.unlock(); return }
+        sending = true
         lastFrame = now
+        lock.unlock()
+        queue.async { [self] in
+            autoreleasepool { sendFrame(sampleBuffer) }
+        }
+    }
+
+    private func releaseFrame() {
+        lock.lock()
+        sending = false
+        lock.unlock()
+    }
+
+    // Runs away from ReplayKit's callback; only one retained sample at a time.
+    private func sendFrame(_ sampleBuffer: CMSampleBuffer) {
+        lock.lock()
+        let active = ready && !finished
+        lock.unlock()
+        guard active, let connection, let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else { releaseFrame(); return }
         var image = CIImage(cvPixelBuffer: pixels)
         // Turned the right way up when the phone is sideways.
         if let raw = CMGetAttachment(sampleBuffer, key: RPVideoSampleOrientationKey as CFString, attachmentModeOut: nil) as? NSNumber,
@@ -67,19 +94,14 @@ final class SampleHandler: RPBroadcastSampleHandler {
         guard let space = CGColorSpace(name: CGColorSpace.sRGB),
               let jpeg = context.jpegRepresentation(of: image, colorSpace: space,
                                                     options: [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: 0.55])
-        else { return }
-        queue.async { [self] in
-            // One frame on its way at a time; newer ones replace waiting ones.
-            guard ready, !sending, let connection else { return }
-            sending = true
-            var length = UInt32(jpeg.count).bigEndian
-            let packet = Data(bytes: &length, count: 4) + jpeg
-            connection.send(content: packet, completion: .contentProcessed { [weak self] error in
-                guard let self else { return }
-                self.sending = false
-                if error != nil { self.stop("Sugerly stopped receiving your screen.") }
-            })
-        }
+        else { releaseFrame(); return }
+        var length = UInt32(jpeg.count).bigEndian
+        let packet = Data(bytes: &length, count: 4) + jpeg
+        connection.send(content: packet, completion: .contentProcessed { [weak self] error in
+            guard let self else { return }
+            self.releaseFrame()
+            if error != nil { self.stop("Sugerly stopped receiving your screen.") }
+        })
     }
 
     // Sugerly closes the link when you press Stop there or the call ends.
@@ -96,8 +118,11 @@ final class SampleHandler: RPBroadcastSampleHandler {
 
     private func stop(_ message: String) {
         queue.async { [self] in
-            guard !finished else { return }
+            lock.lock()
+            guard !finished else { lock.unlock(); return }
             finished = true
+            ready = false
+            lock.unlock()
             connection?.cancel()
             finishBroadcastWithError(NSError(domain: "Sugerly", code: 1, userInfo: [NSLocalizedDescriptionKey: message]))
         }

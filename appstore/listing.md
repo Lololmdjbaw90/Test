@@ -1,6 +1,8 @@
 # Sugerly — App Store listing (copy & paste)
 
-Everything App Store Connect asks for, ready to paste.
+Listing draft. Verify every claim against the submitted build. For Apple's
+additional-information request, complete [review-response.md](review-response.md)
+and the physical-device checks before resubmitting.
 
 ## App information
 
@@ -13,7 +15,7 @@ Everything App Store Connect asks for, ready to paste.
 | Primary language | English (U.S.) |
 | Primary category | Social Networking |
 | Secondary category | Graphics & Design |
-| Content rights | "Does your app contain, show, or access third-party content?" → **Yes** (users' posts, Apple Music, song previews from Deezer, GIFs from GIPHY) and you have the rights to use it |
+| Content rights | Third-party content is present. Verify provider/media/font permissions in [third-party-materials.md](third-party-materials.md) before asserting that distribution rights are secured. |
 | Price | Free |
 | Availability | All countries **except China mainland** (voice channels use CallKit, which isn't allowed there) |
 

@@ -173,7 +173,13 @@ final class CallCenter {
         if voice.room != nil { await voice.leave() }
         let joined = Array(Set(call.joined + [me.email]))
         let fields: Doc = ["status": "active", "joined_emails": joined, "answered_at": Int(call.answeredAt ?? Date().timeIntervalSince1970 * 1000), "updated_date": FS.nowISO()]
-        try? await FS.update("Call", call.id, fields)
+        do {
+            try await FS.update("Call", call.id, fields)
+        } catch {
+            self.error = "Couldn't answer the call — \(error.localizedDescription)"
+            if fromSystem, voice.bridge.adoptAnswered() { voice.bridge.end() }
+            return
+        }
         var next = call
         next.status = "active"
         next.joined = joined
@@ -181,6 +187,12 @@ final class CallCenter {
         current = next
         withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { showScreen = true }
         await voice.join(room(next), me: me, adoptSystemCall: fromSystem)
+        if voice.room == nil {
+            self.error = voice.error ?? "Couldn't connect the call."
+            await left(next.id)
+            current = nil
+            showScreen = false
+        }
     }
 
     func decline(_ call: CallInfo, me: UserProfile) {
@@ -270,7 +282,9 @@ final class CallCenter {
             return
         }
         let call = CallInfo(doc)
-        guard call.status != "ended" else {
+        guard call.status != "ended", call.ringing, call.members.contains(profile.email),
+              !call.declinedBy.contains(profile.email), !call.joined.contains(profile.email),
+              !profile.blocked.contains(call.callerEmail), !profile.ignored.contains(call.callerEmail) else {
             if voice?.bridge.adoptAnswered() == true { voice?.bridge.end() }
             return
         }

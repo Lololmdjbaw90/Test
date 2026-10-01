@@ -188,6 +188,7 @@ struct DailyRewardSheet: View {
 struct HomeView: View {
     @Binding var path: [Route]
     var compose: (Composer) -> Void
+    var loadContent = true
     @Environment(AppModel.self) private var model
     @Environment(PostsStore.self) private var posts
     @Environment(Player.self) private var player
@@ -195,6 +196,7 @@ struct HomeView: View {
     @State private var tracks: [Track] = []
     @State private var servers: [Server] = []
     @State private var reels: [Reel] = []
+    @State private var loading = false
     @State private var loaded = false
     @State private var appeared = false
     @State private var lastLoad = Date.distantPast
@@ -237,18 +239,16 @@ struct HomeView: View {
             .sideRails(760)
         }
         .patternBackground()
+        .accessibilityIdentifier("home-feed")
         .sugarTopBar($path)
-        .refreshable { await load() }
+        .refreshable { if loadContent { await load() } }
         .task {
+            guard loadContent else { appeared = true; loaded = true; return }
             if !appeared {
-                // The first time: wait a moment for the first things to load,
-                // then let the sections float in (so nothing jumps in later).
-                let first = Task { await load() }
-                let started = Date()
-                while !loaded && Date().timeIntervalSince(started) < 0.7 { try? await Task.sleep(for: .milliseconds(40)) }
+                // Present Home immediately; this task owns and cancels its fetches.
                 appeared = true
                 model.shellReady = true
-                await first.value
+                await load()
             } else if Date().timeIntervalSince(lastLoad) > 60 {
                 // Coming back later: freshen up quietly, no replay.
                 await load()
@@ -268,22 +268,25 @@ struct HomeView: View {
     struct TagQuery: Identifiable { var id: String }
 
     private func load() async {
+        guard !loading else { return }
+        loading = true
+        defer { loading = false }
         async let art = try? FS.query("Artwork", orderBy: "created_date", limit: 40)
         async let music = try? FS.query("MusicReview", orderBy: "created_date", limit: 8)
         async let serverDocs = try? FS.query("Community", [.contains("member_emails", model.me?.email ?? "")], limit: 12)
         async let reelDocs = try? FS.query("Reel", orderBy: "created_date", limit: 30)
         if posts.posts.isEmpty { await posts.load() }
-        let nextArt = (await art ?? []).map(Artwork.init)
-        let nextTracks = (await music ?? []).map(Track.init)
-        let nextServers = (await serverDocs ?? []).map(Server.init)
-        let nextReels = (await reelDocs ?? []).map(Reel.init)
-        // New things fade in place instead of making the page jump.
-        withAnimation(.smooth(duration: 0.4)) {
-            if nextArt != artworks { artworks = nextArt }
-            if nextTracks != tracks { tracks = nextTracks }
-            if nextServers != servers { servers = nextServers }
-            if nextReels != reels { reels = nextReels }
-        }
+        let nextArt = await art
+        let nextTracks = await music
+        let nextServers = await serverDocs
+        let nextReels = await reelDocs
+        guard !Task.isCancelled else { return }
+        // Keep cached sections on a failed refresh. Animating the whole stack
+        // also animates image/layout changes while the user is scrolling.
+        if let nextArt { artworks = nextArt.map(Artwork.init) }
+        if let nextTracks { tracks = nextTracks.map(Track.init) }
+        if let nextServers { servers = nextServers.map(Server.init) }
+        if let nextReels { reels = nextReels.map(Reel.init) }
         lastLoad = Date()
         loaded = true
         if model.people.isEmpty { await model.loadPeople() }
@@ -732,19 +735,30 @@ struct TrackRow: View {
 
 
 private extension View {
-    // Home sections rise and fade in one after another the first time Home
-    // opens, then glide softly as they scroll into and out of view.
     func homeSection(_ shown: Bool, _ index: Int) -> some View {
-        self
-            .opacity(shown ? 1 : 0)
-            .offset(y: shown ? 0 : 28)
-            .scaleEffect(shown ? 1 : 0.96, anchor: .top)
-            .animation(.spring(response: 0.62, dampingFraction: 0.86).delay(0.04 + Double(min(index, 8)) * 0.06), value: shown)
-            .scrollTransition(.interactive(timingCurve: .easeOut), axis: .vertical) { content, phase in
-                content
-                    .opacity(1 - abs(phase.value) * 0.3)
-                    .scaleEffect(1 - abs(phase.value) * 0.025)
-                    .offset(y: phase.value * 8)
-            }
+        modifier(HomeSectionEntrance(shown: shown, index: index))
+    }
+}
+
+// Each lazy section enters once. Scrolling never fades content away or
+// continuously scales cards/images, and returning Home doesn't replay it.
+private struct HomeSectionEntrance: ViewModifier {
+    let shown: Bool
+    let index: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var entered = false
+
+    func body(content: Content) -> some View {
+        content
+            .offset(y: entered || reduceMotion ? 0 : 12)
+            .onAppear { enter() }
+            .onChange(of: shown) { _, _ in enter() }
+    }
+
+    private func enter() {
+        guard shown, !entered else { return }
+        withAnimation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.9).delay(Double(min(index, 3)) * 0.025)) {
+            entered = true
+        }
     }
 }

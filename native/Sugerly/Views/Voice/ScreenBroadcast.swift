@@ -80,6 +80,7 @@ final class BroadcastLink: @unchecked Sendable {
             made.stateUpdateHandler = { [weak self] state in
                 guard let self else { return }
                 if case .failed = state {
+                    self.dropLocked()
                     self.listener?.cancel()
                     self.listener = nil
                 }
@@ -139,6 +140,7 @@ final class BroadcastLink: @unchecked Sendable {
                 self.buffer.append(data)
                 self.drain()
             }
+            guard self.connection === link else { return }
             if isComplete || error != nil {
                 link.cancel()
             } else {
@@ -154,7 +156,9 @@ final class BroadcastLink: @unchecked Sendable {
             let start = buffer.startIndex
             let length = buffer[start..<start + 4].reduce(0) { ($0 << 8) | Int($1) }
             guard length > 0, length < 8_000_000 else {
-                buffer = Data()
+                // A malformed stream must close; clearing and continuing
+                // loses packet boundaries and can grow a buffer forever.
+                dropLocked()
                 return
             }
             guard buffer.count >= 4 + length else { break }

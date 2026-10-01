@@ -102,7 +102,7 @@ final class CallBridge: NSObject, CXProviderDelegate {
 
     // iOS insists every call push shows the call screen straight away.
     @discardableResult
-    func reportIncoming(callId: String, title: String) -> UUID {
+    func reportIncoming(callId: String, title: String, completion: @escaping (UUID, Error?) -> Void = { _, _ in }) -> UUID {
         let id = UUID()
         let update = CXCallUpdate()
         update.remoteHandle = CXHandle(type: .generic, value: title)
@@ -114,9 +114,10 @@ final class CallBridge: NSObject, CXProviderDelegate {
         update.supportsDTMF = false
         ringing[id] = callId
         provider.reportNewIncomingCall(with: id, update: update) { [weak self] error in
-            guard error != nil else { return }
-            // Do Not Disturb, blocked, or already too many calls.
-            Task { @MainActor in self?.ringing[id] = nil }
+            Task { @MainActor in
+                if error != nil { self?.ringing[id] = nil }
+                completion(id, error)
+            }
         }
         return id
     }

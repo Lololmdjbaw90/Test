@@ -159,6 +159,7 @@ final class VoiceEngine: NSObject {
     func join(_ room: Room, me: UserProfile, canSpeak: Bool = true, adoptSystemCall: Bool = false) async {
         if self.room != nil { await leave() }
         guard await AVCaptureDevice.requestAccess(for: .audio) else {
+            if adoptSystemCall, call.adoptAnswered() { call.end() }
             error = "Microphone access is off — turn it on in Settings → Sugerly."
             return
         }

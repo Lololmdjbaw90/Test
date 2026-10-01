@@ -67,6 +67,10 @@ jobs:
         timeout-minutes: 18
         run: bash scripts/test-native-interactions.sh
 
+      - name: Test Home scrolling on iPad
+        timeout-minutes: 10
+        run: bash scripts/test-native-interactions.sh iPad HomeIPadTests
+
       - name: Export interaction screenshots
         if: always()
         run: |
@@ -81,43 +85,11 @@ jobs:
           name: release-interaction-results
           path: |
             native/InteractionTests.xcresult
+            native/HomeIPadTests.xcresult
             native/simulator-test.log
             native/test-screenshots
 
-      # Each run's Mac makes a fresh development certificate for signing and
-      # throws its private key away when the run ends, so those certificates
-      # can never be used again. Apple allows only a few, so remove the ones
-      # earlier runs made ("Created via API") before this run makes its own.
-      # Distribution (App Store) certificates are never touched.
-      - name: Remove old build certificates
-        continue-on-error: true
-        run: |
-          node - <<'JS'
-          const fs = require('fs'), crypto = require('crypto');
-          const { KEY_PATH, KEY_ID, ISSUER_ID } = process.env;
-          const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
-          const now = Math.floor(Date.now() / 1000);
-          const head = b64({ alg: 'ES256', kid: KEY_ID, typ: 'JWT' });
-          const body = b64({ iss: ISSUER_ID, iat: now, exp: now + 600, aud: 'appstoreconnect-v1' });
-          const sig = crypto.sign('sha256', Buffer.from(`${head}.${body}`),
-            { key: fs.readFileSync(KEY_PATH, 'utf8'), dsaEncoding: 'ieee-p1363' }).toString('base64url');
-          const headers = { Authorization: `Bearer ${head}.${body}.${sig}` };
-          const api = 'https://api.appstoreconnect.apple.com/v1/certificates';
-          (async () => {
-            const query = new URLSearchParams({ 'filter[certificateType]': 'DEVELOPMENT,IOS_DEVELOPMENT', limit: '200' });
-            const res = await fetch(`${api}?${query}`, { headers });
-            if (!res.ok) { console.log(`Could not list certificates (${res.status}): ${await res.text()}`); return; }
-            const all = (await res.json()).data || [];
-            const robot = all.filter((c) => /created via api/i.test(`${c.attributes.displayName || ''} ${c.attributes.name || ''}`));
-            console.log(`Development certificates: ${all.length}, made by earlier uploads: ${robot.length}`);
-            for (const c of all) console.log(`  - ${c.attributes.displayName || c.attributes.name} (expires ${c.attributes.expirationDate})`);
-            for (const c of robot) {
-              const del = await fetch(`${api}/${c.id}`, { method: 'DELETE', headers });
-              console.log(`Removed ${c.attributes.displayName || c.attributes.name}: ${del.status}`);
-            }
-          })();
-          JS
-
+      # Let Xcode manage signing; do not revoke account-wide certificates.
       - name: Archive (signed)
         run: |
           xcodebuild \
