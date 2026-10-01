@@ -1117,8 +1117,8 @@ struct ReelTextLayer: View {
         let contrast: UInt32 = ReelText.isLight(color) ? 0x2A1620 : 0xFFFFFF
         let font: Font = {
             switch t.font {
-            case "bubbly": return .custom("Bubbly-Regular", size: size)
-            case "cute": return .custom("CuteHereRegular", size: size)
+            case "bubbly": return .custom("BubblegumSans-Regular", size: size)
+            case "cute": return .custom("CaveatBrush-Regular", size: size)
             case "serif": return .custom("Georgia-BoldItalic", size: size)
             case "mono": return .system(size: size, weight: .bold, design: .monospaced)
             default: return .custom("PlusJakartaSans-ExtraBold", size: size)

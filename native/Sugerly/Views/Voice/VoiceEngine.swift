@@ -528,7 +528,7 @@ final class VoiceEngine: NSObject {
         guard room != nil else { ScreenBroadcast.shared.requestStop(); return }
         if cameraOn { stopCamera() }
         let source = ensureVideo()
-        source.adaptOutputFormat(toWidth: 720, height: 1280, fps: 12)
+        source.adaptOutputFormat(toWidth: 720, height: 1280, fps: 15)
         let capturer = RTCVideoCapturer(delegate: source)
         screenCapturer = capturer
         ScreenBroadcast.shared.frames.attach(source, capturer)

@@ -12,7 +12,7 @@ struct SugerlyApp: App {
         if let title = UIFont(name: "PlusJakartaSans-Bold", size: 17) {
             nav.titleTextAttributes = [.font: title]
         }
-        if let large = UIFont(name: "Bubbly-Regular", size: 34) {
+        if let large = UIFont(name: "BubblegumSans-Regular", size: 34) {
             nav.largeTitleTextAttributes = [.font: large]
         }
         // Notifications + background checks have to be set up at launch.

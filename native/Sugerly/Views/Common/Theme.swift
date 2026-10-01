@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 // Sugerly's look, matching the website: warm off-white (or deep plum in dark
-// mode), soft cards, the accent gradient, and the Bubbly / Cute Here /
+// mode), soft cards, the accent gradient, and the Bubblegum Sans / Caveat Brush /
 // Plus Jakarta Sans fonts.
 
 extension UIColor {
@@ -168,13 +168,13 @@ extension View {
 // MARK: - Fonts
 
 extension Font {
-    // Bubbly: big friendly headings (like the website's font-display).
+    // Bubblegum Sans: big friendly headings (like the website's font-display).
     static func display(_ size: CGFloat, relativeTo style: Font.TextStyle = .title) -> Font {
-        .custom("Bubbly-Regular", size: size, relativeTo: style)
+        .custom("BubblegumSans-Regular", size: size, relativeTo: style)
     }
-    // Cute Here: playful accents (names in the greeting, empty states).
+    // Caveat Brush: playful accents (names in the greeting, empty states).
     static func cute(_ size: CGFloat, relativeTo style: Font.TextStyle = .title) -> Font {
-        .custom("CuteHereRegular", size: size, relativeTo: style)
+        .custom("CaveatBrush-Regular", size: size, relativeTo: style)
     }
     // Plus Jakarta Sans: everything else.
     static func jakarta(_ size: CGFloat, _ weight: Font.Weight = .regular, relativeTo style: Font.TextStyle = .body) -> Font {

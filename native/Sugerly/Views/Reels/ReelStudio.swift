@@ -127,8 +127,8 @@ enum StickerFont: String, CaseIterable {
     case bubblegum = "Bubblegum", pacifico = "Pacifico", lilita = "Lilita", balsamiq = "Balsamiq", modak = "Modak", brush = "Brush", chela = "Chela"
     var uiName: String {
         switch self {
-        case .bubbly: return "Bubbly-Regular"
-        case .cute: return "CuteHereRegular"
+        case .bubbly: return "BubblegumSans-Regular"
+        case .cute: return "CaveatBrush-Regular"
         case .bold: return "PlusJakartaSans-ExtraBold"
         case .classic: return "PlusJakartaSans-SemiBold"
         case .bubblegum: return "BubblegumSans-Regular"

@@ -27,6 +27,7 @@ enum DailyReward {
 
 struct DailyRewardButton: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var confetti = false
     @State private var wiggle = false
     @State private var claiming = false
@@ -58,7 +59,7 @@ struct DailyRewardButton: View {
                     .background(status.claimed ? Theme.pink.opacity(0.12) : Color.white.opacity(0.22), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                     // A light bounce the system draws (it used to wiggle
                     // non-stop, which kept Home redrawing all the time).
-                    .symbolEffect(.pulse, options: .repeating, isActive: !status.claimed && wiggle)
+                    .symbolEffect(.bounce, options: .repeat(2), value: !status.claimed && wiggle && !reduceMotion)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(status.claimed ? "Daily reward claimed" : "Claim daily reward").font(.jakarta(15, .bold))
                     HStack(spacing: 4) {

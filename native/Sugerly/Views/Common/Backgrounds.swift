@@ -46,6 +46,7 @@ private struct PatternBackgroundModifier: ViewModifier {
     @AppStorage("sugerly.background.still") private var still = false
     @Environment(\.backgroundPaused) private var paused
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.scenePhase) private var scenePhase
 
     func body(content: Content) -> some View {
         let kind = AppBackground(rawValue: choice) ?? .dots
@@ -58,7 +59,7 @@ private struct PatternBackgroundModifier: ViewModifier {
                 } else {
                     // A new id for each look, so a freshly picked pattern (or
                     // colour, or dark mode) starts moving again straight away.
-                    PatternBackground(kind: kind, animated: !still && !paused)
+                    PatternBackground(kind: kind, animated: !still && !paused && scenePhase == .active)
                         .id("\(kind.rawValue)-\(still)-\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)")
                         .ignoresSafeArea()
                         .accessibilityHidden(true)
