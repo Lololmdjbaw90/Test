@@ -318,6 +318,7 @@ struct ChatView: View {
                                 .frame(width: 36, height: 36)
                         }
                         TextField("Message", text: $draft, axis: .vertical)
+                            .accessibilityIdentifier("chat-message-input")
                             .font(.jakarta(16))
                             .lineLimit(1...6)
                             .focused($typing)
