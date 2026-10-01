@@ -5,6 +5,13 @@ broadcast upload extension for whole-screen sharing. Source compilation does
 not verify APNs credentials, deployed server configuration or physical devices.
 This session could not inspect the live Netlify environment.
 
+Deployment probe on 1 October 2026: unauthenticated POST requests to both
+`https://sugerly.netlify.app/.netlify/functions/call-ring` and
+`https://sugerly.netlify.app/.netlify/functions/turn-credentials` returned 404.
+The existing commission-checkout function returned 401, as expected without
+credentials. Calls cannot use these missing endpoints until they are deployed;
+changing only the IPA cannot fix this server-side failure.
+
 ## Server configuration
 
 The deployed Netlify site must include `netlify/functions/call-ring.mjs` and

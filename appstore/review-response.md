@@ -4,6 +4,10 @@ Draft based on the source, 1 October 2026. Complete the bracketed fields and
 physical-device checks before sending. An uploaded build or passing simulator
 tests does not establish that the submitted build is ready for review.
 
+Current blocker: the live call-ring and turn-credentials endpoints returned
+404 on 1 October 2026. Deploy and verify the call backend before demonstrating
+or claiming working background calls. See [background-calls.md](background-calls.md).
+
 Paste the completed numbered response both into the App Review conversation
 and into App Review Information → Notes. Put the demo password in the private
 Sign-in Information fields, never in this repository.
