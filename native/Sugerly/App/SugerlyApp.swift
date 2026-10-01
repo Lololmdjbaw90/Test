@@ -30,6 +30,8 @@ struct SugerlyApp: App {
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--polish-ui-test") {
                 PolishUITestHost().environment(model)
+            } else if ProcessInfo.processInfo.arguments.contains("--shell-ui-test") {
+                ShellUITestHost().environment(model)
             } else {
                 RootView().environment(model)
             }

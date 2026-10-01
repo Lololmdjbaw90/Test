@@ -46,39 +46,17 @@ extension Binding where Value == [Route] {
     var instant: Binding<[Route]> { self }
 }
 
-// Swipe from the left edge to go back, even though pages use our own back
-// button (hiding the system one normally turns the swipe off too).
-extension UINavigationController: @retroactive UIGestureRecognizerDelegate {
-    override open func viewDidLoad() {
-        super.viewDidLoad()
-        interactivePopGestureRecognizer?.delegate = self
-    }
-
-    public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        viewControllers.count > 1 && transitionCoordinator == nil && presentedViewController == nil
-    }
-}
-
 // Where a tap leads, shared by every tab's navigation stack.
 struct RouteView: View {
     let route: Route
     @Binding var path: [Route]
+    var loadContent = true
 
     var body: some View {
         page
-            // Our own back button (the swipe from the left edge works too).
-            .navigationBarBackButtonHidden(true)
+            // One system Back button keeps the path and interactive swipe in sync.
+            .navigationBarBackButtonHidden(fullScreen)
             .toolbar(fullScreen ? .hidden : .visible, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { back() } label: {
-                        Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold))
-                            .frame(width: 36, height: 36)
-                            .contentShape(Rectangle())
-                    }
-                    .accessibilityLabel("Back")
-                }
-            }
     }
 
     // Reels and Music bring their own back button.
@@ -89,17 +67,12 @@ struct RouteView: View {
         }
     }
 
-    private func back() {
-        guard !path.isEmpty else { return }
-        withAnimation(.smooth(duration: 0.3)) { _ = path.popLast() }
-    }
-
     @ViewBuilder
     private var page: some View {
         switch route {
         case .post(let post): PostDetailView(postId: post.id, initial: post, path: $path)
         case .person(let email): PersonView(email: email, path: $path)
-        case .chat(let conversation): ChatView(conversation: conversation)
+        case .chat(let conversation): ChatView(conversation: conversation, loadMessages: loadContent)
         case .artwork(let artwork): ArtworkDetailView(artwork: artwork, path: $path)
         case .reel(let reel): SingleReelView(reel: reel, path: $path)
         case .gallery: GalleryView(path: $path)
@@ -151,6 +124,7 @@ extension View {
 struct MainShell: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var tab: AppTab = .home
     @State private var chats = ChatStore()
     @State private var posts = PostsStore()
@@ -295,16 +269,22 @@ struct MainShell: View {
         // at the bottom (tabRoom), so nothing ends up hidden under it. (Room
         // made around the whole tab view didn't always reach every page.)
         .overlay(alignment: .bottom) {
-            if !barHidden {
-                VStack(spacing: 8) {
-                    VoiceDock()
-                    if tab != .reels { MiniPlayer() }
-                    SugarTabBar(tab: $tab, unread: chats.unread, dark: tab == .reels) { creating = true }
+            ZStack(alignment: .bottom) {
+                if !barHidden {
+                    VStack(spacing: 8) {
+                        VoiceDock()
+                        if tab != .reels { MiniPlayer() }
+                        SugarTabBar(tab: $tab, unread: chats.unread, dark: tab == .reels) { creating = true }
+                    }
+                    .padding(.bottom, 2)
+                    .background(GeometryReader { g in Color.clear.preference(key: TabBarHeightKey.self, value: g.size.height) })
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                .padding(.bottom, 2)
-                .background(GeometryReader { g in Color.clear.preference(key: TabBarHeightKey.self, value: g.size.height) })
-                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+            // Dock changes must not animate the navigation stacks underneath.
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: barHidden)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: player.track?.id)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: voice.room?.id)
         }
         .onPreferenceChange(TabBarHeightKey.self) { height in
             if abs(height - barHeight) > 0.5 { barHeight = height }
@@ -337,8 +317,6 @@ struct MainShell: View {
                     .zIndex(10)
             }
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: barHidden)
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: player.track?.id)
         .environment(chats)
         .environment(posts)
         .environment(player)
@@ -381,7 +359,6 @@ struct MainShell: View {
         .onChange(of: voice.room?.id) { _, id in
             if id != nil, player.playing { player.pause() }
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: voice.room?.id)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in typing = true }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in typing = false }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in typing = false }
@@ -390,6 +367,9 @@ struct MainShell: View {
         // keyboard still up tells us again.
         .onChange(of: scenePhase) { _, phase in if phase != .active { typing = false } }
         .onChange(of: tab) { _, _ in typing = false }
+        .onChange(of: currentPath.isEmpty) { _, atRoot in
+            if atRoot { typing = false }
+        }
         .sheet(isPresented: $creating, onDismiss: {
             if let pendingComposer { composer = pendingComposer; self.pendingComposer = nil }
         }) {
@@ -530,15 +510,13 @@ extension MainShell {
     }
 }
 
-// MARK: - Floating tab bar: one soft pill, the pink + raised in the middle
+// MARK: - Compact pink dock
 
 struct SugarTabBar: View {
     @Binding var tab: AppTab
     var unread: Int
     var dark: Bool
     var onCreate: () -> Void
-    @Namespace private var lens
-    @State private var plusSpin = false
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -550,72 +528,64 @@ struct SugarTabBar: View {
             item(.community, "Community", "person.2", "person.2.fill")
             item(.gallery, "Fan Art", "paintpalette", "paintpalette.fill")
             Button {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.55)) { plusSpin.toggle() }
                 onCreate()
             } label: {
                 Image(systemName: "plus")
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(.white)
-                    .rotationEffect(.degrees(plusSpin ? 90 : 0))
-                    .frame(width: 58, height: 58)
-                    .background(Theme.gradient, in: Circle())
-                    .overlay(Circle().fill(LinearGradient(colors: [.white.opacity(0.3), .clear], startPoint: .top, endPoint: .center)).padding(2))
-                    .shadow(color: Theme.main.opacity(0.45), radius: 12, y: 5)
+                    .frame(width: 44, height: 44)
+                    .background(Theme.gradient, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).strokeBorder(.white.opacity(0.25), lineWidth: 1))
             }
-            .buttonStyle(BouncyStyle(scale: 0.85))
-            .padding(.horizontal, 4)
+            .buttonStyle(BouncyStyle(scale: 0.94))
+            .padding(.horizontal, 2)
             .accessibilityLabel("Create")
             item(.reels, "Reels", "film.stack", "film.stack.fill")
             item(.chat, "Chat", "bubble.left", "bubble.left.fill", badge: unread)
             item(.me, "Profile", "person.crop.circle", "person.crop.circle.fill")
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, 4)
         .frame(height: 70)
         .background {
-            Capsule().fill(dark ? Color(hex: 0x2A2226) : Palette.surface)
-                .overlay(Capsule().strokeBorder(dark ? Color.white.opacity(0.1) : Palette.border, lineWidth: 1))
-                .shadow(color: dark ? .black.opacity(0.4) : Theme.main.opacity(0.14), radius: 18, y: 8)
+            RoundedRectangle(cornerRadius: 25, style: .continuous)
+                .fill(dark ? Color(hex: 0x2A2226) : Palette.surface)
+                .overlay(RoundedRectangle(cornerRadius: 25, style: .continuous).strokeBorder(dark ? Color.white.opacity(0.12) : Theme.main.opacity(0.18), lineWidth: 1))
+                .shadow(color: dark ? .black.opacity(0.3) : Theme.main.opacity(0.1), radius: 8, y: 4)
         }
-        .animation(.spring(response: 0.38, dampingFraction: 0.75), value: tab)
         .padding(.horizontal, 12)
+        .accessibilityIdentifier("main-dock")
     }
 
     private func item(_ t: AppTab, _ title: String, _ icon: String, _ filled: String, badge: Int = 0) -> some View {
         let active = tab == t
         return Button { select(t) } label: {
-            VStack(spacing: 3) {
+            VStack(spacing: 2) {
                 Image(systemName: active ? filled : icon)
-                    .font(.system(size: showLabels ? 22 : 25, weight: .semibold))
+                    .font(.system(size: 21, weight: active ? .semibold : .medium))
+                    .foregroundStyle(active ? Color.white : dark ? Color.white.opacity(0.75) : Palette.text2)
+                    .frame(width: 34, height: 32)
+                    .background {
+                        if active {
+                            RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Theme.gradient)
+                        }
+                    }
                     .symbolEffect(.bounce.up, options: .nonRepeating, value: active)
                     .symbolEffectsRemoved(reduceMotion)
                     .accessibilityHidden(true)
-                if showLabels {
-                    Text(title).font(.display(12, relativeTo: .caption)).lineLimit(1)
-                }
+                Text(title).font(.display(11, relativeTo: .caption)).lineLimit(1).minimumScaleFactor(0.8)
+                    .opacity(active || showLabels ? 1 : 0)
+                    .accessibilityHidden(true)
             }
             .foregroundStyle(active ? (dark ? AnyShapeStyle(Color.white) : AnyShapeStyle(Theme.main)) : AnyShapeStyle(dark ? Color.white.opacity(0.6) : Palette.muted))
             .frame(maxWidth: .infinity)
             .frame(height: 56)
-            .background { lensView(active) }
             .overlay(alignment: .topTrailing) { badgeView(badge) }
             .contentShape(Capsule())
         }
-        .buttonStyle(BouncyStyle(scale: 0.88))
+        .buttonStyle(BouncyStyle(scale: 0.96))
         .sensoryFeedback(.selection, trigger: active)
         .accessibilityLabel(title)
         .accessibilityAddTraits(active ? [.isSelected] : [])
-    }
-
-    @ViewBuilder
-    private func lensView(_ active: Bool) -> some View {
-        if active {
-            Capsule()
-                .fill(dark ? Color.white.opacity(0.12) : Color.white)
-                .overlay(Capsule().fill(dark ? Color.clear : Theme.main.opacity(0.06)))
-                .shadow(color: dark ? .clear : Theme.main.opacity(0.18), radius: 8, y: 3)
-                .padding(.horizontal, 2)
-                .matchedGeometryEffect(id: "lens", in: lens)
-        }
     }
 
     @ViewBuilder

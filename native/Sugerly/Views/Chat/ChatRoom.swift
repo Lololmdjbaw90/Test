@@ -11,6 +11,7 @@ import AVFoundation
 // shared reels and call buttons in the header.
 struct ChatView: View {
     let conversation: Conversation
+    var loadMessages = true
     @Environment(AppModel.self) private var model
     @Environment(ChatStore.self) private var chats
     @Environment(CallCenter.self) private var calls
@@ -124,10 +125,12 @@ struct ChatView: View {
             Alerts.shared.openConversation = conversation.id
         }
         .onDisappear {
+            typing = false
             if Alerts.shared.openConversation == conversation.id { Alerts.shared.openConversation = nil }
             recorder.cancel()
         }
         .task {
+            guard loadMessages else { loaded = true; return }
             restoreCache()
             await poll()
         }
