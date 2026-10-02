@@ -72,7 +72,7 @@ struct QuickMenu: View {
             let width = min(geo.size.width * 0.86, 390)
             ZStack(alignment: .trailing) {
                 Color.black.opacity(shown ? 0.4 : 0).ignoresSafeArea()
-                    .onTapGesture(perform: close)
+                    .onTapGesture(perform: slideAway)
                 panel
                     .frame(width: width)
                     .frame(maxHeight: .infinity)
@@ -88,11 +88,22 @@ struct QuickMenu: View {
                     .gesture(
                         DragGesture(minimumDistance: 12)
                             .updating($drag) { value, state, _ in state = value.translation.width }
-                            .onEnded { value in if value.translation.width > 80 || value.predictedEndTranslation.width > 200 { close() } }
+                            .onEnded { value in if value.translation.width > 80 || value.predictedEndTranslation.width > 200 { slideAway() } }
                     )
             }
         }
         .onAppear { withAnimation(.spring(response: 0.4, dampingFraction: 0.86)) { shown = true } }
+    }
+
+    // Closing by hand: the panel slides back out to the side and the shade
+    // fades, then the menu goes away.
+    private func slideAway() {
+        guard shown else { return }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.92)) { shown = false }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(240))
+            close()
+        }
     }
 
     private var panel: some View {
@@ -100,7 +111,7 @@ struct QuickMenu: View {
             HStack {
                 Text("Menu").font(.display(30)).foregroundStyle(Theme.gradient)
                 Spacer()
-                Button(action: close) {
+                Button(action: slideAway) {
                     Image(systemName: "xmark").font(.system(size: 14, weight: .heavy)).foregroundStyle(Palette.text2)
                         .frame(width: 38, height: 38).background(Palette.surface2, in: Circle())
                 }

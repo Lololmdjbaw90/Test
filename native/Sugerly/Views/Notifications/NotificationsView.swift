@@ -63,15 +63,17 @@ struct NotificationsPopup: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Color.black.opacity(0.22).ignoresSafeArea()
-                .onTapGesture(perform: close)
+            Color.black.opacity(appeared ? 0.22 : 0).ignoresSafeArea()
+                .onTapGesture(perform: shrinkAway)
+            // Grows out of the bell in the corner.
             card
                 .frame(maxWidth: 400)
                 .padding(.horizontal, 12)
                 .padding(.top, 58)
-                .transition(.scale(scale: 0.6, anchor: .topTrailing).combined(with: .opacity))
+                .scaleEffect(appeared ? 1 : 0.86, anchor: .topTrailing)
+                .opacity(appeared ? 1 : 0)
         }
-        .onAppear { appeared = true }
+        .onAppear { withAnimation(.spring(response: 0.36, dampingFraction: 0.82)) { appeared = true } }
         .onDisappear { notes.markAllRead() }
     }
 
@@ -138,6 +140,16 @@ struct NotificationsPopup: View {
 
     @Namespace private var pill
 
+    // Closing: the card shrinks back into the bell, then goes away.
+    private func shrinkAway() {
+        guard appeared else { return }
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) { appeared = false }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(200))
+            close()
+        }
+    }
+
     private var header: some View {
         HStack(spacing: 12) {
             Image(systemName: "bell.fill").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
@@ -154,10 +166,12 @@ struct NotificationsPopup: View {
                 }
                 .accessibilityLabel("Mark all as read")
             }
-            Button(action: close) {
+            Button(action: shrinkAway) {
                 Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(Palette.text2)
                     .frame(width: 32, height: 32).background(Palette.surface2, in: Circle())
+                    .contentShape(Circle())
             }
+            .buttonStyle(BouncyStyle())
             .accessibilityLabel("Close")
         }
         .padding(.horizontal, 14).padding(.top, 14)

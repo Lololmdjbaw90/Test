@@ -67,7 +67,7 @@ struct PersonView: View {
 }
 
 struct ProfileContent: View {
-    enum Tab: String, CaseIterable { case posts = "Posts", reels = "Reels", saved = "Saved" }
+    enum Tab: String, CaseIterable { case posts = "Posts", art = "Art", reels = "Reels", saved = "Saved" }
 
     let person: UserProfile
     let isMe: Bool
@@ -80,8 +80,10 @@ struct ProfileContent: View {
 
     @Environment(AppModel.self) private var model
     @Environment(PostsStore.self) private var store
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var posts: [Post] = []
     @State private var reels: [Reel] = []
+    @State private var art: [Artwork] = []
     @State private var savedPosts: [Post] = []
     @State private var savedReels: [Reel] = []
     @State private var savedArt: [Artwork] = []
@@ -98,7 +100,8 @@ struct ProfileContent: View {
     // Counted by the database, so it's right however many people there are.
     @State private var followers = 0
     private var totalLikes: Int { posts.reduce(0) { $0 + $1.likeTotal } }
-    private let columns = [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)]
+    // Three across on iPhone, four on iPad.
+    private var columns: [GridItem] { Array(repeating: GridItem(.flexible(), spacing: 4), count: sizeClass == .regular ? 4 : 3) }
 
     var body: some View {
         ScrollView {
@@ -131,6 +134,7 @@ struct ProfileContent: View {
         .task(id: savedKey) { await loadSaved() }
         .dropRemoved($posts)
         .dropRemoved($reels)
+        .dropRemoved($art)
         .sheet(isPresented: $editing) { EditProfileView() }
         .sheet(isPresented: $settings) { SettingsView() }
         .sheet(isPresented: $shop) { NitroShopView() }
@@ -322,7 +326,12 @@ struct ProfileContent: View {
     private var tabs: some View {
         let list = Tab.allCases.filter { isMe || $0 != .saved }
         let options: [(String, String)] = list.map { t in
-            (t.rawValue, t == .posts ? "square.grid.2x2.fill" : t == .reels ? "play.rectangle.fill" : "bookmark.fill")
+            switch t {
+            case .posts: return (t.rawValue, "square.grid.2x2.fill")
+            case .art: return (t.rawValue, "paintpalette.fill")
+            case .reels: return (t.rawValue, "play.rectangle.fill")
+            case .saved: return (t.rawValue, "bookmark.fill")
+            }
         }
         return SectionSwitch(options: options, selection: Binding(get: { list.firstIndex(of: tab) ?? 0 }, set: { i in withAnimation(.snappy) { tab = list[i] } }))
     }
@@ -336,6 +345,9 @@ struct ProfileContent: View {
             case .posts:
                 if posts.isEmpty { EmptyCard(icon: "photo.on.rectangle.angled", title: isMe ? "Share your first post" : "No posts yet", text: isMe ? "Tap + to post to the community." : "Nothing to see here yet.") }
                 postGrid(posts)
+            case .art:
+                if art.isEmpty { EmptyCard(icon: "paintpalette.fill", title: isMe ? "Hang up your first drawing" : "No fan art yet", text: isMe ? "Tap + → Fan art to share a drawing." : "Nothing on the wall yet.") }
+                artGrid(art)
             case .reels:
                 if reels.isEmpty { EmptyCard(icon: "play.rectangle.fill", title: "No reels yet", text: isMe ? "Tap + → Create a reel." : "Nothing to see here yet.") }
                 reelGrid(reels)
@@ -417,10 +429,21 @@ struct ProfileContent: View {
         async let followerCount = try? FS.count("User", [.contains("following", person.email)])
         async let postDocs = try? FS.query("CommunityPost", [.equals("user_email", person.email)], orderBy: "created_date", limit: 90)
         async let reelDocs = try? FS.query("Reel", [.equals("user_email", person.email)], orderBy: "created_date", limit: 60)
+        async let artDocs = Self.artworks(by: person.email)
         posts = (await postDocs ?? []).map(Post.init)
         reels = (await reelDocs ?? []).map(Reel.init)
+        art = await artDocs
         if let n = await followerCount { followers = n }
         for post in posts where !store.posts.contains(where: { $0.id == post.id }) { store.posts.append(post) }
+    }
+
+    // Someone's fan art, newest first. (Without the sorted search's index
+    // yet, it asks for all of theirs and sorts them here.)
+    static func artworks(by email: String) async -> [Artwork] {
+        let newest = try? await FS.query("Artwork", [.equals("user_email", email)], orderBy: "created_date", limit: 90)
+        if let newest { return newest.map(Artwork.init) }
+        let docs = (try? await FS.query("Artwork", [.equals("user_email", email)], limit: 200)) ?? []
+        return docs.map(Artwork.init).sorted { $0.created > $1.created }
     }
 
     // Changes whenever you save or unsave something, so the Saved tab follows along.
@@ -560,7 +583,8 @@ struct EditProfileView: View {
     private var nitro: Bool { model.me?.isNitro ?? false }
 
     var body: some View {
-        ComposerScaffold(title: "Edit profile", actionTitle: "Save", busy: saving, canPost: true, onClose: { dismiss() }, onPost: { Task { await save() } }) {
+        ComposerScaffold(title: "Edit profile", actionTitle: "Save", busy: saving, canPost: true, status: "Saving your profile…", error: error,
+                         onClose: { dismiss() }, onPost: { Task { await save() } }) {
             pictures
             nitroCard
 
@@ -581,8 +605,6 @@ struct EditProfileView: View {
             patternSection
             frameSection
             effectSection
-
-            if let error { Text(error).font(.jakarta(13, .semibold)).foregroundStyle(Palette.danger) }
         }
         .onAppear(perform: fill)
         .photosPicker(isPresented: $showPicker, selection: $pickerItem, matching: .images)
@@ -900,6 +922,7 @@ struct EditProfileView: View {
     }
 
     private func save() async {
+        error = nil
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { error = "Pick a display name."; return }
         guard !Moderation.hasLink(bio), !Moderation.hasLink(status) else { error = "Links aren't allowed in your bio or status — use the Website box."; return }
@@ -926,7 +949,7 @@ struct EditProfileView: View {
             dismiss()
             model.showToast("Profile updated", icon: "sparkles")
         } catch {
-            self.error = error.localizedDescription
+            self.error = PostProblem.message(error)
         }
     }
 }
@@ -1410,6 +1433,7 @@ struct SettingsView: View {
                     .overlay(alignment: isOn.wrappedValue ? .trailing : .leading) {
                         Circle().fill(.white).frame(width: 26, height: 26).padding(3).shadow(radius: 2, y: 1)
                     }
+                    .animation(.spring(response: 0.3, dampingFraction: 0.75), value: isOn.wrappedValue)
             }
             .padding(.horizontal, 14)
             .frame(minHeight: 56)

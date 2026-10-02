@@ -205,6 +205,20 @@
       ]
     },
     {
+      "collectionGroup": "Artwork",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "user_email",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_date",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "CommunityComment",
       "queryScope": "COLLECTION",
       "fields": [

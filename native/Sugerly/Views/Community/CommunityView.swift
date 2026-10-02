@@ -427,7 +427,10 @@ struct CommunityView: View {
             .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
             .padding(.vertical, 8)
         }
-        .background(Palette.bg.opacity(0.96))
+        .scrollClipDisabled()
+        // When it sticks to the top, its strip reaches the screen edges so
+        // posts don't peek out beside it.
+        .background { Rectangle().fill(Palette.bg.opacity(0.97)).padding(.horizontal, -14) }
     }
 
     private var trendingRow: some View {
@@ -472,7 +475,6 @@ struct CommunityView: View {
                                 Image(systemName: "plus").font(.system(size: 11, weight: .black)).foregroundStyle(.white)
                                     .frame(width: 22, height: 22).background(Theme.gradient, in: Circle())
                                     .overlay(Circle().strokeBorder(Palette.bg, lineWidth: 2.5))
-                                    .phaseAnimator([1.0, 1.15]) { v, s in v.scaleEffect(s) } animation: { _ in .easeInOut(duration: 1.1) }
                             }
                         Text("You").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
                     }
@@ -1360,6 +1362,7 @@ struct NewPostView: View {
     @State private var gif = ""
     @State private var gifs = false
     @State private var posting = false
+    @State private var status: String?
     @State private var error: String?
     @State private var drafts: [Drafts.Post] = []
     @State private var draftId: String?
@@ -1370,7 +1373,9 @@ struct NewPostView: View {
     }
 
     var body: some View {
-        ComposerScaffold(title: "New post", actionTitle: "Post", busy: posting, canPost: image != nil || !gif.isEmpty || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, onClose: { if hasContent { askDraft = true } else { dismiss() } }, onPost: { Task { await post() } }) {
+        ComposerScaffold(title: "New post", actionTitle: "Post", busy: posting, canPost: image != nil || !gif.isEmpty || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                         hint: "Write something or add a picture first", status: status, error: error,
+                         onClose: { if hasContent { askDraft = true } else { dismiss() } }, onPost: { Task { await post() } }) {
             if !drafts.isEmpty && draftId == nil && !hasContent {
                 DraftStrip(title: "Drafts", items: drafts, thumb: { d in d.hasImage ? Drafts.image("posts", d.id, "image.jpg") : nil },
                            label: { d in d.title.isEmpty ? (d.text.isEmpty ? "Draft" : d.text) : d.title },
@@ -1402,7 +1407,6 @@ struct NewPostView: View {
                         .padding(10)
                     }
             }
-            if let error { Text(error).font(.jakarta(13, .semibold)).foregroundStyle(Palette.danger) }
         }
         .sheet(isPresented: $gifs) { GifPickerSheet { url in withAnimation(.snappy) { gif = url; image = nil; item = nil } } }
         .onAppear { drafts = Drafts.posts() }
@@ -1429,14 +1433,22 @@ struct NewPostView: View {
 
     private func post() async {
         guard let me = model.me else { return }
+        error = nil
         guard await TextGuard.clear([title, text], kind: .post, model: model) else { return }
         posting = true
-        defer { posting = false }
+        defer { posting = false; status = nil }
         do {
             var imageURL = gif
-            if gif.isEmpty, let image, let data = ImageTools.jpeg(image) {
+            if gif.isEmpty, let image {
+                status = "Getting your picture ready…"
+                let picture = image
+                guard let data = await Task.detached(priority: .userInitiated, operation: { ImageTools.jpeg(picture) }).value else {
+                    throw APIError(message: "Couldn't read that picture. Try another one.")
+                }
+                status = "Uploading…"
                 imageURL = try await StorageClient.upload(data, contentType: "image/jpeg", fileExtension: "jpg")
             }
+            status = "Posting…"
             let now = FS.nowISO()
             let data: Doc = [
                 "title": title.trimmingCharacters(in: .whitespaces), "description": text.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -1451,42 +1463,78 @@ struct NewPostView: View {
             dismiss()
             model.showToast("Posted! +20 XP · +5 coins", icon: "sparkles")
         } catch {
-            self.error = error.localizedDescription
+            TextGuard.forget(.post, model: model)
+            self.error = PostProblem.message(error)
         }
     }
 }
 
-// Shared look for the "new post / artwork / track" screens.
+// Shared look for the "new post / artwork / track" screens: close on the
+// left, the title, and the post button on the right. While it posts, a soft
+// card says what's happening; a failed try shows why at the top.
 struct ComposerScaffold<Content: View>: View {
     let title: String
     let actionTitle: String
     let busy: Bool
     let canPost: Bool
+    // Said when the post button is tapped before it's ready ("Add a
+    // picture first"), instead of the button doing nothing.
+    var hint: String? = nil
+    // What's happening while it posts ("Uploading your drawing…").
+    var status: String? = nil
+    // Why the last try didn't work.
+    var error: String? = nil
     var onClose: () -> Void
     var onPost: () -> Void
     @ViewBuilder var content: () -> Content
+    @State private var nudge: CGFloat = 0
+    @State private var shownHint: String?
+    @State private var hintTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
+            HStack(spacing: 12) {
                 Button(action: onClose) {
-                    Image(systemName: "xmark").font(.system(size: 16, weight: .bold)).foregroundStyle(Palette.text2)
+                    Image(systemName: "xmark").font(.system(size: 15, weight: .bold)).foregroundStyle(Palette.text2)
                         .frame(width: 40, height: 40).background(Palette.surface, in: Circle())
                         .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
+                        .contentShape(Circle())
                 }
                 .buttonStyle(BouncyStyle())
-                Spacer()
+                .disabled(busy)
+                .accessibilityLabel("Close")
                 Text(title).font(.display(24)).foregroundStyle(Palette.text)
-                Spacer()
-                Button(action: onPost) {
-                    if busy { ProgressView().tint(.white) } else { Text(actionTitle) }
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .frame(maxWidth: .infinity)
+                Button {
+                    if canPost { onPost() } else { nudgeHint() }
+                } label: {
+                    ZStack {
+                        Text(actionTitle).opacity(busy ? 0 : 1)
+                        if busy { ProgressView().tint(.white) }
+                    }
                 }
                 .buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
-                .disabled(busy || !canPost)
-                .opacity(canPost ? 1 : 0.5)
+                .disabled(busy || (!canPost && hint == nil))
+                .opacity(canPost || busy ? 1 : 0.55)
+                .modifier(ShakeEffect(shakes: nudge))
+                .animation(.easeOut(duration: 0.2), value: canPost)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
+
+            if let note = error ?? shownHint {
+                Label(note, systemImage: error != nil ? "exclamationmark.circle.fill" : "hand.point.up.left.fill")
+                    .font(.jakarta(13, .bold))
+                    .foregroundStyle(error != nil ? Palette.danger : Theme.main)
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .frame(maxWidth: 640, alignment: .leading)
+                    .background((error != nil ? Palette.danger : Theme.main).opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 6)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) { content() }
                     .padding(18)
@@ -1495,8 +1543,82 @@ struct ComposerScaffold<Content: View>: View {
             }
             .scrollDismissesKeyboard(.interactively)
         }
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: error)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: shownHint)
         .sugarBackground()
+        .overlay {
+            if busy {
+                ZStack {
+                    Color.black.opacity(0.08).ignoresSafeArea()
+                    VStack(spacing: 12) {
+                        ProgressView().controlSize(.large).tint(Theme.main)
+                        Text(status ?? "Posting…").font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
+                            .multilineTextAlignment(.center)
+                            .contentTransition(.opacity)
+                            .animation(.easeOut(duration: 0.2), value: status)
+                    }
+                    .padding(.horizontal, 30).padding(.vertical, 24)
+                    .frame(minWidth: 200)
+                    .sugarCard(radius: 28)
+                    .transition(.scale(scale: 0.92).combined(with: .opacity))
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: busy)
         .interactiveDismissDisabled(busy)
+        .onDisappear { hintTask?.cancel() }
+    }
+
+    // Not ready yet: the button gives a little shake and says what's missing.
+    private func nudgeHint() {
+        guard let hint else { return }
+        withAnimation(.linear(duration: 0.4)) { nudge += 1 }
+        shownHint = hint
+        hintTask?.cancel()
+        hintTask = Task {
+            try? await Task.sleep(for: .seconds(2.6))
+            guard !Task.isCancelled else { return }
+            shownHint = nil
+        }
+    }
+}
+
+// A quick side-to-side shake (a button saying "not yet").
+struct ShakeEffect: GeometryEffect {
+    var shakes: CGFloat
+    var animatableData: CGFloat {
+        get { shakes }
+        set { shakes = newValue }
+    }
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        ProjectionTransform(CGAffineTransform(translationX: 7 * sin(shakes * .pi * 4), y: 0))
+    }
+}
+
+// Friendly words for why posting didn't work.
+enum PostProblem {
+    static func message(_ error: Error) -> String {
+        if let url = error as? URLError {
+            switch url.code {
+            case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed:
+                return "You're offline. Check your internet and try again."
+            case .timedOut:
+                return "That took too long. Check your internet and try again."
+            default:
+                return "Couldn't reach Sugerly. Try again in a moment."
+            }
+        }
+        if let api = error as? APIError {
+            switch api.status {
+            case -1: return "You're offline. Check your internet and try again."
+            case 401: return "Your login ran out. Log out and back in, then try again."
+            case 403: return "Sugerly couldn't save this right now. If you're on a cooldown, wait a little and try again."
+            case 413: return "That file is too big. Try a smaller one."
+            default: return api.message
+            }
+        }
+        return error.localizedDescription
     }
 }
 
@@ -1525,70 +1647,133 @@ struct SugarField: View {
     }
 }
 
+// Pick a picture (or see the one picked, with Edit / Change / remove).
+// Big pictures (huge drawing canvases) are shrunk while they load, so they
+// open quickly and never run the phone out of memory.
 struct PhotoPickerCard: View {
     @Binding var item: PhotosPickerItem?
     @Binding var image: UIImage?
     @State private var editing = false
+    @State private var loading = false
+    @State private var failed = false
 
     var body: some View {
-        Group {
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    .overlay(alignment: .topTrailing) {
-                        Button { withAnimation(.snappy) { self.image = nil; item = nil } } label: {
-                            Image(systemName: "xmark").font(.system(size: 13, weight: .black)).foregroundStyle(.white)
-                                .frame(width: 32, height: 32).background(.black.opacity(0.5), in: Circle())
+        VStack(alignment: .leading, spacing: 8) {
+            Group {
+                if let image {
+                    picked(image)
+                        .transition(.scale(scale: 0.94).combined(with: .opacity))
+                } else {
+                    PhotosPicker(selection: $item, matching: .images) {
+                        VStack(spacing: 10) {
+                            if loading {
+                                ProgressView().controlSize(.large).tint(Theme.main)
+                                Text("Opening your picture…").font(.jakarta(15, .bold)).foregroundStyle(Theme.pink)
+                            } else {
+                                Image(systemName: "photo.badge.plus")
+                                    .font(.system(size: 30, weight: .semibold))
+                                    .foregroundStyle(Theme.gradient)
+                                Text("Add a picture").font(.jakarta(15, .bold)).foregroundStyle(Theme.pink)
+                                Text("From your photos").font(.jakarta(12)).foregroundStyle(Palette.muted)
+                            }
                         }
-                        .padding(10)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 170)
+                        .background(Theme.pink.opacity(0.06), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Theme.pink.opacity(0.35), style: StrokeStyle(lineWidth: 2, dash: [8, 6])))
+                        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                     }
-                    .overlay(alignment: .bottomTrailing) {
-                        Button { editing = true } label: {
-                            Label("Edit", systemImage: "wand.and.stars").font(.jakarta(13, .heavy)).foregroundStyle(.white)
-                                .padding(.horizontal, 14).frame(height: 36)
-                                .background(Theme.gradient, in: Capsule())
-                                .shadow(color: Theme.main.opacity(0.4), radius: 8, y: 3)
-                        }
-                        .buttonStyle(BouncyStyle())
-                        .padding(10)
-                    }
-                    .transition(.scale(scale: 0.94).combined(with: .opacity))
-            } else {
-                PhotosPicker(selection: $item, matching: .images) {
-                    VStack(spacing: 10) {
-                        Image(systemName: "photo.badge.plus")
-                            .font(.system(size: 30, weight: .semibold))
-                            .foregroundStyle(Theme.gradient)
-                        Text("Add a picture").font(.jakarta(15, .bold)).foregroundStyle(Theme.pink)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 170)
-                    .background(Theme.pink.opacity(0.06), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Theme.pink.opacity(0.35), style: StrokeStyle(lineWidth: 2, dash: [8, 6])))
+                    .buttonStyle(BouncyStyle(scale: 0.97))
+                    .disabled(loading)
+                    .transition(.opacity)
                 }
-                .buttonStyle(BouncyStyle(scale: 0.97))
+            }
+            if failed {
+                Label("Couldn't open that picture. Try another one.", systemImage: "exclamationmark.triangle.fill")
+                    .font(.jakarta(13, .semibold)).foregroundStyle(Palette.danger)
+                    .transition(.opacity)
             }
         }
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: image == nil)
+        .animation(.easeOut(duration: 0.2), value: loading)
         .fullScreenCover(isPresented: $editing) {
             if let image {
                 PhotoEditorView(image: image) { edited in withAnimation(.snappy) { self.image = edited } }
             }
         }
         .onChange(of: item) { _, newItem in
-            Task {
-                if let data = try? await newItem?.loadTransferable(type: Data.self), let picked = UIImage(data: data) {
-                    withAnimation(.snappy) { image = picked }
-                }
+            guard let newItem else { return }
+            Task { await load(newItem) }
+        }
+    }
+
+    private func picked(_ image: UIImage) -> some View {
+        // Shown whole; very tall pictures sit in a frame a little taller
+        // than wide, so the fields below stay close.
+        let ratio = image.size.width / max(1, image.size.height)
+        return Color.clear
+            .aspectRatio(min(2, max(0.8, ratio)), contentMode: .fit)
+            .frame(maxWidth: .infinity)
+            .overlay {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             }
+            .padding(8)
+            .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .overlay(alignment: .topTrailing) {
+                Button { withAnimation(.snappy) { self.image = nil; item = nil } } label: {
+                    Image(systemName: "xmark").font(.system(size: 13, weight: .black)).foregroundStyle(.white)
+                        .frame(width: 34, height: 34).background(.black.opacity(0.5), in: Circle())
+                        .contentShape(Circle())
+                }
+                .buttonStyle(BouncyStyle())
+                .accessibilityLabel("Remove picture")
+                .padding(14)
+            }
+            .overlay(alignment: .bottom) {
+                HStack(spacing: 8) {
+                    PhotosPicker(selection: $item, matching: .images) {
+                        Label("Change", systemImage: "photo.on.rectangle.angled").font(.jakarta(13, .heavy)).foregroundStyle(Palette.text)
+                            .padding(.horizontal, 14).frame(height: 36)
+                            .background(.regularMaterial, in: Capsule())
+                    }
+                    .buttonStyle(BouncyStyle())
+                    Spacer(minLength: 0)
+                    Button { editing = true } label: {
+                        Label("Edit", systemImage: "wand.and.stars").font(.jakarta(13, .heavy)).foregroundStyle(.white)
+                            .padding(.horizontal, 14).frame(height: 36)
+                            .background(Theme.gradient, in: Capsule())
+                            .shadow(color: Theme.main.opacity(0.4), radius: 8, y: 3)
+                    }
+                    .buttonStyle(BouncyStyle())
+                }
+                .padding(14)
+            }
+    }
+
+    private func load(_ newItem: PhotosPickerItem) async {
+        loading = true
+        failed = false
+        defer { loading = false }
+        guard let data = try? await newItem.loadTransferable(type: Data.self) else {
+            if item == newItem { withAnimation { failed = true } }
+            return
+        }
+        let shrunk = await Task.detached(priority: .userInitiated) { ImagePipeline.downsample(data, maxPixel: 2560) }.value
+        guard item == newItem else { return }
+        if let shrunk {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { image = shrunk }
+        } else {
+            withAnimation { failed = true }
         }
     }
 }
 
 enum ImageTools {
     // Pictures are resized to at most 2048 px and saved as JPEG before upload.
-    static func jpeg(_ image: UIImage, maxSide: CGFloat = 2048, quality: CGFloat = 0.82) -> Data? {
+    nonisolated static func jpeg(_ image: UIImage, maxSide: CGFloat = 2048, quality: CGFloat = 0.82) -> Data? {
         let size = image.size
         let scale = min(1, maxSide / max(size.width, size.height))
         let target = CGSize(width: floor(size.width * scale), height: floor(size.height * scale))

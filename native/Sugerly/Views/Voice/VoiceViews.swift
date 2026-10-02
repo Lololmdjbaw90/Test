@@ -245,7 +245,7 @@ struct VoiceDock: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .glassPill(cornerRadius: 26)
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 12)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: voice.sharingScreen)
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .sheet(isPresented: $expanded) {

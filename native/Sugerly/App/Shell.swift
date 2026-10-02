@@ -46,7 +46,23 @@ extension Binding where Value == [Route] {
     var instant: Binding<[Route]> { self }
 }
 
-// Where a tap leads, shared by every tab's navigation stack.
+// Swipe from the left edge to go back on every page, also on the full
+// screen ones (Reels, Music) whose top bar is hidden: hiding the bar
+// normally turns the swipe off too.
+extension UINavigationController: @retroactive UIGestureRecognizerDelegate {
+    override open func viewDidLoad() {
+        super.viewDidLoad()
+        interactivePopGestureRecognizer?.delegate = self
+    }
+
+    public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        viewControllers.count > 1 && transitionCoordinator == nil && presentedViewController == nil
+    }
+}
+
+// Where a tap leads, shared by every tab's navigation stack. Every page has
+// exactly one back button: iPhone's own (with the swipe from the edge);
+// pages never add a second one of their own.
 struct RouteView: View {
     let route: Route
     @Binding var path: [Route]
@@ -54,7 +70,6 @@ struct RouteView: View {
 
     var body: some View {
         page
-            // One system Back button keeps the path and interactive swipe in sync.
             .navigationBarBackButtonHidden(fullScreen)
             .toolbar(fullScreen ? .hidden : .visible, for: .navigationBar)
     }
@@ -201,7 +216,7 @@ struct MainShell: View {
             .toolbar(.hidden, for: .tabBar)
 
             NavigationStack(path: $reelsPath.instant) {
-                ReelsView(visible: tab == .reels && reelsPath.isEmpty && !calls.showScreen, path: $reelsPath.instant, create: { composer = .reel }).sugarRoutes($reelsPath.instant)
+                ReelsView(visible: tab == .reels && reelsPath.isEmpty && !calls.showScreen, path: $reelsPath.instant, create: { composer = .reel }, bottomRoom: room).sugarRoutes($reelsPath.instant)
             }
             .tag(AppTab.reels)
             .toolbar(.hidden, for: .tabBar)
@@ -276,15 +291,20 @@ struct MainShell: View {
                         if tab != .reels { MiniPlayer() }
                         SugarTabBar(tab: $tab, unread: chats.unread, dark: tab == .reels) { creating = true }
                     }
+                    // On iPad the bar and the player stay a comfortable width
+                    // in the middle instead of stretching edge to edge.
+                    .frame(maxWidth: 600)
                     .padding(.bottom, 2)
                     .background(GeometryReader { g in Color.clear.preference(key: TabBarHeightKey.self, value: g.size.height) })
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            // Dock changes must not animate the navigation stacks underneath.
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: barHidden)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: player.track?.id)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: voice.room?.id)
+            .frame(maxWidth: .infinity)
+            // Only the bar animates (never the pages underneath it): it slides
+            // away when a page opens and back when you return.
+            .animation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.88), value: barHidden)
+            .animation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.88), value: player.track?.id)
+            .animation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.88), value: voice.room?.id)
         }
         .onPreferenceChange(TabBarHeightKey.self) { height in
             if abs(height - barHeight) > 0.5 { barHeight = height }
@@ -374,7 +394,7 @@ struct MainShell: View {
             if let pendingComposer { composer = pendingComposer; self.pendingComposer = nil }
         }) {
             CreateSheet { choice in pendingComposer = choice; creating = false }
-                .presentationDetents([.height(430)])
+                .presentationDetents([.height(460), .large])
                 .presentationCornerRadius(34)
         }
         .onChange(of: model.soundRequest?.id) { _, id in
@@ -510,82 +530,138 @@ extension MainShell {
     }
 }
 
-// MARK: - Compact pink dock
+// MARK: - The floating tab bar
 
+// One soft floating bar: three tabs, the pink + in the middle, three tabs.
+// The tab you're on gets a little pink pill behind its icon that glides
+// over when you switch (the pages themselves switch instantly). Every tab
+// keeps its name under the icon, so it never jumps around.
 struct SugarTabBar: View {
     @Binding var tab: AppTab
     var unread: Int
     var dark: Bool
     var onCreate: () -> Void
-    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private var showLabels: Bool { sizeClass == .regular }
+    @Namespace private var lensSpace
+    // Where the pill is (moves with a spring, apart from the page switch).
+    @State private var lens: AppTab = .home
 
     var body: some View {
         HStack(spacing: 0) {
             item(.home, "Home", "house", "house.fill")
             item(.community, "Community", "person.2", "person.2.fill")
             item(.gallery, "Fan Art", "paintpalette", "paintpalette.fill")
-            Button {
-                onCreate()
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
-                    .background(Theme.gradient, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).strokeBorder(.white.opacity(0.25), lineWidth: 1))
-            }
-            .buttonStyle(BouncyStyle(scale: 0.94))
-            .padding(.horizontal, 2)
-            .accessibilityLabel("Create")
-            item(.reels, "Reels", "film.stack", "film.stack.fill")
-            item(.chat, "Chat", "bubble.left", "bubble.left.fill", badge: unread)
-            item(.me, "Profile", "person.crop.circle", "person.crop.circle.fill")
+            createButton
+            item(.reels, "Reels", "play.rectangle", "play.rectangle.fill")
+            item(.chat, "Chat", "bubble.left.and.bubble.right", "bubble.left.and.bubble.right.fill", badge: unread)
+            meItem
         }
-        .padding(.horizontal, 4)
-        .frame(height: 70)
+        .padding(.horizontal, 6)
+        .frame(height: 66)
         .background {
-            RoundedRectangle(cornerRadius: 25, style: .continuous)
-                .fill(dark ? Color(hex: 0x2A2226) : Palette.surface)
-                .overlay(RoundedRectangle(cornerRadius: 25, style: .continuous).strokeBorder(dark ? Color.white.opacity(0.12) : Theme.main.opacity(0.18), lineWidth: 1))
-                .shadow(color: dark ? .black.opacity(0.3) : Theme.main.opacity(0.1), radius: 8, y: 4)
+            let shape = RoundedRectangle(cornerRadius: 30, style: .continuous)
+            shape.fill(dark ? Color(hex: 0x241C21).opacity(0.97) : Palette.surface)
+                .overlay(shape.strokeBorder(dark ? Color.white.opacity(0.1) : Theme.main.opacity(0.14), lineWidth: 1))
+                .shadow(color: dark ? .black.opacity(0.35) : Theme.main.opacity(0.13), radius: 16, y: 6)
         }
+        .frame(maxWidth: 560)
         .padding(.horizontal, 12)
+        .onAppear { lens = tab }
+        .onChange(of: tab) { _, next in
+            guard lens != next else { return }
+            withAnimation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.78)) { lens = next }
+        }
         .accessibilityIdentifier("main-dock")
+    }
+
+    private var tint: Color { dark ? .white : Theme.main }
+    private var idle: Color { dark ? Color.white.opacity(0.62) : Palette.muted }
+
+    private var createButton: some View {
+        Button(action: onCreate) {
+            Image(systemName: "plus")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 50, height: 50)
+                .background {
+                    Circle().fill(Theme.gradient)
+                        .overlay(Circle().fill(LinearGradient(colors: [.white.opacity(0.32), .clear], startPoint: .top, endPoint: .center)).padding(2))
+                        .overlay(Circle().strokeBorder(.white.opacity(0.35), lineWidth: 1))
+                }
+                .shadow(color: Theme.main.opacity(0.4), radius: 10, y: 4)
+                .contentShape(Circle())
+        }
+        .buttonStyle(BouncyStyle(scale: 0.88))
+        .frame(width: 60)
+        .accessibilityLabel("Create")
+    }
+
+    private func lensPill(_ active: Bool) -> some View {
+        ZStack {
+            if active {
+                Capsule()
+                    .fill(dark ? Color.white.opacity(0.16) : Theme.main.opacity(0.13))
+                    .matchedGeometryEffect(id: "lens", in: lensSpace)
+            }
+        }
+        .frame(width: 50, height: 32)
     }
 
     private func item(_ t: AppTab, _ title: String, _ icon: String, _ filled: String, badge: Int = 0) -> some View {
         let active = tab == t
         return Button { select(t) } label: {
-            VStack(spacing: 2) {
+            VStack(spacing: 4) {
                 Image(systemName: active ? filled : icon)
-                    .font(.system(size: 21, weight: active ? .semibold : .medium))
-                    .foregroundStyle(active ? Color.white : dark ? Color.white.opacity(0.75) : Palette.text2)
-                    .frame(width: 34, height: 32)
-                    .background {
-                        if active {
-                            RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Theme.gradient)
-                        }
-                    }
-                    .symbolEffect(.bounce.up, options: .nonRepeating, value: active)
+                    .font(.system(size: 19, weight: active ? .semibold : .regular))
+                    .foregroundStyle(active ? tint : idle)
+                    .frame(width: 50, height: 32)
+                    .background { lensPill(lens == t) }
+                    .overlay(alignment: .topTrailing) { badgeView(badge) }
+                    .symbolEffect(.bounce.down, options: .nonRepeating, value: active)
                     .symbolEffectsRemoved(reduceMotion)
-                    .accessibilityHidden(true)
-                Text(title).font(.display(11, relativeTo: .caption)).lineLimit(1).minimumScaleFactor(0.8)
-                    .opacity(active || showLabels ? 1 : 0)
-                    .accessibilityHidden(true)
+                label(title, active: active)
             }
-            .foregroundStyle(active ? (dark ? AnyShapeStyle(Color.white) : AnyShapeStyle(Theme.main)) : AnyShapeStyle(dark ? Color.white.opacity(0.6) : Palette.muted))
             .frame(maxWidth: .infinity)
-            .frame(height: 56)
-            .overlay(alignment: .topTrailing) { badgeView(badge) }
-            .contentShape(Capsule())
+            .frame(height: 60)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(BouncyStyle(scale: 0.96))
+        .buttonStyle(BouncyStyle(scale: 0.9))
         .sensoryFeedback(.selection, trigger: active)
         .accessibilityLabel(title)
+        .accessibilityValue(badge > 0 ? "\(badge) unread" : "")
         .accessibilityAddTraits(active ? [.isSelected] : [])
+    }
+
+    // Your own picture as the profile tab.
+    private var meItem: some View {
+        let active = tab == .me
+        return Button { select(.me) } label: {
+            VStack(spacing: 4) {
+                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 24)
+                    .padding(2)
+                    .overlay(Circle().strokeBorder(active ? tint : idle.opacity(0.5), lineWidth: active ? 2 : 1))
+                    .frame(width: 50, height: 32)
+                    .background { lensPill(lens == .me) }
+                label("Me", active: active)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 60)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(BouncyStyle(scale: 0.9))
+        .sensoryFeedback(.selection, trigger: active)
+        .accessibilityLabel("Your profile")
+        .accessibilityAddTraits(active ? [.isSelected] : [])
+    }
+
+    private func label(_ title: String, active: Bool) -> some View {
+        Text(title)
+            .font(.jakarta(10, active ? .bold : .semibold, relativeTo: .caption2))
+            .foregroundStyle(active ? tint : idle)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .accessibilityHidden(true)
     }
 
     @ViewBuilder
@@ -596,15 +672,18 @@ struct SugarTabBar: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 5)
                 .frame(minWidth: 18, minHeight: 18)
-                .background(Theme.gradient, in: Capsule())
-                .overlay(Capsule().strokeBorder(dark ? Color.clear : .white, lineWidth: 1.5))
-                .offset(x: -2, y: 2)
+                .background(Palette.danger, in: Capsule())
+                .overlay(Capsule().strokeBorder(dark ? Color(hex: 0x241C21) : Palette.surface, lineWidth: 2))
+                .offset(x: 2, y: -3)
                 .transition(.scale.combined(with: .opacity))
+                .contentTransition(.numericText())
+                .animation(.snappy, value: badge)
         }
     }
 
     private func select(_ t: AppTab) {
         guard tab != t else { return }
+        // The page switches straight away; only the pill glides.
         var tx = Transaction()
         tx.disablesAnimations = true
         withTransaction(tx) { tab = t }
@@ -665,8 +744,10 @@ struct TopBar: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
+        // Frosted: the page shows softly through it as it scrolls under.
         .background {
-            Rectangle().fill(Palette.bg)
+            Rectangle().fill(.ultraThinMaterial)
+                .overlay(Palette.bg.opacity(0.72))
                 .overlay(alignment: .bottom) { Rectangle().fill(Palette.border.opacity(0.7)).frame(height: 0.5) }
                 .ignoresSafeArea(edges: .top)
         }
@@ -704,38 +785,61 @@ extension View {
 
 struct CreateSheet: View {
     var onPick: (Composer) -> Void
+    @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Create something").font(.display(28)).foregroundStyle(Palette.text).padding(.top, 26)
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                tile(.reel, "Create a reel", "Film or pick a video", "video.fill", [Color(hex: 0xFF7AA2), Color(hex: 0xD9577F)])
-                tile(.post, "Post", "Share with the community", "text.bubble.fill", [Color(hex: 0xB19CFF), Color(hex: 0x7C5CF0)])
-                tile(.artwork, "Fan art", "Hang it on the wall", "paintpalette.fill", [Color(hex: 0xFFAA80), Color(hex: 0xEE6E40)])
-                tile(.track, "Track", "Share your music", "music.note", [Color(hex: 0x7CBEFF), Color(hex: 0x2F80E0)])
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Create something").font(.display(30)).foregroundStyle(Palette.text)
+                    Text("What would you like to share today?").font(.jakarta(14, .medium)).foregroundStyle(Palette.muted)
+                }
+                .padding(.top, 22)
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                    tile(0, .reel, "Reel", "Film or pick a video", "video.fill", [Color(hex: 0xFF7AA2), Color(hex: 0xD9577F)])
+                    tile(1, .artwork, "Fan art", "Hang a drawing on the wall", "paintpalette.fill", [Color(hex: 0xFFAA80), Color(hex: 0xEE6E40)])
+                    tile(2, .post, "Post", "Share with the community", "text.bubble.fill", [Color(hex: 0xB19CFF), Color(hex: 0x7C5CF0)])
+                    tile(3, .track, "Track", "Share your music", "music.note", [Color(hex: 0x7CBEFF), Color(hex: 0x2F80E0)])
+                }
             }
-            Spacer(minLength: 0)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 20)
         }
-        .padding(.horizontal, 20)
+        .scrollBounceBehavior(.basedOnSize)
         .sugarBackground()
+        .presentationDragIndicator(.visible)
+        .onAppear { shown = true }
     }
 
-    private func tile(_ kind: Composer, _ title: String, _ sub: String, _ icon: String, _ colors: [Color]) -> some View {
-        Button { onPick(kind) } label: {
+    // The four tiles pop in one after another.
+    private func tile(_ index: Int, _ kind: Composer, _ title: String, _ sub: String, _ icon: String, _ colors: [Color]) -> some View {
+        let visible = shown || reduceMotion
+        return Button { onPick(kind) } label: {
             VStack(alignment: .leading, spacing: 10) {
                 Image(systemName: icon)
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(.white)
-                    .frame(width: 48, height: 48)
+                    .frame(width: 50, height: 50)
                     .background(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .shadow(color: colors[1].opacity(0.45), radius: 10, y: 5)
-                Text(title).font(.jakarta(16, .bold)).foregroundStyle(Palette.text)
-                Text(sub).font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(2)
+                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(LinearGradient(colors: [.white.opacity(0.3), .clear], startPoint: .top, endPoint: .center)).padding(1.5))
+                    .shadow(color: colors[1].opacity(0.4), radius: 10, y: 5)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(.jakarta(16, .heavy)).foregroundStyle(Palette.text)
+                    Text(sub).font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)
+                        .lineLimit(2, reservesSpace: true)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .sugarCard(radius: 24, padding: 16)
         }
-        .buttonStyle(BouncyStyle())
+        .buttonStyle(BouncyStyle(scale: 0.95))
+        .scaleEffect(visible ? 1 : 0.88)
+        .opacity(visible ? 1 : 0)
+        .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.72).delay(0.04 + Double(index) * 0.05), value: shown)
+        .accessibilityLabel(title)
+        .accessibilityHint(sub)
     }
 }
 

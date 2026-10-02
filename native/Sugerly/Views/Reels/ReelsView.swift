@@ -142,7 +142,12 @@ struct ReelsView: View {
     let visible: Bool
     @Binding var path: [Route]
     var create: () -> Void
+    // How much of the bottom the floating tab bar covers.
+    var bottomRoom: CGFloat = 0
     @Environment(AppModel.self) private var model
+    // The bar's room, kept while the bar hides for a moment (typing a
+    // comment), so the reel's buttons don't jump.
+    @State private var stableRoom: CGFloat = 76
     @State private var reels: [Reel] = []
     @State private var activeId: String?
     @State private var feed = "foryou"
@@ -200,6 +205,7 @@ struct ReelsView: View {
                                             .overlay(Color.black.opacity(0.45))
                                     }
                                     ReelPage(reel: reel, active: visible && activeId == reel.id, near: abs(i - activeIndex) <= 1, path: $path,
+                                             insets: geo.safeAreaInsets, bottomRoom: stableRoom,
                                              onNext: { advance(from: reel.id) }, onHide: { hide($0) })
                                         .frame(width: column, height: geo.size.height)
                                         .clipShape(RoundedRectangle(cornerRadius: column < geo.size.width - 1 ? 28 : 0, style: .continuous))
@@ -253,6 +259,7 @@ struct ReelsView: View {
             .padding(.top, 6)
         }
         .toolbar(.hidden, for: .navigationBar)
+        .onChange(of: bottomRoom, initial: true) { _, room in if room > 0 { stableRoom = room } }
         .task {
             if let lastLoad, Date().timeIntervalSince(lastLoad) < 90 { return }
             lastLoad = Date()
@@ -483,6 +490,10 @@ struct ReelPage: View {
     var near = true
     @Binding var path: [Route]
     var showBack = false
+    // The screen's notch / home bar and the floating tab bar, so the
+    // buttons sit just clear of them on every iPhone and iPad.
+    var insets = EdgeInsets()
+    var bottomRoom: CGFloat = 0
     @Environment(AppModel.self) private var model
     @Environment(Player.self) private var music
     @Environment(\.dismiss) private var dismiss
@@ -538,7 +549,7 @@ struct ReelPage: View {
                             Label("Show", systemImage: "eye.fill").font(.jakarta(13, .bold)).foregroundStyle(.white)
                                 .padding(.horizontal, 14).frame(height: 36).background(.black.opacity(0.4), in: Capsule())
                         }
-                        .padding(.trailing, 16).padding(.top, showBack ? 54 : 110)
+                        .padding(.trailing, 16).padding(.top, insets.top + (showBack ? 8 : 50))
                     }
                     Spacer()
                 }
@@ -672,7 +683,7 @@ struct ReelPage: View {
                     Spacer()
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 54)
+                .padding(.top, insets.top + 6)
             }
             if muted && active {
                 Button { withAnimation(.snappy) { muted = false } } label: {
@@ -682,7 +693,7 @@ struct ReelPage: View {
                         .background(Color(hex: 0x2A1620).opacity(0.55), in: Capsule())
                 }
                 .buttonStyle(BouncyStyle())
-                .padding(.top, showBack ? 10 : 108)
+                .padding(.top, showBack ? 10 : insets.top + 50)
                 .transition(.scale.combined(with: .opacity))
             }
             Spacer()
@@ -701,7 +712,7 @@ struct ReelPage: View {
                 }
             }
         }
-        .padding(.bottom, showBack ? 20 : 110)
+        .padding(.bottom, insets.bottom + (showBack ? 14 : bottomRoom + 2))
     }
 
     private var relation: String? {
@@ -1030,9 +1041,28 @@ struct SingleReelView: View {
     let reel: Reel
     @Binding var path: [Route]
     var body: some View {
-        ReelPage(reel: reel, active: true, path: $path, showBack: true)
-            .ignoresSafeArea()
-            .toolbar(.hidden, for: .navigationBar)
+        GeometryReader { geo in
+            // On iPad the reel is a phone-shaped column on a blurred copy of
+            // its cover, like in the feed.
+            let column = Swift.min(geo.size.width, geo.size.height * 0.6)
+            let wide = column < geo.size.width - 1
+            ZStack {
+                Color.black
+                if wide {
+                    RemoteImage(url: reel.coverURL.isEmpty ? (reel.pictures.first ?? "") : reel.coverURL)
+                        .blur(radius: 40)
+                        .overlay(Color.black.opacity(0.45))
+                }
+                ReelPage(reel: reel, active: true, path: $path, showBack: true, insets: geo.safeAreaInsets)
+                    .frame(width: column, height: geo.size.height)
+                    .clipShape(RoundedRectangle(cornerRadius: wide ? 28 : 0, style: .continuous))
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
+        }
+        .ignoresSafeArea()
+        .background(Color.black.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 

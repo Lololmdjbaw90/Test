@@ -15,6 +15,7 @@ struct GalleryView: View {
     @Binding var path: [Route]
     var isRoot = false
     @Environment(AppModel.self) private var model
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var artworks: [Artwork] = []
     @State private var sort: Sort = .newest
     @State private var medium = "all"
@@ -84,8 +85,11 @@ struct GalleryView: View {
                 }
                 if loading && artworks.isEmpty {
                     HStack(alignment: .top, spacing: 12) {
-                        VStack(spacing: 12) { SkeletonBlock(height: 240, radius: 22); SkeletonBlock(height: 180, radius: 22) }
-                        VStack(spacing: 12) { SkeletonBlock(height: 180, radius: 22); SkeletonBlock(height: 240, radius: 22) }
+                        VStack(spacing: 12) { SkeletonBlock(height: 240, radius: 18); SkeletonBlock(height: 180, radius: 18) }
+                        VStack(spacing: 12) { SkeletonBlock(height: 180, radius: 18); SkeletonBlock(height: 240, radius: 18) }
+                        if sizeClass == .regular {
+                            VStack(spacing: 12) { SkeletonBlock(height: 210, radius: 18); SkeletonBlock(height: 200, radius: 18) }
+                        }
                     }
                 } else if shown.isEmpty {
                     if sort == .saved {
@@ -94,10 +98,12 @@ struct GalleryView: View {
                         EmptyCard(icon: "paintpalette.fill", title: "The fan art wall is empty", text: "No fan art here yet. Hang the first piece up!", actionTitle: "Share fan art") { adding = true }
                     }
                 }
-                // Two staggered columns, like a pinboard.
-                HStack(alignment: .top, spacing: 10) {
-                    column(stride(from: 0, to: shown.count, by: 2).map { shown[$0] }, offset: 0)
-                    column(stride(from: 1, to: shown.count, by: 2).map { shown[$0] }, offset: 1)
+                // Staggered columns, like a pinboard: two on iPhone, three on iPad.
+                let columns = sizeClass == .regular ? 3 : 2
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(0..<columns, id: \.self) { c in
+                        column(stride(from: c, to: shown.count, by: columns).map { shown[$0] }, offset: c)
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -605,14 +611,20 @@ struct ArtworkDetailView: View {
     }
 }
 
-// Pinch to zoom, drag down to close.
+// Pinch to zoom (then drag to look around), double-tap to zoom in or out,
+// and drag down to close.
 struct ZoomImage: View {
     let url: String
     @Environment(\.dismiss) private var dismiss
     @State private var scale: CGFloat = 1
+    @State private var baseScale: CGFloat = 1
     @State private var offset: CGSize = .zero
+    @State private var baseOffset: CGSize = .zero
+
+    private var zoomed: Bool { scale > 1.01 }
 
     private var backdrop: Double {
+        guard !zoomed else { return 1 }
         let pulled = Double(abs(offset.height)) / 400.0
         return 1.0 - Swift.min(0.6, pulled)
     }
@@ -621,19 +633,62 @@ struct ZoomImage: View {
         ZStack(alignment: .topTrailing) {
             Color.black.ignoresSafeArea().opacity(backdrop)
             RemoteImage(url: url, contentMode: .fit)
-                .scaleEffect(scale)
+                .scaleEffect(zoomed ? scale : 1 - Swift.min(0.15, abs(offset.height) / 1600))
                 .offset(offset)
-                .gesture(MagnifyGesture().onChanged { scale = max(1, $0.magnification) }.onEnded { _ in withAnimation(.spring) { if scale < 1.1 { scale = 1 } } })
-                .simultaneousGesture(DragGesture().onChanged { v in if scale == 1 { offset = v.translation } }.onEnded { v in
-                    if abs(v.translation.height) > 140 { dismiss() } else { withAnimation(.spring) { offset = .zero } }
-                })
-                .onTapGesture(count: 2) { withAnimation(.spring) { scale = scale > 1 ? 1 : 2.5 } }
+                .gesture(magnify.simultaneously(with: drag))
+                .onTapGesture(count: 2) {
+                    withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                        if zoomed { reset() } else { scale = 2.5; baseScale = 2.5 }
+                    }
+                }
             Button { dismiss() } label: {
                 Image(systemName: "xmark").font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
                     .frame(width: 40, height: 40).background(.white.opacity(0.18), in: Circle())
+                    .contentShape(Circle())
             }
+            .buttonStyle(BouncyStyle())
+            .accessibilityLabel("Close")
             .padding(16)
+            .opacity(backdrop)
         }
+        .statusBarHidden()
+        .sensoryFeedback(.impact(weight: .light), trigger: zoomed)
+    }
+
+    private var magnify: some Gesture {
+        MagnifyGesture()
+            .onChanged { v in scale = Swift.min(6, Swift.max(1, baseScale * v.magnification)) }
+            .onEnded { _ in
+                baseScale = scale
+                if scale < 1.05 { withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) { reset() } }
+            }
+    }
+
+    private var drag: some Gesture {
+        DragGesture()
+            .onChanged { v in
+                if zoomed {
+                    offset = CGSize(width: baseOffset.width + v.translation.width, height: baseOffset.height + v.translation.height)
+                } else {
+                    offset = CGSize(width: 0, height: v.translation.height)
+                }
+            }
+            .onEnded { v in
+                if zoomed {
+                    baseOffset = offset
+                } else if abs(v.translation.height) > 140 || abs(v.predictedEndTranslation.height) > 420 {
+                    dismiss()
+                } else {
+                    withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) { offset = .zero; baseOffset = .zero }
+                }
+            }
+    }
+
+    private func reset() {
+        scale = 1
+        baseScale = 1
+        offset = .zero
+        baseOffset = .zero
     }
 }
 
@@ -647,35 +702,62 @@ struct NewArtworkView: View {
     @State private var item: PhotosPickerItem?
     @State private var image: UIImage?
     @State private var busy = false
+    @State private var status: String?
     @State private var error: String?
 
+    private var named: Bool { !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
     var body: some View {
-        ComposerScaffold(title: "New fan art", actionTitle: "Share", busy: busy, canPost: image != nil && !title.trimmingCharacters(in: .whitespaces).isEmpty, onClose: { dismiss() }, onPost: { Task { await share() } }) {
+        ComposerScaffold(title: "New fan art", actionTitle: "Share", busy: busy, canPost: image != nil && named,
+                         hint: image == nil ? "Add your drawing first" : "Give your drawing a title",
+                         status: status, error: error,
+                         onClose: { dismiss() }, onPost: { Task { await share() } }) {
             PhotoPickerCard(item: $item, image: $image)
-            SugarField(placeholder: "Title", text: $title)
-            SugarField(placeholder: "Tell people about it (optional)", text: $text, lines: 3...6)
-            Text("Medium").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(Self.mediums, id: \.self) { m in
-                        Chip(title: m.replacingOccurrences(of: "_", with: " ").capitalized, active: medium == m) { medium = m }
-                    }
-                }
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Title").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+                SugarField(placeholder: "Name your drawing", text: $title)
             }
-            if let error { Text(error).font(.jakarta(13, .semibold)).foregroundStyle(Palette.danger) }
+            VStack(alignment: .leading, spacing: 8) {
+                Text("About it").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+                SugarField(placeholder: "Tell people about it (optional)", text: $text, lines: 3...6)
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Medium").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Self.mediums, id: \.self) { m in
+                            Chip(title: m.replacingOccurrences(of: "_", with: " ").capitalized, active: medium == m) { medium = m }
+                        }
+                    }
+                    .padding(.vertical, 6)
+                }
+                .scrollClipDisabled()
+            }
         }
+        .onChange(of: image == nil) { _, _ in error = nil }
     }
 
     private func share() async {
-        guard let me = model.me, let image, let data = ImageTools.jpeg(image) else { return }
+        guard let me = model.me, let image else { return }
+        error = nil
         guard await TextGuard.clear([title, text], kind: .caption, model: model) else { return }
         busy = true
-        defer { busy = false }
+        status = "Getting your drawing ready…"
+        defer { busy = false; status = nil }
+        let picture = image
+        guard let data = await Task.detached(priority: .userInitiated, operation: { ImageTools.jpeg(picture) }).value else {
+            TextGuard.forget(.caption, model: model)
+            error = "Couldn't read that picture. Try another one."
+            return
+        }
         do {
+            status = "Uploading…"
             let url = try await StorageClient.upload(data, contentType: "image/jpeg", fileExtension: "jpg")
+            status = "Hanging it on the wall…"
             let now = FS.nowISO()
             let doc: Doc = [
-                "title": title.trimmingCharacters(in: .whitespaces), "description": text, "image_url": url, "medium": medium,
+                "title": title.trimmingCharacters(in: .whitespacesAndNewlines), "description": text.trimmingCharacters(in: .whitespacesAndNewlines),
+                "image_url": url, "medium": medium,
                 "year": "\(Calendar.current.component(.year, from: Date()))", "is_featured": false,
                 "user_email": me.email, "user_display_name": me.displayName, "user_profile_picture": me.picture,
                 "likes": [String](), "created_by": me.email, "created_date": now, "updated_date": now,
@@ -686,7 +768,8 @@ struct NewArtworkView: View {
             dismiss()
             model.showToast("Added to the fan art wall · +25 XP", icon: "paintpalette.fill")
         } catch {
-            self.error = error.localizedDescription
+            TextGuard.forget(.caption, model: model)
+            self.error = PostProblem.message(error)
         }
     }
 }

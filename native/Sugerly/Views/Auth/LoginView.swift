@@ -89,15 +89,15 @@ struct LoginView: View {
 
                 if let error {
                     Label(error, systemImage: "exclamationmark.circle.fill")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.red)
+                        .font(.jakarta(13, .semibold))
+                        .foregroundStyle(Palette.danger)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .transition(.opacity)
                 }
                 if let info {
                     Label(info, systemImage: "checkmark.circle.fill")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.green)
+                        .font(.jakarta(13, .semibold))
+                        .foregroundStyle(Palette.success)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 

@@ -594,6 +594,21 @@ enum TextGuard {
         return true
     }
 
+    /// The post didn't go through (no internet, the upload failed): that try
+    /// doesn't count, so trying again isn't met with "Slow down!".
+    static func forget(_ kind: ModKind, model: AppModel) {
+        guard let me = model.me else { return }
+        var state = load(me.email)
+        let kindKey = kind.rawValue
+        guard var times = state.actions[kindKey], let last = times.popLast() else { return }
+        state.actions[kindKey] = times
+        if var recent = state.recent[kindKey], recent.last?.t == last {
+            recent.removeLast()
+            state.recent[kindKey] = recent
+        }
+        save(state, me.email)
+    }
+
     private static func withMute(_ reason: String, _ until: Double, _ now: Double) -> String {
         until > now ? "\(reason) You're on a cooldown for \(wait(until - now))." : reason
     }

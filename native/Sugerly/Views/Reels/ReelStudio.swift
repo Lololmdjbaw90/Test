@@ -1478,7 +1478,8 @@ struct ReelStudioView: View {
             dismiss()
             model.showToast("Your reel is live! +30 XP", icon: "play.rectangle.fill")
         } catch {
-            self.error = error.localizedDescription
+            TextGuard.forget(.caption, model: model)
+            self.error = PostProblem.message(error)
         }
     }
 

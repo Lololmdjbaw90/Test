@@ -70,6 +70,9 @@ struct ChatView: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 10)
+                // On iPad the conversation stays a readable width.
+                .frame(maxWidth: 760)
+                .frame(maxWidth: .infinity)
             }
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
@@ -280,6 +283,8 @@ struct ChatView: View {
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .background {
             Palette.bg.opacity(0.96)
                 .overlay(alignment: .top) { Rectangle().fill(Palette.border).frame(height: 0.5) }
@@ -310,19 +315,13 @@ struct ChatView: View {
             } else {
                 HStack(alignment: .bottom, spacing: 8) {
                     HStack(alignment: .bottom, spacing: 4) {
-                        Menu {
-                            Button { studio = true } label: { Label("Photo or video", systemImage: "camera.on.rectangle") }
-                            Button { gifs = true } label: { Label("GIFs & stickers", systemImage: "photo.stack") }
-                        } label: {
-                            Image(systemName: "plus").font(.system(size: 19, weight: .semibold)).foregroundStyle(Palette.text2)
-                                .frame(width: 36, height: 36)
-                        }
                         TextField("Message", text: $draft, axis: .vertical)
                             .accessibilityIdentifier("chat-message-input")
                             .font(.jakarta(16))
                             .lineLimit(1...6)
                             .focused($typing)
                             .padding(.vertical, 8)
+                            .padding(.leading, 10)
                         Button { gifs = true } label: {
                             Text("GIF").font(.jakarta(11, .heavy)).foregroundStyle(Palette.text2)
                                 .padding(.horizontal, 5).padding(.vertical, 2)
@@ -368,6 +367,8 @@ struct ChatView: View {
         .padding(.horizontal, 8)
         .padding(.top, 8)
         .padding(.bottom, 8)
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .background {
             Palette.bg.opacity(0.96)
                 .overlay(alignment: .top) { Rectangle().fill(Palette.border).frame(height: 0.5) }

@@ -10,12 +10,7 @@ final class HomeInteractionTests: XCTestCase {
         let composer = app.staticTexts["What are you making today?"]
         XCTAssertTrue(composer.waitForExistence(timeout: 5))
         XCTAssertTrue(composer.isHittable, "Creating a post should be reachable without scrolling")
-        let activity = app.buttons["home-activity-toggle"]
-        XCTAssertTrue(activity.isHittable)
-        activity.tap()
-        XCTAssertTrue(app.staticTexts["LEVEL"].waitForExistence(timeout: 3))
-        activity.tap()
-        XCTAssertFalse(app.staticTexts["LEVEL"].exists)
+        XCTAssertTrue(app.staticTexts["LEVEL"].waitForExistence(timeout: 3), "Your level shows at the top of Home")
         XCTAssertTrue(composer.isHittable)
         let feed = app.scrollViews["home-feed"]
         XCTAssertTrue(feed.exists)

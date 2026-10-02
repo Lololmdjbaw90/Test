@@ -74,6 +74,9 @@ struct ChannelChatView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
+                // On iPad the channel stays a readable width.
+                .frame(maxWidth: 860)
+                .frame(maxWidth: .infinity)
             }
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
@@ -206,6 +209,8 @@ struct ChannelChatView: View {
         .padding(.horizontal, 12)
         .padding(.top, 10)
         .padding(.bottom, 8)
+        .frame(maxWidth: 860)
+        .frame(maxWidth: .infinity)
         .background {
             Palette.surface
                 .shadow(color: Palette.shadow, radius: 10, y: -4)

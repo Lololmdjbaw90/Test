@@ -508,8 +508,7 @@ struct WeeklyChallengeCard: View {
                 Image(systemName: c.icon).font(.system(size: 22, weight: .bold)).foregroundStyle(.white)
                     .frame(width: 50, height: 50)
                     .background(.white.opacity(0.22), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .rotationEffect(.degrees(shine ? -6 : 6))
-                    .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: shine)
+                    .symbolEffect(.bounce, options: .repeat(2), value: shine)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 8) {
                         Text("WEEKLY CHALLENGE").font(.jakarta(11, .black)).tracking(1).foregroundStyle(.white.opacity(0.85))

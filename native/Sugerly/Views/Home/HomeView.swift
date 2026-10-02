@@ -200,8 +200,8 @@ struct HomeView: View {
     @State private var loading = false
     @State private var loaded = false
     @State private var appeared = false
-    @State private var showActivity = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var lastLoad = Date.distantPast
     @State private var tagSearch: String?
     @AppStorage("sugerly.dismissedAnnouncement") private var dismissedAnnouncement = ""
@@ -223,7 +223,6 @@ struct HomeView: View {
                 if !reels.isEmpty { reelStrip.homeSection(appeared, 5) }
                 featured.homeSection(appeared, 6)
                 HappeningNow(posts: posts.posts, artworks: artworks, reels: reels, tracks: tracks, path: $path).homeSection(appeared, 7)
-                DailyRewardButton().homeSection(appeared, 8)
                 ArtPromptCard(compose: compose).homeSection(appeared, 9)
                 SuggestedPeople(path: $path).homeSection(appeared, 10)
                 TrendingTags(posts: posts.posts, reels: reels) { tagSearch = $0 }.homeSection(appeared, 11)
@@ -249,10 +248,13 @@ struct HomeView: View {
         .task {
             guard loadContent else { appeared = true; loaded = true; return }
             if !appeared {
-                // Present Home immediately; this task owns and cancels its fetches.
-                appeared = true
+                // Home is ready: the "Setting things up" screen can go. Once
+                // it has faded, the sections rise in one after another.
                 model.shellReady = true
-                await load()
+                async let first: Void = load()
+                while model.settingUp && !Task.isCancelled { try? await Task.sleep(for: .milliseconds(80)) }
+                appeared = true
+                await first
             } else if Date().timeIntervalSince(lastLoad) > 60 {
                 // Coming back later: freshen up quietly, no replay.
                 await load()
@@ -456,81 +458,65 @@ struct HomeView: View {
         let name = me?.displayName ?? ""
         let info = LevelInfo(xp: me?.xp ?? 0)
         let friends = mutualFriends
-        return VStack(alignment: .leading, spacing: 14) {
-            Text(Date().formatted(.dateTime.weekday(.wide).month(.abbreviated).day()).uppercased())
-                .font(.jakarta(10, .bold)).tracking(1)
-                .foregroundStyle(Theme.main)
-            HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(greeting),").font(.display(24)).foregroundStyle(Palette.text)
-                    HStack(alignment: .top, spacing: 6) {
-                        Text(name.isEmpty ? "creator" : name)
-                            .font(.display(32)).foregroundStyle(Theme.gradient)
-                            .lineLimit(2).minimumScaleFactor(0.8)
-                        Twinkle(size: 10).padding(.top, 5)
+        let online = friends.filter { model.person($0)?.isOnline == true }.count
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .center, spacing: 14) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(Date().formatted(.dateTime.weekday(.wide).month(.wide).day()).uppercased())
+                        .font(.jakarta(11, .bold)).tracking(1.2)
+                        .foregroundStyle(Theme.main)
+                    Text("\(greeting),").font(.display(26)).foregroundStyle(Palette.text)
+                    // The sparkles sit beside the name, never on top of it.
+                    HStack(alignment: .top, spacing: 4) {
+                        Text(name.isEmpty ? "friend" : name)
+                            .font(.display(36)).foregroundStyle(Theme.gradient)
+                            .lineLimit(1).minimumScaleFactor(0.55)
+                        Twinkle(size: 11).padding(.top, 4)
                     }
-                    Text("Make something. Find your people.")
-                        .font(.jakarta(13)).foregroundStyle(Palette.text2)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Button { model.tabRequest = .me } label: {
-                    Avatar(url: me?.picture ?? "", name: me?.displayName ?? "", size: 56)
-                        .padding(4)
-                        .background(Theme.gradient, in: Circle())
-                        .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
+                    Avatar(url: me?.picture ?? "", name: name, size: 66)
+                        .shadow(color: Theme.main.opacity(0.25), radius: 10, y: 5)
                 }
                 .buttonStyle(BouncyStyle(scale: 0.94))
                 .accessibilityLabel("Your profile")
             }
-            Button {
-                withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.9)) { showActivity.toggle() }
-            } label: {
-                HStack(spacing: 8) {
-                    Label("Your activity", systemImage: "heart.text.square.fill")
-                    Spacer(minLength: 0)
-                    Text("Lv. \(info.level) · \(Self.compact(me?.coins ?? 0)) coins")
-                        .foregroundStyle(Palette.text2).lineLimit(1)
-                    Image(systemName: "chevron.down").rotationEffect(.degrees(showActivity ? 180 : 0))
-                }
-                .font(.jakarta(12, .bold)).foregroundStyle(Theme.main)
-                .frame(minHeight: 44).contentShape(Rectangle())
+            DailyRewardButton()
+            HStack(spacing: 8) {
+                stat("\(info.level)", "LEVEL", info.title, info.color)
+                stat(Self.compact(me?.coins ?? 0), "COINS", "MimiCoins", Palette.text)
+                stat("\(friends.count)", "FRIENDS", "\(online) online", Palette.text)
             }
-            .buttonStyle(BouncyStyle(scale: 0.98))
-            .accessibilityIdentifier("home-activity-toggle")
-            .accessibilityLabel("Your activity")
-            .accessibilityValue(showActivity ? "Expanded" : "Collapsed")
-            if showActivity {
-                HStack(spacing: 10) {
-                    stat("\(info.level)", "LEVEL", info.title, info.color)
-                    stat(Self.compact(me?.coins ?? 0), "COINS", "MimiCoins", Palette.text)
-                    stat("\(friends.count)", "FRIENDS", "\(friends.filter { model.person($0)?.isOnline == true }.count) online", Palette.text)
-                }
-                XPBar(info: info)
-            }
+            XPBar(info: info)
         }
         .padding(18)
         .background {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(LinearGradient(colors: [Palette.surface, Theme.soft], startPoint: .topLeading, endPoint: .bottomTrailing))
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(LinearGradient(colors: [Palette.surface, Palette.surface, Theme.soft], startPoint: .topLeading, endPoint: .bottomTrailing))
                 .overlay(alignment: .topTrailing) {
                     Image(systemName: "sparkles").font(.system(size: 90, weight: .light))
                         .foregroundStyle(Theme.main.opacity(0.06)).offset(x: 20, y: -20)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(Theme.main.opacity(0.16), lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 30, style: .continuous).strokeBorder(Theme.main.opacity(0.14), lineWidth: 1))
+                .shadow(color: Theme.main.opacity(0.08), radius: 18, y: 8)
         }
     }
 
     private func stat(_ value: String, _ label: String, _ sub: String, _ color: Color) -> some View {
-        VStack(spacing: 2) {
-            Text(value).font(.display(28)).foregroundStyle(color)
-            Text(label).font(.jakarta(10, .bold)).tracking(0.8).foregroundStyle(Palette.muted)
-            Text(sub).font(.jakarta(11)).foregroundStyle(Palette.text2).lineLimit(1)
+        VStack(spacing: 1) {
+            Text(value).font(.display(24)).foregroundStyle(color)
+                .lineLimit(1).minimumScaleFactor(0.6)
+                .contentTransition(.numericText())
+            Text(label).font(.jakarta(9, .heavy)).tracking(0.8).foregroundStyle(Palette.muted)
+            Text(sub).font(.jakarta(11, .medium)).foregroundStyle(Palette.text2).lineLimit(1).minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+        .padding(.vertical, 10)
+        .padding(.horizontal, 4)
+        .background(Palette.surface2.opacity(0.7), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
     }
 
     private var featured: some View {
@@ -542,9 +528,9 @@ struct HomeView: View {
             SectionHeader(icon: "star.fill", title: "Featured art") { model.tabRequest = .gallery }
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
-                    if !loaded {
+                    if !loaded && list.isEmpty {
                         ForEach(0..<4, id: \.self) { _ in
-                            RoundedRectangle(cornerRadius: 26, style: .continuous).fill(Palette.surface2).frame(width: 220, height: 280)
+                            SkeletonBlock(height: 280, radius: 26).frame(width: 220)
                         }
                     }
                     ForEach(Array(list)) { art in
@@ -594,7 +580,7 @@ struct HomeView: View {
                     SkeletonBlock(height: 160, radius: 24)
                 }
             }
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: sizeClass == .regular ? 3 : 2), spacing: 12) {
                 ForEach(communityPicks) { post in
                     Button { path.append(.post(post)) } label: {
                         VStack(alignment: .leading, spacing: 0) {
@@ -774,30 +760,23 @@ struct TrackRow: View {
 
 
 private extension View {
+    // The first time Home opens, its sections rise and fade in one after
+    // another. Only once: sections rebuilt while you scroll simply show.
     func homeSection(_ shown: Bool, _ index: Int) -> some View {
         modifier(HomeSectionEntrance(shown: shown, index: index))
     }
 }
 
-// Only the first four sections enter; the rest stay still during scrolling.
-// Content is always visible, including when lazy sections are recreated.
 private struct HomeSectionEntrance: ViewModifier {
     let shown: Bool
     let index: Int
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var entered = false
 
     func body(content: Content) -> some View {
+        let visible = shown || reduceMotion
         content
-            .offset(y: entered || reduceMotion || index >= 4 ? 0 : 8)
-            .onAppear { enter() }
-            .onChange(of: shown) { _, _ in enter() }
-    }
-
-    private func enter() {
-        guard shown, !entered, index < 4 else { return }
-        withAnimation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.9).delay(Double(min(index, 3)) * 0.025)) {
-            entered = true
-        }
+            .opacity(visible ? 1 : 0)
+            .offset(y: visible ? 0 : 18)
+            .animation(reduceMotion ? nil : .spring(response: 0.55, dampingFraction: 0.86).delay(Double(min(index, 7)) * 0.05), value: shown)
     }
 }
