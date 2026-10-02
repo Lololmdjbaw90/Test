@@ -1,0 +1,169 @@
+import SwiftUI
+
+// The frame every page sits in: iPhone's own tab bar and top bars (so the
+// back button, the swipe back, the keyboard and the safe areas all behave
+// exactly like other iPhone apps), in Sugerly's pink.
+
+// MARK: - Main pages (the first page of each tab)
+
+extension View {
+    /// The first page of a tab: your picture on the left (your account), the
+    /// bell and the + on the right, and the music / call bar at the bottom.
+    func rootBar(create: Bool = true, search: (() -> Void)? = nil) -> some View {
+        modifier(RootBar(create: create, search: search))
+    }
+
+    /// The music player and the call bar, just above the tab bar.
+    func bottomDock(_ shown: Bool = true) -> some View {
+        safeAreaInset(edge: .bottom, spacing: 0) {
+            if shown { BottomDock() }
+        }
+    }
+}
+
+private struct RootBar: ViewModifier {
+    var create: Bool
+    var search: (() -> Void)?
+    @Environment(AppModel.self) private var model
+    @Environment(NotificationsStore.self) private var notes
+
+    func body(content: Content) -> some View {
+        content
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    AccountButton()
+                }
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    if let search {
+                        Button(action: search) {
+                            Image(systemName: "magnifyingglass")
+                        }
+                        .accessibilityLabel("Search")
+                    }
+                    Button { model.showNotifications = true } label: {
+                        Image(systemName: notes.unread > 0 ? "bell.badge.fill" : "bell")
+                            .symbolRenderingMode(.multicolor)
+                            .contentTransition(.symbolEffect(.replace))
+                    }
+                    .accessibilityLabel("Notifications")
+                    .accessibilityValue(notes.unread > 0 ? "\(notes.unread) new" : "")
+                    if create {
+                        Button { model.showCreate = true } label: {
+                            Image(systemName: "plus")
+                        }
+                        .accessibilityLabel("Create")
+                    }
+                }
+            }
+            .bottomDock()
+    }
+}
+
+// Your picture in the top left corner: opens your account.
+struct AccountButton: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Button { model.showMenu = true } label: {
+            Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 30)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Your account")
+    }
+}
+
+// The music player and the call bar, stacked. Empty (no height at all) when
+// nothing is playing and you're not in a call.
+struct BottomDock: View {
+    @Environment(Player.self) private var player
+    @Environment(VoiceEngine.self) private var voice
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let busy = player.track != nil || voice.room != nil
+        VStack(spacing: 8) {
+            VoiceDock()
+            MiniPlayer()
+        }
+        // On iPad they stay a comfortable width in the middle.
+        .frame(maxWidth: 600)
+        .frame(maxWidth: .infinity)
+        .padding(.top, busy ? 6 : 0)
+        .padding(.bottom, busy ? 8 : 0)
+        .animation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.86), value: player.track?.id)
+        .animation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.86), value: voice.room?.id)
+    }
+}
+
+// MARK: - Lists in Sugerly's colours
+
+extension View {
+    /// A native grouped list on the blush background with white cards.
+    func sugarList() -> some View {
+        self
+            .scrollContentBackground(.hidden)
+            .background { Palette.bg.ignoresSafeArea() }
+    }
+}
+
+// A row title with a little gradient icon tile (lists, account, settings).
+struct IconRow: View {
+    let title: String
+    var detail: String? = nil
+    let icon: String
+    var colors: [UInt32] = [0xEE8FAE, 0xD9577F]
+    var value: String? = nil
+    var danger = false
+    var chevron = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .background(LinearGradient(colors: colors.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing),
+                            in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.jakarta(15, .semibold)).foregroundStyle(danger ? Palette.danger : Palette.text)
+                if let detail, !detail.isEmpty {
+                    Text(detail).font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(2)
+                }
+            }
+            Spacer(minLength: 6)
+            if let value {
+                Text(value).font(.jakarta(14, .semibold)).foregroundStyle(Palette.muted)
+            }
+            if chevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Palette.muted.opacity(0.7))
+            }
+        }
+        .contentShape(Rectangle())
+        .padding(.vertical, 2)
+    }
+}
+
+// Section titles in lists.
+struct ListHeader: View {
+    let title: String
+    var body: some View {
+        Text(title).font(.jakarta(12, .heavy)).tracking(0.8).foregroundStyle(Palette.muted)
+    }
+}
+
+// MARK: - Page openers
+
+extension Binding where Value == [Route] {
+    // A quick double tap opens a page once, not twice (which used to need two
+    // taps on Back to get out again).
+    var once: Binding<[Route]> {
+        Binding(get: { wrappedValue }, set: { next in
+            var clean: [Route] = []
+            for route in next where clean.last != route { clean.append(route) }
+            wrappedValue = clean
+        })
+    }
+}

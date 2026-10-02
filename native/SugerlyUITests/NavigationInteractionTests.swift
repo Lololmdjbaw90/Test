@@ -18,7 +18,7 @@ final class NavigationInteractionTests: XCTestCase {
         app.descendants(matching: .any).matching(identifier: "chat-message-input").firstMatch
     }
 
-    func testSingleChatBackRestoresDockAfterTypingAndRepeatedVisits() {
+    func testSingleChatBackRestoresTabBarAfterTypingAndRepeatedVisits() {
         let open = app.buttons["Open test chat"]
         XCTAssertTrue(open.waitForExistence(timeout: 5))
         for _ in 0..<3 {
@@ -30,14 +30,14 @@ final class NavigationInteractionTests: XCTestCase {
             message.typeText("Local draft")
             backButtons.firstMatch.tap()
             XCTAssertTrue(open.waitForExistence(timeout: 3))
-            XCTAssertTrue(app.buttons["Home"].isHittable, "Returning must restore the dock")
+            XCTAssertTrue(app.buttons["Home"].isHittable, "Returning must bring the tab bar back")
         }
         app.buttons["Home"].tap()
         XCTAssertTrue(app.staticTexts["Home page"].waitForExistence(timeout: 3))
         app.buttons["Chat"].tap()
         XCTAssertTrue(open.isHittable)
         let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = "phone-dock-after-chat"
+        attachment.name = "phone-tab-bar-after-chat"
         attachment.lifetime = .keepAlways
         add(attachment)
         app.buttons["Create"].tap()

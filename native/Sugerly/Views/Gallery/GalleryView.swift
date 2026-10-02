@@ -135,7 +135,10 @@ struct GalleryView: View {
         .fullScreenCover(isPresented: $adding, onDismiss: { Task { await load() } }) { NewArtworkView() }
 
         if isRoot {
-            content.sugarTopBar($path)
+            content
+                .navigationTitle("Fan Art")
+                .navigationBarTitleDisplayMode(.large)
+                .rootBar()
         } else {
             content.navigationTitle("Fan Art").navigationBarTitleDisplayMode(.inline)
         }

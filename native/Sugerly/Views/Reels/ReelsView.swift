@@ -142,12 +142,7 @@ struct ReelsView: View {
     let visible: Bool
     @Binding var path: [Route]
     var create: () -> Void
-    // How much of the bottom the floating tab bar covers.
-    var bottomRoom: CGFloat = 0
     @Environment(AppModel.self) private var model
-    // The bar's room, kept while the bar hides for a moment (typing a
-    // comment), so the reel's buttons don't jump.
-    @State private var stableRoom: CGFloat = 76
     @State private var reels: [Reel] = []
     @State private var activeId: String?
     @State private var feed = "foryou"
@@ -205,7 +200,7 @@ struct ReelsView: View {
                                             .overlay(Color.black.opacity(0.45))
                                     }
                                     ReelPage(reel: reel, active: visible && activeId == reel.id, near: abs(i - activeIndex) <= 1, path: $path,
-                                             insets: geo.safeAreaInsets, bottomRoom: stableRoom,
+                                             insets: geo.safeAreaInsets,
                                              onNext: { advance(from: reel.id) }, onHide: { hide($0) })
                                         .frame(width: column, height: geo.size.height)
                                         .clipShape(RoundedRectangle(cornerRadius: column < geo.size.width - 1 ? 28 : 0, style: .continuous))
@@ -259,7 +254,10 @@ struct ReelsView: View {
             .padding(.top, 6)
         }
         .toolbar(.hidden, for: .navigationBar)
-        .onChange(of: bottomRoom, initial: true) { _, room in if room > 0 { stableRoom = room } }
+        // A dark tab bar over the videos (the reel's buttons sit just above it).
+        .toolbarBackground(.visible, for: .tabBar)
+        .toolbarBackground(Color.black.opacity(0.55), for: .tabBar)
+        .toolbarColorScheme(.dark, for: .tabBar)
         .task {
             if let lastLoad, Date().timeIntervalSince(lastLoad) < 90 { return }
             lastLoad = Date()

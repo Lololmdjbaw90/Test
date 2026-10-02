@@ -15,6 +15,12 @@ struct SugerlyApp: App {
         if let large = UIFont(name: "BubblegumSans-Regular", size: 34) {
             nav.largeTitleTextAttributes = [.font: large]
         }
+        // The tab bar's labels in Sugerly's font.
+        if let small = UIFont(name: "PlusJakartaSans-SemiBold", size: 10) {
+            let item = UITabBarItem.appearance()
+            item.setTitleTextAttributes([.font: small], for: .normal)
+            item.setTitleTextAttributes([.font: small], for: .selected)
+        }
         // Notifications + background checks have to be set up at launch.
         Alerts.shared.registerBackground()
         // Calls ring this phone even when Sugerly is closed (iPhone's own

@@ -113,6 +113,196 @@ struct ServerIcon: View {
     }
 }
 
+// MARK: - Servers: a list you tap into on iPhone, the rail on iPad
+
+// On iPhone your servers are a list (each opens as its own page, with the
+// one back button); servers to join are below. On iPad it's the
+// Discord-like rail with the open server next to it.
+struct ServersHome: View {
+    @Binding var path: [Route]
+    // Inside the Chat tab, which has its own title.
+    var embedded = false
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    var body: some View {
+        let content = Group {
+            if sizeClass == .regular {
+                ServerHubView(path: $path)
+            } else {
+                ServerList(path: $path)
+            }
+        }
+        .sugarBackground()
+        if embedded {
+            content
+        } else {
+            content
+                .navigationTitle("Servers")
+                .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+struct ServerList: View {
+    @Binding var path: [Route]
+    @Environment(AppModel.self) private var model
+    @State private var servers: [Server] = []
+    @State private var loaded = false
+    @State private var query = ""
+    @State private var busy: String?
+    @State private var creating = false
+
+    private var me: String { model.me?.email ?? "" }
+    private var mine: [Server] { servers.filter { $0.members.contains(me) } }
+    private var discover: [Server] {
+        let others = servers.filter { !$0.members.contains(me) }.sorted { $0.members.count > $1.members.count }
+        guard !query.isEmpty else { return others }
+        return others.filter { $0.name.localizedCaseInsensitiveContains(query) || $0.description.localizedCaseInsensitiveContains(query) }
+    }
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Text("Your servers").font(.jakarta(18, .heavy)).foregroundStyle(Palette.text)
+                    Spacer()
+                    Button { creating = true } label: {
+                        Label("New", systemImage: "plus")
+                            .font(.jakarta(13, .heavy)).foregroundStyle(Theme.main)
+                            .padding(.horizontal, 14).frame(height: 34)
+                            .background(Theme.soft, in: Capsule())
+                    }
+                    .buttonStyle(BouncyStyle())
+                    .accessibilityLabel("Create a server")
+                }
+                if !loaded {
+                    ForEach(0..<3, id: \.self) { _ in SkeletonBlock(height: 64, radius: 20) }
+                } else if mine.isEmpty {
+                    EmptyCard(icon: "person.3.fill", title: "No servers yet", text: "Servers are group chats with channels and voice rooms. Join one below or make your own.", compact: true)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(mine) { server in
+                            Button { path.append(.server(server)) } label: { row(server) }
+                                .buttonStyle(.plain)
+                                .contextMenu {
+                                    Button {
+                                        UIPasteboard.general.string = "\(Servers.site)/CommunityChat?id=\(server.id)"
+                                        model.showToast("Invite link copied", icon: "link")
+                                    } label: { Label("Copy invite link", systemImage: "link") }
+                                }
+                            if server.id != mine.last?.id {
+                                Rectangle().fill(Palette.border).frame(height: 1).padding(.leading, 74)
+                            }
+                        }
+                    }
+                    .sugarCard(radius: 24)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Discover").font(.jakarta(18, .heavy)).foregroundStyle(Palette.text)
+                    Text("Find your people").font(.jakarta(13, .medium)).foregroundStyle(Palette.muted)
+                }
+                .padding(.top, 10)
+                SearchField(text: $query, placeholder: "Search servers…")
+                if loaded && discover.isEmpty {
+                    EmptyCard(icon: "sparkles", title: query.isEmpty ? "You're in them all" : "Nothing found", text: query.isEmpty ? "Make a new one with New." : "Try another name.", compact: true)
+                }
+                ForEach(discover) { server in
+                    ServerCard(server: server, joined: false, busy: busy == server.id) {
+                        Task { await join(server) }
+                    }
+                }
+            }
+            .padding(16)
+            .padding(.bottom, 20)
+            .frame(maxWidth: 720)
+            .frame(maxWidth: .infinity)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .refreshable { await load() }
+        .task { if !loaded { await load() } }
+        .fullScreenCover(isPresented: $creating) {
+            CreateServerView { server in
+                servers.insert(server, at: 0)
+                path.append(.server(server))
+            }
+        }
+    }
+
+    private func row(_ server: Server) -> some View {
+        let online = server.members.filter { model.person($0)?.isOnline == true }.count
+        return HStack(spacing: 12) {
+            ServerIcon(server: server, size: 48)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(server.name).font(.jakarta(16, .bold)).foregroundStyle(Palette.text).lineLimit(1)
+                HStack(spacing: 10) {
+                    Label("\(server.members.count)", systemImage: "person.2.fill").foregroundStyle(Palette.muted)
+                    if online > 0 {
+                        Label("\(online) online", systemImage: "circle.fill").foregroundStyle(Palette.success)
+                    }
+                }
+                .font(.jakarta(12, .semibold))
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Palette.muted.opacity(0.7))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+    }
+
+    // Servers you're in come straight from membership (so an old server
+    // never goes missing), plus the newest ones to discover.
+    private func load() async {
+        async let joined = try? FS.query("Community", [.contains("member_emails", me)], limit: 300)
+        async let newest = try? FS.query("Community", orderBy: "created_date", limit: 100)
+        let mineDocs = await joined ?? []
+        let docs = await newest ?? []
+        var seen = Set<String>()
+        let next = (mineDocs + docs).map(Server.init).filter { seen.insert($0.id).inserted }
+        if !next.isEmpty || !loaded { servers = next }
+        loaded = true
+    }
+
+    private func join(_ server: Server) async {
+        guard let meProfile = model.me else { return }
+        busy = server.id
+        defer { busy = nil }
+        do {
+            try await Servers.join(server, me: meProfile)
+            var joined = server
+            joined.members.append(meProfile.email)
+            if let i = servers.firstIndex(where: { $0.id == server.id }) { servers[i] = joined }
+            model.showToast("Welcome to \(server.name)!", icon: "party.popper.fill")
+            path.append(.server(joined))
+        } catch {
+            model.showToast("Couldn't join — try again", error: true)
+        }
+    }
+}
+
+// One server as its own page: banner, channels (with who's in voice), roles.
+struct ServerPage: View {
+    @Binding var path: [Route]
+    @State private var store: ServerStore
+
+    init(server: Server, path: Binding<[Route]>) {
+        _path = path
+        _store = State(initialValue: ServerStore(server))
+    }
+
+    var body: some View {
+        ServerPanel(store: store, path: $path, onLeft: {
+            if !path.isEmpty { path.removeLast() }
+        })
+        .sugarBackground()
+        .navigationTitle(store.server.name)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
 // MARK: - The hub: a rail of your servers + the open server (like Discord)
 
 struct ServerHubView: View {

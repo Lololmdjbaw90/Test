@@ -295,7 +295,10 @@ struct CommunityView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 14, pinnedViews: [.sectionHeaders]) {
-                hero.stagger(appeared, 0)
+                Text("Little updates. Long conversations.")
+                    .font(.jakarta(13, .medium)).foregroundStyle(Palette.muted)
+                    .padding(.horizontal, 4)
+                    .stagger(appeared, 0)
                 stories.stagger(appeared, 1)
                 Section {
                     if !trending.isEmpty || tag != nil { trendingRow }
@@ -337,7 +340,9 @@ struct CommunityView: View {
             .animation(.spring(response: 0.45, dampingFraction: 0.85), value: feed)
         }
         .sugarBackground()
-        .sugarTopBar($path)
+        .navigationTitle("Community")
+        .navigationBarTitleDisplayMode(.large)
+        .rootBar(search: { searching = true })
         .refreshable { await store.load() }
         .sheet(item: $reporting) { target in ReportSheet(target: target) }
         .sheet(isPresented: $searching) {
@@ -354,32 +359,6 @@ struct CommunityView: View {
             withAnimation(.snappy) { store.posts.append(contentsOf: fresh) }
         }
         .onAppear { appeared = true }
-    }
-
-    // A social app header: title, search and a big + to post.
-    private var hero: some View {
-        HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Community").font(.display(36)).foregroundStyle(Palette.text)
-                Text("Little updates. Long conversations.").font(.jakarta(13, .medium)).foregroundStyle(Palette.muted)
-            }
-            Spacer(minLength: 8)
-            Button { searching = true } label: {
-                Image(systemName: "magnifyingglass").font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(Palette.text).frame(width: 42, height: 42)
-                    .background(Palette.surface, in: Circle())
-                    .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
-            }
-            .buttonStyle(BouncyStyle()).accessibilityLabel("Search community")
-            Button(action: compose) {
-                Image(systemName: "plus").font(.system(size: 18, weight: .heavy))
-                    .foregroundStyle(.white).frame(width: 42, height: 42)
-                    .background(Theme.gradient, in: Circle())
-                    .shadow(color: Theme.main.opacity(0.35), radius: 8, y: 4)
-            }
-            .buttonStyle(BouncyStyle()).accessibilityLabel("New post")
-        }
-        .padding(.horizontal, 4)
     }
 
     // "Start a thread…" at the top of the feed, like a social app.
@@ -1498,49 +1477,7 @@ struct ComposerScaffold<Content: View>: View {
     @State private var hintTask: Task<Void, Never>?
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                Button(action: onClose) {
-                    Image(systemName: "xmark").font(.system(size: 15, weight: .bold)).foregroundStyle(Palette.text2)
-                        .frame(width: 40, height: 40).background(Palette.surface, in: Circle())
-                        .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
-                        .contentShape(Circle())
-                }
-                .buttonStyle(BouncyStyle())
-                .disabled(busy)
-                .accessibilityLabel("Close")
-                Text(title).font(.display(24)).foregroundStyle(Palette.text)
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                    .frame(maxWidth: .infinity)
-                Button {
-                    if canPost { onPost() } else { nudgeHint() }
-                } label: {
-                    ZStack {
-                        Text(actionTitle).opacity(busy ? 0 : 1)
-                        if busy { ProgressView().tint(.white) }
-                    }
-                }
-                .buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
-                .disabled(busy || (!canPost && hint == nil))
-                .opacity(canPost || busy ? 1 : 0.55)
-                .modifier(ShakeEffect(shakes: nudge))
-                .animation(.easeOut(duration: 0.2), value: canPost)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-
-            if let note = error ?? shownHint {
-                Label(note, systemImage: error != nil ? "exclamationmark.circle.fill" : "hand.point.up.left.fill")
-                    .font(.jakarta(13, .bold))
-                    .foregroundStyle(error != nil ? Palette.danger : Theme.main)
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .frame(maxWidth: 640, alignment: .leading)
-                    .background((error != nil ? Palette.danger : Theme.main).opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 6)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-
+        NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) { content() }
                     .padding(18)
@@ -1548,10 +1485,52 @@ struct ComposerScaffold<Content: View>: View {
                     .frame(maxWidth: .infinity)
             }
             .scrollDismissesKeyboard(.interactively)
+            // What's missing, or why it didn't post, just under the top bar.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if let note = error ?? shownHint {
+                    Label(note, systemImage: error != nil ? "exclamationmark.circle.fill" : "hand.point.up.left.fill")
+                        .font(.jakarta(13, .bold))
+                        .foregroundStyle(error != nil ? Palette.danger : Theme.main)
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        .frame(maxWidth: 640, alignment: .leading)
+                        .background((error != nil ? Palette.danger : Theme.main).opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 6)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .sugarBackground()
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: onClose)
+                        .font(.jakarta(16, .semibold))
+                        .disabled(busy)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        if canPost { onPost() } else { nudgeHint() }
+                    } label: {
+                        if busy {
+                            ProgressView().tint(.white)
+                        } else {
+                            Text(actionTitle).font(.jakarta(15, .heavy))
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .buttonBorderShape(.capsule)
+                    .tint(Theme.main)
+                    .disabled(busy || (!canPost && hint == nil))
+                    .opacity(canPost || busy ? 1 : 0.5)
+                    .modifier(ShakeEffect(shakes: nudge))
+                    .animation(.easeOut(duration: 0.2), value: canPost)
+                }
+            }
         }
+        .tint(Theme.main)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: error)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: shownHint)
-        .sugarBackground()
         .overlay {
             if busy {
                 ZStack {

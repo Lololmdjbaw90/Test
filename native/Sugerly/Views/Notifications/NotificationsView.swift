@@ -1,15 +1,14 @@
 import SwiftUI
 import UIKit
 
-// Notifications as a pop-up card under the bell (tap outside to close).
-struct NotificationsPopup: View {
+// Notifications: a page of its own (the bell in the top bar), grouped into
+// Today / This week / Earlier, with likes on the same thing in one row.
+struct NotificationsPage: View {
     @Binding var path: [Route]
-    var close: () -> Void
     @Environment(AppModel.self) private var model
     @Environment(NotificationsStore.self) private var notes
     @Environment(PostsStore.self) private var posts
     @State private var filter = "all"
-    @State private var appeared = false
 
     private let filters: [(String, String, String)] = [("all", "All", "sparkles"), ("like", "Likes", "heart.fill"), ("comment", "Comments", "bubble.left.fill"), ("follow", "Follows", "person.fill.badge.plus"), ("mention", "Mentions", "at")]
 
@@ -62,119 +61,72 @@ struct NotificationsPopup: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Color.black.opacity(appeared ? 0.22 : 0).ignoresSafeArea()
-                .onTapGesture(perform: shrinkAway)
-            // Grows out of the bell in the corner.
-            card
-                .frame(maxWidth: 400)
-                .padding(.horizontal, 12)
-                .padding(.top, 58)
-                .scaleEffect(appeared ? 1 : 0.86, anchor: .topTrailing)
-                .opacity(appeared ? 1 : 0)
+        List {
+            Section {
+                filterBar
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
+            if shown.isEmpty {
+                Section {
+                    EmptyCard(icon: "bell.fill", title: "All quiet here",
+                              text: filter == "all" ? "When someone likes, follows, comments or mentions you, it shows up here." : "Nothing like this yet.",
+                              mood: .sleepy)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                }
+            }
+            ForEach(groups, id: \.0) { group in
+                Section {
+                    ForEach(group.1) { b in
+                        Button { go(b.first) } label: { row(b) }
+                            .buttonStyle(.plain)
+                            .listRowBackground(b.unread ? Palette.surface2 : Palette.surface)
+                    }
+                } header: {
+                    ListHeader(title: group.0.uppercased())
+                }
+            }
+            if !shown.isEmpty && notes.hasOlder {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small).tint(Theme.main)
+                    Text("Loading older").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
+                }
+                .frame(maxWidth: .infinity)
+                .listRowBackground(Color.clear)
+                .onAppear { Task { await notes.loadOlder(me: model.me?.email ?? "") } }
+            }
         }
-        .onAppear { withAnimation(.spring(response: 0.36, dampingFraction: 0.82)) { appeared = true } }
+        .listStyle(.insetGrouped)
+        .sugarList()
+        .navigationTitle("Notifications")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if notes.unread > 0 {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { withAnimation(.snappy) { notes.markAllRead() } } label: {
+                        Image(systemName: "checkmark.circle")
+                    }
+                    .accessibilityLabel("Mark all as read")
+                }
+            }
+        }
+        .refreshable { await notes.refresh(me: model.me?.email ?? "") }
+        .animation(.snappy, value: filter)
         .onDisappear { notes.markAllRead() }
     }
 
-    private var card: some View {
-        VStack(spacing: 0) {
-            header
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(filters, id: \.0) { f in
-                        let on = filter == f.0
-                        Button { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { filter = f.0 } } label: {
-                            Label(f.1, systemImage: f.2).font(.jakarta(12, .bold))
-                                .foregroundStyle(on ? .white : Palette.text2)
-                                .padding(.horizontal, 12).frame(height: 32)
-                                .background {
-                                    if on { Capsule().fill(Theme.gradient).matchedGeometryEffect(id: "pill", in: pill) }
-                                    else { Capsule().fill(Palette.surface2) }
-                                }
-                        }
-                        .buttonStyle(.plain)
-                    }
+    private var filterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(filters, id: \.0) { f in
+                    Chip(title: f.1, icon: f.2, active: filter == f.0) { filter = f.0 }
                 }
-                .padding(.horizontal, 14).padding(.vertical, 10)
             }
-            Divider().overlay(Palette.border)
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    if shown.isEmpty {
-                        VStack(spacing: 6) {
-                            MimiBuddy(icon: "bell.fill", mood: .sleepy, size: 100)
-                            Text("All quiet here").font(.display(22)).foregroundStyle(Palette.text)
-                            Doodles.squiggle.stroke(Theme.main.opacity(0.55), style: StrokeStyle(lineWidth: 2.2, lineCap: .round)).frame(width: 54, height: 7)
-                            Text(filter == "all" ? "When someone likes, follows, comments or mentions you, it pops up here." : "Nothing like this yet.")
-                                .font(.jakarta(13)).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
-                        }
-                        .frame(maxWidth: .infinity).padding(.vertical, 24).padding(.horizontal, 20)
-                    }
-                    ForEach(Array(groups.enumerated()), id: \.element.0) { gi, group in
-                        Text(group.0).font(.jakarta(12, .heavy)).foregroundStyle(Palette.muted)
-                            .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 4)
-                        ForEach(Array(group.1.enumerated()), id: \.element.id) { i, b in
-                            Button { open(b.first) } label: { row(b) }
-                                .buttonStyle(.plain)
-                                .stagger(appeared, gi * 3 + i)
-                        }
-                    }
-                    if !shown.isEmpty && notes.hasOlder {
-                        ProgressView().controlSize(.small).tint(Theme.main)
-                            .frame(maxWidth: .infinity).padding(.vertical, 12)
-                            .onAppear { Task { await notes.loadOlder(me: model.me?.email ?? "") } }
-                    }
-                }
-                .padding(.bottom, 10)
-            }
-            .scrollIndicators(.hidden)
-            .frame(maxHeight: 470)
-            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 6)
         }
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .shadow(color: Theme.main.opacity(0.22), radius: 28, y: 14)
-    }
-
-    @Namespace private var pill
-
-    // Closing: the card shrinks back into the bell, then goes away.
-    private func shrinkAway() {
-        guard appeared else { return }
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) { appeared = false }
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(200))
-            close()
-        }
-    }
-
-    private var header: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "bell.fill").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
-                .frame(width: 38, height: 38).background(Theme.gradient, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Activity").font(.jakarta(18, .heavy)).foregroundStyle(Palette.text)
-                Text(notes.unread > 0 ? "\(notes.unread) new" : "You're all caught up").font(.jakarta(12, .semibold))
-                    .foregroundStyle(notes.unread > 0 ? Theme.main : Palette.muted)
-            }
-            Spacer()
-            if notes.unread > 0 {
-                Button { withAnimation { notes.markAllRead() } } label: {
-                    Image(systemName: "checkmark.circle.fill").font(.system(size: 20, weight: .semibold)).foregroundStyle(Theme.main)
-                }
-                .accessibilityLabel("Mark all as read")
-            }
-            Button(action: shrinkAway) {
-                Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(Palette.text2)
-                    .frame(width: 32, height: 32).background(Palette.surface2, in: Circle())
-                    .contentShape(Circle())
-            }
-            .buttonStyle(BouncyStyle())
-            .accessibilityLabel("Close")
-        }
-        .padding(.horizontal, 14).padding(.top, 14)
     }
 
     private func row(_ b: Bundle) -> some View {
@@ -220,8 +172,7 @@ struct NotificationsPopup: View {
                 Circle().fill(Theme.main).frame(width: 9, height: 9)
             }
         }
-        .padding(.horizontal, 14).padding(.vertical, 10)
-        .background(b.unread ? Theme.soft : Color.clear)
+        .padding(.vertical, 4)
         .contentShape(Rectangle())
     }
 
@@ -248,14 +199,6 @@ struct NotificationsPopup: View {
     }
 
     // Links are website paths; open the matching screen.
-    private func open(_ n: AppNotification) {
-        close()
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(200))
-            go(n)
-        }
-    }
-
     private func go(_ n: AppNotification) {
         guard let comps = URLComponents(string: n.link) else { return }
         let value = { (name: String) in comps.queryItems?.first { $0.name == name }?.value ?? "" }

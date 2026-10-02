@@ -25,6 +25,7 @@ struct PolishUITestHost: View {
     }()
     @State private var notes = NotificationsStore()
     @State private var player = Player()
+    @State private var chats = ChatStore()
     private let art = Artwork(["id": "ui-art", "title": "Pink sketch", "user_display_name": "Luna", "user_email": "fixture@example.invalid"])
 
     var body: some View {
@@ -55,7 +56,7 @@ struct PolishUITestHost: View {
                 Spacer()
             } else if tab == 2 {
                 NavigationStack(path: $path) {
-                    CommunityView(path: $path, compose: {}).environment(posts).environment(notes)
+                    CommunityView(path: $path, compose: {})
                 }
             } else if tab == 3 {
                 NavigationStack(path: $path) {
@@ -64,11 +65,14 @@ struct PolishUITestHost: View {
             } else {
                 NavigationStack(path: $path) {
                     HomeView(path: $path, compose: { _ in }, loadContent: false)
-                        .environment(posts).environment(notes).environment(player)
                 }
             }
         }
         .sugarBackground()
+        // Everything the real pages read (the top bar's bell, the music and
+        // call bar), without logging in.
+        .environment(posts).environment(notes).environment(player).environment(chats)
+        .environment(VoiceEngine.shared).environment(CallCenter.shared)
         .onAppear {
             model.me = UserProfile(["id": "fixture-user", "email": "test@example.invalid", "display_name": "Mimi"])
         }

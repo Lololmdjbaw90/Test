@@ -15,10 +15,12 @@ final class AppModel {
     var people: [String: UserProfile] = [:]
     // The little pop-up at the top ("Saved", "Posted!", errors).
     var toast: Toast?
-    // The notifications pop-up (opened from the bell).
+    // Opens the notifications page (the bell, or a notification tap).
     var showNotifications = false
-    // The quick menu (opened from your picture in the top bar).
+    // Your account (your picture in the top left corner).
     var showMenu = false
+    // The "Create something" sheet (the + in the top right corner).
+    var showCreate = false
     // Ask the shell to switch tabs (e.g. "See all" art → Gallery tab).
     var tabRequest: AppTab?
     // "Use this sound" on a reel: opens the reel maker with that sound.
@@ -421,6 +423,7 @@ final class AppModel {
         withAnimation(.easeOut(duration: 0.25)) {
             showMenu = false
             showNotifications = false
+            showCreate = false
         }
         // Let the "Log out?" question finish closing, then slide sheets down.
         try? await Task.sleep(for: .milliseconds(300))
@@ -470,6 +473,7 @@ final class AppModel {
         toast = nil
         showNotifications = false
         showMenu = false
+        showCreate = false
         tabRequest = nil
         soundRequest = nil
         Drafts.owner = "guest"

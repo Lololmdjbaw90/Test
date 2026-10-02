@@ -28,6 +28,7 @@ struct PersonView: View {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).sugarBackground()
             }
         }
+        .navigationTitle(person?.displayName ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if !isMe, let person {
@@ -136,7 +137,7 @@ struct ProfileContent: View {
         .dropRemoved($reels)
         .dropRemoved($art)
         .sheet(isPresented: $editing) { EditProfileView() }
-        .sheet(isPresented: $settings) { SettingsView() }
+        .sheet(isPresented: $settings) { NavigationStack { SettingsView(closable: true) } }
         .sheet(isPresented: $shop) { NitroShopView() }
         .sheet(isPresented: $statusSheet) { StatusSheet().presentationCornerRadius(30) }
     }
@@ -1050,23 +1051,11 @@ struct MyColorsPicker: View {
 }
 
 
-// Settings: your profile up top, quick jumps to each part, then tidy groups
-// of rows (a coloured icon, a title, and a switch or an arrow).
+// Settings: your profile card, then iPhone-style groups of rows (a coloured
+// icon, a title, and a switch or an arrow). Inside your account it's a page
+// you go back from; opened from your profile it has a Done button.
 struct SettingsView: View {
-    enum Part: String, CaseIterable, Identifiable {
-        case look = "Look", alerts = "Alerts", privacy = "Privacy", sounds = "Sounds", help = "Help", account = "Account"
-        var id: String { rawValue }
-        var icon: String {
-            switch self {
-            case .look: return "paintpalette.fill"
-            case .alerts: return "bell.badge.fill"
-            case .privacy: return "lock.shield.fill"
-            case .sounds: return "hand.tap.fill"
-            case .help: return "questionmark.circle.fill"
-            case .account: return "person.crop.circle.fill"
-            }
-        }
-    }
+    var closable = false
 
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -1087,32 +1076,50 @@ struct SettingsView: View {
     @State private var peopleList: PeopleListSheet.Kind?
     @State private var editing = false
     @State private var ownColours = false
-    private var alerts = Alerts.shared
+    private var alerts: Alerts { Alerts.shared }
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    topRow
-                    if let me = model.me { profileCard(me) }
-                    jumpBar(proxy)
-                    InviteCard()
-                    lookGroup
-                    alertsGroup
-                    privacyGroup
-                    soundsGroup
-                    helpGroup
-                    accountGroup
-                    footer
+        List {
+            if let me = model.me {
+                Section {
+                    profileCard(me)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                 }
-                .padding(.horizontal, 18)
-                .padding(.bottom, 34)
-                .frame(maxWidth: 720)
+            }
+            Section {
+                InviteCard()
+                    .buttonStyle(.borderless)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+            }
+            lookGroup
+            alertsGroup
+            privacyGroup
+            soundsGroup
+            helpGroup
+            accountGroup
+            Section {
+                VStack(spacing: 6) {
+                    BrandLogo(height: 30)
+                    Text("Sugerly for iPhone & iPad").font(.cute(16)).foregroundStyle(Theme.gradient)
+                }
                 .frame(maxWidth: .infinity)
+                .listRowBackground(Color.clear)
             }
         }
-        .overlay(alignment: .topTrailing) { closeButton }
-        .sugarBackground()
+        .listStyle(.insetGrouped)
+        .sugarList()
+        .navigationTitle("Settings")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if closable {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }.font(.jakarta(16, .bold))
+                }
+            }
+        }
+        .tint(Theme.main)
         .sheet(isPresented: $statusSheet) { StatusSheet().presentationCornerRadius(30) }
         .sheet(item: $peopleList) { kind in PeopleListSheet(kind: kind).presentationCornerRadius(30) }
         .sheet(item: $legal) { doc in LegalView(doc: doc) }
@@ -1132,34 +1139,11 @@ struct SettingsView: View {
 
     // MARK: top
 
-    private var topRow: some View {
-        Text("Settings").font(.display(34)).foregroundStyle(Palette.text)
-            .padding(.trailing, 56)   // room for the pinned close button
-            .padding(.top, 20)
-    }
-
-    // Pinned above the scrolling content, so it's always there and never
-    // fights the scroll view or the sheet's swipe for the tap.
-    private var closeButton: some View {
-        Button { dismiss() } label: {
-            Image(systemName: "xmark").font(.system(size: 15, weight: .bold)).foregroundStyle(Palette.text2)
-                .frame(width: 42, height: 42)
-                .background(.regularMaterial, in: Circle())
-                .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
-                .frame(width: 52, height: 52)
-                .contentShape(Circle())
-        }
-        .buttonStyle(BouncyStyle())
-        .accessibilityLabel("Close")
-        .padding(.top, 10)
-        .padding(.trailing, 10)
-    }
-
     private func profileCard(_ me: UserProfile) -> some View {
         let level = LevelInfo(xp: me.xp)
         return VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 14) {
-                Avatar(url: me.picture, name: me.displayName, size: 66)
+                Avatar(url: me.picture, name: me.displayName, size: 64)
                     .overlay(Circle().strokeBorder(.white, lineWidth: 3))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(me.displayName).font(.display(24)).foregroundStyle(.white).lineLimit(1)
@@ -1182,15 +1166,14 @@ struct SettingsView: View {
         }
         .padding(18)
         .background {
-            RoundedRectangle(cornerRadius: 30, style: .continuous).fill(Theme.gradient)
+            RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Theme.gradient)
                 .overlay(alignment: .topTrailing) {
                     Circle().fill(.white.opacity(0.12)).frame(width: 170).offset(x: 60, y: -70)
                 }
                 .overlay(alignment: .bottomLeading) {
                     Circle().fill(.white.opacity(0.08)).frame(width: 120).offset(x: -40, y: 50)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-                .shadow(color: Theme.main.opacity(0.3), radius: 16, y: 8)
+                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         }
     }
 
@@ -1207,42 +1190,31 @@ struct SettingsView: View {
         .background(.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    // Chips that jump to each part of the page.
-    private func jumpBar(_ proxy: ScrollViewProxy) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(Part.allCases) { part in
-                    Button { withAnimation(.snappy) { proxy.scrollTo(part, anchor: .top) } } label: {
-                        Label(part.rawValue, systemImage: part.icon)
-                            .font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
-                            .padding(.horizontal, 14).frame(height: 38)
-                            .background(Palette.surface, in: Capsule())
-                            .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
-                    }
-                    .buttonStyle(BouncyStyle(scale: 0.93))
-                }
-            }
-            .padding(.horizontal, 2)
-        }
-    }
-
     // MARK: groups
 
+    private var themeChoice: Binding<String> {
+        Binding(get: {
+            let theme = model.me?.theme ?? ""
+            return theme.isEmpty ? "light" : theme
+        }, set: { value in
+            Task { try? await model.updateMe(["theme": value]) }
+        })
+    }
+
     private var lookGroup: some View {
-        group(.look, "Appearance") {
-            block {
-                label("Theme", "moon.stars.fill", tint: 0x7C5CF0)
-                HStack(spacing: 6) {
-                    themeOption("light", "Light", "sun.max.fill")
-                    themeOption("dark", "Dark", "moon.fill")
-                    themeOption("system", "Auto", "circle.lefthalf.filled")
+        Section {
+            VStack(alignment: .leading, spacing: 12) {
+                IconRow(title: "Theme", icon: "moon.stars.fill", colors: [0xB19CFF, 0x7C5CF0])
+                Picker("Theme", selection: themeChoice) {
+                    Text("Light").tag("light")
+                    Text("Dark").tag("dark")
+                    Text("Auto").tag("system")
                 }
-                .padding(4)
-                .background(Palette.surface2, in: Capsule())
+                .pickerStyle(.segmented)
             }
-            divider
-            block {
-                label("Colour", "drop.fill", tint: 0xE8457C)
+            .padding(.vertical, 4)
+            VStack(alignment: .leading, spacing: 12) {
+                IconRow(title: "Colour", detail: "The logo and Mimi change colour to match.", icon: "drop.fill", colors: [0xF27BA3, 0xE8457C])
                 HStack(spacing: 0) {
                     ForEach(Accent.allCases) { accent in
                         let picked = model.accent == accent && model.myColors == nil
@@ -1268,185 +1240,110 @@ struct SettingsView: View {
                     MyColorsPicker()
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
-                Text("The logo and Mimi change colour to match.").font(.jakarta(12)).foregroundStyle(Palette.muted)
             }
-            divider
-            block {
-                label("Background", "sparkles", tint: 0xF0A020)
+            .padding(.vertical, 4)
+            .buttonStyle(.borderless)
+            VStack(alignment: .leading, spacing: 12) {
+                IconRow(title: "Background", detail: "Shown behind Home.", icon: "sparkles", colors: [0xFFD166, 0xF0A020])
                 BackgroundPicker()
-                Text("Shown behind Home and the menu.").font(.jakarta(12)).foregroundStyle(Palette.muted)
             }
-        }
+            .padding(.vertical, 4)
+            .buttonStyle(.borderless)
+        } header: { ListHeader(title: "APPEARANCE") }
     }
 
     private var alertsGroup: some View {
-        group(.alerts, "Notifications") {
+        Section {
             if alerts.permission == .denied {
-                rowButton("Notifications are off", "Tap to turn them on in iPhone Settings", icon: "bell.slash.fill", tint: 0xE0526B) {
+                Button {
                     if let url = URL(string: UIApplication.openNotificationSettingsURLString) { UIApplication.shared.open(url) }
+                } label: {
+                    IconRow(title: "Notifications are off", detail: "Tap to turn them on in iPhone Settings", icon: "bell.slash.fill", colors: [0xF07A8E, 0xE0526B], chevron: true)
                 }
-                divider
             }
-            toggleRow(Alerts.Kind.dms.title, nil, icon: Alerts.Kind.dms.icon, tint: 0x2F80E0, isOn: $alertDMs)
-            divider
-            toggleRow(Alerts.Kind.servers.title, nil, icon: Alerts.Kind.servers.icon, tint: 0x7C5CF0, isOn: $alertServers)
-            divider
-            toggleRow(Alerts.Kind.social.title, nil, icon: Alerts.Kind.social.icon, tint: 0xE8457C, isOn: $alertSocial)
-            divider
-            toggleRow(Alerts.Kind.reels.title, nil, icon: Alerts.Kind.reels.icon, tint: 0xEE6E40, isOn: $alertReels)
-        }
+            toggle(Alerts.Kind.dms.title, icon: Alerts.Kind.dms.icon, colors: [0x7CBEFF, 0x2F80E0], isOn: $alertDMs)
+            toggle(Alerts.Kind.servers.title, icon: Alerts.Kind.servers.icon, colors: [0xB19CFF, 0x7C5CF0], isOn: $alertServers)
+            toggle(Alerts.Kind.social.title, icon: Alerts.Kind.social.icon, colors: [0xF27BA3, 0xE8457C], isOn: $alertSocial)
+            toggle(Alerts.Kind.reels.title, icon: Alerts.Kind.reels.icon, colors: [0xFFAA80, 0xEE6E40], isOn: $alertReels)
+        } header: { ListHeader(title: "NOTIFICATIONS") }
         .task { await alerts.requestPermission() }
     }
 
     private var privacyGroup: some View {
-        group(.privacy, "Privacy & status") {
-            rowButton("Status", statusLine, icon: "bubble.left.fill", tint: 0x16A37F) { statusSheet = true }
-            divider
-            toggleRow("Show when I'm online", "Off makes you look offline", icon: "circle.fill", tint: 0x17A673, isOn: Binding(
+        Section {
+            Button { statusSheet = true } label: {
+                IconRow(title: "Status", detail: statusLine, icon: "bubble.left.fill", colors: [0x5FD3B0, 0x16A37F], chevron: true)
+            }
+            Toggle(isOn: Binding(
                 get: { model.me?.presence != "invisible" },
-                set: { on in Task { await Privacy.setPresence(on ? .online : .invisible, model: model) } }))
-            divider
-            rowButton("Blocked people", nil, icon: "hand.raised.fill", tint: 0xE0526B, value: "\(model.me?.blocked.count ?? 0)") { peopleList = .blocked }
-            divider
-            rowButton("Ignored people", nil, icon: "bell.slash.fill", tint: 0x86707C, value: "\(model.me?.ignored.count ?? 0)") { peopleList = .ignored }
-        } note: {
+                set: { on in Task { await Privacy.setPresence(on ? .online : .invisible, model: model) } })) {
+                IconRow(title: "Show when I'm online", detail: "Off makes you look offline", icon: "circle.fill", colors: [0x4CC795, 0x17A673])
+            }
+            Button { peopleList = .blocked } label: {
+                IconRow(title: "Blocked people", icon: "hand.raised.fill", colors: [0xF07A8E, 0xE0526B], value: "\(model.me?.blocked.count ?? 0)", chevron: true)
+            }
+            Button { peopleList = .ignored } label: {
+                IconRow(title: "Ignored people", icon: "bell.slash.fill", colors: [0xB8A3AE, 0x86707C], value: "\(model.me?.ignored.count ?? 0)", chevron: true)
+            }
+        } header: {
+            ListHeader(title: "PRIVACY & STATUS")
+        } footer: {
             Text("Only friends (people who follow you back) can call you or send voice messages. Anyone else's first message arrives as a request.")
+                .font(.jakarta(12)).foregroundStyle(Palette.muted)
         }
     }
 
     private var soundsGroup: some View {
-        group(.sounds, "Sounds & haptics") {
-            toggleRow("Haptics", "Little taps when you like, send and switch tabs", icon: "iphone.radiowaves.left.and.right", tint: 0x2F80E0, isOn: $haptics)
-            divider
-            toggleRow("Click sounds", "A soft pop when you tap (quiet on silent)", icon: "speaker.wave.2.fill", tint: 0xEE6E40, isOn: $clickSounds)
-        }
+        Section {
+            toggle("Haptics", detail: "Little taps when you like, send and switch tabs", icon: "iphone.radiowaves.left.and.right", colors: [0x7CBEFF, 0x2F80E0], isOn: $haptics)
+            toggle("Click sounds", detail: "A soft pop when you tap (quiet on silent)", icon: "speaker.wave.2.fill", colors: [0xFFAA80, 0xEE6E40], isOn: $clickSounds)
+        } header: { ListHeader(title: "SOUNDS & HAPTICS") }
     }
 
     private var helpGroup: some View {
-        group(.help, "Help & legal") {
-            ForEach(Array(LegalDoc.allCases.enumerated()), id: \.element.id) { i, doc in
-                if i > 0 { divider }
-                rowButton(doc.title, nil, icon: doc == .terms ? "doc.text.fill" : doc == .privacy ? "lock.fill" : "heart.text.square.fill",
-                          tint: doc == .terms ? 0x7C5CF0 : doc == .privacy ? 0x16A37F : 0xE8457C) { legal = doc }
+        Section {
+            ForEach(LegalDoc.allCases) { doc in
+                Button { legal = doc } label: {
+                    IconRow(title: doc.title,
+                            icon: doc == .terms ? "doc.text.fill" : doc == .privacy ? "lock.fill" : "heart.text.square.fill",
+                            colors: doc == .terms ? [0xB19CFF, 0x7C5CF0] : doc == .privacy ? [0x5FD3B0, 0x16A37F] : [0xF27BA3, 0xE8457C],
+                            chevron: true)
+                }
             }
-            divider
-            rowButton("Help & support chat", "Chat with the team, follow your reports", icon: "bubble.left.and.bubble.right.fill", tint: 0x3B82F6) { contacting = true }
-        }
+            Button { contacting = true } label: {
+                IconRow(title: "Help & support chat", detail: "Chat with the team, follow your reports", icon: "bubble.left.and.bubble.right.fill", colors: [0x7CB2FF, 0x3B82F6], chevron: true)
+            }
+        } header: { ListHeader(title: "HELP & LEGAL") }
     }
 
     private var accountGroup: some View {
-        group(.account, "Account") {
-            rowButton("Log out", nil, icon: "rectangle.portrait.and.arrow.right", tint: 0x86707C) { confirmLogout = true }
-            divider
-            rowButton("Delete account", "Removes your profile and everything you posted. This can't be undone.", icon: "trash.fill", tint: 0xE0526B, danger: true) { confirmDelete = true }
-        } note: {
-            if let error { Text(error).foregroundStyle(Palette.danger) }
+        Section {
+            Button { confirmLogout = true } label: {
+                IconRow(title: "Log out", icon: "rectangle.portrait.and.arrow.right", colors: [0xB8A3AE, 0x86707C])
+            }
+            Button { confirmDelete = true } label: {
+                IconRow(title: "Delete account", detail: "Removes your profile and everything you posted. This can't be undone.", icon: "trash.fill", colors: [0xF07A8E, 0xE0526B], danger: true)
+            }
+        } header: {
+            ListHeader(title: "ACCOUNT")
+        } footer: {
+            if let error { Text(error).font(.jakarta(12)).foregroundStyle(Palette.danger) }
         }
-    }
-
-    private var footer: some View {
-        VStack(spacing: 6) {
-            BrandLogo(height: 30)
-            Text("Sugerly for iPhone & iPad").font(.cute(16)).foregroundStyle(Theme.gradient)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 6)
     }
 
     // MARK: building blocks
 
-    private func group<Content: View>(_ part: Part, _ title: String, @ViewBuilder content: () -> Content) -> some View {
-        group(part, title, content: content) { EmptyView() }
-    }
-
-    private func group<Content: View, Note: View>(_ part: Part, _ title: String, @ViewBuilder content: () -> Content, @ViewBuilder note: () -> Note) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title.uppercased()).font(.jakarta(12, .heavy)).tracking(1.2).foregroundStyle(Palette.muted).padding(.leading, 10)
-            VStack(spacing: 0) { content() }
-                .background(Palette.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
-                .shadow(color: Palette.shadow, radius: 6, y: 2)
-            note()
-                .font(.jakarta(12)).foregroundStyle(Palette.muted)
-                .padding(.horizontal, 10)
+    private func toggle(_ title: String, detail: String? = nil, icon: String, colors: [UInt32], isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            IconRow(title: title, detail: detail, icon: icon, colors: colors)
         }
-        .id(part)
-    }
-
-    // A roomy part of a group (for pickers).
-    private func block<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 12) { content() }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var divider: some View {
-        Rectangle().fill(Palette.border).frame(height: 1).padding(.leading, 58)
-    }
-
-    private func iconTile(_ icon: String, tint: UInt32) -> some View {
-        Image(systemName: icon).font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
-            .frame(width: 32, height: 32)
-            .background(Color(hex: tint), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
-    private func label(_ title: String, _ icon: String, tint: UInt32) -> some View {
-        HStack(spacing: 12) {
-            iconTile(icon, tint: tint)
-            Text(title).font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
-        }
-    }
-
-    private func rowContent(_ title: String, _ sub: String?, icon: String, tint: UInt32, danger: Bool) -> some View {
-        HStack(spacing: 12) {
-            iconTile(icon, tint: tint)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.jakarta(15, .semibold)).foregroundStyle(danger ? Palette.danger : Palette.text)
-                if let sub, !sub.isEmpty {
-                    Text(sub).font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(2)
-                }
-            }
-            Spacer(minLength: 8)
-        }
-    }
-
-    private func rowButton(_ title: String, _ sub: String?, icon: String, tint: UInt32, danger: Bool = false, value: String? = nil, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                rowContent(title, sub, icon: icon, tint: tint, danger: danger)
-                if let value { Text(value).font(.jakarta(14, .semibold)).foregroundStyle(Palette.muted) }
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.muted)
-            }
-            .padding(.horizontal, 14)
-            .frame(minHeight: 56)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func toggleRow(_ title: String, _ sub: String?, icon: String, tint: UInt32, isOn: Binding<Bool>) -> some View {
-        Button { withAnimation(.snappy) { isOn.wrappedValue.toggle() } } label: {
-            HStack(spacing: 8) {
-                rowContent(title, sub, icon: icon, tint: tint, danger: false)
-                Capsule().fill(isOn.wrappedValue ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.border))
-                    .frame(width: 52, height: 32)
-                    .overlay(alignment: isOn.wrappedValue ? .trailing : .leading) {
-                        Circle().fill(.white).frame(width: 26, height: 26).padding(3).shadow(radius: 2, y: 1)
-                    }
-                    .animation(.spring(response: 0.3, dampingFraction: 0.75), value: isOn.wrappedValue)
-            }
-            .padding(.horizontal, 14)
-            .frame(minHeight: 56)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+        .tint(Theme.main)
         .sensoryFeedback(.selection, trigger: isOn.wrappedValue)
-        .accessibilityAddTraits(isOn.wrappedValue ? .isSelected : [])
     }
 
     private func swatch<S: ShapeStyle>(_ fill: S, picked: Bool, ring: Color, icon: String? = nil) -> some View {
         Circle().fill(fill)
-            .frame(width: 42, height: 42)
+            .frame(width: 40, height: 40)
             .overlay(Circle().strokeBorder(.white, lineWidth: picked ? 3 : 0))
             .overlay {
                 if picked {
@@ -1457,25 +1354,6 @@ struct SettingsView: View {
             }
             .overlay(Circle().strokeBorder(ring.opacity(picked ? 0.9 : 0), lineWidth: 2).padding(-4))
             .padding(4)
-    }
-
-    private func themeOption(_ value: String, _ title: String, _ icon: String) -> some View {
-        let active = (model.me?.theme.isEmpty == false ? model.me?.theme : "light") == value
-        return Button { Task { try? await model.updateMe(["theme": value]) } } label: {
-            HStack(spacing: 6) {
-                Image(systemName: icon).font(.system(size: 13, weight: .bold))
-                Text(title).font(.jakarta(13, .bold))
-            }
-            .foregroundStyle(active ? .white : Palette.text2)
-            .frame(maxWidth: .infinity)
-            .frame(height: 38)
-            .background {
-                if active { Capsule().fill(Theme.gradient) }
-            }
-            .contentShape(Capsule())
-        }
-        .buttonStyle(BouncyStyle(scale: 0.95))
-        .sensoryFeedback(.selection, trigger: active)
     }
 
     private var statusLine: String {

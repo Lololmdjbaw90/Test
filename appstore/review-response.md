@@ -137,12 +137,13 @@ an app that supports iPhone. Test on a physical iPhone as well.
    stop sharing and confirm frames stop. Test rotation and both call hangups.
 8. Demonstrate earned-coin MimiPlus and commission screens if enabled. Include
    any accessible paid-content flow; do not make unnecessary real purchases.
-9. Delete the disposable account from Profile → Settings → Account. Verify
-   that it cannot log back in and that deletion actually completes.
+9. Delete the disposable account from your picture (top left) → Settings →
+   Account. Verify that it cannot log back in and that deletion actually
+   completes.
 10. Verify Home/Settings scrolling, keyboard navigation, reel controls,
     portrait/landscape iPad layouts, media permissions and offline recovery.
     In a chat, verify there is exactly one Back button. Type a draft, go back,
-    and confirm the bottom dock returns and every page remains reachable.
+    and confirm the tab bar returns and every page remains reachable.
     Reopen the chat several times and test the left-edge Back swipe too.
     Record failures and fix them before marking a device as passed.
 
