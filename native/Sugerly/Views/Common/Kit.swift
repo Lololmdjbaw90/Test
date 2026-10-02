@@ -48,11 +48,10 @@ private struct RootBar: ViewModifier {
                     }
                     .accessibilityLabel("Notifications")
                     .accessibilityValue(notes.unread > 0 ? "\(notes.unread) new" : "")
-                    if create {
-                        Button { model.showCreate = true } label: {
-                            Image(systemName: "plus")
-                        }
-                        .accessibilityLabel("Create")
+                }
+                if create {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        PinkCircleButton(icon: "plus", label: "Create") { model.showCreate = true }
                     }
                 }
             }
@@ -103,6 +102,33 @@ enum TabBarLook {
         }
         UITabBar.appearance().standardAppearance = bar
         UITabBar.appearance().scrollEdgeAppearance = bar
+    }
+}
+
+// The + (and other "make something" buttons): a bright pink circle that
+// gives a little bounce when the page opens, so it's easy to spot.
+struct PinkCircleButton: View {
+    let icon: String
+    let label: String
+    var action: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var bounce = 0
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .heavy))
+                .symbolEffect(.bounce, value: bounce)
+        }
+        .buttonStyle(.borderedProminent)
+        .buttonBorderShape(.circle)
+        .tint(Theme.main)
+        .accessibilityLabel(label)
+        .task {
+            guard !reduceMotion else { return }
+            try? await Task.sleep(for: .seconds(0.9))
+            bounce += 1
+        }
     }
 }
 

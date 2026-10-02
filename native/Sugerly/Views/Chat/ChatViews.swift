@@ -214,8 +214,7 @@ struct ChatListView: View {
                 TitleSwitch(titles: ["Chats", "Servers"], selection: $section)
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button { starting = true } label: { Image(systemName: "square.and.pencil") }
-                    .accessibilityLabel("New message")
+                PinkCircleButton(icon: "square.and.pencil", label: "New message") { starting = true }
             }
         }
         .bottomDock()

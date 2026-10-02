@@ -3,11 +3,11 @@ import UIKit
 
 // MARK: - Animated pattern backgrounds
 
-// Cute moving wallpapers for Home and the menu: polka dots, clouds, candy
-// stripes, hearts and stars. They follow your accent colour and dark mode,
-// and can be turned off in Settings.
+// Cute moving wallpapers for the top of Home: polka dots, clouds, candy
+// stripes, hearts, stars, sprinkles, flowers, bubbles and gingham. They
+// follow your accent colour and dark mode, and can be turned off in Settings.
 enum AppBackground: String, CaseIterable, Identifiable {
-    case dots, clouds, stripes, hearts, stars, off
+    case dots, clouds, stripes, hearts, stars, sprinkles, flowers, bubbles, gingham, off
     var id: String { rawValue }
     static let storageKey = "sugerly.background"
 
@@ -18,6 +18,10 @@ enum AppBackground: String, CaseIterable, Identifiable {
         case .stripes: return "Stripes"
         case .hearts: return "Hearts"
         case .stars: return "Stars"
+        case .sprinkles: return "Sprinkles"
+        case .flowers: return "Flowers"
+        case .bubbles: return "Bubbles"
+        case .gingham: return "Gingham"
         case .off: return "Off"
         }
     }
@@ -29,6 +33,10 @@ enum AppBackground: String, CaseIterable, Identifiable {
         case .stripes: return "line.3.horizontal"
         case .hearts: return "heart.fill"
         case .stars: return "sparkles"
+        case .sprinkles: return "wand.and.stars"
+        case .flowers: return "camera.macro"
+        case .bubbles: return "bubbles.and.sparkles"
+        case .gingham: return "squareshape.split.2x2"
         case .off: return "circle.slash"
         }
     }
@@ -204,6 +212,14 @@ struct PatternBackground: View {
                     sliding("hearts", dx: 0, dy: 86.4, duration: 9, size: size, colors)
                 case .stars:
                     twinkle(size: size, colors)
+                case .sprinkles:
+                    sliding("sprinkles", dx: 64, dy: 64, duration: 10, size: size, colors)
+                case .flowers:
+                    sliding("flowers", dx: 90, dy: 0, duration: 14, size: size, colors)
+                case .bubbles:
+                    sliding("bubbles", dx: 0, dy: 140, duration: 12, size: size, colors)
+                case .gingham:
+                    sliding("gingham", dx: 36, dy: 36, duration: 9, size: size, colors)
                 case .clouds:
                     Canvas { ctx, s in Self.sky(&ctx, s, colors) }.frame(width: size.width, height: size.height)
                     sliding("clouds", dx: Self.cloudSpacing(size), dy: 0, duration: 40, size: size, colors)
@@ -230,6 +246,10 @@ struct PatternBackground: View {
         case "hearts": return { ctx, s in Self.hearts(&ctx, s, c) }
         case "stars-even": return { ctx, s in Self.stars(&ctx, s, c, even: true) }
         case "stars-odd": return { ctx, s in Self.stars(&ctx, s, c, even: false) }
+        case "sprinkles": return { ctx, s in Self.sprinkles(&ctx, s, c) }
+        case "flowers": return { ctx, s in Self.flowers(&ctx, s, c) }
+        case "bubbles": return { ctx, s in Self.bubbles(&ctx, s, c) }
+        case "gingham": return { ctx, s in Self.gingham(&ctx, s, c) }
         default: return { ctx, s in Self.cloudLanes(&ctx, s, c, visibleWidth: size.width) }
         }
     }
@@ -244,13 +264,17 @@ struct PatternBackground: View {
         case .hearts: layers = [("hearts", CGSize(width: size.width, height: size.height + 86.4))]
         case .clouds: layers = [("clouds", CGSize(width: size.width + Self.cloudSpacing(size), height: size.height))]
         case .stars: layers = [("stars-even", size), ("stars-odd", size)]
+        case .sprinkles: layers = [("sprinkles", CGSize(width: size.width + 64, height: size.height + 64))]
+        case .flowers: layers = [("flowers", CGSize(width: size.width + 90, height: size.height))]
+        case .bubbles: layers = [("bubbles", CGSize(width: size.width, height: size.height + 140))]
+        case .gingham: layers = [("gingham", CGSize(width: size.width + 36, height: size.height + 36))]
         case .off: layers = []
         }
         var next: [String: UIImage] = [:]
         for (name, full) in layers {
             let paint = Self.painter(name, size, c)
             let renderer = ImageRenderer(content: Canvas { ctx, s in paint(&ctx, s) }.frame(width: full.width, height: full.height))
-            renderer.scale = min(displayScale, 2)
+            renderer.scale = displayScale
             renderer.isOpaque = false
             if let image = renderer.uiImage { next[name] = image }
         }
@@ -307,11 +331,15 @@ struct PatternBackground: View {
             let radius = 5.2 + depth * 1.6
             var x: CGFloat = row % 2 == 0 ? 6 : 6 + gap / 2
             var path = Path()
+            var shine = Path()
             while x < size.width + gap {
                 path.addEllipse(in: CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2))
+                // A little candy shine on each dot.
+                shine.addEllipse(in: CGRect(x: x - radius * 0.62, y: y - radius * 0.66, width: radius * 0.6, height: radius * 0.46))
                 x += gap
             }
             context.fill(path, with: .color(tint.opacity(alpha)))
+            context.fill(shine, with: .color(.white.opacity(c.dark ? 0.1 : 0.6 * depth + 0.15)))
             y += gap * 0.86
             row += 1
         }
@@ -335,16 +363,119 @@ struct PatternBackground: View {
         var row = 0
         var y: CGFloat = 20
         var path = Path()
+        var shine = Path()
         while y < size.height + gap {
             var x: CGFloat = row % 2 == 0 ? 14 : 14 + gap / 2
+            // Every other row a little smaller (the pattern still repeats
+            // every two rows, so it loops smoothly).
+            let w: CGFloat = row % 2 == 0 ? 15 : 11
             while x < size.width + gap {
-                path.addPath(heartPath(CGRect(x: x - 7, y: y - 7, width: 14, height: 12.6)))
+                path.addPath(heartPath(CGRect(x: x - w / 2, y: y - w / 2, width: w, height: w * 0.9)))
+                shine.addEllipse(in: CGRect(x: x - w * 0.36, y: y - w * 0.36, width: w * 0.2, height: w * 0.16))
                 x += gap
             }
             y += gap * 0.8
             row += 1
         }
-        context.fill(path, with: .color(tint.opacity(c.dark ? 0.16 : 0.18)))
+        context.fill(path, with: .color(tint.opacity(c.dark ? 0.2 : 0.22)))
+        context.fill(shine, with: .color(.white.opacity(c.dark ? 0.12 : 0.6)))
+    }
+
+    // Candy sprinkles in six colours, sliding gently down and to the side.
+    private static func sprinkles(_ context: inout GraphicsContext, _ size: CGSize, _ c: Colors) {
+        let tile: CGFloat = 64
+        let colors: [Color] = [c.main, c.light, Color(hex: 0xFFB38A), Color(hex: 0xB19CFF), Color(hex: 0x7FD8BE), Color(hex: 0xFFD166)]
+        let spots: [(CGFloat, CGFloat, Double)] = [(10, 12, 30), (42, 9, -40), (25, 33, 70), (53, 41, 15), (9, 52, -60), (37, 57, 45)]
+        let alpha = c.dark ? 0.42 : 0.5
+        var y: CGFloat = -tile
+        while y < size.height + tile {
+            var x: CGFloat = -tile
+            while x < size.width + tile {
+                for (i, spot) in spots.enumerated() {
+                    var piece = context
+                    piece.translateBy(x: x + spot.0, y: y + spot.1)
+                    piece.rotate(by: .degrees(spot.2))
+                    let rect = CGRect(x: -6, y: -1.9, width: 12, height: 3.8)
+                    piece.fill(Path(roundedRect: rect, cornerRadius: 1.9), with: .color(colors[i % colors.count].opacity(alpha)))
+                }
+                x += tile
+            }
+            y += tile
+        }
+    }
+
+    // Little daisies drifting sideways.
+    private static func flowers(_ context: inout GraphicsContext, _ size: CGSize, _ c: Colors) {
+        let tile: CGFloat = 90
+        let tint = c.dark ? c.light : c.main
+        let center = Color(hex: 0xFFD166).opacity(c.dark ? 0.5 : 0.75)
+        var row = 0
+        var y: CGFloat = 22
+        while y < size.height + tile {
+            var x: CGFloat = row % 2 == 0 ? 22 : 22 + tile / 2
+            let radius: CGFloat = row % 2 == 0 ? 10 : 7.5
+            while x < size.width + tile {
+                flower(&context, CGPoint(x: x, y: y), radius: radius, petals: tint.opacity(c.dark ? 0.22 : 0.24), center: center)
+                x += tile
+            }
+            y += tile * 0.62
+            row += 1
+        }
+    }
+
+    private static func flower(_ context: inout GraphicsContext, _ p: CGPoint, radius r: CGFloat, petals: Color, center: Color) {
+        var path = Path()
+        for i in 0..<5 {
+            let angle = Double(i) / 5 * 2 * Double.pi - Double.pi / 2
+            let cx = p.x + CGFloat(cos(angle)) * r * 0.85
+            let cy = p.y + CGFloat(sin(angle)) * r * 0.85
+            path.addEllipse(in: CGRect(x: cx - r * 0.6, y: cy - r * 0.6, width: r * 1.2, height: r * 1.2))
+        }
+        context.fill(path, with: .color(petals))
+        context.fill(Path(ellipseIn: CGRect(x: p.x - r * 0.42, y: p.y - r * 0.42, width: r * 0.84, height: r * 0.84)), with: .color(center))
+    }
+
+    // Soap bubbles with a shine, floating up.
+    private static func bubbles(_ context: inout GraphicsContext, _ size: CGSize, _ c: Colors) {
+        let period: CGFloat = 140
+        let tint = c.dark ? c.light : c.main
+        var y: CGFloat = -period
+        while y < size.height + period {
+            var i = 0
+            var x: CGFloat = 16
+            while x < size.width + 24 {
+                let r = 5 + CGFloat(i * 37 % 11) / 11 * 10
+                let by = y + CGFloat(i * 53 % 17) / 17 * period
+                let rect = CGRect(x: x - r, y: by - r, width: r * 2, height: r * 2)
+                context.fill(Path(ellipseIn: rect), with: .color(tint.opacity(c.dark ? 0.08 : 0.07)))
+                context.stroke(Path(ellipseIn: rect), with: .color(tint.opacity(c.dark ? 0.32 : 0.3)), lineWidth: 1.4)
+                let s = r * 0.34
+                context.fill(Path(ellipseIn: CGRect(x: x - r * 0.5, y: by - r * 0.58, width: s, height: s * 0.8)), with: .color(.white.opacity(c.dark ? 0.3 : 0.8)))
+                x += 44
+                i += 1
+            }
+            y += period
+        }
+    }
+
+    // Soft picnic gingham, sliding slowly.
+    private static func gingham(_ context: inout GraphicsContext, _ size: CGSize, _ c: Colors) {
+        let cell: CGFloat = 18
+        let tint = (c.dark ? c.light : c.main).opacity(c.dark ? 0.07 : 0.085)
+        var columns = Path()
+        var x: CGFloat = 0
+        while x < size.width + cell * 2 {
+            columns.addRect(CGRect(x: x, y: 0, width: cell, height: size.height))
+            x += cell * 2
+        }
+        var rows = Path()
+        var y: CGFloat = 0
+        while y < size.height + cell * 2 {
+            rows.addRect(CGRect(x: 0, y: y, width: size.width, height: cell))
+            y += cell * 2
+        }
+        context.fill(columns, with: .color(tint))
+        context.fill(rows, with: .color(tint))
     }
 
     static func heartPath(_ r: CGRect) -> Path {
