@@ -21,6 +21,10 @@ on:
         description: "Version shown on the App Store (e.g. 1.0, 1.1)"
         required: true
         default: "1.0"
+      tests:
+        description: "Run the automatic iPhone and iPad tests first (about 15 minutes more, catches broken screens). Untick for a quick upload of a small change."
+        type: boolean
+        default: true
 
 jobs:
   upload:
@@ -64,15 +68,17 @@ jobs:
           echo "KEY_PATH=$RUNNER_TEMP/keys/AuthKey_$KEY_ID.p8" >> "$GITHUB_ENV"
 
       - name: Test iPhone editor and Fanart interactions
+        if: ${{ inputs.tests }}
         timeout-minutes: 18
         run: bash scripts/test-native-interactions.sh
 
       - name: Test Home scrolling on iPad
+        if: ${{ inputs.tests }}
         timeout-minutes: 10
         run: bash scripts/test-native-interactions.sh iPad HomeIPadTests
 
       - name: Export interaction screenshots
-        if: always()
+        if: ${{ always() && inputs.tests }}
         run: |
           if [ -d native/InteractionTests.xcresult ]; then
             xcrun xcresulttool export attachments --path native/InteractionTests.xcresult --output-path native/test-screenshots || true
@@ -82,7 +88,7 @@ jobs:
           fi
 
       - name: Save interaction results
-        if: always()
+        if: ${{ always() && inputs.tests }}
         uses: actions/upload-artifact@v4
         with:
           name: release-interaction-results
