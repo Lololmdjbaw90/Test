@@ -100,8 +100,7 @@ struct NotificationsPage: View {
         }
         .listStyle(.insetGrouped)
         .sugarList()
-        .navigationTitle("Notifications")
-        .navigationBarTitleDisplayMode(.inline)
+        .roundTitle("Notifications")
         .toolbar {
             if notes.unread > 0 {
                 ToolbarItem(placement: .topBarTrailing) {

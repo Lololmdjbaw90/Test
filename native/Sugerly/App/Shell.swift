@@ -128,6 +128,152 @@ extension View {
     }
 }
 
+// Which tab is open and the pages open on each tab. Each tab's pages only
+// redraw that tab: opening your account, the + or a sheet doesn't redraw
+// all five tabs (that made opening them stutter).
+@MainActor
+@Observable
+final class Navigator {
+    var tab: AppTab = .home
+    var home: [Route] = []
+    var community: [Route] = []
+    var gallery: [Route] = []
+    var reels: [Route] = []
+    var chat: [Route] = []
+    // The page that makes a post / drawing / reel / track.
+    var composer: Composer?
+
+    subscript(_ t: AppTab) -> [Route] {
+        get {
+            switch t {
+            case .home: return home
+            case .community: return community
+            case .gallery: return gallery
+            case .reels: return reels
+            case .chat: return chat
+            }
+        }
+        set {
+            switch t {
+            case .home: home = newValue
+            case .community: community = newValue
+            case .gallery: gallery = newValue
+            case .reels: reels = newValue
+            case .chat: chat = newValue
+            }
+        }
+    }
+
+    // A tab's pages. A quick double tap opens a page once, not twice (which
+    // used to need two taps on Back to get out again).
+    func path(_ t: AppTab) -> Binding<[Route]> {
+        Binding(get: { self[t] }, set: { next in
+            var clean: [Route] = []
+            for route in next where clean.last != route { clean.append(route) }
+            self[t] = clean
+        })
+    }
+
+    // Opens a page on the tab you're on.
+    func push(_ route: Route) {
+        guard self[tab].last != route else { return }
+        self[tab].append(route)
+    }
+}
+
+// The five tabs, each its own view with its own pages.
+private struct ShellTabs: View {
+    let nav: Navigator
+    @Environment(ChatStore.self) private var chats
+
+    // Tapping the tab you're already on takes it back to its first page.
+    private var selection: Binding<AppTab> {
+        Binding(get: { nav.tab }, set: { next in
+            if next == nav.tab { nav[next] = [] }
+            nav.tab = next
+        })
+    }
+
+    var body: some View {
+        TabView(selection: selection) {
+            HomeTab(nav: nav)
+                .tabItem { Label("Home", systemImage: "house") }
+                .tag(AppTab.home)
+            CommunityTab(nav: nav)
+                .tabItem { Label("Community", systemImage: "person.2") }
+                .tag(AppTab.community)
+            GalleryTab(nav: nav)
+                .tabItem { Label("Fan Art", systemImage: "paintpalette") }
+                .tag(AppTab.gallery)
+            ReelsTab(nav: nav)
+                .tabItem { Label("Reels", systemImage: "play.rectangle") }
+                .tag(AppTab.reels)
+            ChatTab(nav: nav)
+                .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
+                .badge(chats.unread)
+                .tag(AppTab.chat)
+        }
+        .compactTabBar()
+        .tint(Theme.main)
+    }
+}
+
+private struct HomeTab: View {
+    let nav: Navigator
+    var body: some View {
+        let path = nav.path(.home)
+        NavigationStack(path: path) {
+            HomeView(path: path, compose: { nav.composer = $0 })
+                .sugarRoutes(path)
+        }
+    }
+}
+
+private struct CommunityTab: View {
+    let nav: Navigator
+    var body: some View {
+        let path = nav.path(.community)
+        NavigationStack(path: path) {
+            CommunityView(path: path, compose: { nav.composer = .post })
+                .sugarRoutes(path)
+        }
+    }
+}
+
+private struct GalleryTab: View {
+    let nav: Navigator
+    var body: some View {
+        let path = nav.path(.gallery)
+        NavigationStack(path: path) {
+            GalleryView(path: path, isRoot: true)
+                .sugarRoutes(path)
+        }
+    }
+}
+
+private struct ReelsTab: View {
+    let nav: Navigator
+    @Environment(CallCenter.self) private var calls
+    var body: some View {
+        let path = nav.path(.reels)
+        NavigationStack(path: path) {
+            ReelsView(visible: nav.tab == .reels && nav.reels.isEmpty && !calls.showScreen, path: path, create: { nav.composer = .reel })
+                .sugarRoutes(path)
+        }
+    }
+}
+
+private struct ChatTab: View {
+    let nav: Navigator
+    var body: some View {
+        let path = nav.path(.chat)
+        NavigationStack(path: path) {
+            ChatListView(path: path)
+                .sugarRoutes(path)
+        }
+    }
+}
+
 // MARK: - App shell
 
 // iPhone's own tab bar with five tabs, each with its own pages. Your
@@ -135,20 +281,14 @@ extension View {
 struct MainShell: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
-    @State private var tab: AppTab = .home
+    @State private var nav = Navigator()
     @State private var chats = ChatStore()
     @State private var posts = PostsStore()
     @State private var player = Player()
     @State private var notes = NotificationsStore()
     @State private var voice = VoiceEngine.shared
     @State private var calls = CallCenter.shared
-    @State private var homePath: [Route] = []
-    @State private var communityPath: [Route] = []
-    @State private var galleryPath: [Route] = []
-    @State private var reelsPath: [Route] = []
-    @State private var chatPath: [Route] = []
     @State private var pendingComposer: Composer?
-    @State private var composer: Composer?
     @State private var pendingRoute: Route?
     @State private var dailyShown = false
     @State private var openedAt = Date()
@@ -158,73 +298,6 @@ struct MainShell: View {
     private func settle(_ seconds: Double) async {
         let left = seconds - Date().timeIntervalSince(openedAt)
         if left > 0 { try? await Task.sleep(for: .seconds(left)) }
-    }
-
-    private func path(_ t: AppTab) -> Binding<[Route]> {
-        switch t {
-        case .home: return $homePath.once
-        case .community: return $communityPath.once
-        case .gallery: return $galleryPath.once
-        case .reels: return $reelsPath.once
-        case .chat: return $chatPath.once
-        }
-    }
-
-    // Opens a page on the tab you're on.
-    private func push(_ route: Route) {
-        let current = path(tab)
-        guard current.wrappedValue.last != route else { return }
-        current.wrappedValue.append(route)
-    }
-
-    // Tapping the tab you're already on takes it back to its first page.
-    private var selection: Binding<AppTab> {
-        Binding(get: { tab }, set: { next in
-            if next == tab { path(next).wrappedValue = [] }
-            tab = next
-        })
-    }
-
-    private var tabs: some View {
-        TabView(selection: selection) {
-            NavigationStack(path: path(.home)) {
-                HomeView(path: path(.home), compose: { composer = $0 })
-                    .sugarRoutes(path(.home))
-            }
-            .tabItem { Label("Home", systemImage: "house") }
-            .tag(AppTab.home)
-
-            NavigationStack(path: path(.community)) {
-                CommunityView(path: path(.community), compose: { composer = .post })
-                    .sugarRoutes(path(.community))
-            }
-            .tabItem { Label("Community", systemImage: "person.2") }
-            .tag(AppTab.community)
-
-            NavigationStack(path: path(.gallery)) {
-                GalleryView(path: path(.gallery), isRoot: true)
-                    .sugarRoutes(path(.gallery))
-            }
-            .tabItem { Label("Fan Art", systemImage: "paintpalette") }
-            .tag(AppTab.gallery)
-
-            NavigationStack(path: path(.reels)) {
-                ReelsView(visible: tab == .reels && reelsPath.isEmpty && !calls.showScreen, path: path(.reels), create: { composer = .reel })
-                    .sugarRoutes(path(.reels))
-            }
-            .tabItem { Label("Reels", systemImage: "play.rectangle") }
-            .tag(AppTab.reels)
-
-            NavigationStack(path: path(.chat)) {
-                ChatListView(path: path(.chat))
-                    .sugarRoutes(path(.chat))
-            }
-            .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
-            .badge(chats.unread)
-            .tag(AppTab.chat)
-        }
-        .compactTabBar()
-        .tint(Theme.main)
     }
 
     private var accountShown: Binding<Bool> {
@@ -239,10 +312,13 @@ struct MainShell: View {
         Binding(get: { calls.showScreen }, set: { calls.showScreen = $0 })
     }
 
+    private var composerShown: Binding<Composer?> {
+        Binding(get: { nav.composer }, set: { nav.composer = $0 })
+    }
+
     // The tabs with everything that opens over them.
     private var framed: some View {
-        tabs
-            .environment(\.backgroundPaused, composer != nil || model.showMenu || model.showCreate)
+        ShellTabs(nav: nav)
             .overlay(alignment: .top) {
                 if let toast = model.toast {
                     ToastView(toast: toast)
@@ -267,13 +343,13 @@ struct MainShell: View {
                 }
             }
             .sheet(isPresented: createShown, onDismiss: {
-                if let pendingComposer { composer = pendingComposer; self.pendingComposer = nil }
+                if let pendingComposer { nav.composer = pendingComposer; self.pendingComposer = nil }
             }) {
                 CreateSheet { choice in pendingComposer = choice; model.showCreate = false }
                     .presentationDetents([.height(460), .large])
                     .presentationCornerRadius(34)
             }
-            .fullScreenCover(item: $composer) { kind in
+            .fullScreenCover(item: composerShown) { kind in
                 switch kind {
                 case .post: NewPostView { await posts.load() }
                 case .artwork: NewArtworkView()
@@ -293,14 +369,14 @@ struct MainShell: View {
     private func openPending() {
         guard let route = pendingRoute else { return }
         pendingRoute = nil
-        push(route)
+        nav.push(route)
     }
 
     var body: some View {
         framed
         .onChange(of: model.tabRequest) { _, next in
             guard let next else { return }
-            tab = next
+            nav.tab = next
             model.tabRequest = nil
         }
         // The bell (and a notification tapped) opens the notifications page
@@ -308,7 +384,7 @@ struct MainShell: View {
         .onChange(of: model.showNotifications) { _, show in
             guard show else { return }
             model.showNotifications = false
-            push(.notifications)
+            nav.push(.notifications)
         }
         .onChange(of: Alerts.shared.destination) { _, dest in
             guard let dest else { return }
@@ -343,7 +419,7 @@ struct MainShell: View {
             if id != nil, player.playing { player.pause() }
         }
         .onChange(of: model.soundRequest?.id) { _, id in
-            if id != nil { composer = .reel }
+            if id != nil { nav.composer = .reel }
         }
         .task {
             // First the notifications question (only ever asked once), then
@@ -396,7 +472,7 @@ struct MainShell: View {
                 Alerts.shared.setBadge(chats.unread + notes.unread)
                 WidgetBridge.update(model: model, unreadDMs: chats.unread, unreadAlerts: notes.unread)
                 tick += 1
-                let base: Double = tab == .chat ? 6 : 15
+                let base: Double = nav.tab == .chat ? 6 : 15
                 try? await Task.sleep(for: .seconds(base * (FS.missingIndex.contains("DirectMessage") ? 2 : 1)))
             }
         }
@@ -422,8 +498,8 @@ extension MainShell {
             try? await Task.sleep(for: .milliseconds(450))
         }
         let switching: (AppTab) async -> Void = { next in
-            guard tab != next else { return }
-            tab = next
+            guard nav.tab != next else { return }
+            nav.tab = next
             try? await Task.sleep(for: .milliseconds(350))
         }
         switch kind {
@@ -433,37 +509,37 @@ extension MainShell {
             let me = model.me?.email ?? ""
             if chats.conversations.first(where: { $0.id == target }) == nil { await chats.refresh(me: me) }
             if let c = chats.conversations.first(where: { $0.id == target }) {
-                chatPath = [.chat(c)]
+                nav.chat = [.chat(c)]
             } else if target.contains("__dm__") {
                 let members = target.components(separatedBy: "__dm__")
-                chatPath = [.chat(Conversation(id: target, members: members, isGroup: false, groupName: "", last: nil, unread: 0))]
+                nav.chat = [.chat(Conversation(id: target, members: members, isGroup: false, groupName: "", last: nil, unread: 0))]
             }
         case "server":
             await switching(.chat)
             UserDefaults.standard.set(1, forKey: "sugerly.chat.section")
-            if !target.isEmpty, let doc = try? await FS.get("Community", target) { chatPath = [.server(Server(doc))] }
+            if !target.isEmpty, let doc = try? await FS.get("Community", target) { nav.chat = [.server(Server(doc))] }
         case "reels", "reel":
             await switching(.reels)
-            if target.isEmpty { reelsPath = [] }
-            else if let doc = try? await FS.get("Reel", target) { reelsPath = [.reel(Reel(doc))] }
+            if target.isEmpty { nav.reels = [] }
+            else if let doc = try? await FS.get("Reel", target) { nav.reels = [.reel(Reel(doc))] }
             else { model.showToast("This reel is no longer available.", error: true) }
         case "gallery", "artwork":
             await switching(.gallery)
-            if target.isEmpty { galleryPath = [] }
-            else if let doc = try? await FS.get("Artwork", target) { galleryPath = [.artwork(Artwork(doc))] }
+            if target.isEmpty { nav.gallery = [] }
+            else if let doc = try? await FS.get("Artwork", target) { nav.gallery = [.artwork(Artwork(doc))] }
             else { model.showToast("This artwork is no longer available.", error: true) }
         case "community", "post":
             await switching(.community)
-            if target.isEmpty { communityPath = [] }
-            else if let doc = try? await FS.get("CommunityPost", target) { communityPath = [.post(Post(doc))] }
+            if target.isEmpty { nav.community = [] }
+            else if let doc = try? await FS.get("CommunityPost", target) { nav.community = [.post(Post(doc))] }
             else { model.showToast("This post is no longer available.", error: true) }
-        case "home": tab = .home; homePath = []
+        case "home": nav.tab = .home; nav.home = []
         case "alerts", "social":
             model.showNotifications = true
         case "support":
             await switching(.home)
             let ticket = URLComponents(string: target)?.queryItems?.first { $0.name == "ticket" }?.value ?? ""
-            homePath = [ticket.isEmpty ? .support : .supportTicket(ticket)]
+            nav.home = [ticket.isEmpty ? .support : .supportTicket(ticket)]
         default: break
         }
     }

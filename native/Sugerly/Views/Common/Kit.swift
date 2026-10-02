@@ -143,6 +143,61 @@ struct BottomDock: View {
     }
 }
 
+// MARK: - Titles in the round font
+
+extension View {
+    /// The page's name in the round font, in the middle of the top bar.
+    func roundTitle(_ title: String) -> some View {
+        self
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text(title)
+                        .font(.display(26))
+                        .foregroundStyle(Palette.text)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .accessibilityAddTraits(.isHeader)
+                }
+            }
+    }
+}
+
+// Two titles in the round font with a pink pill behind the one you're on
+// (sits in the middle of the top bar, so it takes no extra room).
+struct TitleSwitch: View {
+    let titles: [String]
+    @Binding var selection: Int
+    @Namespace private var pill
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(Array(titles.enumerated()), id: \.offset) { i, title in
+                Button { withAnimation(.snappy(duration: 0.28)) { selection = i } } label: {
+                    Text(title)
+                        .font(.display(19))
+                        .foregroundStyle(selection == i ? Color.white : Palette.text2)
+                        .padding(.horizontal, 14)
+                        .frame(height: 32)
+                        .background {
+                            if selection == i {
+                                Capsule().fill(Theme.gradient)
+                                    .matchedGeometryEffect(id: "pill", in: pill)
+                            }
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selection == i ? .isSelected : [])
+            }
+        }
+        .padding(3)
+        .background(Palette.surface2, in: Capsule())
+        .sensoryFeedback(.selection, trigger: selection)
+    }
+}
+
 // MARK: - Lists in Sugerly's colours
 
 extension View {

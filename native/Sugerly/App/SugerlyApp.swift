@@ -9,7 +9,7 @@ struct SugerlyApp: App {
         // Keep pictures around so feeds scroll without reloading them.
         URLCache.shared = URLCache(memoryCapacity: 64 * 1024 * 1024, diskCapacity: 400 * 1024 * 1024)
         let nav = UINavigationBar.appearance()
-        if let title = UIFont(name: "PlusJakartaSans-Bold", size: 17) {
+        if let title = UIFont(name: "BubblegumSans-Regular", size: 22) {
             nav.titleTextAttributes = [.font: title]
         }
         if let large = UIFont(name: "BubblegumSans-Regular", size: 34) {

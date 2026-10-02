@@ -340,8 +340,7 @@ struct CommunityView: View {
             .animation(.spring(response: 0.45, dampingFraction: 0.85), value: feed)
         }
         .sugarBackground()
-        .navigationTitle("Community")
-        .navigationBarTitleDisplayMode(.large)
+        .roundTitle("Community")
         .rootBar(search: { searching = true })
         .refreshable { await store.load() }
         .sheet(item: $reporting) { target in ReportSheet(target: target) }

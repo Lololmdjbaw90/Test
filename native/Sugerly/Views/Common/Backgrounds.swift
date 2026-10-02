@@ -68,6 +68,33 @@ private struct PatternBackgroundModifier: ViewModifier {
     }
 }
 
+// The pattern you picked, as a soft wallpaper at the top of Home that fades
+// into the plain background. (Behind the whole page it fought with the
+// cards and everything looked busy; up top it's a cute header instead.)
+struct HeaderWallpaper: View {
+    @AppStorage(AppBackground.storageKey) private var choice = AppBackground.dots.rawValue
+    @AppStorage("sugerly.background.still") private var still = false
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.scenePhase) private var scenePhase
+
+    var body: some View {
+        let kind = AppBackground(rawValue: choice) ?? .dots
+        if kind != .off {
+            PatternBackground(kind: kind, animated: !still && scenePhase == .active)
+                .id("\(kind.rawValue)-\(still)-\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)")
+                .mask {
+                    LinearGradient(stops: [
+                        .init(color: .black, location: 0),
+                        .init(color: .black.opacity(0.75), location: 0.4),
+                        .init(color: .clear, location: 1),
+                    ], startPoint: .top, endPoint: .bottom)
+                }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
 // Nothing moves behind a sheet or menu (it would only slow down what's on top).
 private struct BackgroundPausedKey: EnvironmentKey {
     static let defaultValue = false
@@ -80,8 +107,51 @@ extension EnvironmentValues {
     }
 }
 
-// Soft accent glows (the plain page background), drawn once.
+// Soft accent glows (the plain page background). The blurred glows are
+// drawn once into a small picture and reused by every page, so opening a
+// page doesn't have to blur them again (that made pages stutter in).
 struct GlowLayer: View {
+    @Environment(\.colorScheme) private var scheme
+    @State private var drawn: UIImage?
+
+    var body: some View {
+        let key = GlowArt.key(scheme)
+        let image = GlowArt.cache[key] ?? drawn
+        Palette.bg
+            .overlay {
+                if let image {
+                    Image(uiImage: image).resizable().scaledToFill()
+                }
+            }
+            .clipped()
+            .task(id: key) {
+                if GlowArt.cache[key] == nil { drawn = GlowArt.render(key, scheme: scheme) }
+            }
+    }
+}
+
+@MainActor
+enum GlowArt {
+    static var cache: [String: UIImage] = [:]
+
+    static func key(_ scheme: ColorScheme) -> String {
+        "\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)-\(Theme.custom?.light ?? 0)"
+    }
+
+    static func render(_ key: String, scheme: ColorScheme) -> UIImage? {
+        if let hit = cache[key] { return hit }
+        let renderer = ImageRenderer(content: GlowShapes()
+            .frame(width: 430, height: 932)
+            .environment(\.colorScheme, scheme))
+        renderer.scale = 1
+        guard let image = renderer.uiImage else { return nil }
+        if cache.count > 8 { cache.removeAll() }
+        cache[key] = image
+        return image
+    }
+}
+
+private struct GlowShapes: View {
     var body: some View {
         ZStack {
             Palette.bg
@@ -89,7 +159,6 @@ struct GlowLayer: View {
             Circle().fill(Theme.lavender.opacity(0.18)).frame(width: 320).blur(radius: 95).offset(x: -170, y: 260)
             Circle().fill(Color(hex: 0xFFD6A5).opacity(0.14)).frame(width: 240).blur(radius: 80).offset(x: 140, y: 120)
         }
-        .drawingGroup()
     }
 }
 
@@ -98,21 +167,27 @@ extension View {
     func sugarBackground() -> some View { background { GlowLayer().ignoresSafeArea() } }
 }
 
-// Each pattern is drawn once (a little bigger than the screen) and then just
-// slides — the phone's graphics chip moves it, so it costs almost nothing
-// and never slows the app down. It stops when the page isn't showing.
+// Each pattern is drawn once (a little bigger than the screen) into a
+// picture, and the phone's graphics chip slides it (Core Animation). Nothing
+// is redrawn while it moves, so scrolling, swiping back and opening sheets
+// stay smooth. It stops when the page isn't showing.
 struct PatternBackground: View {
     let kind: AppBackground
     var animated = true
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var go = false
+    @Environment(\.displayScale) private var displayScale
+    // The moving layers, drawn once into pictures.
+    @State private var art: [String: UIImage] = [:]
+    @State private var artSize: CGSize = .zero
 
     private struct Colors {
         var dark: Bool
         var main: Color
         var light: Color
     }
+
+    private var moving: Bool { animated && !reduceMotion }
 
     var body: some View {
         let colors = Colors(dark: scheme == .dark, main: Theme.main, light: Theme.light)
@@ -122,16 +197,16 @@ struct PatternBackground: View {
                 base(colors)
                 switch kind {
                 case .dots:
-                    sliding(dx: 52, dy: 0, duration: 8, size: size) { ctx, s in Self.dots(&ctx, s, colors) }
+                    sliding("dots", dx: 52, dy: 0, duration: 8, size: size, colors)
                 case .stripes:
-                    sliding(dx: 40, dy: 0, duration: 5, size: size) { ctx, s in Self.stripes(&ctx, s, colors) }
+                    sliding("stripes", dx: 40, dy: 0, duration: 5, size: size, colors)
                 case .hearts:
-                    sliding(dx: 0, dy: 86.4, duration: 9, size: size) { ctx, s in Self.hearts(&ctx, s, colors) }
+                    sliding("hearts", dx: 0, dy: 86.4, duration: 9, size: size, colors)
                 case .stars:
                     twinkle(size: size, colors)
                 case .clouds:
                     Canvas { ctx, s in Self.sky(&ctx, s, colors) }.frame(width: size.width, height: size.height)
-                    sliding(dx: Self.cloudSpacing(size), dy: 0, duration: 40, size: size) { ctx, s in Self.cloudLanes(&ctx, s, colors, visibleWidth: size.width) }
+                    sliding("clouds", dx: Self.cloudSpacing(size), dy: 0, duration: 40, size: size, colors)
                     Canvas { ctx, s in Self.cloudBank(&ctx, s, colors) }.frame(width: size.width, height: size.height)
                 case .off:
                     EmptyView()
@@ -139,38 +214,79 @@ struct PatternBackground: View {
             }
             .frame(width: size.width, height: size.height, alignment: .topLeading)
             .clipped()
+            .task(id: moving ? size : .zero) {
+                guard moving, size != artSize || art.isEmpty else { return }
+                draw(size, colors)
+            }
         }
         .background(Palette.bg)
-        .onAppear { start() }
-        .onDisappear { go = false }
-        .onChange(of: animated) { _, _ in go = false; start() }
-        .onChange(of: kind) { _, _ in go = false; start() }
     }
 
-    // Starts the loop on the next frame, so the first (still) frame is drawn
-    // and the move from there is animated.
-    private func start() {
-        guard animated && !reduceMotion else { return }
-        DispatchQueue.main.async { go = true }
-    }
-
-    private func sliding(dx: CGFloat, dy: CGFloat, duration: Double, size: CGSize, draw: @escaping (inout GraphicsContext, CGSize) -> Void) -> some View {
-        Canvas { ctx, s in draw(&ctx, s) }
-            .frame(width: size.width + dx, height: size.height + abs(dy))
-            .offset(x: go ? -dx : 0, y: go ? -abs(dy) : 0)
-            .animation(go ? .linear(duration: duration).repeatForever(autoreverses: false) : .easeOut(duration: 0.2), value: go)
-    }
-
-    private func twinkle(size: CGSize, _ c: Colors) -> some View {
-        ZStack {
-            Canvas { ctx, s in Self.stars(&ctx, s, c, even: true) }
-                .opacity(go ? 0.25 : 1)
-                .animation(go ? .easeInOut(duration: 1.6).repeatForever(autoreverses: true) : .default, value: go)
-            Canvas { ctx, s in Self.stars(&ctx, s, c, even: false) }
-                .opacity(go ? 1 : 0.25)
-                .animation(go ? .easeInOut(duration: 1.6).repeatForever(autoreverses: true) : .default, value: go)
+    // What each moving layer draws.
+    private static func painter(_ name: String, _ size: CGSize, _ c: Colors) -> (inout GraphicsContext, CGSize) -> Void {
+        switch name {
+        case "dots": return { ctx, s in Self.dots(&ctx, s, c) }
+        case "stripes": return { ctx, s in Self.stripes(&ctx, s, c) }
+        case "hearts": return { ctx, s in Self.hearts(&ctx, s, c) }
+        case "stars-even": return { ctx, s in Self.stars(&ctx, s, c, even: true) }
+        case "stars-odd": return { ctx, s in Self.stars(&ctx, s, c, even: false) }
+        default: return { ctx, s in Self.cloudLanes(&ctx, s, c, visibleWidth: size.width) }
         }
-        .frame(width: size.width, height: size.height)
+    }
+
+    // Draws the moving layers into pictures (once per screen size).
+    private func draw(_ size: CGSize, _ c: Colors) {
+        guard size.width > 1, size.height > 1 else { return }
+        let layers: [(String, CGSize)]
+        switch kind {
+        case .dots: layers = [("dots", CGSize(width: size.width + 52, height: size.height))]
+        case .stripes: layers = [("stripes", CGSize(width: size.width + 40, height: size.height))]
+        case .hearts: layers = [("hearts", CGSize(width: size.width, height: size.height + 86.4))]
+        case .clouds: layers = [("clouds", CGSize(width: size.width + Self.cloudSpacing(size), height: size.height))]
+        case .stars: layers = [("stars-even", size), ("stars-odd", size)]
+        case .off: layers = []
+        }
+        var next: [String: UIImage] = [:]
+        for (name, full) in layers {
+            let paint = Self.painter(name, size, c)
+            let renderer = ImageRenderer(content: Canvas { ctx, s in paint(&ctx, s) }.frame(width: full.width, height: full.height))
+            renderer.scale = min(displayScale, 2)
+            renderer.isOpaque = false
+            if let image = renderer.uiImage { next[name] = image }
+        }
+        art = next
+        artSize = size
+    }
+
+    @ViewBuilder
+    private func sliding(_ name: String, dx: CGFloat, dy: CGFloat, duration: Double, size: CGSize, _ c: Colors) -> some View {
+        if moving, let image = art[name] {
+            LayerMover(image: image, dx: dx, dy: abs(dy), duration: duration)
+                .frame(width: size.width, height: size.height)
+        } else {
+            let paint = Self.painter(name, size, c)
+            Canvas { ctx, s in paint(&ctx, s) }
+                .frame(width: size.width + dx, height: size.height + abs(dy))
+        }
+    }
+
+    @ViewBuilder
+    private func twinkle(size: CGSize, _ c: Colors) -> some View {
+        if moving, let even = art["stars-even"], let odd = art["stars-odd"] {
+            ZStack {
+                LayerMover(image: even, duration: 1.6, fade: true, startFaded: false)
+                LayerMover(image: odd, duration: 1.6, fade: true, startFaded: true)
+            }
+            .frame(width: size.width, height: size.height)
+        } else {
+            let even = Self.painter("stars-even", size, c)
+            let odd = Self.painter("stars-odd", size, c)
+            ZStack {
+                Canvas { ctx, s in even(&ctx, s) }
+                Canvas { ctx, s in odd(&ctx, s) }.opacity(0.25)
+            }
+            .frame(width: size.width, height: size.height)
+        }
     }
 
     // Soft base: blush at the bottom (like the pictures), deep plum in dark mode.
@@ -432,5 +548,90 @@ struct BackgroundPicker: View {
             try? await Task.sleep(for: .milliseconds(16))
         }
         BackgroundPreviews.drawn[key] = drawn
+    }
+}
+
+// A picture moved (or faded) by Core Animation on the graphics chip, so a
+// moving background costs nothing on the main thread.
+private struct LayerMover: UIViewRepresentable {
+    let image: UIImage
+    var dx: CGFloat = 0
+    var dy: CGFloat = 0
+    var duration: Double
+    var fade = false
+    var startFaded = false
+
+    func makeUIView(context: Context) -> MoverView { MoverView() }
+
+    func updateUIView(_ view: MoverView, context: Context) {
+        view.update(image: image, dx: dx, dy: dy, duration: duration, fade: fade, startFaded: startFaded)
+    }
+
+    final class MoverView: UIView {
+        private let content = CALayer()
+        private var image: UIImage?
+        private var dx: CGFloat = 0
+        private var dy: CGFloat = 0
+        private var duration: Double = 1
+        private var fade = false
+        private var startFaded = false
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            isUserInteractionEnabled = false
+            clipsToBounds = true
+            layer.addSublayer(content)
+        }
+
+        required init?(coder: NSCoder) { nil }
+
+        func update(image: UIImage, dx: CGFloat, dy: CGFloat, duration: Double, fade: Bool, startFaded: Bool) {
+            let changed = image !== self.image || dx != self.dx || dy != self.dy || duration != self.duration || fade != self.fade || startFaded != self.startFaded
+            guard changed else { return }
+            self.image = image
+            self.dx = dx
+            self.dy = dy
+            self.duration = duration
+            self.fade = fade
+            self.startFaded = startFaded
+            content.contents = image.cgImage
+            content.contentsScale = image.scale
+            setNeedsLayout()
+            restart()
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            content.frame = CGRect(x: 0, y: 0, width: bounds.width + dx, height: bounds.height + dy)
+            CATransaction.commit()
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            restart()
+        }
+
+        private func restart() {
+            content.removeAnimation(forKey: "move")
+            guard window != nil, image != nil else { return }
+            let animation: CABasicAnimation
+            if fade {
+                animation = CABasicAnimation(keyPath: "opacity")
+                animation.fromValue = startFaded ? 0.25 : 1.0
+                animation.toValue = startFaded ? 1.0 : 0.25
+                animation.autoreverses = true
+                animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            } else {
+                animation = CABasicAnimation(keyPath: "transform.translation")
+                animation.fromValue = NSValue(cgSize: .zero)
+                animation.toValue = NSValue(cgSize: CGSize(width: -dx, height: -dy))
+            }
+            animation.duration = duration
+            animation.repeatCount = .infinity
+            animation.isRemovedOnCompletion = false
+            content.add(animation, forKey: "move")
+        }
     }
 }

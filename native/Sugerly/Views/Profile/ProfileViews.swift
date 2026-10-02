@@ -1110,8 +1110,7 @@ struct SettingsView: View {
         }
         .listStyle(.insetGrouped)
         .sugarList()
-        .navigationTitle("Settings")
-        .navigationBarTitleDisplayMode(.inline)
+        .roundTitle("Settings")
         .toolbar {
             if closable {
                 ToolbarItem(placement: .confirmationAction) {
@@ -1244,7 +1243,7 @@ struct SettingsView: View {
             .padding(.vertical, 4)
             .buttonStyle(.borderless)
             VStack(alignment: .leading, spacing: 12) {
-                IconRow(title: "Background", detail: "Shown behind Home.", icon: "sparkles", colors: [0xFFD166, 0xF0A020])
+                IconRow(title: "Background", detail: "Shown at the top of Home.", icon: "sparkles", colors: [0xFFD166, 0xF0A020])
                 BackgroundPicker()
             }
             .padding(.vertical, 4)

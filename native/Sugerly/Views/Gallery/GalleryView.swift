@@ -136,8 +136,7 @@ struct GalleryView: View {
 
         if isRoot {
             content
-                .navigationTitle("Fan Art")
-                .navigationBarTitleDisplayMode(.large)
+                .roundTitle("Fan Art")
                 .rootBar()
         } else {
             content.navigationTitle("Fan Art").navigationBarTitleDisplayMode(.inline)

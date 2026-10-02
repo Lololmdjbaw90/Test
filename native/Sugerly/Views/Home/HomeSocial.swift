@@ -120,39 +120,59 @@ struct HomeComposerBar: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 0) {
             Button { compose(.post) } label: {
-                HStack(spacing: 10) {
-                    Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 40)
-                    Text("What are you making today?").font(.jakarta(14, .medium)).foregroundStyle(Palette.muted)
-                    Spacer(minLength: 0)
-                    Image(systemName: "sparkles").font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.main)
+                HStack(spacing: 12) {
+                    Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 42)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("What are you making today?")
+                            .font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
+                            .lineLimit(1).minimumScaleFactor(0.85)
+                        Text("Tap to share it with everyone")
+                            .font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 6)
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 38, height: 38)
+                        .background(Theme.gradient, in: Circle())
                 }
-                .padding(.horizontal, 12).frame(height: 56)
-                .background(Palette.surface2, in: Capsule())
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .contentShape(Rectangle())
             }
             .buttonStyle(BouncyStyle(scale: 0.98))
-            HStack(spacing: 8) {
-                action("Photo", "photo.fill", 0x5FD3B0) { compose(.post) }
-                action("Reel", "play.rectangle.fill", 0xFF7AA2) { compose(.reel) }
-                action("Drawing", "paintbrush.pointed.fill", 0xB19CFF) { compose(.artwork) }
-                action("Song", "music.note", 0x7CBEFF) { compose(.track) }
+            Rectangle().fill(Palette.border).frame(height: 1).padding(.horizontal, 14)
+            HStack(spacing: 0) {
+                action("Post", "text.bubble.fill") { compose(.post) }
+                action("Reel", "play.rectangle.fill") { compose(.reel) }
+                action("Drawing", "paintbrush.pointed.fill") { compose(.artwork) }
+                action("Song", "music.note") { compose(.track) }
             }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 6)
         }
-        .padding(12)
-        .sugarCard(radius: 28)
+        .sugarCard(radius: 24)
     }
 
-    private func action(_ title: String, _ icon: String, _ color: UInt32, _ run: @escaping () -> Void) -> some View {
+    private func action(_ title: String, _ icon: String, _ run: @escaping () -> Void) -> some View {
         Button(action: run) {
-            HStack(spacing: 5) {
-                Image(systemName: icon).font(.system(size: 12, weight: .bold)).foregroundStyle(Color(hex: color))
-                Text(title).font(.jakarta(12, .bold)).foregroundStyle(Palette.text2).lineLimit(1).minimumScaleFactor(0.8)
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Theme.main)
+                    .frame(width: 34, height: 34)
+                    .background(Theme.soft, in: Circle())
+                Text(title).font(.jakarta(11, .bold)).foregroundStyle(Palette.text2).lineLimit(1)
             }
-            .frame(maxWidth: .infinity).frame(height: 36)
-            .background(Color(hex: color).opacity(0.12), in: Capsule())
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
         }
         .buttonStyle(BouncyStyle(scale: 0.92))
+        .accessibilityLabel("New \(title.lowercased())")
     }
 }
 

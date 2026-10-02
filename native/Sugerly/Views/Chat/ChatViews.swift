@@ -205,19 +205,13 @@ struct ChatListView: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) { AccountButton() }
             ToolbarItem(placement: .principal) {
-                Picker("Show", selection: $section) {
-                    Text("Chats").tag(0)
-                    Text("Servers").tag(1)
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 210)
+                TitleSwitch(titles: ["Chats", "Servers"], selection: $section)
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button { starting = true } label: { Image(systemName: "square.and.pencil") }
                     .accessibilityLabel("New message")
             }
         }
-        .sensoryFeedback(.selection, trigger: section)
         .bottomDock()
         .sheet(isPresented: $starting) {
             NewChatView { email in

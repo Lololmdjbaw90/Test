@@ -54,8 +54,7 @@ struct AccountView: View {
             }
             .listStyle(.insetGrouped)
             .sugarList()
-            .navigationTitle("Account")
-            .navigationBarTitleDisplayMode(.inline)
+            .roundTitle("Account")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }

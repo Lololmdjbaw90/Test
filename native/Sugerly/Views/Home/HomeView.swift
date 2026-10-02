@@ -237,9 +237,16 @@ struct HomeView: View {
             .padding(.top, 8)
             .padding(.bottom, 32)
             .sideRails(760)
+            // Your background pattern only at the top, fading out, so the
+            // cards below sit on a calm page.
+            .background(alignment: .top) {
+                HeaderWallpaper()
+                    .frame(height: 480)
+                    .offset(y: -170)
+            }
         }
         .scrollIndicators(.hidden)
-        .patternBackground()
+        .sugarBackground()
         .accessibilityIdentifier("home-feed")
         .navigationTitle("Home")
         .navigationBarTitleDisplayMode(.inline)
@@ -357,17 +364,7 @@ struct HomeView: View {
             DailyRewardButton()
         }
         .padding(18)
-        .background {
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .fill(LinearGradient(colors: [Palette.surface, Palette.surface, Theme.soft], startPoint: .topLeading, endPoint: .bottomTrailing))
-                .overlay(alignment: .topTrailing) {
-                    Image(systemName: "sparkles").font(.system(size: 90, weight: .light))
-                        .foregroundStyle(Theme.main.opacity(0.06)).offset(x: 20, y: -20)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 30, style: .continuous).strokeBorder(Theme.main.opacity(0.14), lineWidth: 1))
-                .shadow(color: Theme.main.opacity(0.08), radius: 18, y: 8)
-        }
+        .sugarCard(radius: 28)
     }
 
     private func stat(_ value: String, _ label: String, _ sub: String, _ color: Color) -> some View {
@@ -399,11 +396,10 @@ struct HomeView: View {
                 Button { path.append(item.3) } label: {
                     VStack(spacing: 8) {
                         Image(systemName: item.1)
-                            .font(.system(size: 19, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 50, height: 50)
-                            .background(LinearGradient(colors: item.2.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 17, style: .continuous))
-                            .shadow(color: Color(hex: item.2[1]).opacity(0.3), radius: 8, y: 4)
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(Theme.main)
+                            .frame(width: 48, height: 48)
+                            .background(Theme.soft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                         Text(item.0).font(.jakarta(12, .bold)).foregroundStyle(Palette.text2)
                             .lineLimit(1).minimumScaleFactor(0.8)
                     }

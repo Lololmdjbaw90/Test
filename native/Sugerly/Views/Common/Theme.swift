@@ -206,8 +206,7 @@ struct SugarCard: ViewModifier {
             .padding(padding)
             .background {
                 shape.fill(Palette.surface)
-                    .shadow(color: Palette.shadow, radius: 2, y: 1)
-                    .shadow(color: Theme.main.opacity(scheme == .dark ? 0.0 : 0.06), radius: 18, y: 8)
+                    .shadow(color: scheme == .dark ? Palette.shadow : Theme.main.opacity(0.08), radius: 12, y: 6)
             }
             .overlay {
                 shape.strokeBorder(
@@ -326,30 +325,28 @@ struct Chip: View {
     }
 }
 
-// Section title with an icon tile and an optional "See all".
+// Section title in the round font with a small accent icon, and an
+// optional "See all". Kept quiet so the content is what stands out.
 struct SectionHeader: View {
     let icon: String
     let title: String
     var action: (() -> Void)? = nil
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 34, height: 34)
-                .background(Theme.gradient, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                .shadow(color: Theme.main.opacity(0.3), radius: 6, y: 3)
-            Text(title).font(.display(22)).foregroundStyle(Palette.text)
-            Spacer()
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(Theme.main)
+            Text(title).font(.display(23)).foregroundStyle(Palette.text)
+                .lineLimit(1).minimumScaleFactor(0.8)
+            Spacer(minLength: 8)
             if let action {
                 Button(action: action) {
-                    HStack(spacing: 4) { Text("See all"); Image(systemName: "chevron.right").font(.system(size: 10, weight: .heavy)) }
-                        .font(.jakarta(12, .bold))
+                    HStack(spacing: 3) { Text("See all"); Image(systemName: "chevron.right").font(.system(size: 10, weight: .heavy)) }
+                        .font(.jakarta(13, .bold))
                         .foregroundStyle(Theme.main)
-                        .padding(.horizontal, 12)
-                        .frame(height: 30)
-                        .background(Theme.soft, in: Capsule())
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(BouncyStyle())
             }
