@@ -47,6 +47,7 @@ struct ShellUITestHost: View {
             .badge(3)
             .tag(AppTab.chat)
         }
+        .compactTabBar()
         .tint(Theme.main)
         .sheet(isPresented: createShown) {
             CreateSheet { _ in model.showCreate = false }

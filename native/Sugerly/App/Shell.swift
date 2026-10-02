@@ -223,6 +223,7 @@ struct MainShell: View {
             .badge(chats.unread)
             .tag(AppTab.chat)
         }
+        .compactTabBar()
         .tint(Theme.main)
     }
 

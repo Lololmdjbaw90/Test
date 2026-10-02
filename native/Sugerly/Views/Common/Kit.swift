@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // The frame every page sits in: iPhone's own tab bar and top bars (so the
 // back button, the swipe back, the keyboard and the safe areas all behave
@@ -56,6 +57,52 @@ private struct RootBar: ViewModifier {
                 }
             }
             .bottomDock()
+    }
+}
+
+// MARK: - The tab bar
+
+extension View {
+    /// On iOS 26 the tab bar shrinks to a small bubble while you scroll down
+    /// (the page gets the room) and comes back as soon as you scroll up.
+    func compactTabBar() -> some View {
+        modifier(CompactTabBar())
+    }
+}
+
+private struct CompactTabBar: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.tabBarMinimizeBehavior(.onScrollDown)
+        } else {
+            content
+        }
+    }
+}
+
+enum TabBarLook {
+    // Before iOS 26 (which draws its own floating glass bar): a soft blush
+    // frosted bar, quiet icons, the pink one for the tab you're on, and
+    // pink badges, in Sugerly's font.
+    static func apply() {
+        guard #unavailable(iOS 26.0) else { return }
+        let small = UIFont(name: "PlusJakartaSans-SemiBold", size: 10) ?? .systemFont(ofSize: 10, weight: .semibold)
+        let bold = UIFont(name: "PlusJakartaSans-Bold", size: 10) ?? .systemFont(ofSize: 10, weight: .bold)
+        let muted = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x86707C) : UIColor(hex: 0x9C8A93) }
+        let bar = UITabBarAppearance()
+        bar.configureWithDefaultBackground()
+        bar.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterial)
+        bar.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x140A11, alpha: 0.72) : UIColor(hex: 0xFFF3F7, alpha: 0.8) }
+        bar.shadowColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x351F2C) : UIColor(hex: 0xF8D9E4) }
+        for layout in [bar.stackedLayoutAppearance, bar.inlineLayoutAppearance, bar.compactInlineLayoutAppearance] {
+            layout.normal.iconColor = muted
+            layout.normal.titleTextAttributes = [.foregroundColor: muted, .font: small]
+            layout.selected.titleTextAttributes = [.font: bold]
+            layout.normal.badgeBackgroundColor = UIColor(hex: 0xE8457C)
+            layout.selected.badgeBackgroundColor = UIColor(hex: 0xE8457C)
+        }
+        UITabBar.appearance().standardAppearance = bar
+        UITabBar.appearance().scrollEdgeAppearance = bar
     }
 }
 
