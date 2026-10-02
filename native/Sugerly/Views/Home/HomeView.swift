@@ -219,14 +219,14 @@ struct HomeView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 26) {
                 announcementBanner
-                hero.homeSection(appeared, 0)
-                HomeComposerBar(compose: compose).homeSection(appeared, 1)
+                hero.scrollFade().homeSection(appeared, 0)
+                HomeComposerBar(compose: compose).scrollFade().homeSection(appeared, 1)
                 StoriesRow(reels: reels, path: $path, compose: compose).homeSection(appeared, 2)
-                shortcuts.homeSection(appeared, 3)
+                shortcuts.scrollFade().homeSection(appeared, 3)
                 community.homeSection(appeared, 4)
                 if !reels.isEmpty { reelStrip.homeSection(appeared, 5) }
                 featured.homeSection(appeared, 6)
-                ArtPromptCard(compose: compose).homeSection(appeared, 7)
+                ArtPromptCard(compose: compose).scrollFade().homeSection(appeared, 7)
                 SuggestedPeople(path: $path)
                 TrendingTags(posts: posts.posts, reels: reels) { tagSearch = $0 }
                 freshTracks
@@ -246,6 +246,7 @@ struct HomeView: View {
             }
         }
         .scrollIndicators(.hidden)
+        .appearFade()
         .sugarBackground()
         .accessibilityIdentifier("home-feed")
         .navigationTitle("Home")
@@ -438,6 +439,7 @@ struct HomeView: View {
                 ForEach(communityPicks) { post in
                     Button { path.append(.post(post)) } label: { pickCard(post) }
                         .buttonStyle(BouncyStyle(scale: 0.96))
+                        .scrollFade()
                 }
             }
         }
@@ -495,6 +497,7 @@ struct HomeView: View {
                             .shadow(color: Palette.shadow, radius: 8, y: 4)
                         }
                         .buttonStyle(BouncyStyle(scale: 0.95))
+                        .swipeFade()
                     }
                 }
                 .padding(.vertical, 4)
@@ -540,6 +543,7 @@ struct HomeView: View {
                             .shadow(color: Palette.shadow, radius: 10, y: 5)
                         }
                         .buttonStyle(BouncyStyle(scale: 0.96))
+                        .swipeFade()
                     }
                 }
                 .padding(.vertical, 4)
@@ -591,6 +595,7 @@ struct HomeView: View {
                                 .frame(width: 72)
                             }
                             .buttonStyle(BouncyStyle())
+                            .swipeFade()
                         }
                     }
                     .padding(.vertical, 4)
@@ -622,6 +627,7 @@ struct HomeView: View {
                             .sugarCard(radius: 20, padding: 10)
                         }
                         .buttonStyle(BouncyStyle(scale: 0.96))
+                        .scrollFade()
                     }
                 }
             }

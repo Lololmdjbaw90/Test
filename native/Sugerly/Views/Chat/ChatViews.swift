@@ -196,10 +196,16 @@ struct ChatListView: View {
         Group {
             if section == 1 {
                 ServersHome(path: $path, embedded: true)
+                    .transition(.opacity)
             } else {
                 chats
+                    .transition(.opacity)
             }
         }
+        .animation(.easeOut(duration: 0.22), value: section)
+        .appearFade()
+        // The page colour stays put while the list fades in.
+        .background { Palette.bg.ignoresSafeArea() }
         .navigationTitle(section == 0 ? "Chats" : "Servers")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

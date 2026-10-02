@@ -321,6 +321,7 @@ struct CommunityView: View {
                         startThread
                         ForEach(Array(visible.enumerated()), id: \.element.id) { index, post in
                             PostCard(post: post, path: $path, reporting: $reporting, conversational: true)
+                                .scrollFade()
                                 .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 18)), removal: .opacity))
                                 .onAppear { if index >= visible.count - 5 { Task { await store.loadMore() } } }
                             if index == 1 && !suggestions.isEmpty && feed == .forYou {
@@ -342,6 +343,7 @@ struct CommunityView: View {
             .sideRails(680)
             .animation(.spring(response: 0.45, dampingFraction: 0.85), value: feed)
         }
+        .appearFade()
         .sugarBackground()
         .roundTitle("Community")
         .rootBar(search: { searching = true })

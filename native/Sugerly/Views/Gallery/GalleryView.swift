@@ -113,6 +113,7 @@ struct GalleryView: View {
             .frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
+        .appearFade()
         .sugarBackground()
         .refreshable { await load() }
         .task { if artworks.isEmpty { await load() } }

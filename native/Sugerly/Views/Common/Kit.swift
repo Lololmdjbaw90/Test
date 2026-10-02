@@ -143,6 +143,58 @@ struct BottomDock: View {
     }
 }
 
+// MARK: - Always a little motion
+
+extension View {
+    /// A tab's page fades in each time it comes on screen (switching tabs,
+    /// swiping back to it). Put it on the content, not the background, so
+    /// the page's colour never flashes.
+    func appearFade() -> some View {
+        modifier(AppearFade())
+    }
+
+    /// Fades and settles in as it scrolls onto the screen (and out as it
+    /// leaves), following your finger.
+    func scrollFade() -> some View {
+        modifier(ScrollFade(axis: .vertical))
+    }
+
+    /// The same for cards in a sideways row, as you swipe through them.
+    func swipeFade() -> some View {
+        modifier(ScrollFade(axis: .horizontal))
+    }
+}
+
+private struct AppearFade: ViewModifier {
+    @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown || reduceMotion ? 1 : 0)
+            .onAppear { withAnimation(.easeOut(duration: 0.24)) { shown = true } }
+            .onDisappear { shown = false }
+    }
+}
+
+private struct ScrollFade: ViewModifier {
+    let axis: Axis
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        if reduceMotion {
+            content
+        } else {
+            let vertical = axis == .vertical
+            content.scrollTransition(.interactive.threshold(.visible(vertical ? 0.3 : 0.45)), axis: axis) { view, phase in
+                view
+                    .opacity(phase.isIdentity ? 1 : 0.4)
+                    .scaleEffect(phase.isIdentity ? 1 : (vertical ? 0.95 : 0.9))
+            }
+        }
+    }
+}
+
 // MARK: - Titles in the round font
 
 extension View {

@@ -61,7 +61,7 @@ struct StoriesRow: View {
                 }
                 .buttonStyle(BouncyStyle(scale: 0.9))
                 ForEach(Array(stories.enumerated()), id: \.element.id) { i, story in
-                    bubble(story).transition(.scale.combined(with: .opacity))
+                    bubble(story).transition(.scale.combined(with: .opacity)).swipeFade()
                 }
             }
             .padding(.vertical, 6)
