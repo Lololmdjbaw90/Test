@@ -257,9 +257,12 @@ struct CommunityView: View {
                         let person = model.person(entry.0)
                         Button { path.append(.person(entry.0)) } label: {
                             VStack(spacing: 5) {
-                                Avatar(url: person?.picture ?? "", name: person?.displayName ?? "", size: 54, online: person?.isOnline ?? false)
+                                Avatar(url: person?.picture ?? "", name: person?.displayName ?? "", size: 54)
                                     .padding(3)
                                     .overlay(Circle().strokeBorder(i == 0 ? Color(hex: 0xF0A020) : i == 1 ? Color(hex: 0x94A3B8) : i == 2 ? Color(hex: 0xC2773A) : Palette.border, lineWidth: i < 3 ? 2.5 : 1.5))
+                                    .overlay(alignment: .bottomTrailing) {
+                                        PresenceBadge(online: person?.isOnline ?? false, size: 54).padding(3)
+                                    }
                                     .overlay(alignment: .top) {
                                         if i == 0 {
                                             Image(systemName: "crown.fill").font(.system(size: 15, weight: .bold)).foregroundStyle(Color(hex: 0xF0A020))

@@ -36,15 +36,7 @@ struct Avatar: View {
             .frame(width: size, height: size)
             .clipShape(Circle())
 
-            if let presence, presence != .offline {
-                PresenceDot(presence: presence, size: max(11, size * 0.3))
-                    .overlay(Circle().strokeBorder(Palette.surface, lineWidth: max(1.5, size * 0.04)))
-            } else if online {
-                Circle().fill(Palette.success)
-                    .frame(width: max(9, size * 0.27), height: max(9, size * 0.27))
-                    .overlay(Circle().strokeBorder(Palette.surface, lineWidth: max(2, size * 0.05)))
-                    .shadow(color: Palette.success.opacity(0.5), radius: 3)
-            }
+            PresenceBadge(presence: presence, online: online, size: size)
         }
         .accessibilityHidden(true)
         .task(id: url) {
@@ -71,6 +63,28 @@ struct Avatar: View {
                 .font(.display(size * 0.45))
                 .foregroundStyle(.white)
                 .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
+        }
+    }
+}
+
+// The little status dot on a picture (online, idle, do not disturb). Also
+// used on its own on top of a picture that has a ring or frame around it,
+// so the dot always sits in front of the ring, never behind it.
+struct PresenceBadge: View {
+    var presence: Presence? = nil
+    var online = false
+    // The size of the picture it belongs to.
+    let size: CGFloat
+
+    var body: some View {
+        if let presence, presence != .offline {
+            PresenceDot(presence: presence, size: max(11, size * 0.3))
+                .overlay(Circle().strokeBorder(Palette.surface, lineWidth: max(1.5, size * 0.04)))
+        } else if online {
+            Circle().fill(Palette.success)
+                .frame(width: max(9, size * 0.27), height: max(9, size * 0.27))
+                .overlay(Circle().strokeBorder(Palette.surface, lineWidth: max(2, size * 0.05)))
+                .shadow(color: Palette.success.opacity(0.5), radius: 3)
         }
     }
 }

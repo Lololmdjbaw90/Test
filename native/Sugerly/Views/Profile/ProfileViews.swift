@@ -166,12 +166,16 @@ struct ProfileContent: View {
             // One ring at a time: a chosen frame replaces the plain / MimiPlus
             // ring (both at once used to draw over each other).
             let framed = !person.avatarFrame.isEmpty && (person.isNitro || !AvatarFrame.isPremium(person.avatarFrame))
-            Avatar(url: person.picture, name: person.displayName, size: 104, ring: !framed && !person.isNitro, nitro: !framed && person.isNitro,
-                   presence: isMe ? (Presence(rawValue: person.presence) ?? .online) : person.presenceNow)
+            Avatar(url: person.picture, name: person.displayName, size: 104, ring: !framed && !person.isNitro, nitro: !framed && person.isNitro)
                 .padding(4)
                 .background(Circle().fill(Palette.bg).shadow(color: (accent ?? Theme.pink).opacity(0.3), radius: 16, y: 8))
                 .overlay {
                     if framed { AvatarFrameView(frame: person.avatarFrame, color: accent ?? Theme.main, size: 104) }
+                }
+                // The status dot goes on top of the frame, not under it.
+                .overlay(alignment: .bottomTrailing) {
+                    PresenceBadge(presence: isMe ? (Presence(rawValue: person.presence) ?? .online) : person.presenceNow, size: 104)
+                        .padding(4)
                 }
                 .offset(x: 26, y: 56)
         }

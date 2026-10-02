@@ -185,6 +185,7 @@ final class Navigator {
 private struct ShellTabs: View {
     let nav: Navigator
     @Environment(ChatStore.self) private var chats
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     // Tapping the tab you're already on takes it back to its first page.
     private var selection: Binding<AppTab> {
@@ -197,24 +198,34 @@ private struct ShellTabs: View {
     var body: some View {
         TabView(selection: selection) {
             HomeTab(nav: nav)
+                .environment(\.horizontalSizeClass, sizeClass)
                 .tabItem { Label("Home", systemImage: "house") }
                 .tag(AppTab.home)
             CommunityTab(nav: nav)
+                .environment(\.horizontalSizeClass, sizeClass)
                 .tabItem { Label("Community", systemImage: "person.2") }
                 .tag(AppTab.community)
             GalleryTab(nav: nav)
+                .environment(\.horizontalSizeClass, sizeClass)
                 .tabItem { Label("Fan Art", systemImage: "paintpalette") }
                 .tag(AppTab.gallery)
             ReelsTab(nav: nav)
+                .environment(\.horizontalSizeClass, sizeClass)
                 .tabItem { Label("Reels", systemImage: "play.rectangle") }
                 .tag(AppTab.reels)
             ChatTab(nav: nav)
+                .environment(\.horizontalSizeClass, sizeClass)
                 .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
                 .badge(chats.unread)
                 .tag(AppTab.chat)
         }
         .compactTabBar()
         .tint(Theme.main)
+        // iPad: the tab bar sits at the bottom like on iPhone. (iPadOS puts
+        // the tabs at the top, squeezed in with each page's title and
+        // buttons, which looked crowded.) The pages inside keep their iPad
+        // layout.
+        .environment(\.horizontalSizeClass, .compact)
     }
 }
 
