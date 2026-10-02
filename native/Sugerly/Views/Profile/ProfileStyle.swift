@@ -515,7 +515,7 @@ struct NitroShopView: View {
         Perk(icon: "textformat", title: "Name styles", text: "Gold, Aurora, Neon, Rainbow and Sunset", colors: [0xFFD166, 0xF0A020]),
         Perk(icon: "sparkles", title: "Profile effects", text: "12 floating effects for your banner", colors: [0xB19CFF, 0x8B5CF6]),
         Perk(icon: "heart.circle.fill", title: "Premium frames", text: "Rainbow, Hearts and Stars", colors: [0x7CBEFF, 0x2F80E0]),
-        Perk(icon: "circle.dashed.inset.filled", title: "Candy ring", text: "An animated ring around your picture", colors: [0x5EC8B8, 0x2E9E8F]),
+        Perk(icon: "rectangle.inset.filled", title: "Plus banner", text: "A dreamy colour banner when you don't add your own", colors: [0x5EC8B8, 0x2E9E8F]),
         Perk(icon: "checkmark.seal.fill", title: "MimiPlus badge", text: "Next to your name on your profile", colors: [0xF472B6, 0xC084FC]),
     ]
 
