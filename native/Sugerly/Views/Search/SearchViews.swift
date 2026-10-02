@@ -199,10 +199,8 @@ struct PersonBubble: View {
         VStack(spacing: 10) {
             Button(action: open) {
                 VStack(spacing: 8) {
-                    Avatar(url: person.picture, name: person.displayName, size: 78, online: person.isOnline, ring: person.isOnline,
+                    Avatar(url: person.picture, name: person.displayName, size: 82, online: person.isOnline,
                            presence: person.isOnline ? person.presenceNow : nil)
-                        .padding(4)
-                        .background(Circle().fill(Theme.soft))
                     HStack(spacing: 4) {
                         Text(person.displayName).font(.jakarta(15, .heavy)).foregroundStyle(Palette.text).lineLimit(1)
                         if person.isAdmin {

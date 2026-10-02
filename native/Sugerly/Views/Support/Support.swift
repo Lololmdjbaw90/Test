@@ -214,6 +214,8 @@ struct SupportChatView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 4)
+                    .frame(maxWidth: 720)
+                    .frame(maxWidth: .infinity)
                     .animation(.spring(response: 0.4, dampingFraction: 0.85), value: messages.map(\.id))
                 }
                 .scrollDismissesKeyboard(.interactively)
@@ -423,6 +425,8 @@ struct SupportChatView: View {
         .padding(.horizontal, 14)
         .padding(.top, 8)
         .padding(.bottom, 10)
+        .frame(maxWidth: 720)
+        .frame(maxWidth: .infinity)
         .background(.bar)
         .animation(.snappy, value: photo != nil)
     }

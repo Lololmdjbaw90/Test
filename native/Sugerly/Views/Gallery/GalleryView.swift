@@ -517,22 +517,40 @@ struct ArtworkDetailView: View {
                     }
                     .onTapGesture(count: 2) { doubleTap() }
                     .onTapGesture { zoom = true }
-                Text(artwork.title).font(.display(32)).foregroundStyle(Palette.text)
-                Button { path.append(.person(artwork.authorEmail)) } label: {
+                // Who drew it and what it is, on one soft card.
+                VStack(alignment: .leading, spacing: 12) {
+                    if !artwork.title.isEmpty {
+                        Text(artwork.title).font(.display(30)).foregroundStyle(Palette.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     HStack(spacing: 10) {
-                        Avatar(url: model.person(artwork.authorEmail)?.picture ?? artwork.authorPicture, name: model.name(artwork.authorEmail, artwork.authorName), size: 40)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(model.name(artwork.authorEmail, artwork.authorName)).font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
-                            Text(Dates.ago(artwork.created)).font(.jakarta(12)).foregroundStyle(Palette.muted)
+                        Button { path.append(.person(artwork.authorEmail)) } label: {
+                            HStack(spacing: 10) {
+                                Avatar(url: model.person(artwork.authorEmail)?.picture ?? artwork.authorPicture, name: model.name(artwork.authorEmail, artwork.authorName), size: 42)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(model.name(artwork.authorEmail, artwork.authorName)).font(.jakarta(15, .bold)).foregroundStyle(Palette.text).lineLimit(1)
+                                    Text(Dates.ago(artwork.created)).font(.jakarta(12)).foregroundStyle(Palette.muted)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        Spacer(minLength: 8)
+                        FollowButton(email: artwork.authorEmail, compact: true)
+                    }
+                    if !artwork.text.isEmpty {
+                        Text(artwork.text).font(.jakarta(15)).foregroundStyle(Palette.text2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if !artwork.medium.isEmpty || !artwork.year.isEmpty {
+                        HStack(spacing: 8) {
+                            if !artwork.medium.isEmpty { tag(artwork.medium.replacingOccurrences(of: "_", with: " ").capitalized, "paintbrush.pointed.fill") }
+                            if !artwork.year.isEmpty { tag(artwork.year, "calendar") }
                         }
                     }
                 }
-                .buttonStyle(.plain)
-                if !artwork.text.isEmpty { Text(artwork.text).font(.jakarta(15)).foregroundStyle(Palette.text2) }
-                if !artwork.medium.isEmpty {
-                    Text(artwork.medium.capitalized).font(.jakarta(12, .bold)).foregroundStyle(Theme.pink)
-                        .padding(.horizontal, 12).padding(.vertical, 6).background(Theme.pink.opacity(0.1), in: Capsule())
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .sugarCard(radius: 26, padding: 16)
                 HStack(spacing: 12) {
                     Button { toggleLike() } label: {
                         Label("\(artwork.likeTotal)", systemImage: liked ? "heart.fill" : "heart")
@@ -571,6 +589,12 @@ struct ArtworkDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $reporting) { target in ReportSheet(target: target) }
         .fullScreenCover(isPresented: $zoom) { ZoomImage(url: artwork.imageURL) }
+    }
+
+    private func tag(_ text: String, _ icon: String) -> some View {
+        Label(text, systemImage: icon).font(.jakarta(12, .bold)).foregroundStyle(Theme.main)
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .background(Theme.soft, in: Capsule())
     }
 
     private func doubleTap() {

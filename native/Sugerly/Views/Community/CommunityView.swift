@@ -1174,6 +1174,8 @@ struct CommentsScreen<Header: View>: View {
         .padding(.horizontal, 12)
         .padding(.top, 10)
         .padding(.bottom, 8)
+        .frame(maxWidth: 680)
+        .frame(maxWidth: .infinity)
         .background {
             Palette.surface
                 .shadow(color: Palette.shadow, radius: 10, y: -4)
@@ -1238,7 +1240,11 @@ struct CommentsScreen<Header: View>: View {
             let said = text.isEmpty ? Media.label(gif).replacingOccurrences(of: "Sent", with: "sent") : "\"\(text.prefix(60))\""
             Notify.send(to: target, from: me, type: "comment", message: "\(me.displayName) \(replyTo == nil ? "commented" : "replied"): \(said)", link: link)
             replyTo = nil
-        } catch {}
+        } catch {
+            // Say why (it used to fail silently), and let them try again.
+            TextGuard.forget(.comment, model: model)
+            model.showToast(PostProblem.message(error), icon: "exclamationmark.circle", error: true)
+        }
     }
 
     private func like(_ c: Comment) {

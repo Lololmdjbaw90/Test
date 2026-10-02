@@ -416,12 +416,14 @@ struct Artwork: Identifiable, Hashable {
     var likeCount: Int?
     var featured: Bool
     var created: String
+    var year: String
 
     init(_ d: Doc) {
         id = d.str("id")
         title = d.str("title")
         text = d.str("description")
         imageURL = d.str("image_url")
+        year = d.str("year")
         medium = d.str("medium").replacingOccurrences(of: "_", with: " ")
         authorEmail = d.str("user_email").lowercased()
         authorName = d.str("user_display_name")

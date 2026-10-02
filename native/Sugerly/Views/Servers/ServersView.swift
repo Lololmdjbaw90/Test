@@ -263,10 +263,13 @@ struct DiscoverServers: View {
                 } else if shown.isEmpty {
                     EmptyCard(icon: "person.3.fill", title: "Nothing found", text: "Try another name, or make your own with +.")
                 }
-                ForEach(shown) { server in
-                    let joined = server.members.contains(model.me?.email ?? "")
-                    ServerCard(server: server, joined: joined, busy: busy == server.id) {
-                        if joined { onOpen(server) } else { Task { await join(server) } }
+                // One column on iPhone, more side by side on iPad.
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 12, alignment: .top)], spacing: 12) {
+                    ForEach(shown) { server in
+                        let joined = server.members.contains(model.me?.email ?? "")
+                        ServerCard(server: server, joined: joined, busy: busy == server.id) {
+                            if joined { onOpen(server) } else { Task { await join(server) } }
+                        }
                     }
                 }
             }
@@ -390,6 +393,8 @@ struct ServerPanel: View {
             }
             .padding(12)
             .padding(.bottom, 20)
+            .frame(maxWidth: 720)
+            .frame(maxWidth: .infinity)
         }
         .refreshable { await store.load() }
         .task { await store.load() }
