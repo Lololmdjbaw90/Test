@@ -352,7 +352,8 @@ struct ReelStudioView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var step: Step = .pick
-    @State private var camera = false
+    @State private var library = false
+    @State private var showDrafts = false
     @State private var items: [PhotosPickerItem] = []
     @State private var loadingPick = false
 
@@ -446,15 +447,8 @@ struct ReelStudioView: View {
         .overlay { chatBusyOverlay }
         .preferredColorScheme(.dark)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: step)
-        .fullScreenCover(isPresented: $camera) {
-            RecorderView(sound: $sound, onVideo: { url in
-                camera = false
-                Task { await openVideo(url) }
-            }, onPhotos: { images in
-                camera = false
-                openPhotos(images)
-            }, onClose: { camera = false })
-        }
+        .photosPicker(isPresented: $library, selection: $items, maxSelectionCount: 10, matching: .any(of: [.videos, .images]))
+        .sheet(isPresented: $showDrafts) { draftsSheet }
         .sheet(item: $editingText) { sticker in
             TextStickerEditor(sticker: sticker) { updated in
                 if let i = stickers.firstIndex(where: { $0.id == updated.id }) { stickers[i] = updated } else { stickers.append(updated) }
@@ -514,56 +508,59 @@ struct ReelStudioView: View {
         .onDisappear { teardown() }
     }
 
-    // MARK: step 1 — pick
+    // MARK: step 1 — the camera
 
+    // Making a reel opens the camera straight away (like TikTok). Upload
+    // picks from your library; Drafts opens the ones you saved.
     private var pickScreen: some View {
-        VStack(spacing: 22) {
-            topBar(title: chatName.map { "Send to \($0)" } ?? "New reel", back: { dismiss() }, next: nil)
-            Spacer()
-            ZStack {
-                Circle().fill(Theme.gradient).frame(width: 190, height: 190).blur(radius: 50).opacity(0.7)
-                Image(systemName: "video.fill")
-                    .font(.system(size: 58, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 130, height: 130)
-                    .background(Theme.gradient, in: RoundedRectangle(cornerRadius: 40, style: .continuous))
-                    .shadow(color: Theme.pink.opacity(0.6), radius: 24, y: 10)
-            }
-            Text(isChat ? "Snap or film something" : "Make something cute").font(.display(34)).foregroundStyle(.white)
-            if let sound {
-                Label("Using \(sound.title) · \(sound.artist)", systemImage: "music.note")
-                    .font(.jakarta(13, .bold)).foregroundStyle(.white).lineLimit(1)
-                    .padding(.horizontal, 14).frame(height: 34)
-                    .background(Theme.gradient, in: Capsule())
-                    .padding(.horizontal, 30)
-            }
-            Text("Film in clips (pause, delete, start over), snap photos, or pick from your library.")
-                .font(.jakarta(15)).foregroundStyle(.white.opacity(0.7)).multilineTextAlignment(.center).padding(.horizontal, 30)
-            Spacer()
+        RecorderView(sound: $sound, onVideo: { url in
+            Task { await openVideo(url) }
+        }, onPhotos: { images in
+            openPhotos(images)
+        }, onClose: { dismiss() },
+        onUpload: { library = true },
+        draftCount: isChat ? 0 : drafts.count,
+        onDrafts: { showDrafts = true })
+        .overlay {
             if loadingPick {
-                ProgressView().tint(.white).padding()
+                ProgressView().tint(.white).controlSize(.large)
+                    .frame(width: 90, height: 90)
+                    .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .transition(.opacity)
             }
-            if !drafts.isEmpty && !isChat {
-                DraftStrip(title: "Drafts", items: drafts, dark: true, thumb: { Drafts.reelCover($0) },
-                           label: { d in d.caption.isEmpty ? d.saved.formatted(date: .abbreviated, time: .omitted) : d.caption },
-                           onOpen: { d in Task { await openDraft(d) } },
-                           onDelete: { d in Drafts.delete("reels", d.id); drafts = Drafts.reels() })
-                    .padding(.horizontal, 24)
-            }
-            VStack(spacing: 12) {
-                Button { camera = true } label: { Label("Open camera", systemImage: "camera.fill") }
-                    .buttonStyle(GradientButtonStyle(height: 56))
-                PhotosPicker(selection: $items, maxSelectionCount: 10, matching: .any(of: [.videos, .images])) {
-                    Label("Choose from library", systemImage: "photo.on.rectangle.angled")
-                        .font(.jakarta(15, .bold)).foregroundStyle(.white)
-                        .frame(maxWidth: .infinity).frame(height: 56)
-                        .background(.white.opacity(0.14), in: Capsule())
-                        .overlay(Capsule().strokeBorder(.white.opacity(0.25), lineWidth: 1))
-                }
-                .buttonStyle(BouncyStyle(scale: 0.96))
-            }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 30)
         }
+        .overlay(alignment: .top) {
+            // (In chats the problem shows in the middle instead.)
+            if let error, !isChat {
+                Text(error).font(.jakarta(13, .semibold)).foregroundStyle(.white)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(Palette.danger, in: Capsule())
+                    .padding(.top, 60)
+                    .onTapGesture { self.error = nil }
+                    .transition(.opacity)
+            }
+        }
+    }
+
+    private var draftsSheet: some View {
+        DraftStrip(title: "Drafts", items: drafts, dark: true, thumb: { Drafts.reelCover($0) },
+                   label: { d in d.caption.isEmpty ? d.saved.formatted(date: .abbreviated, time: .omitted) : d.caption },
+                   onOpen: { d in
+                       showDrafts = false
+                       Task { await openDraft(d) }
+                   },
+                   onDelete: { d in
+                       Drafts.delete("reels", d.id)
+                       drafts = Drafts.reels()
+                       if drafts.isEmpty { showDrafts = false }
+                   })
+            .padding(.horizontal, 20)
+            .padding(.top, 26)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .presentationDetents([.height(220)])
+            .presentationCornerRadius(30)
+            .presentationBackground(Color(hex: 0x1A0F15))
+            .preferredColorScheme(.dark)
     }
 
     // MARK: step 2 — edit

@@ -4,9 +4,11 @@ import AVFoundation
 
 // MARK: - Camera engine
 
-// The in-app camera: video in clips (tap to record, tap again to pause, keep
-// adding clips, delete the last one or start over) and photos. Flash, front
-// / back, pinch to zoom and a 3 s / 10 s timer.
+// The in-app camera: video in clips (tap to record, tap again to pause, or
+// hold to film while you hold; keep adding clips, delete the last one or
+// start over) and photos. Flash (a ring light on the screen for the front
+// camera), front / back, tap to focus, pinch or slide to zoom, a 3 s / 10 s
+// timer and "Align" to line the next clip up with the last one.
 @MainActor
 @Observable
 final class RecorderModel: NSObject {
@@ -15,6 +17,8 @@ final class RecorderModel: NSObject {
         let url: URL
         let seconds: Double
         var speed: Double = 1
+        // The clip's last moment, for "Align".
+        var ghost: UIImage? = nil
         var effective: Double { seconds / speed }
     }
 
@@ -34,6 +38,7 @@ final class RecorderModel: NSObject {
     var recording = false
     var current: Double = 0
     var flash = false
+    var photoMode = false
     var zoom: CGFloat = 1
     var maxSeconds: Double = 60
     var speed: Double = 1
@@ -118,6 +123,7 @@ final class RecorderModel: NSObject {
         session.commitConfiguration()
         fixConnections()
         zoom = 1
+        applyTorch()
     }
 
     func setZoom(_ factor: CGFloat) {
@@ -131,8 +137,43 @@ final class RecorderModel: NSObject {
         } catch {}
     }
 
+    // Tap to focus: sharp and bright where you tapped.
+    func focus(at point: CGPoint) {
+        guard let device else { return }
+        let p = CGPoint(x: min(max(point.x, 0), 1), y: min(max(point.y, 0), 1))
+        do {
+            try device.lockForConfiguration()
+            if device.isFocusPointOfInterestSupported, device.isFocusModeSupported(.continuousAutoFocus) {
+                device.focusPointOfInterest = p
+                device.focusMode = .continuousAutoFocus
+            }
+            if device.isExposurePointOfInterestSupported, device.isExposureModeSupported(.continuousAutoExposure) {
+                device.exposurePointOfInterest = p
+                device.exposureMode = .continuousAutoExposure
+            }
+            device.unlockForConfiguration()
+        } catch {}
+    }
+
+    func toggleFlash() {
+        flash.toggle()
+        applyTorch()
+    }
+
+    func setPhotoMode(_ on: Bool) {
+        photoMode = on
+        applyTorch()
+    }
+
+    // Back camera + flash: the light stays on while you line up and film
+    // (like TikTok). Photos use the real flash instead.
+    private func applyTorch() {
+        setTorch(flash && position == .back && !photoMode)
+    }
+
     private func setTorch(_ on: Bool) {
-        guard let device, device.hasTorch else { return }
+        guard let device, device.hasTorch, device.isTorchModeSupported(on ? .on : .off) else { return }
+        if on && !device.isTorchAvailable { return }
         do {
             try device.lockForConfiguration()
             device.torchMode = on ? .on : .off
@@ -149,7 +190,7 @@ final class RecorderModel: NSObject {
     func startClip() {
         guard !recording, total < maxSeconds - 0.3, session.isRunning else { return }
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("clip-\(UUID().uuidString).mov")
-        if flash && position == .back { setTorch(true) }
+        applyTorch()
         movieOutput.startRecording(to: url, recordingDelegate: self)
         recording = true
         current = 0
@@ -172,7 +213,6 @@ final class RecorderModel: NSObject {
     func stopClip() {
         guard recording else { return }
         movieOutput.stopRecording()
-        setTorch(false)
         soundPlayer?.pause()
     }
 
@@ -181,10 +221,25 @@ final class RecorderModel: NSObject {
         progressTask?.cancel()
         current = 0
         if seconds > 0.2 {
-            clips.append(Clip(url: url, seconds: seconds, speed: clipSpeed))
+            let clip = Clip(url: url, seconds: seconds, speed: clipSpeed)
+            clips.append(clip)
+            Task { await addGhost(to: clip.id, from: url) }
         } else {
             try? FileManager.default.removeItem(at: url)
         }
+    }
+
+    // Grabs the clip's last moment, shown see-through with "Align" so the
+    // next clip can start exactly where this one stopped.
+    private func addGhost(to id: UUID, from url: URL) async {
+        let asset = AVURLAsset(url: url)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 1000, height: 1000)
+        guard let duration = try? await asset.load(.duration) else { return }
+        let at = CMTime(seconds: max(0, duration.seconds - 0.1), preferredTimescale: 600)
+        guard let frame = try? await generator.image(at: at) else { return }
+        if let i = clips.firstIndex(where: { $0.id == id }) { clips[i].ghost = UIImage(cgImage: frame.image) }
     }
 
     func deleteLast() {
@@ -266,36 +321,95 @@ extension RecorderModel: AVCaptureFileOutputRecordingDelegate, AVCapturePhotoCap
     }
 }
 
-// Live camera picture.
+// Live camera picture. Tap it to focus there, tap twice to flip the camera.
 struct CameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
+    // Where you tapped on the screen, and the same spot for the camera.
+    var onFocus: ((CGPoint, CGPoint) -> Void)? = nil
+    var onDoubleTap: (() -> Void)? = nil
 
     final class PreviewView: UIView {
         override static var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
         var preview: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
     }
 
+    @MainActor
+    final class Coordinator: NSObject {
+        var parent: CameraPreview
+        init(_ parent: CameraPreview) { self.parent = parent }
+
+        @objc func tapped(_ gesture: UITapGestureRecognizer) {
+            guard let view = gesture.view as? PreviewView else { return }
+            let point = gesture.location(in: view)
+            parent.onFocus?(point, view.preview.captureDevicePointConverted(fromLayerPoint: point))
+        }
+
+        @objc func doubleTapped(_ gesture: UITapGestureRecognizer) {
+            parent.onDoubleTap?()
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
     func makeUIView(context: Context) -> PreviewView {
         let view = PreviewView()
         view.preview.session = session
         view.preview.videoGravity = .resizeAspectFill
         view.backgroundColor = .black
+        let double = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.doubleTapped(_:)))
+        double.numberOfTapsRequired = 2
+        let single = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.tapped(_:)))
+        single.require(toFail: double)
+        view.addGestureRecognizer(double)
+        view.addGestureRecognizer(single)
         return view
     }
 
-    func updateUIView(_ view: PreviewView, context: Context) {}
+    func updateUIView(_ view: PreviewView, context: Context) {
+        context.coordinator.parent = self
+    }
+}
+
+// The front camera's flash, like TikTok: the screen turns into a soft ring
+// light around you (and goes to full brightness while it's on).
+struct RingLight: View {
+    var cornerRadius: CGFloat
+
+    var body: some View {
+        let warm = Color(red: 1, green: 0.97, blue: 0.93)
+        ZStack {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(warm.opacity(0.6), lineWidth: 64)
+                .blur(radius: 16)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(warm, lineWidth: 30)
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
 }
 
 // MARK: - Camera screen
 
+// Opens straight away when you make a reel (like TikTok). Tap the big button
+// to film and again to pause, or hold it to film while you hold (slide your
+// finger up to zoom). Tap the picture to focus, tap twice to flip.
 struct RecorderView: View {
     @Binding var sound: Track?
     var onVideo: (URL) -> Void
     var onPhotos: ([UIImage]) -> Void
     var onClose: () -> Void
+    // Pick a video or photos from your library instead.
+    var onUpload: (() -> Void)? = nil
+    // Your saved drafts (none in chats).
+    var draftCount = 0
+    var onDrafts: (() -> Void)? = nil
 
     enum Mode: String { case short = "15s", video = "60s", photo = "Photo" }
 
+    @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("sugerly.recorder.tip") private var tipShown = false
     @State private var camera = RecorderModel()
     @State private var mode: Mode = .video
     @State private var timer = 0
@@ -307,8 +421,22 @@ struct RecorderView: View {
     @State private var pinchStart: CGFloat = 1
     @State private var confirmRestart = false
     @State private var grid = false
+    @State private var align = false
     @State private var showSpeed = false
     @State private var pickingSound = false
+    @State private var focusPoint: CGPoint?
+    @State private var focusTick = 0
+    @State private var hint: String?
+    @State private var hintTick = 0
+    // Holding the big button.
+    @GestureState private var pressing = false
+    @State private var pressStart: Date?
+    @State private var heldClip = false
+    @State private var holdZoom: CGFloat = 1
+    @State private var savedBrightness: CGFloat?
+
+    // Front camera + flash on: the ring light.
+    private var ringLight: Bool { camera.flash && camera.position == .front && camera.authorized == true }
 
     var body: some View {
         GeometryReader { geo in
@@ -318,12 +446,19 @@ struct RecorderView: View {
                 Color.black.ignoresSafeArea()
                 ZStack {
                     if camera.authorized == true {
-                        CameraPreview(session: camera.session)
+                        CameraPreview(session: camera.session, onFocus: { point, spot in
+                            tapFocus(point, spot)
+                        }, onDoubleTap: { flip() })
+                            .overlay {
+                                if align, !camera.recording, let ghost = camera.clips.last?.ghost {
+                                    ghostView(ghost)
+                                }
+                            }
                             .overlay { if grid { CameraGrid() } }
+                            .overlay { focusRing }
                             .gesture(MagnifyGesture()
                                 .onChanged { v in camera.setZoom(pinchStart * v.magnification) }
                                 .onEnded { _ in pinchStart = camera.zoom })
-                            .onTapGesture(count: 2) { camera.flip() }
                     } else if camera.authorized == false {
                         VStack(spacing: 12) {
                             Image(systemName: "camera.fill").font(.system(size: 40)).foregroundStyle(Theme.gradient)
@@ -333,8 +468,14 @@ struct RecorderView: View {
                                 if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
                             }
                             .buttonStyle(GradientButtonStyle(fullWidth: false))
+                            if let onUpload {
+                                Button("Choose from library", action: onUpload)
+                                    .font(.jakarta(15, .bold)).foregroundStyle(.white)
+                                    .padding(.top, 4)
+                            }
                         }
                     }
+                    if ringLight { RingLight(cornerRadius: wide ? 30 : 0).transition(.opacity) }
                     if flashScreen { Color.white.ignoresSafeArea().transition(.opacity) }
                     if countdown > 0 {
                         Text("\(countdown)")
@@ -368,25 +509,45 @@ struct RecorderView: View {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { shots.append(image) }
             }
             await camera.start()
-        }
-        .onDisappear { camera.stop() }
-        .sheet(isPresented: $pickingSound) {
-            SoundPicker { track in
-                sound = track
-                camera.setSound(track)
+            if !tipShown && camera.authorized == true {
+                tipShown = true
+                showHint("Tap to film, or hold the button and slide up to zoom")
             }
+        }
+        .onDisappear {
+            camera.stop()
+            brighten(false)
+        }
+        .onChange(of: sound) { _, track in camera.setSound(track) }
+        .onChange(of: ringLight) { _, on in brighten(on) }
+        .onChange(of: scenePhase) { _, phase in brighten(phase == .active && ringLight) }
+        .onChange(of: pressing) { _, now in
+            // The touch was cut off (a call, an alert) without letting go:
+            // a clip filmed by holding stops.
+            guard !now else { return }
+            Task {
+                try? await Task.sleep(for: .milliseconds(120))
+                if pressStart != nil { pressCancelled() }
+            }
+        }
+        .sheet(isPresented: $pickingSound) {
+            SoundPicker { track in sound = track }
             .presentationDetents([.medium, .large])
             .presentationCornerRadius(30)
         }
         .onChange(of: mode) { _, m in
             camera.maxSeconds = m == .short ? 15 : 60
+            camera.setPhotoMode(m == .photo)
         }
         .confirmationDialog("Start over?", isPresented: $confirmRestart, titleVisibility: .visible) {
             Button("Delete all clips", role: .destructive) { withAnimation { camera.restart() } }
         }
+        .sensoryFeedback(.impact(weight: .light), trigger: countdown) { _, new in new > 0 }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: countdown)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: camera.recording)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: camera.clips.count)
+        .animation(.easeInOut(duration: 0.25), value: ringLight)
+        .animation(.easeInOut(duration: 0.25), value: align)
     }
 
     // Clip progress (like TikTok / Discord): one segment per clip.
@@ -412,12 +573,12 @@ struct RecorderView: View {
         VStack(spacing: 10) {
             if mode != .photo { progressBar.padding(.horizontal, 14) }
             HStack(spacing: 10) {
-                roundButton("xmark") { camera.stop(); onClose() }
+                roundButton("xmark", label: "Close") { camera.stop(); onClose() }
                 Spacer(minLength: 6)
                 soundPill
                 Spacer(minLength: 6)
                 if mode != .photo && !camera.clips.isEmpty && !camera.recording {
-                    roundButton("arrow.counterclockwise") { confirmRestart = true }
+                    roundButton("arrow.counterclockwise", label: "Start over") { confirmRestart = true }
                 } else {
                     Color.clear.frame(width: 44, height: 44)
                 }
@@ -426,10 +587,14 @@ struct RecorderView: View {
             HStack {
                 Spacer()
                 VStack(spacing: 12) {
-                    roundButton("arrow.triangle.2.circlepath.camera.fill") { camera.flip() }
-                    roundButton(camera.flash ? "bolt.fill" : "bolt.slash.fill", active: camera.flash) { camera.flash.toggle() }
+                    roundButton("arrow.triangle.2.circlepath.camera.fill", label: "Flip camera") { flip() }
+                    roundButton(camera.flash ? "bolt.fill" : "bolt.slash.fill", label: "Flash", active: camera.flash) {
+                        camera.toggleFlash()
+                        showHint(camera.flash ? (camera.position == .front ? "Front flash on" : "Flash on") : "Flash off")
+                    }
                     Button {
                         timer = timer == 0 ? 3 : timer == 3 ? 10 : 0
+                        showHint(timer == 0 ? "Timer off" : "\(timer)s timer: tap the button, then get ready")
                     } label: {
                         VStack(spacing: 0) {
                             Image(systemName: "timer").font(.system(size: 15, weight: .bold))
@@ -441,6 +606,8 @@ struct RecorderView: View {
                         .overlay(Circle().strokeBorder(.white.opacity(0.25), lineWidth: 1))
                     }
                     .buttonStyle(BouncyStyle())
+                    .accessibilityLabel("Timer")
+                    .accessibilityValue(timer == 0 ? "Off" : "\(timer) seconds")
                     if mode != .photo {
                         Button { withAnimation(.snappy) { showSpeed.toggle() } } label: {
                             Text(speedLabel(camera.speed)).font(.jakarta(13, .heavy)).foregroundStyle(.white)
@@ -451,7 +618,14 @@ struct RecorderView: View {
                         .buttonStyle(BouncyStyle())
                         .accessibilityLabel("Speed")
                     }
-                    roundButton("grid", active: grid) { grid.toggle() }
+                    roundButton("grid", label: "Grid", active: grid) { grid.toggle() }
+                    if mode != .photo && !camera.clips.isEmpty {
+                        roundButton("square.on.square.dashed", label: "Align", active: align) {
+                            align.toggle()
+                            if align { showHint("Line up with the end of your last clip") }
+                        }
+                        .transition(.scale.combined(with: .opacity))
+                    }
                 }
                 .opacity(camera.recording ? 0 : 1)
             }
@@ -459,6 +633,15 @@ struct RecorderView: View {
             if camera.zoom > 1.05 {
                 Text(String(format: "%.1fx", camera.zoom)).font(.jakarta(12, .heavy)).foregroundStyle(.white)
                     .padding(.horizontal, 10).padding(.vertical, 4).background(.black.opacity(0.4), in: Capsule())
+            }
+            if let hint {
+                Text(hint).font(.jakarta(13, .bold)).foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(.black.opacity(0.5), in: Capsule())
+                    .padding(.horizontal, 30)
+                    .id(hintTick)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
         }
         .padding(.top, 8)
@@ -471,7 +654,7 @@ struct RecorderView: View {
                 Text(sound?.title ?? "Add sound").font(.jakarta(13, .bold)).lineLimit(1)
                 if sound != nil {
                     Image(systemName: "xmark").font(.system(size: 10, weight: .heavy))
-                        .onTapGesture { sound = nil; camera.setSound(nil) }
+                        .onTapGesture { sound = nil }
                 }
             }
             .foregroundStyle(.white)
@@ -524,11 +707,13 @@ struct RecorderView: View {
                 }
             }
             HStack(alignment: .center) {
-                // Left: delete the last clip (video) or nothing.
+                // Left: delete the last clip, or your drafts before you start.
                 Group {
                     if mode != .photo && !camera.clips.isEmpty && !camera.recording {
-                        roundButton("delete.backward.fill", size: 50) { withAnimation { camera.deleteLast() } }
+                        roundButton("delete.backward.fill", size: 50, label: "Delete last clip") { withAnimation { camera.deleteLast() } }
                             .transition(.scale.combined(with: .opacity))
+                    } else if draftCount > 0, let onDrafts, camera.clips.isEmpty, shots.isEmpty, !camera.recording {
+                        sideTile("tray.full.fill", "Drafts", action: onDrafts)
                     } else {
                         Color.clear.frame(width: 50, height: 50)
                     }
@@ -537,7 +722,7 @@ struct RecorderView: View {
 
                 recordButton
 
-                // Right: done.
+                // Right: done, or pick from your library before you start.
                 Group {
                     let ready = mode != .photo ? (!camera.clips.isEmpty && !camera.recording) : !shots.isEmpty
                     if ready {
@@ -552,7 +737,10 @@ struct RecorderView: View {
                         }
                         .buttonStyle(BouncyStyle(scale: 0.85))
                         .disabled(merging)
+                        .accessibilityLabel("Done")
                         .transition(.scale.combined(with: .opacity))
+                    } else if let onUpload, camera.clips.isEmpty, !camera.recording, countdown == 0 {
+                        sideTile("photo.on.rectangle.angled", "Upload", action: onUpload)
                     } else {
                         Color.clear.frame(width: 54, height: 54)
                     }
@@ -572,6 +760,7 @@ struct RecorderView: View {
                         }
                     }
                     .buttonStyle(.plain)
+                    .accessibilityAddTraits(mode == m ? .isSelected : [])
                 }
             }
             .padding(.bottom, 10)
@@ -580,31 +769,153 @@ struct RecorderView: View {
         .background(LinearGradient(colors: [.clear, .black.opacity(0.5)], startPoint: .top, endPoint: .bottom).ignoresSafeArea())
     }
 
+    // The big button: tap to start / pause, or hold to film while you hold
+    // (it grows, and sliding up zooms in).
     private var recordButton: some View {
-        Button { Task { await shutter() } } label: {
-            ZStack {
-                Circle().strokeBorder(.white.opacity(0.9), lineWidth: 5).frame(width: 84, height: 84)
-                if mode != .photo {
-                    Circle()
-                        .trim(from: 0, to: camera.total / camera.maxSeconds)
-                        .stroke(Theme.gradient, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                        .frame(width: 84, height: 84)
-                    RoundedRectangle(cornerRadius: camera.recording ? 10 : 34, style: .continuous)
-                        .fill(Theme.gradient)
-                        .frame(width: camera.recording ? 34 : 68, height: camera.recording ? 34 : 68)
-                } else {
-                    Circle().fill(.white).frame(width: 68, height: 68)
+        ZStack {
+            Circle().strokeBorder(.white.opacity(0.9), lineWidth: 5).frame(width: 84, height: 84)
+            if mode != .photo {
+                Circle()
+                    .trim(from: 0, to: camera.total / camera.maxSeconds)
+                    .stroke(Theme.gradient, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .frame(width: 84, height: 84)
+                RoundedRectangle(cornerRadius: camera.recording ? 10 : 34, style: .continuous)
+                    .fill(Theme.gradient)
+                    .frame(width: camera.recording ? 34 : 68, height: camera.recording ? 34 : 68)
+            } else {
+                Circle().fill(.white).frame(width: 68, height: 68)
+            }
+        }
+        .shadow(color: Theme.main.opacity(camera.recording ? 0.7 : 0.3), radius: camera.recording ? 18 : 8)
+        .scaleEffect(heldClip ? 1.18 : (pressStart != nil ? 0.92 : 1))
+        .animation(.spring(response: 0.28, dampingFraction: 0.7), value: heldClip)
+        .animation(.spring(response: 0.2, dampingFraction: 0.7), value: pressStart != nil)
+        .contentShape(Circle())
+        .gesture(DragGesture(minimumDistance: 0)
+            .updating($pressing) { _, state, _ in state = true }
+            .onChanged { v in
+                if pressStart == nil { pressDown() }
+                // Holding: slide up to zoom in.
+                if heldClip, v.translation.height < -12 {
+                    camera.setZoom(holdZoom + (-v.translation.height - 12) / 70)
                 }
             }
-            .shadow(color: Theme.main.opacity(camera.recording ? 0.7 : 0.3), radius: camera.recording ? 18 : 8)
-        }
-        .buttonStyle(BouncyStyle(scale: 0.9))
+            .onEnded { _ in pressUp() })
+        .allowsHitTesting(countdown == 0 && !merging)
+        .opacity(merging ? 0.6 : 1)
         .sensoryFeedback(.impact(weight: .medium), trigger: camera.recording)
-        .disabled(countdown > 0 || merging)
+        .accessibilityElement()
+        .accessibilityLabel(mode == .photo ? "Take photo" : camera.recording ? "Stop filming" : "Film")
+        .accessibilityHint(mode == .photo ? "" : "Tap to start and stop, or hold to film while you hold")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { Task { await shutter() } }
     }
 
-    private func roundButton(_ icon: String, size: CGFloat = 44, active: Bool = false, action: @escaping () -> Void) -> some View {
+    // Holding to film starts straight away (no timer); a quick tap does the
+    // usual thing when you let go.
+    private func pressDown() {
+        pressStart = .now
+        guard mode != .photo, timer == 0, !camera.recording, camera.total < camera.maxSeconds - 0.3 else { return }
+        error = nil
+        holdZoom = camera.zoom
+        camera.startClip()
+        heldClip = camera.recording
+    }
+
+    private func pressUp() {
+        let held = pressStart.map { Date.now.timeIntervalSince($0) } ?? 0
+        pressStart = nil
+        if heldClip {
+            heldClip = false
+            pinchStart = camera.zoom
+            // Held: filming stops when you let go. A quick tap keeps filming
+            // until you tap again.
+            if held > 0.4 { camera.stopClip() }
+            return
+        }
+        Task { await shutter() }
+    }
+
+    private func pressCancelled() {
+        pressStart = nil
+        if heldClip {
+            heldClip = false
+            camera.stopClip()
+        }
+    }
+
+    private func flip() {
+        guard !camera.recording else { return }
+        camera.flip()
+        pinchStart = 1
+    }
+
+    private func tapFocus(_ point: CGPoint, _ spot: CGPoint) {
+        camera.focus(at: spot)
+        focusTick += 1
+        let tick = focusTick
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { focusPoint = point }
+        Task {
+            try? await Task.sleep(for: .seconds(1.2))
+            guard focusTick == tick else { return }
+            withAnimation(.easeOut(duration: 0.3)) { focusPoint = nil }
+        }
+    }
+
+    // A little circle where you tapped to focus.
+    private var focusRing: some View {
+        ZStack {
+            if let focusPoint {
+                Circle().strokeBorder(.white, lineWidth: 2)
+                    .background(Circle().fill(.white.opacity(0.12)))
+                    .frame(width: 72, height: 72)
+                    .shadow(color: .black.opacity(0.3), radius: 4)
+                    .position(focusPoint)
+                    .id(focusTick)
+                    .transition(.scale(scale: 1.4).combined(with: .opacity))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .allowsHitTesting(false)
+    }
+
+    // "Align": the end of your last clip, see-through over the camera.
+    private func ghostView(_ image: UIImage) -> some View {
+        Color.clear
+            .overlay { Image(uiImage: image).resizable().scaledToFill() }
+            .clipped()
+            .opacity(0.38)
+            .allowsHitTesting(false)
+            .transition(.opacity)
+    }
+
+    private func showHint(_ text: String) {
+        hintTick += 1
+        let tick = hintTick
+        withAnimation(.snappy(duration: 0.25)) { hint = text }
+        Task {
+            try? await Task.sleep(for: .seconds(1.8))
+            guard hintTick == tick else { return }
+            withAnimation(.easeOut(duration: 0.3)) { hint = nil }
+        }
+    }
+
+    // The ring light turns the screen all the way up while it's on, and puts
+    // your own brightness back after.
+    private func brighten(_ on: Bool) {
+        let screens = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.screen }
+        guard let screen = screens.first else { return }
+        if on {
+            if savedBrightness == nil { savedBrightness = screen.brightness }
+            screen.brightness = 1
+        } else if let saved = savedBrightness {
+            screen.brightness = saved
+            savedBrightness = nil
+        }
+    }
+
+    private func roundButton(_ icon: String, size: CGFloat = 44, label: String, active: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon).font(.system(size: size * 0.38, weight: .bold)).foregroundStyle(.white)
                 .frame(width: size, height: size)
@@ -612,6 +923,23 @@ struct RecorderView: View {
                 .overlay(Circle().strokeBorder(.white.opacity(0.25), lineWidth: 1))
         }
         .buttonStyle(BouncyStyle())
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(active ? .isSelected : [])
+    }
+
+    // A square button with its name under it (Upload, Drafts).
+    private func sideTile(_ icon: String, _ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon).font(.system(size: 19, weight: .bold)).foregroundStyle(.white)
+                    .frame(width: 46, height: 46)
+                    .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.4), lineWidth: 1.5))
+                Text(title).font(.jakarta(11, .heavy)).foregroundStyle(.white)
+            }
+        }
+        .buttonStyle(BouncyStyle())
+        .transition(.scale.combined(with: .opacity))
     }
 
     private func shutter() async {
@@ -641,9 +969,9 @@ struct RecorderView: View {
         }
     }
 
+    // The camera turns off by itself once this screen goes away.
     private func finish() async {
         if mode == .photo {
-            camera.stop()
             onPhotos(shots)
             return
         }
@@ -651,7 +979,6 @@ struct RecorderView: View {
         defer { merging = false }
         do {
             let url = try await camera.merge()
-            camera.stop()
             onVideo(url)
         } catch {
             self.error = error.localizedDescription
