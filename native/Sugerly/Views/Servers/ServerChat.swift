@@ -293,6 +293,7 @@ struct ChannelChatView: View {
         guard await TextGuard.clear([text], kind: .message, model: model, cooldown: editing == nil) else { return }
         failed = nil
         draft = ""
+        TapSound.play(.send)
         if let editing {
             self.editing = nil
             if let i = messages.firstIndex(where: { $0.id == editing.id }) { messages[i].text = text; messages[i].edited = true }

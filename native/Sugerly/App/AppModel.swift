@@ -40,6 +40,7 @@ final class AppModel {
 
     func showToast(_ text: String, icon: String = "checkmark.circle.fill", error: Bool = false) {
         let next = Toast(text: text, icon: error ? "exclamationmark.circle.fill" : icon, error: error)
+        TapSound.play(error || icon.hasPrefix("exclamationmark") ? .error : .chime)
         withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) { toast = next }
         Task {
             try? await Task.sleep(for: .seconds(2.4))

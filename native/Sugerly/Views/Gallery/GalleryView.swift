@@ -343,6 +343,7 @@ struct GalleryView: View {
         pendingLikes.insert(art.id)
         let before = artworks[i]
         let liking = !LikeBook.shared.isLiked(before, me: me.email)
+        TapSound.play(liking ? .like : .tap)
         artworks[i].setLiked(liking, me: me.email)
         Task {
             defer { pendingLikes.remove(art.id) }
@@ -611,6 +612,7 @@ struct ArtworkDetailView: View {
         liking = true
         let before = artwork
         let liking = !LikeBook.shared.isLiked(before, me: me)
+        TapSound.play(liking ? .like : .tap)
         artwork.setLiked(liking, me: me)
         Task {
             defer { self.liking = false }

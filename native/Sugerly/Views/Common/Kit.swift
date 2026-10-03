@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import TipKit
 
 // The frame every page sits in: iPhone's own tab bar and top bars (so the
 // back button, the swipe back, the keyboard and the safe areas all behave
@@ -42,7 +41,10 @@ private struct RootBar: ViewModifier {
                         }
                         .accessibilityLabel("Search")
                     }
-                    Button { model.showNotifications = true } label: {
+                    Button {
+                        TapSound.play(.tap)
+                        model.showNotifications = true
+                    } label: {
                         Image(systemName: notes.unread > 0 ? "bell.badge.fill" : "bell")
                             .symbolRenderingMode(.multicolor)
                             .contentTransition(.symbolEffect(.replace))
@@ -116,7 +118,10 @@ struct PinkCircleButton: View {
     @State private var bounce = 0
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            TapSound.play(.tap)
+            action()
+        } label: {
             Image(systemName: icon)
                 .font(.system(size: 16, weight: .heavy))
                 .symbolEffect(.bounce, value: bounce)
@@ -135,15 +140,20 @@ struct PinkCircleButton: View {
 
 // The menu button in the top left corner: a little pill with the pink
 // menu lines and your picture, so it's clear it opens something. Everything
-// stays inside the pill (nothing sticks out to get cut off), and the first
-// time you open the app a tip bubble points at it.
+// stays inside the pill (nothing sticks out to get cut off). The first time
+// you open the app, a small pink bubble under it says what it is, then goes
+// away by itself.
 struct AccountButton: View {
     @Environment(AppModel.self) private var model
-    private let tip = MenuTip()
+    @AppStorage("sugerly.hint.menu") private var hintSeen = false
+    @State private var hint = false
+    // Only one menu button (there's one on each tab) shows the hint.
+    @MainActor private static var hinting = false
 
     var body: some View {
         Button {
-            tip.invalidate(reason: .actionPerformed)
+            hintSeen = true
+            hint = false
             model.showMenu = true
         } label: {
             HStack(spacing: 7) {
@@ -159,9 +169,52 @@ struct AccountButton: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .popoverTip(tip)
+        .popover(isPresented: $hint) {
+            MenuHint { hint = false }
+                .presentationCompactAdaptation(.popover)
+                .presentationBackground(Palette.surface)
+        }
         .accessibilityLabel("Menu")
         .accessibilityHint("Your profile, music, servers, settings and more")
+        .task { await showHintOnce() }
+    }
+
+    private func showHintOnce() async {
+        guard !hintSeen, !Self.hinting,
+              !ProcessInfo.processInfo.arguments.contains(where: { $0.hasSuffix("-ui-test") }) else { return }
+        Self.hinting = true
+        try? await Task.sleep(for: .seconds(1.2))
+        guard !Task.isCancelled, !hintSeen else { return }
+        hintSeen = true
+        hint = true
+        try? await Task.sleep(for: .seconds(5))
+        hint = false
+    }
+}
+
+// The first-time hint: small, solid and pink, in the app's own style.
+private struct MenuHint: View {
+    var close: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 13, weight: .heavy))
+                .foregroundStyle(.white)
+                .frame(width: 30, height: 30)
+                .background(Theme.gradient, in: Circle())
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Your menu").font(.display(17)).foregroundStyle(Palette.text)
+                Text("Profile, music, servers & settings").font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .fixedSize()
+        .contentShape(Rectangle())
+        .onTapGesture(perform: close)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -177,13 +230,6 @@ private struct MenuPillBackground: View {
                 .overlay(Capsule().strokeBorder(Theme.main.opacity(0.18), lineWidth: 1))
         }
     }
-}
-
-// The first-time hint for the menu.
-struct MenuTip: Tip {
-    var title: Text { Text("Your menu") }
-    var message: Text? { Text("Tap here for your profile, music, servers, settings and more.") }
-    var image: Image? { Image(systemName: "line.3.horizontal.circle.fill") }
 }
 
 // The music player and the call bar, stacked. Empty (no height at all) when
@@ -292,7 +338,10 @@ struct TitleSwitch: View {
     var body: some View {
         HStack(spacing: 2) {
             ForEach(Array(titles.enumerated()), id: \.offset) { i, title in
-                Button { withAnimation(.snappy(duration: 0.28)) { selection = i } } label: {
+                Button {
+                    if selection != i { TapSound.play(.select) }
+                    withAnimation(.snappy(duration: 0.28)) { selection = i }
+                } label: {
                     Text(title)
                         .font(.display(19))
                         .foregroundStyle(selection == i ? Color.white : Palette.text2)
@@ -338,7 +387,10 @@ struct UnderlineTabs<Value: Hashable>: View {
 
     private func tab(_ value: Value, _ title: String) -> some View {
         let on = selection == value
-        return Button { withAnimation(.snappy(duration: 0.25)) { selection = value } } label: {
+        return Button {
+            if !on { TapSound.play(.select) }
+            withAnimation(.snappy(duration: 0.25)) { selection = value }
+        } label: {
             Text(title)
                 .font(.jakarta(14, on ? .heavy : .semibold))
                 .foregroundStyle(on ? Palette.text : Palette.muted)

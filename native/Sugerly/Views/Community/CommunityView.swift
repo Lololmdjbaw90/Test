@@ -88,6 +88,7 @@ final class PostsStore {
         guard let me else { return }
         var next = post
         let liking = !LikeBook.shared.isLiked(post, me: me.email)
+        TapSound.play(liking ? .like : .tap)
         next.setLiked(liking, me: me.email)
         replace(next)
         Task {
@@ -1215,6 +1216,7 @@ struct CommentsScreen<Header: View>: View {
         ]
         do {
             let created = try await FS.create(collection, data)
+            TapSound.play(.send)
             withAnimation(.snappy) {
                 comments.append(Comment(created))
                 if !text.isEmpty { draft = "" }
@@ -1234,6 +1236,7 @@ struct CommentsScreen<Header: View>: View {
         guard let me = model.me?.email, let i = comments.firstIndex(where: { $0.id == c.id }) else { return }
         var next = c
         let liking = !next.likes.contains(me)
+        TapSound.play(liking ? .like : .tap)
         if liking { next.likes.append(me) } else { next.likes.removeAll { $0 == me } }
         comments[i] = next
         Task { try? await FS.change(collection, c.id, [liking ? .add("likes", me) : .remove("likes", me)], set: ["updated_date": FS.nowISO()]) }

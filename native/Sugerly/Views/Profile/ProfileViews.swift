@@ -1299,7 +1299,7 @@ struct SettingsView: View {
     private var soundsGroup: some View {
         Section {
             toggle("Haptics", detail: "Little taps when you like, send and switch tabs", icon: "iphone.radiowaves.left.and.right", colors: [0x7CBEFF, 0x2F80E0], isOn: $haptics)
-            toggle("Click sounds", detail: "A soft pop when you tap (quiet on silent)", icon: "speaker.wave.2.fill", colors: [0xFFAA80, 0xEE6E40], isOn: $clickSounds)
+            toggle("App sounds", detail: "Soft pops, likes, sends and little chimes (quiet on silent)", icon: "speaker.wave.2.fill", colors: [0xFFAA80, 0xEE6E40], isOn: $clickSounds)
         } header: { ListHeader(title: "SOUNDS & HAPTICS") }
     }
 
@@ -1342,6 +1342,7 @@ struct SettingsView: View {
         }
         .tint(Theme.main)
         .sensoryFeedback(.selection, trigger: isOn.wrappedValue)
+        .onChange(of: isOn.wrappedValue) { _, on in TapSound.play(on ? .toggle : .toggleOff) }
     }
 
     private func swatch<S: ShapeStyle>(_ fill: S, picked: Bool, ring: Color, icon: String? = nil) -> some View {

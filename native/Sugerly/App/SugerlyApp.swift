@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import TipKit
 
 @main
 struct SugerlyApp: App {
@@ -20,11 +19,6 @@ struct SugerlyApp: App {
             item.setTitleTextAttributes([.font: small], for: .selected)
         }
         TabBarLook.apply()
-        // First-time hints (iPhone's own tip bubbles), each shown once. Not
-        // while the app is being tested, so they never cover a button.
-        if !ProcessInfo.processInfo.arguments.contains(where: { $0.hasSuffix("-ui-test") }) {
-            try? Tips.configure([.displayFrequency(.immediate)])
-        }
         // Notifications + background checks have to be set up at launch.
         Alerts.shared.registerBackground()
         // Calls ring this phone even when Sugerly is closed (iPhone's own

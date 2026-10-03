@@ -128,6 +128,28 @@ extension View {
     }
 }
 
+// Soft sounds: the menu and the + sheet whoosh open and closed, and a
+// little bell rings when a message or notification comes in (not for what's
+// already waiting when the app opens).
+private struct ShellSounds: ViewModifier {
+    let chats: ChatStore
+    let notes: NotificationsStore
+    @Environment(AppModel.self) private var model
+    @State private var ready = false
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: model.showMenu) { _, open in TapSound.play(open ? .open : .close) }
+            .onChange(of: model.showCreate) { _, open in TapSound.play(open ? .open : .close) }
+            .onChange(of: chats.unread) { old, new in if ready && new > old { TapSound.play(.receive) } }
+            .onChange(of: notes.unread) { old, new in if ready && new > old { TapSound.play(.receive) } }
+            .task {
+                try? await Task.sleep(for: .seconds(8))
+                ready = true
+            }
+    }
+}
+
 // Which tab is open and the pages open on each tab. Each tab's pages only
 // redraw that tab: opening your account, the + or a sheet doesn't redraw
 // all five tabs (that made opening them stutter).
@@ -191,6 +213,7 @@ private struct ShellTabs: View {
     private var selection: Binding<AppTab> {
         Binding(get: { nav.tab }, set: { next in
             if next == nav.tab { nav[next] = [] }
+            TapSound.play(.select)
             nav.tab = next
         })
     }
@@ -390,6 +413,7 @@ struct MainShell: View {
             nav.tab = next
             model.tabRequest = nil
         }
+        .modifier(ShellSounds(chats: chats, notes: notes))
         // The bell (and a notification tapped) opens the notifications page
         // on the tab you're on.
         .onChange(of: model.showNotifications) { _, show in

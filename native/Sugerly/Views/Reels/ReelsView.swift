@@ -946,6 +946,7 @@ struct ReelPage: View {
         guard let meProfile = model.me else { return }
         let before = reel
         let liking = !LikeBook.shared.isLiked(before, me: me)
+        TapSound.play(liking ? .like : .tap)
         reel.setLiked(liking, me: me)
         let r = reel
         Task { await ReelBrain.shared.liked(r, liking) }

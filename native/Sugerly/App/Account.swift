@@ -132,6 +132,7 @@ struct AccountView: View {
 
     private var darkMode: Binding<Bool> {
         Binding(get: { model.me?.theme == "dark" }, set: { on in
+            TapSound.play(on ? .toggle : .toggleOff)
             Task { try? await model.updateMe(["theme": on ? "dark" : "light"]) }
         })
     }

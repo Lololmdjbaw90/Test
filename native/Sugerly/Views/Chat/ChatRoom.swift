@@ -571,6 +571,7 @@ struct ChatView: View {
         guard !text.isEmpty, let data = payload(text: text, imageURL: "") else { return }
         guard await TextGuard.clear([text], kind: .message, model: model) else { return }
         draft = ""
+        TapSound.play(.send)
         await post(data)
     }
 
