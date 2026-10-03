@@ -151,7 +151,7 @@ struct ChatView: View {
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SoftPressStyle())
     }
 
     private var status: String {
@@ -989,7 +989,7 @@ struct SharedReelCard: View {
     var body: some View {
         Group {
             if let loaded {
-                NavigationLink(value: Route.reel(loaded)) { card }.buttonStyle(.plain)
+                NavigationLink(value: Route.reel(loaded)) { card }.buttonStyle(SoftPressStyle())
             } else {
                 card
             }

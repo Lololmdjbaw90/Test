@@ -383,7 +383,7 @@ struct CommunityView: View {
             .padding(.horizontal, 16).padding(.vertical, 14)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SoftPressStyle())
         .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1).allowsHitTesting(false) }
     }
 
@@ -403,7 +403,7 @@ struct CommunityView: View {
                             }
                             .contentShape(Capsule())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SoftPressStyle())
                 }
             }
             .padding(4)
@@ -684,7 +684,7 @@ struct PostCard: View {
                     Button { path.append(.person(post.authorEmail)) } label: {
                         NameText(name: author?.displayName ?? post.authorName, style: author?.nameStyle ?? "", size: 15, nitro: author?.isNitro ?? false).lineLimit(1)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SoftPressStyle())
                     if author?.isNitro == true { NitroBadge(compact: true) }
                     Text(Dates.ago(post.created)).font(.jakarta(13)).foregroundStyle(Palette.muted).lineLimit(1)
                     Spacer(minLength: 4)
@@ -747,7 +747,7 @@ struct PostCard: View {
                         Text(summary(comments))
                             .font(.jakarta(13)).foregroundStyle(Palette.muted)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SoftPressStyle())
                 }
             }
         }
@@ -946,7 +946,7 @@ struct PostCard: View {
                     .padding(10)
                     .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SoftPressStyle())
                 .contextMenu {
                     if top.email != me, !top.id.isEmpty {
                         Button { reporting = ReportSheet.Target(id: top.id, type: "comment", ownerEmail: top.email, preview: top.text, link: "/Community?post=\(post.id)", collection: "CommunityComment") } label: { Label("Report comment", systemImage: "flag") }
@@ -966,7 +966,7 @@ struct PostCard: View {
                     .frame(height: 40)
                     .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SoftPressStyle())
             }
         }
     }
@@ -1317,7 +1317,7 @@ struct CommentRow: View {
                     }
                 }
                 .font(.jakarta(12, .bold))
-                .buttonStyle(.plain)
+                .buttonStyle(SoftPressStyle())
                 .padding(.leading, 6)
             }
             Spacer(minLength: 0)

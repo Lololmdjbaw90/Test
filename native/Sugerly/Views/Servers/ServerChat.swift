@@ -425,7 +425,7 @@ struct ChannelMessageRow: View {
                                     .font(.jakarta(14, .heavy))
                                     .foregroundStyle(nameColor.map { AnyShapeStyle($0) } ?? (mine ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.text)))
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(SoftPressStyle())
                             if let roleName {
                                 Text(roleName).font(.jakarta(9, .heavy)).foregroundStyle(nameColor ?? Palette.muted)
                                     .padding(.horizontal, 6).frame(height: 16)

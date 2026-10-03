@@ -325,7 +325,7 @@ struct SupportChatView: View {
                         .padding(.horizontal, 14).padding(.vertical, 12)
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SoftPressStyle())
                     if q != Support.answers.last?.0 { Divider().padding(.leading, 14) }
                 }
             }

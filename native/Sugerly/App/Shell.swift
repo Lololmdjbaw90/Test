@@ -109,15 +109,40 @@ extension View {
     }
 }
 
-// Presses squish a little and spring back, with a light tap (all buttons).
+// Presses squish down quickly and spring back up with a little jelly
+// bounce, with a soft click (most buttons).
 struct BouncyStyle: ButtonStyle {
     var scale: CGFloat = 0.93
+    var sound = true
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? scale : 1)
             .brightness(configuration.isPressed ? -0.03 : 0)
-            .animation(.spring(response: 0.28, dampingFraction: 0.55), value: configuration.isPressed)
-            .clickSound(configuration.isPressed)
+            .animation(configuration.isPressed ? .easeOut(duration: 0.1) : .spring(response: 0.36, dampingFraction: 0.45), value: configuration.isPressed)
+            .clickSound(configuration.isPressed && sound)
+    }
+}
+
+// Rows, links and text buttons: a gentle squish and fade while your finger
+// is down, then a soft spring back (quiet: they're everywhere).
+struct SoftPressStyle: ButtonStyle {
+    var scale: CGFloat = 0.97
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? scale : 1)
+            .opacity(configuration.isPressed ? 0.8 : 1)
+            .animation(configuration.isPressed ? .easeOut(duration: 0.1) : .spring(response: 0.34, dampingFraction: 0.55), value: configuration.isPressed)
+    }
+}
+
+// List rows inside a card: a soft pink highlight and a tiny squish.
+struct RowPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .contentShape(Rectangle())
+            .background(configuration.isPressed ? Palette.surface2 : Color.clear)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(configuration.isPressed ? .easeOut(duration: 0.1) : .spring(response: 0.34, dampingFraction: 0.6), value: configuration.isPressed)
     }
 }
 

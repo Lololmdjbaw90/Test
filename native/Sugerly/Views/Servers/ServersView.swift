@@ -183,7 +183,7 @@ struct ServerList: View {
                     VStack(spacing: 0) {
                         ForEach(mine) { server in
                             Button { path.append(.server(server)) } label: { row(server) }
-                                .buttonStyle(.plain)
+                                .buttonStyle(SoftPressStyle())
                                 .contextMenu {
                                     Button {
                                         UIPasteboard.general.string = "\(Servers.site)/CommunityChat?id=\(server.id)"

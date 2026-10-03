@@ -275,7 +275,7 @@ struct PermissionToggle: View {
             }
             .sugarCard(radius: 16, padding: 12)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SoftPressStyle())
         .sensoryFeedback(.selection, trigger: on)
     }
 }
@@ -439,7 +439,7 @@ struct ChannelEditor: View {
                         }
                         .sugarCard(radius: 16, padding: 12)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SoftPressStyle())
                     if isPrivate || !allowed.isEmpty {
                         Text(isPrivate ? "WHO CAN SEE IT" : "WHO CAN POST").font(.jakarta(11, .heavy)).tracking(1.2).foregroundStyle(Palette.muted)
                         FlowLayout(spacing: 6) {

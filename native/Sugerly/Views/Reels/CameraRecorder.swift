@@ -712,7 +712,7 @@ struct RecorderView: View {
                         .frame(width: 58, height: 34)
                         .background(camera.speed == v ? Color.white : Color.clear, in: Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SoftPressStyle())
             }
         }
         .padding(4)
@@ -794,7 +794,7 @@ struct RecorderView: View {
                             Circle().fill(Theme.gradient).frame(width: 5, height: 5).opacity(mode == m ? 1 : 0)
                         }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SoftPressStyle())
                     .accessibilityAddTraits(mode == m ? .isSelected : [])
                 }
             }

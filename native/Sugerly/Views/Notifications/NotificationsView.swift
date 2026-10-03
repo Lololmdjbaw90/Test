@@ -108,7 +108,7 @@ struct NotificationsPage: View {
                 .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 4)
                 .accessibilityAddTraits(.isHeader)
             ForEach(group.1) { b in
-                row(b)
+                tappable(b)
                     .transition(.opacity)
             }
         }
@@ -155,11 +155,23 @@ struct NotificationsPage: View {
         .padding(.vertical, 12)
         .background(b.unread ? Theme.main.opacity(0.06) : Color.clear)
         .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1).allowsHitTesting(false) }
-        .contentShape(Rectangle())
-        .onTapGesture { open(b) }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAction { open(b) }
+    }
+
+    // A row lights up pink and squishes a little while you press it.
+    @ViewBuilder
+    private func tappable(_ b: Bundle) -> some View {
+        if b.first.type == "follow" && !b.first.fromEmail.isEmpty {
+            row(b)
+                .contentShape(Rectangle())
+                .onTapGesture { open(b) }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { open(b) }
+        } else {
+            Button { open(b) } label: { row(b) }
+                .buttonStyle(RowPressStyle())
+                .accessibilityElement(children: .combine)
+        }
     }
 
     // The faces on the left; how long ago (and a pink dot if it's new) on the right.
@@ -590,7 +602,7 @@ struct AdminView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SoftPressStyle())
                     Text(FirebaseConfig.siteOwners.contains(u.email) ? "owner" : (u.role.isEmpty ? "user" : u.role))
                         .font(.jakarta(10, .heavy)).foregroundStyle(rank(u) < 2 ? Theme.main : Palette.muted)
                         .padding(.horizontal, 8).padding(.vertical, 4)

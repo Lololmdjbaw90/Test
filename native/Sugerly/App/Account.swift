@@ -82,7 +82,7 @@ struct AccountView: View {
             } label: {
                 rowLabel("Settings", "Account, privacy and colours", "gearshape.fill", [0x8FA3B8, 0x5B6B80])
             }
-            .buttonStyle(RowPress())
+            .buttonStyle(RowPressStyle())
             divider
             row("What's new", "The latest updates", "gift.fill", [0xFF9EC4, 0xE0508A]) { go(.updates) }
             divider
@@ -109,7 +109,7 @@ struct AccountView: View {
             }
             .padding(.horizontal, 14).padding(.vertical, 9)
         }
-        .buttonStyle(RowPress())
+        .buttonStyle(RowPressStyle())
         .accessibilityValue(notes.unread > 0 ? "\(notes.unread) new" : "")
     }
 
@@ -126,7 +126,7 @@ struct AccountView: View {
                 IconRow(title: "Log out", icon: "rectangle.portrait.and.arrow.right", colors: [0xF07A8E, 0xD9455F], danger: true)
                     .padding(.horizontal, 14).padding(.vertical, 9)
             }
-            .buttonStyle(RowPress())
+            .buttonStyle(RowPressStyle())
         }
     }
 
@@ -273,7 +273,7 @@ struct AccountView: View {
 
     private func row(_ title: String, _ detail: String, _ icon: String, _ colors: [UInt32], action: @escaping () -> Void) -> some View {
         Button(action: action) { rowLabel(title, detail, icon, colors) }
-            .buttonStyle(RowPress())
+            .buttonStyle(RowPressStyle())
     }
 
     private func rowLabel(_ title: String, _ detail: String, _ icon: String, _ colors: [UInt32]) -> some View {
@@ -304,15 +304,5 @@ struct AccountView: View {
             .foregroundStyle(Palette.muted)
             .frame(maxWidth: .infinity)
             .padding(.top, 2)
-    }
-}
-
-// A list row that lights up softly while your finger is on it.
-private struct RowPress: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .contentShape(Rectangle())
-            .background(configuration.isPressed ? Palette.surface2 : Color.clear)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }

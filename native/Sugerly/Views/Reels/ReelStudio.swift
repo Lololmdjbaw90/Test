@@ -903,7 +903,7 @@ struct ReelStudioView: View {
                         .padding(14)
                         .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SoftPressStyle())
 
                     if let error { Text(error).font(.jakarta(13, .semibold)).foregroundStyle(Palette.danger) }
                 }

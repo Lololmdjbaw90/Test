@@ -166,7 +166,7 @@ struct SendToChatsSheet: View {
                                 Text(t.name).font(.jakarta(11, .semibold)).foregroundStyle(Palette.text).lineLimit(1).frame(width: 66)
                             }
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(SoftPressStyle())
                     }
                 }
                 .padding(.horizontal, 18)
@@ -256,7 +256,7 @@ struct ReelShareSheet: View {
                                 Text(t.name).font(.jakarta(11, .semibold)).foregroundStyle(Palette.text).lineLimit(1).frame(width: 66)
                             }
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(SoftPressStyle())
                     }
                 }
                 .padding(.horizontal, 18)

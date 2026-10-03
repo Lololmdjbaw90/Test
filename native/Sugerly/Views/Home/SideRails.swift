@@ -196,7 +196,7 @@ struct ChartsMini: View {
                         Image(systemName: player.isPlaying(t) ? "pause.fill" : "play.fill").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.main)
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SoftPressStyle())
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

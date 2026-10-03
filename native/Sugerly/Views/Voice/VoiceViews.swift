@@ -220,7 +220,7 @@ struct VoiceDock: View {
                         }
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SoftPressStyle())
                 if voice.sharingScreen {
                     Button { voice.stopScreenShare() } label: {
                         Image(systemName: "rectangle.on.rectangle.slash").font(.system(size: 14, weight: .bold)).foregroundStyle(.white)

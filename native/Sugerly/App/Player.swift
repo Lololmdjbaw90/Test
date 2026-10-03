@@ -260,7 +260,7 @@ struct MiniPlayer: View {
                 }
                 MiniProgress()
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SoftPressStyle())
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
             .glassPill(cornerRadius: 26)

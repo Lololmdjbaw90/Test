@@ -236,7 +236,7 @@ struct ReelsView: View {
                             Capsule().fill(.white).frame(width: feed == id ? 24 : 6, height: 3).opacity(feed == id ? 1 : 0)
                         }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SoftPressStyle())
                 }
             }
             .shadow(color: .black.opacity(0.4), radius: 6)
@@ -735,7 +735,7 @@ struct ReelPage: View {
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SoftPressStyle())
             if let relation {
                 Label(relation, systemImage: "sparkles")
                     .font(.jakarta(12, .bold)).foregroundStyle(.white)
@@ -753,7 +753,7 @@ struct ReelPage: View {
                         }
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SoftPressStyle())
             }
             if !reel.musicTitle.isEmpty || reel.isVideo {
                 Button { useSound = true } label: {

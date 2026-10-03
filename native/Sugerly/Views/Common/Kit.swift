@@ -27,6 +27,7 @@ private struct RootBar: ViewModifier {
     var search: (() -> Void)?
     @Environment(AppModel.self) private var model
     @Environment(NotificationsStore.self) private var notes
+    @State private var bellTaps = 0
 
     func body(content: Content) -> some View {
         content
@@ -43,11 +44,14 @@ private struct RootBar: ViewModifier {
                     }
                     Button {
                         TapSound.play(.tap)
+                        bellTaps += 1
                         model.showNotifications = true
                     } label: {
+                        // The bell gives a little wiggle when tapped.
                         Image(systemName: notes.unread > 0 ? "bell.badge.fill" : "bell")
                             .symbolRenderingMode(.multicolor)
                             .contentTransition(.symbolEffect(.replace))
+                            .symbolEffect(.bounce, value: bellTaps)
                     }
                     .accessibilityLabel("Notifications")
                     .accessibilityValue(notes.unread > 0 ? "\(notes.unread) new" : "")
@@ -120,6 +124,7 @@ struct PinkCircleButton: View {
     var body: some View {
         Button {
             TapSound.play(.tap)
+            bounce += 1
             action()
         } label: {
             Image(systemName: icon)
@@ -168,7 +173,8 @@ struct AccountButton: View {
             .background { MenuPillBackground() }
             .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        // (No click: the menu opening makes its own sound.)
+        .buttonStyle(BouncyStyle(scale: 0.9, sound: false))
         .popover(isPresented: $hint) {
             MenuHint { hint = false }
                 .presentationCompactAdaptation(.popover)
@@ -355,7 +361,7 @@ struct TitleSwitch: View {
                         }
                         .contentShape(Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SoftPressStyle())
                 .accessibilityAddTraits(selection == i ? .isSelected : [])
             }
         }
@@ -408,7 +414,7 @@ struct UnderlineTabs<Value: Hashable>: View {
                 .frame(maxWidth: .infinity)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SoftPressStyle())
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 }

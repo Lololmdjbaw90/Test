@@ -836,7 +836,7 @@ struct AdminPayouts: View {
                 .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
             ForEach(refunds) { o in
-                Button { open(o.id) } label: { OrderRow(order: o, asBuyer: false) }.buttonStyle(.plain)
+                Button { open(o.id) } label: { OrderRow(order: o, asBuyer: false) }.buttonStyle(SoftPressStyle())
             }
         }
         .padding(16)
@@ -910,7 +910,7 @@ struct CommissionDetail: View {
                             Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.muted)
                         }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SoftPressStyle())
                 }
                 if !commission.description.isEmpty {
                     Text(commission.description).font(.jakarta(15)).foregroundStyle(Palette.text2)
@@ -1364,7 +1364,7 @@ struct CommissionOrderView: View {
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SoftPressStyle())
     }
 
     private func briefCard(_ o: CommissionOrder) -> some View {
@@ -1802,7 +1802,7 @@ struct ApproveSheet: View {
                                 .foregroundStyle(Color(hex: 0xF0A020))
                                 .scaleEffect(i == rating ? 1.12 : 1)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(SoftPressStyle())
                         .accessibilityLabel("\(i) star\(i == 1 ? "" : "s")")
                     }
                 }
@@ -1916,7 +1916,7 @@ struct NewCommissionView: View {
                             TextField("Price", text: $tier.price).keyboardType(.decimalPad).font(.jakarta(14, .bold)).multilineTextAlignment(.trailing).frame(width: 76)
                             if tiers.count > 1 {
                                 Button { withAnimation { tiers.removeAll { $0.id == tier.id } } } label: { Image(systemName: "minus.circle.fill").foregroundStyle(Palette.muted) }
-                                    .buttonStyle(.plain)
+                                    .buttonStyle(SoftPressStyle())
                             }
                         }
                         HStack(spacing: 8) {

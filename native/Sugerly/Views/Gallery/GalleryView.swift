@@ -467,7 +467,7 @@ struct GalleryCard: View {
                         Text(model.name(artwork.authorEmail, artwork.authorName)).font(.jakarta(11, .semibold)).foregroundStyle(Palette.muted).lineLimit(1)
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SoftPressStyle())
                 Spacer(minLength: 0)
                 if artwork.likeTotal > 0 {
                     Label("\(artwork.likeTotal)", systemImage: "heart.fill").font(.jakarta(10, .heavy)).foregroundStyle(Theme.main)
@@ -538,7 +538,7 @@ struct ArtworkDetailView: View {
                             }
                             .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(SoftPressStyle())
                         Spacer(minLength: 8)
                         FollowButton(email: artwork.authorEmail, compact: true)
                     }
