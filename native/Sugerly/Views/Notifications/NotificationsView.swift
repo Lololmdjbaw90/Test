@@ -1,8 +1,11 @@
 import SwiftUI
 import UIKit
 
-// Notifications: a page of its own (the bell in the top bar), grouped into
-// Today / This week / Earlier, with likes on the same thing in one row.
+// Notifications: a page of its own (the bell in the top bar), laid out like
+// a social app. Tabs along the top, then Today / This week / Earlier; each
+// row has a big coloured icon for what happened, the faces of who did it,
+// their names in bold, and what they said or liked. Likes on the same thing
+// come together in one row ("Mia and 3 others liked your post").
 struct NotificationsPage: View {
     @Binding var path: [Route]
     @Environment(AppModel.self) private var model
@@ -10,7 +13,7 @@ struct NotificationsPage: View {
     @Environment(PostsStore.self) private var posts
     @State private var filter = "all"
 
-    private let filters: [(String, String, String)] = [("all", "All", "sparkles"), ("like", "Likes", "heart.fill"), ("comment", "Comments", "bubble.left.fill"), ("follow", "Follows", "person.fill.badge.plus"), ("mention", "Mentions", "at")]
+    private let filters: [(String, String)] = [("all", "All"), ("like", "Likes"), ("comment", "Comments"), ("follow", "Follows"), ("mention", "Mentions")]
 
     private var shown: [AppNotification] {
         let hidden = Set((model.me?.ignored ?? []) + (model.me?.blocked ?? []))
@@ -35,7 +38,7 @@ struct NotificationsPage: View {
         var unread: Bool { items.contains { !$0.read } }
     }
 
-    // Today / This week / Earlier, like the website.
+    // Today / This week / Earlier.
     private var groups: [(String, [Bundle])] {
         let now = Date()
         var buckets: [String: [AppNotification]] = [:]
@@ -61,45 +64,20 @@ struct NotificationsPage: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                filterBar
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-            }
-            if shown.isEmpty {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                 Section {
-                    EmptyCard(icon: "bell.fill", title: "All quiet here",
-                              text: filter == "all" ? "When someone likes, follows, comments or mentions you, it shows up here." : "Nothing like this yet.",
-                              mood: .sleepy)
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
-                }
-            }
-            ForEach(groups, id: \.0) { group in
-                Section {
-                    ForEach(group.1) { b in
-                        Button { go(b.first) } label: { row(b) }
-                            .buttonStyle(.plain)
-                            .listRowBackground(b.unread ? Palette.surface2 : Palette.surface)
-                    }
+                    content
                 } header: {
-                    ListHeader(title: group.0.uppercased())
+                    UnderlineTabs(items: filters, selection: $filter)
                 }
             }
-            if !shown.isEmpty && notes.hasOlder {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small).tint(Theme.main)
-                    Text("Loading older").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
-                }
-                .frame(maxWidth: .infinity)
-                .listRowBackground(Color.clear)
-                .onAppear { Task { await notes.loadOlder(me: model.me?.email ?? "") } }
-            }
+            .padding(.bottom, 24)
+            .frame(maxWidth: 680)
+            .frame(maxWidth: .infinity)
         }
-        .listStyle(.insetGrouped)
-        .sugarList()
+        .appearFade()
+        .background { Palette.surface.ignoresSafeArea() }
         .roundTitle("Notifications")
         .toolbar {
             if notes.unread > 0 {
@@ -116,63 +94,149 @@ struct NotificationsPage: View {
         .onDisappear { notes.markAllRead() }
     }
 
-    private var filterBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(filters, id: \.0) { f in
-                    Chip(title: f.1, icon: f.2, active: filter == f.0) { filter = f.0 }
-                }
+    @ViewBuilder
+    private var content: some View {
+        if shown.isEmpty {
+            EmptyCard(icon: "bell.fill", title: "All quiet here",
+                      text: filter == "all" ? "When someone likes, follows, comments or mentions you, it shows up here." : "Nothing like this yet.",
+                      mood: .sleepy)
+                .padding(16)
+        }
+        ForEach(groups, id: \.0) { group in
+            Text(group.0)
+                .font(.display(19)).foregroundStyle(Palette.text)
+                .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 4)
+                .accessibilityAddTraits(.isHeader)
+            ForEach(group.1) { b in
+                row(b)
+                    .transition(.opacity)
             }
-            .padding(.horizontal, 4)
-            .padding(.vertical, 6)
+        }
+        if !shown.isEmpty && notes.hasOlder {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small).tint(Theme.main)
+                Text("Loading older").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .onAppear { Task { await notes.loadOlder(me: model.me?.email ?? "") } }
         }
     }
 
+    // MARK: a row
+
     private func row(_ b: Bundle) -> some View {
         let n = b.first
-        var names: [String] = []
-        for item in b.items {
-            let name = model.name(item.fromEmail, item.fromName.isEmpty ? "Someone" : item.fromName)
-            if !names.contains(name) { names.append(name) }
-        }
-        let text: String = {
-            guard b.items.count > 1 else { return n.message }
-            let what = n.link.contains("Reels") ? "your reel" : n.link.contains("Gallery") ? "your artwork" : "your post"
-            let others = names.count - 1
-            return "\(names[0]) and \(others) other\(others == 1 ? "" : "s") liked \(what)"
-        }()
-        return HStack(spacing: 12) {
-            ZStack(alignment: .bottomTrailing) {
-                if b.items.count > 1 {
-                    ZStack(alignment: .topLeading) {
-                        Avatar(url: model.person(b.items[1].fromEmail)?.picture ?? b.items[1].fromPicture, name: b.items[1].fromName, size: 34)
-                        Avatar(url: model.person(n.fromEmail)?.picture ?? n.fromPicture, name: n.fromName, size: 34)
-                            .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
-                            .offset(x: 12, y: 12)
-                    }
-                    .frame(width: 48, height: 48, alignment: .topLeading)
-                } else {
-                    Avatar(url: model.person(n.fromEmail)?.picture ?? n.fromPicture, name: n.fromName, size: 46)
+        let words = headline(b)
+        return HStack(alignment: .top, spacing: 12) {
+            // What happened, as a big coloured icon (like a social app).
+            Image(systemName: icon(n.type))
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(LinearGradient(colors: tint(n.type), startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: 40, height: 34, alignment: .trailing)
+            VStack(alignment: .leading, spacing: 7) {
+                topLine(b)
+                sentence(words.names, words.rest)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if let quote = words.quote, !quote.isEmpty {
+                    Text(quote)
+                        .font(.jakarta(14)).foregroundStyle(Palette.text2)
+                        .lineLimit(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                Image(systemName: icon(n.type)).font(.system(size: 9, weight: .black)).foregroundStyle(.white)
-                    .frame(width: 20, height: 20)
-                    .background(LinearGradient(colors: tint(n.type), startPoint: .topLeading, endPoint: .bottomTrailing), in: Circle())
-                    .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
-                    .offset(x: 4, y: 4)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(text).font(.jakarta(14, b.unread ? .bold : .medium)).foregroundStyle(Palette.text).multilineTextAlignment(.leading).lineLimit(3)
-                Text(Dates.ago(n.created)).font(.jakarta(11, .semibold)).foregroundStyle(b.unread ? Theme.main : Palette.muted)
-            }
-            Spacer(minLength: 0)
-            if n.type == "follow" && !n.fromEmail.isEmpty {
-                FollowButton(email: n.fromEmail, compact: true)
-            } else if b.unread {
-                Circle().fill(Theme.main).frame(width: 9, height: 9)
+                if n.type == "follow" && !n.fromEmail.isEmpty {
+                    FollowButton(email: n.fromEmail, compact: true)
+                }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.leading, 12)
+        .padding(.trailing, 16)
+        .padding(.vertical, 12)
+        .background(b.unread ? Theme.main.opacity(0.06) : Color.clear)
+        .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1).allowsHitTesting(false) }
         .contentShape(Rectangle())
+        .onTapGesture { open(b) }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { open(b) }
+    }
+
+    // The faces on the left; how long ago (and a pink dot if it's new) on the right.
+    private func topLine(_ b: Bundle) -> some View {
+        HStack(spacing: 8) {
+            faces(b)
+            Spacer(minLength: 4)
+            Text(Dates.ago(b.first.created))
+                .font(.jakarta(12, .semibold))
+                .foregroundStyle(b.unread ? Theme.main : Palette.muted)
+            if b.unread {
+                Circle().fill(Theme.main).frame(width: 8, height: 8)
+            }
+        }
+    }
+
+    private func sentence(_ names: String, _ rest: String) -> Text {
+        let bold = Text(names).font(.jakarta(15, .heavy)).foregroundColor(Palette.text)
+        let plain = Text(rest).font(.jakarta(15)).foregroundColor(Palette.text)
+        return bold + plain
+    }
+
+    // Up to six faces of who did it, overlapping a little.
+    private func faces(_ b: Bundle) -> some View {
+        var seen = Set<String>()
+        var people: [AppNotification] = []
+        for item in b.items where !seen.contains(item.fromEmail) {
+            seen.insert(item.fromEmail)
+            people.append(item)
+        }
+        return HStack(spacing: -8) {
+            ForEach(people.prefix(6), id: \.id) { item in
+                Avatar(url: model.person(item.fromEmail)?.picture ?? item.fromPicture, name: item.fromName, size: 32)
+                    .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
+            }
+        }
+    }
+
+    // Who (in bold), what they did, and what they said or liked.
+    private func headline(_ b: Bundle) -> (names: String, rest: String, quote: String?) {
+        let n = b.first
+        let name = model.name(n.fromEmail, n.fromName.isEmpty ? "Someone" : n.fromName)
+        if b.items.count > 1 {
+            let others = Set(b.items.map(\.fromEmail)).count - 1
+            let what = n.link.contains("Reels") ? "your reel" : n.link.contains("Gallery") ? "your artwork" : "your post"
+            let rest = others > 0 ? " and \(others) other\(others == 1 ? "" : "s") liked \(what)" : " liked \(what)"
+            return (name, rest, likedPost(n))
+        }
+        var rest = n.message
+        var names = ""
+        for prefix in [n.fromName, name] where !prefix.isEmpty && rest.hasPrefix(prefix) {
+            names = name
+            rest = String(rest.dropFirst(prefix.count))
+            break
+        }
+        var quote: String?
+        if ["comment", "reply", "support"].contains(n.type), let r = rest.range(of: ": ") {
+            quote = String(rest[r.upperBound...])
+            rest = String(rest[..<r.lowerBound])
+        } else if n.type == "like" {
+            quote = likedPost(n)
+        }
+        return (names, rest, quote)
+    }
+
+    // The words of the post that was liked (when it's loaded).
+    private func likedPost(_ n: AppNotification) -> String? {
+        guard n.link.lowercased().hasPrefix("/community"),
+              let id = URLComponents(string: n.link)?.queryItems?.first(where: { $0.name == "post" })?.value,
+              let post = posts.posts.first(where: { $0.id == id }) else { return nil }
+        let words = post.title.isEmpty ? post.text : post.title
+        return words.isEmpty ? nil : words
+    }
+
+    private func open(_ b: Bundle) {
+        notes.markRead(b.items.map(\.id))
+        go(b.first)
     }
 
     private func tint(_ type: String) -> [Color] {
@@ -180,6 +244,7 @@ struct NotificationsPage: View {
         case "like": return [Color(hex: 0xFF7AA2), Color(hex: 0xE0406F)]
         case "follow": return [Color(hex: 0xB19CFF), Color(hex: 0x7C5CF0)]
         case "comment", "reply": return [Color(hex: 0x7CBEFF), Color(hex: 0x2F80E0)]
+        case "mention": return [Color(hex: 0x5FD3B0), Color(hex: 0x16A37F)]
         case "message": return [Color(hex: 0x5FD3B0), Color(hex: 0x16A37F)]
         case "commission": return [Color(hex: 0xFFD166), Color(hex: 0xF0A020)]
         default: return [Theme.light, Theme.main]
@@ -189,10 +254,12 @@ struct NotificationsPage: View {
     private func icon(_ type: String) -> String {
         switch type {
         case "like": return "heart.fill"
-        case "follow": return "person.fill.badge.plus"
+        case "follow": return "person.fill"
         case "comment", "reply": return "bubble.left.fill"
+        case "mention": return "at"
         case "message": return "paperplane.fill"
         case "commission": return "storefront.fill"
+        case "support": return "questionmark.bubble.fill"
         default: return "sparkles"
         }
     }
@@ -666,17 +733,27 @@ struct AdminView: View {
             Button { Task { await saveSite() } } label: { Label("Save site settings", systemImage: "checkmark") }
                 .buttonStyle(GradientButtonStyle(height: 46))
             Text("Community").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
-            HStack(spacing: 10) {
-                Button { editChallenges = true } label: { Label("Weekly challenges", systemImage: "trophy.fill").frame(maxWidth: .infinity) }
-                    .buttonStyle(OutlineButtonStyle(height: 44, fullWidth: true))
-                Button { editPrompts = true } label: { Label("Daily prompts", systemImage: "paintpalette.fill").frame(maxWidth: .infinity) }
-                    .buttonStyle(OutlineButtonStyle(height: 44, fullWidth: true))
+            // One full-width row each (side by side, the names wrapped onto
+            // two lines and the icons floated at the top).
+            VStack(spacing: 8) {
+                adminLink("Weekly challenges", "The themes everyone draws this week", "trophy.fill", [0xFFD166, 0xF0A020]) { editChallenges = true }
+                adminLink("Daily prompts", "A new idea to draw each day", "paintpalette.fill", [0xFF9EC4, 0xE0508A]) { editPrompts = true }
             }
             .sheet(isPresented: $editChallenges) { DailyContentEditor(kind: .challenges).presentationCornerRadius(30) }
             .sheet(isPresented: $editPrompts) { DailyContentEditor(kind: .prompts).presentationCornerRadius(30) }
             Divider().padding(.vertical, 6)
             Text("App colours").font(.display(22)).foregroundStyle(Palette.text)
         }
+    }
+
+    private func adminLink(_ title: String, _ detail: String, _ icon: String, _ colors: [UInt32], action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            IconRow(title: title, detail: detail, icon: icon, colors: colors, chevron: true)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .sugarCard(radius: 18)
+        }
+        .buttonStyle(BouncyStyle(scale: 0.97))
     }
 
     private func saveSite() async {

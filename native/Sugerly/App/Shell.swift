@@ -655,6 +655,16 @@ final class NotificationsStore {
         items += docs.map(AppNotification.init).filter { !known.contains($0.id) }
     }
 
+    // Opening a notification marks it (and the likes grouped with it) read.
+    func markRead(_ ids: [String]) {
+        let wanted = Set(ids)
+        for i in items.indices where wanted.contains(items[i].id) && !items[i].read {
+            items[i].read = true
+            let id = items[i].id
+            Task { try? await FS.update("Notification", id, ["is_read": true]) }
+        }
+    }
+
     func markAllRead() {
         let unread = items.filter { !$0.read }
         for i in items.indices { items[i].read = true }

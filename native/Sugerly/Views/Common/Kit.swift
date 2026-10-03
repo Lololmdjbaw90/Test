@@ -316,6 +316,51 @@ struct TitleSwitch: View {
     }
 }
 
+// Tabs like a social app: the names spread across the top with a pink
+// line under the one you're on (it slides over when you switch). Used by
+// Community and Notifications; stick it in a pinned section header.
+struct UnderlineTabs<Value: Hashable>: View {
+    let items: [(Value, String)]
+    @Binding var selection: Value
+    @Namespace private var line
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(items, id: \.0) { item in
+                tab(item.0, item.1)
+            }
+        }
+        .padding(.horizontal, 4)
+        .background(.bar)
+        .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1) }
+        .sensoryFeedback(.selection, trigger: selection)
+    }
+
+    private func tab(_ value: Value, _ title: String) -> some View {
+        let on = selection == value
+        return Button { withAnimation(.snappy(duration: 0.25)) { selection = value } } label: {
+            Text(title)
+                .font(.jakarta(14, on ? .heavy : .semibold))
+                .foregroundStyle(on ? Palette.text : Palette.muted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .padding(.top, 13)
+                .padding(.bottom, 11)
+                .overlay(alignment: .bottom) {
+                    if on {
+                        Capsule().fill(Theme.gradient)
+                            .frame(height: 4)
+                            .matchedGeometryEffect(id: "line", in: line)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}
+
 // MARK: - Lists in Sugerly's colours
 
 extension View {

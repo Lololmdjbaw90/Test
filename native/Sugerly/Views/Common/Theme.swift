@@ -284,6 +284,10 @@ private struct GradientButtonBody: View {
         configuration.label
             .font(.jakarta(15, .bold))
             .foregroundStyle(.white)
+            // Pill buttons stay on one line (shrinking a little if they
+            // must) instead of wrapping into a lopsided two-line blob.
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
             .padding(.horizontal, 20)
             .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: height)
             .background {
@@ -310,6 +314,8 @@ struct OutlineButtonStyle: ButtonStyle {
         configuration.label
             .font(.jakarta(14, .bold))
             .foregroundStyle(Theme.pink)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
             .padding(.horizontal, 18)
             .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: height)
             .background(configuration.isPressed ? Theme.soft : Color.clear, in: Capsule())

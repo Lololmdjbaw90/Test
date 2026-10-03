@@ -177,10 +177,7 @@ struct CommunityView: View {
     @State private var feed: Feed = .forYou
     @State private var tag: String?
     @State private var reporting: ReportSheet.Target?
-    @State private var dismissed = Set<String>()
     @State private var searching = false
-    @State private var appeared = false
-    @Namespace private var feedPill
 
     private var visible: [Post] {
         guard let me = model.me else { return [] }
@@ -220,133 +217,42 @@ struct CommunityView: View {
         return counts.sorted { $0.value > $1.value }.prefix(8).map(\.key)
     }
 
-    private var storyPeople: [String] {
-        let threeDays = Dates.iso(Date().addingTimeInterval(-3 * 86400))
-        var seen = Set<String>()
-        var out: [String] = []
-        for p in store.posts where p.created > threeDays && p.authorEmail != model.me?.email && !seen.contains(p.authorEmail) {
-            seen.insert(p.authorEmail)
-            out.append(p.authorEmail)
-        }
-        return Array(out.prefix(14))
-    }
-
-    // Most-liked people this week.
-    private var topCreators: [(String, Int)] {
-        let weekAgo = Dates.iso(Date().addingTimeInterval(-7 * 86400))
-        var likes: [String: Int] = [:]
-        for p in store.posts where p.created > weekAgo { likes[p.authorEmail, default: 0] += p.likeTotal }
-        return likes.filter { $0.value > 0 && model.person($0.key) != nil }
-            .sorted { $0.value > $1.value }.prefix(8).map { ($0.key, $0.value) }
-    }
-
-    private var creatorsRow: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label("Top creators this week", systemImage: "crown.fill").font(.jakarta(16, .heavy)).foregroundStyle(Palette.text)
-                    .labelStyle(TintedIconLabel(tint: Color(hex: 0xF0A020)))
-                Spacer()
-                Button { path.append(.topArtists) } label: {
-                    HStack(spacing: 3) { Text("Board"); Image(systemName: "chevron.right").font(.system(size: 10, weight: .heavy)) }
-                        .font(.jakarta(13, .bold)).foregroundStyle(Theme.main)
-                }
-            }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 14) {
-                    ForEach(Array(topCreators.enumerated()), id: \.element.0) { i, entry in
-                        let person = model.person(entry.0)
-                        Button { path.append(.person(entry.0)) } label: {
-                            VStack(spacing: 5) {
-                                Avatar(url: person?.picture ?? "", name: person?.displayName ?? "", size: 54)
-                                    .padding(3)
-                                    .overlay(Circle().strokeBorder(i == 0 ? Color(hex: 0xF0A020) : i == 1 ? Color(hex: 0x94A3B8) : i == 2 ? Color(hex: 0xC2773A) : Palette.border, lineWidth: i < 3 ? 2.5 : 1.5))
-                                    .overlay(alignment: .bottomTrailing) {
-                                        PresenceBadge(online: person?.isOnline ?? false, size: 54).padding(3)
-                                    }
-                                    .overlay(alignment: .top) {
-                                        if i == 0 {
-                                            Image(systemName: "crown.fill").font(.system(size: 15, weight: .bold)).foregroundStyle(Color(hex: 0xF0A020))
-                                                .offset(y: -13)
-                                                .phaseAnimator([false, true]) { v, tilt in v.rotationEffect(.degrees(tilt ? -10 : 10)) } animation: { _ in .easeInOut(duration: 1.1) }
-                                        }
-                                    }
-                                Text(person?.displayName ?? "").font(.jakarta(11, .bold)).foregroundStyle(Palette.text).lineLimit(1)
-                                Label("\(entry.1)", systemImage: "heart.fill").font(.jakarta(10, .heavy)).foregroundStyle(Theme.main)
-                            }
-                            .frame(width: 70)
-                        }
-                        .buttonStyle(BouncyStyle(scale: 0.92))
-                    }
-                }
-                .padding(.top, 12).padding(.horizontal, 2)
-            }
-            .scrollClipDisabled()
-        }
-        .sugarCard(radius: 26, padding: 14)
-    }
-
+    // Three people to follow, shown between posts.
     private var suggestions: [UserProfile] {
         guard let me = model.me else { return [] }
         let following = Set(me.following)
         let blocked = Set(me.blocked)
         return model.people.values
-            .filter { $0.email != me.email && !following.contains($0.email) && !blocked.contains($0.email) && !dismissed.contains($0.email) }
+            .filter { $0.email != me.email && !following.contains($0.email) && !blocked.contains($0.email) }
             .sorted { $0.isOnline && !$1.isOnline }
-            .prefix(8).map { $0 }
+            .prefix(3).map { $0 }
     }
 
+    // Laid out like a social timeline: tabs along the top (they stick while
+    // you scroll), "What's happening?", then one post after another on a
+    // plain page with thin lines between them, and a round pink button to
+    // write a post.
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 14, pinnedViews: [.sectionHeaders]) {
-                Text("Little updates. Long conversations.")
-                    .font(.jakarta(13, .medium)).foregroundStyle(Palette.muted)
-                    .padding(.horizontal, 4)
-                    .stagger(appeared, 0)
-                stories.stagger(appeared, 1)
+            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                 Section {
+                    composeRow
                     if !trending.isEmpty || tag != nil { trendingRow }
-
-                    if store.loading && store.posts.isEmpty {
-                        ForEach(0..<3, id: \.self) { i in SkeletonCard(media: i != 1) }
-                    } else if visible.isEmpty {
-                        EmptyCard(icon: feed == .saved ? "bookmark.fill" : "photo.on.rectangle.angled",
-                                  title: feed == .saved ? "No saved posts" : feed == .following ? "It's quiet over here" : "Nothing here yet",
-                                  text: feed == .saved ? "Tap the bookmark on a post and it'll wait for you here." : feed == .following ? "The people you follow haven't posted yet. Follow a few more artists?" : "No posts yet. Yours could be the first!",
-                                  actionTitle: feed == .saved ? nil : "Share a post", action: feed == .saved ? nil : compose)
-                    }
-
-                    // One sheet of conversation: a slim composer on top, then
-                    // every post as a thread row with a line down the side.
-                    LazyVStack(spacing: 0) {
-                        startThread
-                        ForEach(Array(visible.enumerated()), id: \.element.id) { index, post in
-                            PostCard(post: post, path: $path, reporting: $reporting, conversational: true)
-                                .scrollFade()
-                                .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 18)), removal: .opacity))
-                                .onAppear { if index >= visible.count - 5 { Task { await store.loadMore() } } }
-                            if index == 1 && !suggestions.isEmpty && feed == .forYou {
-                                suggested.padding(12)
-                                    .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1).allowsHitTesting(false) }
-                            }
-                        }
-                    }
-                    .background(Palette.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-                    .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
+                    feedContent
                 } header: {
-                    feedBar
+                    UnderlineTabs(items: Feed.allCases.map { ($0, $0.rawValue) }, selection: $feed)
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.top, 10)
-            .padding(.bottom, 30)
-            .sideRails(680)
+            // Room so the last post isn't under the pink button.
+            .padding(.bottom, 90)
+            .sideRails(640)
             .animation(.spring(response: 0.45, dampingFraction: 0.85), value: feed)
         }
         .appearFade()
-        .sugarBackground()
+        .background { Palette.surface.ignoresSafeArea() }
+        .overlay(alignment: .bottomTrailing) { composeButton }
         .roundTitle("Community")
-        .rootBar(search: { searching = true })
+        .rootBar(create: false, search: { searching = true })
         .refreshable { await store.load() }
         .sheet(item: $reporting) { target in ReportSheet(target: target) }
         .sheet(isPresented: $searching) {
@@ -362,58 +268,63 @@ struct CommunityView: View {
             let fresh = docs.values.map { Post($0) }.filter { p in !store.posts.contains { $0.id == p.id } }
             withAnimation(.snappy) { store.posts.append(contentsOf: fresh) }
         }
-        .onAppear { appeared = true }
     }
 
-    // "Start a thread…" at the top of the feed, like a social app.
-    private var startThread: some View {
+    @ViewBuilder
+    private var feedContent: some View {
+        let list = visible
+        if store.loading && store.posts.isEmpty {
+            ForEach(0..<3, id: \.self) { i in SkeletonCard(media: i != 1).padding(14) }
+        } else if list.isEmpty {
+            EmptyCard(icon: feed == .saved ? "bookmark.fill" : "photo.on.rectangle.angled",
+                      title: feed == .saved ? "No saved posts" : feed == .following ? "It's quiet over here" : "Nothing here yet",
+                      text: feed == .saved ? "Tap the bookmark on a post and it'll wait for you here." : feed == .following ? "The people you follow haven't posted yet. Follow a few more artists?" : "No posts yet. Yours could be the first!",
+                      actionTitle: feed == .saved ? nil : "Share a post", action: feed == .saved ? nil : compose)
+                .padding(16)
+        }
+        let followAt = min(2, list.count - 1)
+        ForEach(Array(list.enumerated()), id: \.element.id) { index, post in
+            PostCard(post: post, path: $path, reporting: $reporting)
+                .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 18)), removal: .opacity))
+                .onAppear { if index >= list.count - 5 { Task { await store.loadMore() } } }
+            if index == followAt && feed == .forYou && !suggestions.isEmpty {
+                whoToFollow
+            }
+        }
+    }
+
+    // "What's happening?" at the top: tap to write a post.
+    private var composeRow: some View {
         Button(action: compose) {
             HStack(spacing: 12) {
-                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 40)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(model.me?.displayName ?? "You").font(.jakarta(14, .heavy)).foregroundStyle(Palette.text)
-                    Text("Start a thread…").font(.jakarta(14)).foregroundStyle(Palette.muted)
-                }
+                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 42)
+                Text("What's happening?").font(.jakarta(16)).foregroundStyle(Palette.muted)
                 Spacer(minLength: 0)
-                Text("Post").font(.jakarta(13, .heavy)).foregroundStyle(.white)
-                    .padding(.horizontal, 16).frame(height: 34)
-                    .background(Theme.gradient, in: Capsule())
+                Image(systemName: "photo").font(.system(size: 18, weight: .semibold)).foregroundStyle(Theme.main)
             }
-            .padding(.horizontal, 16).padding(.vertical, 14)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1).allowsHitTesting(false) }
+        .accessibilityLabel("Write a post")
     }
 
-    // Feed tabs as soft pills; the chosen one slides over.
-    private var feedBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(Feed.allCases, id: \.self) { f in
-                    let on = feed == f
-                    Button { withAnimation(.snappy(duration: 0.25)) { feed = f } } label: {
-                        Label(f.rawValue, systemImage: f.icon)
-                            .font(.jakarta(13, on ? .heavy : .semibold))
-                            .foregroundStyle(on ? .white : Palette.text2)
-                            .padding(.horizontal, 14).frame(height: 36)
-                            .background {
-                                if on { Capsule().fill(Theme.gradient).matchedGeometryEffect(id: "feed", in: feedPill) }
-                            }
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(4)
-            .background(Palette.surface, in: Capsule())
-            .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
-            .padding(.vertical, 8)
+    // The round pink button in the corner for a new post.
+    private var composeButton: some View {
+        Button(action: compose) {
+            Image(systemName: "plus")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 58, height: 58)
+                .background(Theme.gradient, in: Circle())
+                .shadow(color: Theme.main.opacity(0.4), radius: 12, y: 6)
         }
-        .scrollClipDisabled()
-        // When it sticks to the top, its strip reaches the screen edges so
-        // posts don't peek out beside it.
-        .background { Rectangle().fill(Palette.bg.opacity(0.97)).padding(.horizontal, -14) }
+        .buttonStyle(BouncyStyle(scale: 0.9))
+        .padding(.trailing, 18)
+        .padding(.bottom, 16)
+        .accessibilityLabel("New post")
     }
 
     private var trendingRow: some View {
@@ -424,9 +335,10 @@ struct CommunityView: View {
                 if let tag, !trending.contains(tag) { tagChip(tag) }
                 ForEach(trending, id: \.self) { t in tagChip(t) }
             }
-            .padding(.horizontal, 2)
-            .padding(.vertical, 2)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
         }
+        .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1).allowsHitTesting(false) }
     }
 
     private func tagChip(_ t: String) -> some View {
@@ -439,84 +351,48 @@ struct CommunityView: View {
             .foregroundStyle(on ? .white : Palette.text2)
             .padding(.horizontal, 14).frame(height: 34)
             .background {
-                if on { Capsule().fill(Theme.gradient) } else { Capsule().fill(Palette.surface).overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1)) }
+                if on { Capsule().fill(Theme.gradient) } else { Capsule().fill(Palette.surface2) }
             }
         }
         .buttonStyle(BouncyStyle())
     }
 
-    // Who's been posting lately, as round stories; you first, with a +.
-    private var stories: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 14) {
-                Button(action: compose) {
-                    VStack(spacing: 6) {
-                        Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 62)
-                            .padding(3)
-                            .overlay(Circle().strokeBorder(Palette.border, lineWidth: 2))
-                            .overlay(alignment: .bottomTrailing) {
-                                Image(systemName: "plus").font(.system(size: 11, weight: .black)).foregroundStyle(.white)
-                                    .frame(width: 22, height: 22).background(Theme.gradient, in: Circle())
-                                    .overlay(Circle().strokeBorder(Palette.bg, lineWidth: 2.5))
-                            }
-                        Text("You").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
-                    }
-                }
-                .buttonStyle(BouncyStyle()).accessibilityLabel("Share a post")
-                ForEach(Array(storyPeople.enumerated()), id: \.element) { i, email in
-                    let person = model.person(email)
-                    Button { path.append(.person(email)) } label: {
-                        VStack(spacing: 6) {
-                            Avatar(url: person?.picture ?? "", name: person?.displayName ?? email, size: 62, online: person?.isOnline ?? false)
-                            Text(person?.displayName ?? "").font(.jakarta(12, .semibold)).foregroundStyle(Palette.text).lineLimit(1).frame(width: 70)
-                        }
-                    }
-                    .buttonStyle(BouncyStyle())
-                    .scaleEffect(appeared ? 1 : 0.4)
-                    .opacity(appeared ? 1 : 0)
-                    .animation(.spring(response: 0.5, dampingFraction: 0.62).delay(0.15 + Double(min(i, 10)) * 0.05), value: appeared)
-                }
+    // "Who to follow": three people with a Follow button, and Show more.
+    private var whoToFollow: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Who to follow").font(.display(21)).foregroundStyle(Palette.text)
+                .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 4)
+            ForEach(suggestions) { person in
+                personRow(person)
             }
-            .padding(.horizontal, 4)
-            .padding(.vertical, 4)
+            Button { path.append(.people) } label: {
+                Text("Show more").font(.jakarta(15, .semibold)).foregroundStyle(Theme.main)
+                    .padding(.horizontal, 16).padding(.vertical, 14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
+        .background(Palette.surface2.opacity(0.5))
+        .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1).allowsHitTesting(false) }
     }
 
-    private var suggested: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("Suggested for you").font(.jakarta(18, .heavy)).foregroundStyle(Palette.text)
-                Spacer()
-                Button("See all") { path.append(.people) }.font(.jakarta(15, .bold)).foregroundStyle(Theme.main)
+    private func personRow(_ person: UserProfile) -> some View {
+        let reason = person.following.contains(model.me?.email ?? "") ? "Follows you" : person.isOnline ? "Active now" : "New on Sugerly"
+        return HStack(spacing: 12) {
+            Avatar(url: person.picture, name: person.displayName, size: 44, online: person.isOnline)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(person.displayName).font(.jakarta(15, .heavy)).foregroundStyle(Palette.text).lineLimit(1)
+                Text(reason).font(.jakarta(13)).foregroundStyle(Palette.muted).lineLimit(1)
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(suggestions) { person in
-                        let reason = person.following.contains(model.me?.email ?? "") ? "Follows you" : person.isOnline ? "Recently active" : "New on Sugerly"
-                        VStack(spacing: 6) {
-                            Avatar(url: person.picture, name: person.displayName, size: 76, online: person.isOnline)
-                                .padding(.top, 6)
-                            Text(person.displayName).font(.jakarta(16, .heavy)).foregroundStyle(Palette.text).lineLimit(1)
-                            Text(reason).font(.jakarta(13)).foregroundStyle(Palette.muted)
-                            FollowButton(email: person.email)
-                                .padding(.top, 6)
-                        }
-                        .frame(width: 150)
-                        .padding(.vertical, 16)
-                        .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                        .overlay(alignment: .topTrailing) {
-                            Button { withAnimation(.snappy) { _ = dismissed.insert(person.email) } } label: {
-                                Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.muted).frame(width: 34, height: 34)
-                            }
-                        }
-                        .contentShape(RoundedRectangle(cornerRadius: 24))
-                        .onTapGesture { path.append(.person(person.email)) }
-                        .transition(.scale.combined(with: .opacity))
-                    }
-                }
-            }
+            Spacer(minLength: 8)
+            FollowButton(email: person.email, compact: true)
         }
-        .sugarCard(radius: 28, padding: 16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .onTapGesture { path.append(.person(person.email)) }
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -537,8 +413,9 @@ struct PostCard: View {
     let post: Post
     @Binding var path: [Route]
     @Binding var reporting: ReportSheet.Target?
+    // In the feed (tap to open). Off on the post's own page, which shows
+    // everything in full with the date and counts, like a social app.
     var openable = true
-    var conversational = false
 
     @Environment(AppModel.self) private var model
     @Environment(PostsStore.self) private var store
@@ -549,96 +426,21 @@ struct PostCard: View {
 
     private var me: String { model.me?.email ?? "" }
     private var liked: Bool { LikeBook.shared.isLiked(post, me: me) }
-
-    // "name  words…" under the picture, like a photo feed.
-    private var caption: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if !post.title.isEmpty {
-                Text(post.title).font(.jakarta(15, .heavy)).foregroundStyle(Palette.text)
-            }
-            if !post.text.isEmpty {
-                (Text(model.name(post.authorEmail, post.authorName) + "  ").font(.jakarta(14, .heavy)).foregroundStyle(Palette.text)
-                 + Text(Hashtags.styled(post.text)).font(.jakarta(14)).foregroundStyle(Palette.text))
-                    .lineLimit(openable ? 4 : nil)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .fixedSize(horizontal: false, vertical: true)
-        .contentShape(Rectangle())
-        .onTapGesture { open() }
-    }
     private var saved: Bool { model.me?.savedPosts.contains(post.id) ?? false }
     private var author: UserProfile? { model.person(post.authorEmail) }
     private var following: Bool { model.me?.following.contains(post.authorEmail) ?? false }
+    private var comments: Int { store.commentCounts[post.id] ?? 0 }
 
-    // Someone you follow who liked this post (the website's "Liked by Luna").
+    // Someone you follow who liked this post ("Luna liked").
     private var friendLiker: UserProfile? {
         guard let me = model.me else { return nil }
         let following = Set(me.following)
         return post.likes.first { following.contains($0) && $0 != post.authorEmail }.flatMap { model.person($0) }
     }
 
-    private var card: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if let friend = friendLiker {
-                Label("Liked by \(friend.displayName)", systemImage: "heart.fill")
-                    .font(.jakarta(12, .bold)).foregroundStyle(Palette.muted)
-                    .labelStyle(TintedIconLabel(tint: Theme.main))
-                    .padding(.horizontal, 16).padding(.top, 14)
-            }
-            header
-                .padding(.horizontal, 14)
-                .padding(.top, friendLiker == nil ? 14 : 8)
-                .padding(.bottom, 12)
-            // Social layout: the picture right under the name, edge to edge,
-            // then the buttons, then the words (like a photo feed).
-            if conversational && !post.imageURL.isEmpty {
-                media
-                    .frame(maxWidth: .infinity)
-                    .clipped()
-                    .padding(.bottom, 6)
-                actions.padding(.horizontal, 8)
-                caption.padding(.horizontal, 16).padding(.top, 4)
-                footer
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .padding(.bottom, 14)
-            } else {
-            if !post.title.isEmpty {
-                Text(post.title).font(conversational ? .jakarta(19, .bold) : .display(22)).foregroundStyle(Palette.text)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .onTapGesture { open() }
-                    .padding(.horizontal, 16).padding(.bottom, 6)
-            }
-            if !post.text.isEmpty {
-                Text(Hashtags.styled(post.text)).font(.jakarta(15)).foregroundStyle(Palette.text).lineLimit(openable ? 6 : nil)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .onTapGesture { open() }
-                    .padding(.horizontal, 16).padding(.bottom, 12)
-            }
-            if !post.imageURL.isEmpty {
-                media
-                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 12)
-            }
-            actions.padding(.horizontal, 12)
-            footer
-                .padding(.horizontal, 14)
-                .padding(.top, 12)
-                .padding(.bottom, 14)
-            }
-        }
-        .modifier(ConversationSurface(flat: conversational))
-    }
-
     var body: some View {
         Group {
-            if conversational { threadRow } else { card }
+            if openable { timelineRow } else { fullPost }
         }
         .confirmationDialog("Delete this post?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
@@ -658,110 +460,234 @@ struct PostCard: View {
         }
     }
 
-    // MARK: conversation row (the Community feed)
+    // MARK: in the feed
 
-    // A post as a conversation: picture on the left with a thread line
-    // running down to who replied, name and time, the words, the picture,
-    // then light icon buttons with counts.
-    private var threadRow: some View {
-        let comments = store.commentCounts[post.id] ?? 0
-        return HStack(alignment: .top, spacing: 12) {
-            VStack(spacing: 6) {
-                Button { path.append(.person(post.authorEmail)) } label: {
-                    Avatar(url: author?.picture ?? post.authorPicture, name: author?.displayName ?? post.authorName, size: 42,
-                           online: author?.isOnline ?? false, nitro: author?.isNitro ?? false)
-                }
-                .buttonStyle(BouncyStyle())
-                if comments > 0, let top = store.latestComment[post.id] {
-                    Capsule().fill(Palette.border).frame(width: 2).frame(maxHeight: .infinity)
-                    Avatar(url: model.person(top.email)?.picture ?? "", name: model.person(top.email)?.displayName ?? top.name, size: 20)
-                }
-            }
-            .frame(width: 44)
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 6) {
-                    Button { path.append(.person(post.authorEmail)) } label: {
-                        NameText(name: author?.displayName ?? post.authorName, style: author?.nameStyle ?? "", size: 15, nitro: author?.isNitro ?? false).lineLimit(1)
+    // Like a post on a social timeline: picture on the left; name, level and
+    // time on one line; the words; the picture; then the buttons with their
+    // counts spread across. Tap anywhere to open it.
+    private var timelineRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let friend = friendLiker { likedByFriend(friend) }
+            HStack(alignment: .top, spacing: 10) {
+                authorPicture(42)
+                VStack(alignment: .leading, spacing: 5) {
+                    nameLine
+                    words(lines: 8, size: 15)
+                    if !post.imageURL.isEmpty {
+                        media
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
+                            .padding(.top, 4)
                     }
-                    .buttonStyle(.plain)
-                    if author?.isNitro == true { NitroBadge(compact: true) }
-                    Text(Dates.ago(post.created)).font(.jakarta(13)).foregroundStyle(Palette.muted).lineLimit(1)
-                    Spacer(minLength: 4)
-                    if post.authorEmail != me && !following {
-                        Button { follow() } label: {
-                            Text("Follow").font(.jakarta(12, .heavy)).foregroundStyle(Theme.main)
-                                .padding(.horizontal, 10).frame(height: 28)
-                                .overlay(Capsule().strokeBorder(Theme.main.opacity(0.4), lineWidth: 1.2))
-                        }
-                        .buttonStyle(BouncyStyle())
-                    }
-                    moreMenu
-                }
-                if !post.title.isEmpty {
-                    Text(post.title).font(.jakarta(16, .heavy)).foregroundStyle(Palette.text)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .contentShape(Rectangle()).onTapGesture { open() }
-                }
-                if !post.text.isEmpty {
-                    Text(Hashtags.styled(post.text)).font(.jakarta(15)).foregroundStyle(Palette.text).lineLimit(8)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle()).onTapGesture { open() }
-                }
-                if !post.imageURL.isEmpty {
-                    media
-                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
+                    actionRow(size: 16)
                         .padding(.top, 2)
-                }
-                HStack(spacing: 18) {
-                    Button {
-                        if !liked { burstLike() }
-                        store.toggleLike(post, me: model.me)
-                    } label: {
-                        iconCount(liked ? "heart.fill" : "heart", post.likeTotal, on: liked)
-                            .overlay(alignment: .leading) {
-                                if let likeBurst { HeartPop().id(likeBurst).offset(x: 8) }
-                            }
-                    }
-                    .sensoryFeedback(.impact(weight: .light), trigger: liked)
-                    .accessibilityLabel(liked ? "Unlike" : "Like")
-                    Button { open() } label: { iconCount("bubble.right", comments, on: false) }
-                        .accessibilityLabel("Comments")
-                    Button { sendSheet = true } label: { iconCount("paperplane", nil, on: false) }
-                        .accessibilityLabel("Send to a chat")
-                    ShareLink(item: ReelLinks.post(post.id), subject: Text("Sugerly"), message: Text(post.title.isEmpty ? post.text : post.title)) {
-                        iconCount("square.and.arrow.up", nil, on: false)
-                    }
-                    .accessibilityLabel("Share")
-                    Spacer(minLength: 0)
-                    Button { toggleSave() } label: { iconCount(saved ? "bookmark.fill" : "bookmark", nil, on: saved) }
-                        .sensoryFeedback(.impact(weight: .light), trigger: saved)
-                        .accessibilityLabel(saved ? "Remove from saved" : "Save")
-                }
-                .buttonStyle(BouncyStyle(scale: 0.8))
-                .padding(.top, 2)
-                if comments > 0 || post.likeTotal > 0 {
-                    Button { open() } label: {
-                        Text(summary(comments))
-                            .font(.jakarta(13)).foregroundStyle(Palette.muted)
-                    }
-                    .buttonStyle(.plain)
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.leading, 16)
+        .padding(.trailing, 10)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
         .contentShape(Rectangle())
+        .onTapGesture { open() }
         .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1).allowsHitTesting(false) }
         // Posts glide up and fade in as they come into view.
         .scrollTransition(.animated(.spring(response: 0.5, dampingFraction: 0.86)).threshold(.visible(0.08))) { content, phase in
             content
                 .opacity(phase.isIdentity ? 1 : 0)
-                .offset(y: phase == .bottomTrailing ? 28 : 0)
-                .scaleEffect(phase.isIdentity ? 1 : 0.97, anchor: .top)
+                .offset(y: phase == .bottomTrailing ? 24 : 0)
         }
     }
+
+    // "♥ Luna liked" above the post, lined up with the words.
+    private func likedByFriend(_ friend: UserProfile) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "heart.fill")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Theme.main)
+                .frame(width: 42, alignment: .trailing)
+            Text("\(friend.displayName) liked")
+                .font(.jakarta(13, .bold)).foregroundStyle(Palette.muted)
+                .lineLimit(1)
+        }
+    }
+
+    private func authorPicture(_ size: CGFloat) -> some View {
+        Button { path.append(.person(post.authorEmail)) } label: {
+            Avatar(url: author?.picture ?? post.authorPicture, name: author?.displayName ?? post.authorName, size: size,
+                   online: author?.isOnline ?? false, nitro: author?.isNitro ?? false)
+        }
+        .buttonStyle(BouncyStyle())
+        .accessibilityLabel(author?.displayName ?? post.authorName)
+    }
+
+    // Name, then "Lv.3 · 2h" in grey, and the ⋯ menu on the right.
+    private var nameLine: some View {
+        HStack(spacing: 4) {
+            Button { path.append(.person(post.authorEmail)) } label: {
+                NameText(name: author?.displayName ?? post.authorName, style: author?.nameStyle ?? "", size: 15, nitro: author?.isNitro ?? false)
+                    .lineLimit(1)
+            }
+            .buttonStyle(.plain)
+            .layoutPriority(1)
+            if author?.isNitro == true { NitroBadge(compact: true) }
+            Text(levelAndTime)
+                .font(.jakarta(14)).foregroundStyle(Palette.muted)
+                .lineLimit(1)
+            Spacer(minLength: 4)
+            moreMenu
+        }
+        .frame(height: 22)
+    }
+
+    private var levelAndTime: String {
+        let ago = Dates.ago(post.created)
+        guard let author else { return "· \(ago)" }
+        return "Lv.\(LevelInfo(xp: author.xp).level) · \(ago)"
+    }
+
+    @ViewBuilder
+    private func words(lines: Int?, size: CGFloat) -> some View {
+        if !post.title.isEmpty {
+            Text(post.title).font(.jakarta(size + 1, .heavy)).foregroundStyle(Palette.text)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        if !post.text.isEmpty {
+            Text(Hashtags.styled(post.text)).font(.jakarta(size)).foregroundStyle(Palette.text)
+                .lineLimit(lines)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    // Reply, like, send and save / share, spread across like a social app.
+    private func actionRow(size: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            Button { open() } label: { iconCount("bubble.left", openable ? comments : nil, on: false, size: size) }
+                .accessibilityLabel("Reply")
+                .accessibilityValue(comments > 0 ? "\(comments)" : "")
+            Spacer(minLength: 8)
+            Button {
+                if !liked { burstLike() }
+                store.toggleLike(post, me: model.me)
+            } label: {
+                iconCount(liked ? "heart.fill" : "heart", openable ? post.likeTotal : nil, on: liked, size: size)
+                    .overlay(alignment: .leading) {
+                        if let likeBurst { HeartPop().id(likeBurst).offset(x: 8) }
+                    }
+            }
+            .sensoryFeedback(.impact(weight: .light), trigger: liked)
+            .accessibilityLabel(liked ? "Unlike" : "Like")
+            .accessibilityValue(post.likeTotal > 0 ? "\(post.likeTotal)" : "")
+            Spacer(minLength: 8)
+            Button { sendSheet = true } label: { iconCount("paperplane", nil, on: false, size: size) }
+                .accessibilityLabel("Send to a chat")
+            Spacer(minLength: 8)
+            HStack(spacing: 12) {
+                Button { toggleSave() } label: { iconCount(saved ? "bookmark.fill" : "bookmark", nil, on: saved, size: size) }
+                    .sensoryFeedback(.impact(weight: .light), trigger: saved)
+                    .accessibilityLabel(saved ? "Remove from saved" : "Save")
+                ShareLink(item: ReelLinks.post(post.id), subject: Text("Sugerly"), message: Text(post.title.isEmpty ? post.text : post.title)) {
+                    iconCount("square.and.arrow.up", nil, on: false, size: size)
+                }
+                .accessibilityLabel("Share")
+            }
+        }
+        .buttonStyle(BouncyStyle(scale: 0.8))
+    }
+
+    private func iconCount(_ icon: String, _ count: Int?, on: Bool, size: CGFloat) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon).font(.system(size: size, weight: .medium))
+                .symbolEffect(.bounce, value: on)
+            if let count, count > 0 {
+                Text("\(count)").font(.jakarta(13, .medium)).contentTransition(.numericText())
+            }
+        }
+        .foregroundStyle(on ? AnyShapeStyle(Theme.main) : AnyShapeStyle(Palette.muted))
+        .frame(minWidth: 32, minHeight: 38, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    // MARK: on its own page
+
+    // The post in full: bigger words, the exact date, the counts, then the
+    // buttons (comments follow underneath).
+    private var fullPost: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let friend = friendLiker {
+                Label("\(friend.displayName) liked", systemImage: "heart.fill")
+                    .font(.jakarta(13, .bold)).foregroundStyle(Palette.muted)
+                    .labelStyle(TintedIconLabel(tint: Theme.main))
+            }
+            fullHeader
+            words(lines: nil, size: 17)
+            if !post.imageURL.isEmpty {
+                media
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
+            }
+            Text(fullDate).font(.jakarta(14)).foregroundStyle(Palette.muted)
+            fullStats
+            Divider()
+            actionRow(size: 19)
+                .padding(.horizontal, 4)
+        }
+        .sugarCard(radius: 24, padding: 16)
+    }
+
+    // Their picture, name and level, Follow, and the ⋯ menu.
+    private var fullHeader: some View {
+        HStack(spacing: 10) {
+            authorPicture(46)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    NameText(name: author?.displayName ?? post.authorName, style: author?.nameStyle ?? "", size: 16, nitro: author?.isNitro ?? false)
+                        .lineLimit(1)
+                    if author?.isNitro == true { NitroBadge(compact: true) }
+                }
+                if let author {
+                    let info = LevelInfo(xp: author.xp)
+                    Text("Lv.\(info.level) · \(info.title)").font(.jakarta(13, .semibold)).foregroundStyle(info.color)
+                }
+            }
+            Spacer(minLength: 4)
+            if post.authorEmail != me && !following {
+                Button { follow() } label: {
+                    Text("Follow").font(.jakarta(14, .heavy)).foregroundStyle(.white)
+                        .padding(.horizontal, 16).frame(height: 34)
+                        .background(Theme.gradient, in: Capsule())
+                }
+                .buttonStyle(BouncyStyle())
+            }
+            moreMenu
+        }
+    }
+
+    // "12 Likes  3 Comments" between thin lines.
+    @ViewBuilder
+    private var fullStats: some View {
+        if comments > 0 || post.likeTotal > 0 {
+            Divider()
+            HStack(spacing: 18) {
+                if post.likeTotal > 0 { stat(post.likeTotal, post.likeTotal == 1 ? "Like" : "Likes") }
+                if comments > 0 { stat(comments, comments == 1 ? "Comment" : "Comments") }
+            }
+        }
+    }
+
+    private var fullDate: String {
+        guard let date = Dates.parse(post.created) else { return Dates.ago(post.created) }
+        return "\(date.formatted(date: .omitted, time: .shortened)) · \(date.formatted(date: .abbreviated, time: .omitted))"
+    }
+
+    private func stat(_ value: Int, _ label: String) -> some View {
+        (Text("\(value) ").font(.jakarta(14, .heavy)).foregroundColor(Palette.text)
+         + Text(label).font(.jakarta(14)).foregroundColor(Palette.muted))
+    }
+
+    // MARK: shared
 
     // Little hearts fly out of the button when you like.
     private func burstLike() {
@@ -773,31 +699,13 @@ struct PostCard: View {
         }
     }
 
-    // "3 replies · 12 likes"
-    private func summary(_ comments: Int) -> String {
-        var parts: [String] = []
-        if comments > 0 { parts.append(comments == 1 ? "1 reply" : "\(comments) replies") }
-        if post.likeTotal > 0 { parts.append(post.likeTotal == 1 ? "1 like" : "\(post.likeTotal) likes") }
-        return parts.joined(separator: " · ")
-    }
-
-    private func iconCount(_ icon: String, _ count: Int?, on: Bool) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: icon).font(.system(size: 17, weight: .semibold))
-                .symbolEffect(.bounce, value: on)
-            if let count, count > 0 {
-                Text("\(count)").font(.jakarta(13, .bold)).contentTransition(.numericText())
-            }
-        }
-        .foregroundStyle(on ? AnyShapeStyle(Theme.main) : AnyShapeStyle(Palette.text2))
-        .frame(minWidth: 30, minHeight: 36, alignment: .leading)
-        .contentShape(Rectangle())
-    }
-
     private var moreMenu: some View {
         Menu {
             if !post.text.isEmpty { Button { UIPasteboard.general.string = post.text; model.showToast("Copied", icon: "doc.on.doc.fill") } label: { Label("Copy text", systemImage: "doc.on.doc") } }
             Button { sendSheet = true } label: { Label("Send to a chat", systemImage: "paperplane") }
+            if post.authorEmail != me && !following {
+                Button { follow() } label: { Label("Follow \(author?.displayName ?? post.authorName)", systemImage: "person.badge.plus") }
+            }
             if post.authorEmail != me {
                 Button { reporting = ReportSheet.Target(id: post.id, type: "post", ownerEmail: post.authorEmail, preview: post.title.isEmpty ? post.text : post.title, link: "/Community?post=\(post.id)") } label: { Label("Report", systemImage: "flag") }
             }
@@ -806,58 +714,9 @@ struct PostCard: View {
             }
         } label: {
             Image(systemName: "ellipsis").font(.system(size: 15, weight: .bold)).foregroundStyle(Palette.muted)
-                .frame(width: 30, height: 30).contentShape(Rectangle())
+                .frame(width: 32, height: 30).contentShape(Rectangle())
         }
         .accessibilityLabel("More")
-    }
-
-    private var header: some View {
-        HStack(spacing: 10) {
-            Button { path.append(.person(post.authorEmail)) } label: {
-                Avatar(url: author?.picture ?? post.authorPicture, name: author?.displayName ?? post.authorName, size: 44, online: author?.isOnline ?? false, ring: author?.isOnline ?? false, nitro: author?.isNitro ?? false)
-            }
-            .buttonStyle(BouncyStyle())
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    NameText(name: author?.displayName ?? post.authorName, style: author?.nameStyle ?? "", size: 15, nitro: author?.isNitro ?? false).lineLimit(1)
-                    if author?.isNitro == true { NitroBadge(compact: true) }
-                }
-                HStack(spacing: 6) {
-                    if let author {
-                        let info = LevelInfo(xp: author.xp)
-                        Text("Lv.\(info.level)")
-                            .font(.jakarta(10, .heavy)).foregroundStyle(.white)
-                            .padding(.horizontal, 6).frame(height: 17)
-                            .background(info.color, in: Capsule())
-                    }
-                    Text(Dates.ago(post.created)).font(.jakarta(12, .medium)).foregroundStyle(Palette.muted).lineLimit(1)
-                }
-            }
-            Spacer(minLength: 4)
-            if post.authorEmail != me && !following {
-                Button { follow() } label: {
-                    Label("Follow", systemImage: "plus").font(.jakarta(12, .heavy)).foregroundStyle(.white)
-                        .padding(.horizontal, 12).frame(height: 30)
-                        .background(Theme.gradient, in: Capsule())
-                }
-                .buttonStyle(BouncyStyle())
-            }
-            Menu {
-                if !post.text.isEmpty { Button { UIPasteboard.general.string = post.text; model.showToast("Copied", icon: "doc.on.doc.fill") } label: { Label("Copy text", systemImage: "doc.on.doc") } }
-                Button { sendSheet = true } label: { Label("Send to a chat", systemImage: "paperplane") }
-                if post.authorEmail != me {
-                    Button { reporting = ReportSheet.Target(id: post.id, type: "post", ownerEmail: post.authorEmail, preview: post.title.isEmpty ? post.text : post.title, link: "/Community?post=\(post.id)") } label: { Label("Report", systemImage: "flag") }
-                }
-                if post.authorEmail == me || model.me?.isAdmin == true {
-                    Button(role: .destructive) { confirmDelete = true } label: { Label("Delete", systemImage: "trash") }
-                }
-            } label: {
-                Image(systemName: "ellipsis").font(.system(size: 15, weight: .bold)).foregroundStyle(Palette.text2)
-                    .frame(width: 34, height: 34)
-                    .background(Palette.surface2, in: Circle())
-                    .contentShape(Circle())
-            }
-        }
     }
 
     private var media: some View {
@@ -881,108 +740,11 @@ struct PostCard: View {
                         .scaleEffect(heart ? 1 : 0.3)
                         .opacity(heart ? 1 : 0)
                 }
+                .allowsHitTesting(false)
             }
             .contentShape(Rectangle())
             .onTapGesture(count: 2) { doubleTapLike() }
             .onTapGesture { open() }
-    }
-
-    // Likes and comments as soft pills; send, share and save as round buttons.
-    private var actions: some View {
-        HStack(spacing: 8) {
-            Button { store.toggleLike(post, me: model.me) } label: {
-                pill(liked ? "heart.fill" : "heart", count: post.likeTotal, active: liked, bounce: liked)
-            }
-            .sensoryFeedback(.impact(weight: .light), trigger: liked)
-            .accessibilityLabel(liked ? "Unlike" : "Like")
-            Button { open() } label: {
-                pill("bubble.right.fill", count: store.commentCounts[post.id] ?? 0, active: false, bounce: false)
-            }
-            .accessibilityLabel("Comments")
-            Button { sendSheet = true } label: { pill("paperplane.fill", count: nil, active: false, bounce: false) }
-                .accessibilityLabel("Send to a chat")
-            ShareLink(item: ReelLinks.post(post.id), subject: Text("Sugerly"), message: Text(post.title.isEmpty ? post.text : post.title)) {
-                pill("square.and.arrow.up", count: nil, active: false, bounce: false)
-            }
-            .accessibilityLabel("Share")
-            Spacer(minLength: 0)
-            Button { toggleSave() } label: { pill(saved ? "bookmark.fill" : "bookmark", count: nil, active: saved, bounce: saved) }
-                .sensoryFeedback(.impact(weight: .light), trigger: saved)
-                .accessibilityLabel(saved ? "Remove from saved" : "Save")
-        }
-        .buttonStyle(BouncyStyle(scale: 0.86))
-    }
-
-    private func pill(_ icon: String, count: Int?, active: Bool, bounce: Bool) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .bold))
-                .symbolEffect(.bounce, value: bounce)
-            if let count {
-                Text("\(count)").font(.jakarta(14, .heavy)).contentTransition(.numericText())
-            }
-        }
-        .foregroundStyle(active ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.text2))
-        .padding(.horizontal, count == nil ? 0 : 14)
-        .frame(minWidth: 40, minHeight: 40)
-        .background(active ? Theme.soft : Palette.surface2, in: Capsule())
-    }
-
-    // Who liked it, the newest comment, and a box to add yours.
-    private var footer: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if !post.likes.isEmpty { likedBy }
-            if let top = store.latestComment[post.id] {
-                Button { open() } label: {
-                    HStack(alignment: .top, spacing: 8) {
-                        Avatar(url: model.person(top.email)?.picture ?? "", name: model.person(top.email)?.displayName ?? top.name, size: 26)
-                        (Text(model.person(top.email)?.displayName ?? top.name).font(.jakarta(13, .heavy)).foregroundColor(Palette.text)
-                         + Text("  " + top.text).font(.jakarta(13)).foregroundColor(Palette.text2))
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(10)
-                    .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .contextMenu {
-                    if top.email != me, !top.id.isEmpty {
-                        Button { reporting = ReportSheet.Target(id: top.id, type: "comment", ownerEmail: top.email, preview: top.text, link: "/Community?post=\(post.id)", collection: "CommunityComment") } label: { Label("Report comment", systemImage: "flag") }
-                    }
-                }
-            }
-            if openable {
-                Button { open() } label: {
-                    HStack(spacing: 10) {
-                        Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 28)
-                        Text((store.commentCounts[post.id] ?? 0) > 1 ? "View all \(store.commentCounts[post.id] ?? 0) comments" : "Add a comment…")
-                            .font(.jakarta(14)).foregroundStyle(Palette.muted)
-                        Spacer(minLength: 0)
-                        Image(systemName: "arrow.up.circle.fill").font(.system(size: 20)).foregroundStyle(Theme.gradient)
-                    }
-                    .padding(.leading, 5).padding(.trailing, 8)
-                    .frame(height: 40)
-                    .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    private var likedBy: some View {
-        let likers = post.likes.compactMap { model.person($0) }
-        return HStack(spacing: 8) {
-            HStack(spacing: -8) {
-                ForEach(likers.prefix(3)) { p in
-                    Avatar(url: p.picture, name: p.displayName, size: 22).overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
-                }
-            }
-            if let first = likers.first {
-                (Text("Liked by ") + Text(first.displayName).bold() + Text(post.likeTotal > 1 ? " and \(post.likeTotal - 1) other\(post.likeTotal == 2 ? "" : "s")" : ""))
-                    .font(.jakarta(13)).foregroundStyle(Palette.text2).lineLimit(1)
-            }
-        }
     }
 
     private func open() { if openable { path.append(.post(post)) } }
@@ -1790,20 +1552,6 @@ extension View {
             .background(active ? Theme.soft : Palette.surface2, in: Capsule())
             .overlay(Capsule().strokeBorder(active ? Theme.main.opacity(0.25) : Color.clear, lineWidth: 1))
             .contentShape(Capsule())
-    }
-}
-
-// Feed posts: a clean rounded card each (light, no heavy shadow, so the
-// feed scrolls smoothly), like a social app.
-private struct ConversationSurface: ViewModifier {
-    let flat: Bool
-    @ViewBuilder func body(content: Content) -> some View {
-        if flat {
-            content
-                .background(Palette.surface, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
-        } else { content.sugarCard(radius: 30) }
     }
 }
 
