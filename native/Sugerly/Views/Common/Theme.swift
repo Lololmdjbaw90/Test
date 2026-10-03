@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 // Sugerly's look, matching the website: warm off-white (or deep plum in dark
-// mode), soft cards, the accent gradient, and the Bubblegum Sans / Caveat Brush /
+// mode), soft cards, the accent gradient, and the iPhone rounded / Caveat Brush /
 // Plus Jakarta Sans fonts.
 
 extension UIColor {
@@ -167,10 +167,40 @@ extension View {
 
 // MARK: - Fonts
 
+extension Font.TextStyle {
+    var uiKit: UIFont.TextStyle {
+        switch self {
+        case .largeTitle: return .largeTitle
+        case .title: return .title1
+        case .title2: return .title2
+        case .title3: return .title3
+        case .headline: return .headline
+        case .subheadline: return .subheadline
+        case .callout: return .callout
+        case .footnote: return .footnote
+        case .caption: return .caption1
+        case .caption2: return .caption2
+        default: return .body
+        }
+    }
+}
+
+extension UIFont {
+    /// The iPhone's rounded letters (the same as the titles), for the top bars.
+    static func rounded(_ size: CGFloat, _ weight: UIFont.Weight = .heavy) -> UIFont {
+        let base = UIFont.systemFont(ofSize: size, weight: weight)
+        guard let descriptor = base.fontDescriptor.withDesign(.rounded) else { return base }
+        return UIFont(descriptor: descriptor, size: size)
+    }
+}
+
 extension Font {
-    // Bubblegum Sans: big friendly headings (like the website's font-display).
+    // The iPhone's own fully round letters, extra bold: big friendly
+    // headings. (A touch smaller than the size asked for: these letters are
+    // wider than the old bubbly font, so pages keep the same room.) Grows
+    // with the text size picked in iPhone Settings.
     static func display(_ size: CGFloat, relativeTo style: Font.TextStyle = .title) -> Font {
-        .custom("BubblegumSans-Regular", size: size, relativeTo: style)
+        .system(size: UIFontMetrics(forTextStyle: style.uiKit).scaledValue(for: size * 0.9), weight: .heavy, design: .rounded)
     }
     // Caveat Brush: playful accents (names in the greeting, empty states).
     static func cute(_ size: CGFloat, relativeTo style: Font.TextStyle = .title) -> Font {

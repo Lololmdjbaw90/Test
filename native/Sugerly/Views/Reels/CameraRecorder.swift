@@ -439,115 +439,150 @@ struct RecorderView: View {
     private var ringLight: Bool { camera.flash && camera.position == .front && camera.authorized == true }
 
     var body: some View {
+        watchers(screen)
+            .sheet(isPresented: $pickingSound) {
+                SoundPicker { track in sound = track }
+                    .presentationDetents([.medium, .large])
+                    .presentationCornerRadius(30)
+            }
+            .confirmationDialog("Start over?", isPresented: $confirmRestart, titleVisibility: .visible) {
+                Button("Delete all clips", role: .destructive) { withAnimation { camera.restart() } }
+            }
+            .sensoryFeedback(.impact(weight: .light), trigger: countdown) { _, new in new > 0 }
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: countdown)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: camera.recording)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: camera.clips.count)
+            .animation(.easeInOut(duration: 0.25), value: ringLight)
+            .animation(.easeInOut(duration: 0.25), value: align)
+    }
+
+    private var screen: some View {
         GeometryReader { geo in
             let wide = geo.size.width > geo.size.height * 0.75
             let previewWidth = wide ? min(geo.size.width, geo.size.height * 0.6) : geo.size.width
             ZStack {
                 Color.black.ignoresSafeArea()
-                ZStack {
-                    if camera.authorized == true {
-                        CameraPreview(session: camera.session, onFocus: { point, spot in
-                            tapFocus(point, spot)
-                        }, onDoubleTap: { flip() })
-                            .overlay {
-                                if align, !camera.recording, let ghost = camera.clips.last?.ghost {
-                                    ghostView(ghost)
-                                }
-                            }
-                            .overlay { if grid { CameraGrid() } }
-                            .overlay { focusRing }
-                            .gesture(MagnifyGesture()
-                                .onChanged { v in camera.setZoom(pinchStart * v.magnification) }
-                                .onEnded { _ in pinchStart = camera.zoom })
-                    } else if camera.authorized == false {
-                        VStack(spacing: 12) {
-                            Image(systemName: "camera.fill").font(.system(size: 40)).foregroundStyle(Theme.gradient)
-                            Text("Camera access is off").font(.display(24)).foregroundStyle(.white)
-                            Text("Turn it on in Settings → Sugerly to film here.").font(.jakarta(14)).foregroundStyle(.white.opacity(0.7))
-                            Button("Open Settings") {
-                                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
-                            }
-                            .buttonStyle(GradientButtonStyle(fullWidth: false))
-                            if let onUpload {
-                                Button("Choose from library", action: onUpload)
-                                    .font(.jakarta(15, .bold)).foregroundStyle(.white)
-                                    .padding(.top, 4)
-                            }
-                        }
-                    }
-                    if ringLight { RingLight(cornerRadius: wide ? 30 : 0).transition(.opacity) }
-                    if flashScreen { Color.white.ignoresSafeArea().transition(.opacity) }
-                    if countdown > 0 {
-                        Text("\(countdown)")
-                            .font(.display(140)).foregroundStyle(.white)
-                            .shadow(color: Theme.main, radius: 20)
-                            .id(countdown)
-                            .transition(.scale(scale: 2).combined(with: .opacity))
-                    }
-                }
-                .frame(width: previewWidth)
-                .clipShape(RoundedRectangle(cornerRadius: wide ? 30 : 0, style: .continuous))
-                .ignoresSafeArea(edges: wide ? [] : .all)
-
-                VStack(spacing: 0) {
-                    topControls
-                    Spacer()
-                    if let error {
-                        Text(error).font(.jakarta(13, .semibold)).foregroundStyle(.white)
-                            .padding(.horizontal, 14).padding(.vertical, 8).background(Palette.danger, in: Capsule())
-                    }
-                    bottomControls
-                }
-                .frame(width: previewWidth)
+                previewArea(wide: wide)
+                    .frame(width: previewWidth)
+                    .clipShape(RoundedRectangle(cornerRadius: wide ? 30 : 0, style: .continuous))
+                    .ignoresSafeArea(edges: wide ? [] : .all)
+                controls
+                    .frame(width: previewWidth)
             }
         }
         .preferredColorScheme(.dark)
         .statusBarHidden()
-        .task {
-            camera.setSound(sound)
-            camera.onPhoto = { image in
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { shots.append(image) }
+    }
+
+    // Starting and stopping the camera, and keeping it in step with the
+    // sound, the ring light and the app going to the background.
+    private func watchers<Content: View>(_ content: Content) -> some View {
+        content
+            .task {
+                camera.setSound(sound)
+                camera.onPhoto = { image in
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { shots.append(image) }
+                }
+                await camera.start()
+                if !tipShown && camera.authorized == true {
+                    tipShown = true
+                    showHint("Tap to film, or hold the button and slide up to zoom")
+                }
             }
-            await camera.start()
-            if !tipShown && camera.authorized == true {
-                tipShown = true
-                showHint("Tap to film, or hold the button and slide up to zoom")
+            .onDisappear {
+                camera.stop()
+                brighten(false)
+            }
+            .onChange(of: sound) { _, track in camera.setSound(track) }
+            .onChange(of: ringLight) { _, on in brighten(on) }
+            .onChange(of: scenePhase) { _, phase in brighten(phase == .active && ringLight) }
+            .onChange(of: pressing) { _, now in
+                // The touch was cut off (a call, an alert) without letting go:
+                // a clip filmed by holding stops.
+                guard !now else { return }
+                Task {
+                    try? await Task.sleep(for: .milliseconds(120))
+                    if pressStart != nil { pressCancelled() }
+                }
+            }
+            .onChange(of: mode) { _, m in
+                camera.maxSeconds = m == .short ? 15 : 60
+                camera.setPhotoMode(m == .photo)
+            }
+    }
+
+    // The camera picture with the ring light, the photo flash and the
+    // countdown on top.
+    private func previewArea(wide: Bool) -> some View {
+        ZStack {
+            cameraLayer
+            if ringLight { RingLight(cornerRadius: wide ? 30 : 0).transition(.opacity) }
+            if flashScreen { Color.white.ignoresSafeArea().transition(.opacity) }
+            if countdown > 0 {
+                Text("\(countdown)")
+                    .font(.display(140)).foregroundStyle(.white)
+                    .shadow(color: Theme.main, radius: 20)
+                    .id(countdown)
+                    .transition(.scale(scale: 2).combined(with: .opacity))
             }
         }
-        .onDisappear {
-            camera.stop()
-            brighten(false)
+    }
+
+    @ViewBuilder
+    private var cameraLayer: some View {
+        if camera.authorized == true {
+            livePreview
+        } else if camera.authorized == false {
+            accessOff
         }
-        .onChange(of: sound) { _, track in camera.setSound(track) }
-        .onChange(of: ringLight) { _, on in brighten(on) }
-        .onChange(of: scenePhase) { _, phase in brighten(phase == .active && ringLight) }
-        .onChange(of: pressing) { _, now in
-            // The touch was cut off (a call, an alert) without letting go:
-            // a clip filmed by holding stops.
-            guard !now else { return }
-            Task {
-                try? await Task.sleep(for: .milliseconds(120))
-                if pressStart != nil { pressCancelled() }
+    }
+
+    private var livePreview: some View {
+        CameraPreview(session: camera.session, onFocus: { point, spot in
+            tapFocus(point, spot)
+        }, onDoubleTap: { flip() })
+            .overlay { alignGhost }
+            .overlay { if grid { CameraGrid() } }
+            .overlay { focusRing }
+            .gesture(MagnifyGesture()
+                .onChanged { v in camera.setZoom(pinchStart * v.magnification) }
+                .onEnded { _ in pinchStart = camera.zoom })
+    }
+
+    @ViewBuilder
+    private var alignGhost: some View {
+        if align, !camera.recording, let ghost = camera.clips.last?.ghost {
+            ghostView(ghost)
+        }
+    }
+
+    private var accessOff: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "camera.fill").font(.system(size: 40)).foregroundStyle(Theme.gradient)
+            Text("Camera access is off").font(.display(24)).foregroundStyle(.white)
+            Text("Turn it on in Settings → Sugerly to film here.").font(.jakarta(14)).foregroundStyle(.white.opacity(0.7))
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+            }
+            .buttonStyle(GradientButtonStyle(fullWidth: false))
+            if let onUpload {
+                Button("Choose from library", action: onUpload)
+                    .font(.jakarta(15, .bold)).foregroundStyle(.white)
+                    .padding(.top, 4)
             }
         }
-        .sheet(isPresented: $pickingSound) {
-            SoundPicker { track in sound = track }
-            .presentationDetents([.medium, .large])
-            .presentationCornerRadius(30)
+    }
+
+    private var controls: some View {
+        VStack(spacing: 0) {
+            topControls
+            Spacer()
+            if let error {
+                Text(error).font(.jakarta(13, .semibold)).foregroundStyle(.white)
+                    .padding(.horizontal, 14).padding(.vertical, 8).background(Palette.danger, in: Capsule())
+            }
+            bottomControls
         }
-        .onChange(of: mode) { _, m in
-            camera.maxSeconds = m == .short ? 15 : 60
-            camera.setPhotoMode(m == .photo)
-        }
-        .confirmationDialog("Start over?", isPresented: $confirmRestart, titleVisibility: .visible) {
-            Button("Delete all clips", role: .destructive) { withAnimation { camera.restart() } }
-        }
-        .sensoryFeedback(.impact(weight: .light), trigger: countdown) { _, new in new > 0 }
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: countdown)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: camera.recording)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: camera.clips.count)
-        .animation(.easeInOut(duration: 0.25), value: ringLight)
-        .animation(.easeInOut(duration: 0.25), value: align)
     }
 
     // Clip progress (like TikTok / Discord): one segment per clip.

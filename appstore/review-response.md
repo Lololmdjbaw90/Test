@@ -50,7 +50,7 @@ Sign-in Information fields, never in this repository.
      A two-account demo can show messaging and a call between mutual friends.
    - Servers provide community channels and voice rooms. Include a populated
      review server [SERVER NAME AND JOIN INSTRUCTIONS].
-   - Profile → Settings includes appearance, privacy, help and account controls.
+   - Your picture (top left) → Menu → Settings includes appearance, privacy, help and account controls.
      Account → Delete account requests the current password. Demonstrate this
      with a separate disposable account, leaving the review account available.
    - MimiPlus is unlocked for a fixed term with earned MimiCoins. The current

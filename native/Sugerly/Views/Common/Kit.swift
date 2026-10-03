@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import TipKit
 
 // The frame every page sits in: iPhone's own tab bar and top bars (so the
 // back button, the swipe back, the keyboard and the safe areas all behave
@@ -132,18 +133,42 @@ struct PinkCircleButton: View {
     }
 }
 
-// Your picture in the top left corner: opens your account.
+// Your picture in the top left corner: opens the menu. A little pink
+// "menu" badge on it shows it's a button, and the first time you open the
+// app a tip bubble points at it.
 struct AccountButton: View {
     @Environment(AppModel.self) private var model
+    private let tip = MenuTip()
 
     var body: some View {
-        Button { model.showMenu = true } label: {
+        Button {
+            tip.invalidate(reason: .actionPerformed)
+            model.showMenu = true
+        } label: {
             Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 30)
+                .overlay(alignment: .bottomTrailing) {
+                    Image(systemName: "line.3.horizontal")
+                        .font(.system(size: 6.5, weight: .black))
+                        .foregroundStyle(.white)
+                        .frame(width: 14, height: 14)
+                        .background(Theme.main, in: Circle())
+                        .overlay(Circle().strokeBorder(Palette.bg, lineWidth: 1.5))
+                        .offset(x: 4, y: 4)
+                }
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Your account")
+        .popoverTip(tip)
+        .accessibilityLabel("Menu")
+        .accessibilityHint("Your profile, music, servers, settings and more")
     }
+}
+
+// The first-time hint for the menu.
+struct MenuTip: Tip {
+    var title: Text { Text("Your menu") }
+    var message: Text? { Text("Tap your picture for your profile, music, servers, settings and more.") }
+    var image: Image? { Image(systemName: "line.3.horizontal.circle.fill") }
 }
 
 // The music player and the call bar, stacked. Empty (no height at all) when
@@ -232,7 +257,7 @@ extension View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text(title)
-                        .font(.display(26))
+                        .font(.display(24))
                         .foregroundStyle(Palette.text)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)

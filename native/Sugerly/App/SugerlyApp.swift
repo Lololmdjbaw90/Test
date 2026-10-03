@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import TipKit
 
 @main
 struct SugerlyApp: App {
@@ -8,13 +9,10 @@ struct SugerlyApp: App {
     init() {
         // Keep pictures around so feeds scroll without reloading them.
         URLCache.shared = URLCache(memoryCapacity: 64 * 1024 * 1024, diskCapacity: 400 * 1024 * 1024)
+        // Page titles in the iPhone's fully round letters.
         let nav = UINavigationBar.appearance()
-        if let title = UIFont(name: "BubblegumSans-Regular", size: 22) {
-            nav.titleTextAttributes = [.font: title]
-        }
-        if let large = UIFont(name: "BubblegumSans-Regular", size: 34) {
-            nav.largeTitleTextAttributes = [.font: large]
-        }
+        nav.titleTextAttributes = [.font: UIFont.rounded(19)]
+        nav.largeTitleTextAttributes = [.font: UIFont.rounded(32)]
         // The tab bar's labels in Sugerly's font, and its look before iOS 26.
         if let small = UIFont(name: "PlusJakartaSans-SemiBold", size: 10) {
             let item = UITabBarItem.appearance()
@@ -22,6 +20,11 @@ struct SugerlyApp: App {
             item.setTitleTextAttributes([.font: small], for: .selected)
         }
         TabBarLook.apply()
+        // First-time hints (iPhone's own tip bubbles), each shown once. Not
+        // while the app is being tested, so they never cover a button.
+        if !ProcessInfo.processInfo.arguments.contains(where: { $0.hasSuffix("-ui-test") }) {
+            try? Tips.configure([.displayFrequency(.immediate)])
+        }
         // Notifications + background checks have to be set up at launch.
         Alerts.shared.registerBackground()
         // Calls ring this phone even when Sugerly is closed (iPhone's own
