@@ -133,9 +133,10 @@ struct PinkCircleButton: View {
     }
 }
 
-// Your picture in the top left corner: opens the menu. A little pink
-// "menu" badge on it shows it's a button, and the first time you open the
-// app a tip bubble points at it.
+// The menu button in the top left corner: a little pill with the pink
+// menu lines and your picture, so it's clear it opens something. Everything
+// stays inside the pill (nothing sticks out to get cut off), and the first
+// time you open the app a tip bubble points at it.
 struct AccountButton: View {
     @Environment(AppModel.self) private var model
     private let tip = MenuTip()
@@ -145,17 +146,17 @@ struct AccountButton: View {
             tip.invalidate(reason: .actionPerformed)
             model.showMenu = true
         } label: {
-            Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 30)
-                .overlay(alignment: .bottomTrailing) {
-                    Image(systemName: "line.3.horizontal")
-                        .font(.system(size: 6.5, weight: .black))
-                        .foregroundStyle(.white)
-                        .frame(width: 14, height: 14)
-                        .background(Theme.main, in: Circle())
-                        .overlay(Circle().strokeBorder(Palette.bg, lineWidth: 1.5))
-                        .offset(x: 4, y: 4)
-                }
-                .contentShape(Circle())
+            HStack(spacing: 7) {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 15, weight: .heavy))
+                    .foregroundStyle(Theme.main)
+                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 28)
+            }
+            .padding(.leading, 11)
+            .padding(.trailing, 3)
+            .frame(height: 34)
+            .background { MenuPillBackground() }
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .popoverTip(tip)
@@ -164,10 +165,24 @@ struct AccountButton: View {
     }
 }
 
+// On iOS 26 the top bar already puts its glass around the pill; before
+// that, a soft pink pill of its own.
+private struct MenuPillBackground: View {
+    var body: some View {
+        if #available(iOS 26.0, *) {
+            Color.clear
+        } else {
+            Capsule()
+                .fill(Theme.main.opacity(0.12))
+                .overlay(Capsule().strokeBorder(Theme.main.opacity(0.18), lineWidth: 1))
+        }
+    }
+}
+
 // The first-time hint for the menu.
 struct MenuTip: Tip {
     var title: Text { Text("Your menu") }
-    var message: Text? { Text("Tap your picture for your profile, music, servers, settings and more.") }
+    var message: Text? { Text("Tap here for your profile, music, servers, settings and more.") }
     var image: Image? { Image(systemName: "line.3.horizontal.circle.fill") }
 }
 
