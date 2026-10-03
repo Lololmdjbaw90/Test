@@ -281,6 +281,10 @@ private struct GradientButtonBody: View {
     @Environment(\.isEnabled) private var enabled
 
     var body: some View {
+        JellyPress(content: styled, pressed: configuration.isPressed, scale: 0.95, wobble: 0.05)
+    }
+
+    private var styled: some View {
         configuration.label
             .font(.jakarta(15, .bold))
             .foregroundStyle(.white)
@@ -301,9 +305,7 @@ private struct GradientButtonBody: View {
             .shadow(color: Theme.main.opacity(configuration.isPressed ? 0.2 : 0.38), radius: configuration.isPressed ? 6 : 14, y: configuration.isPressed ? 3 : 7)
             .saturation(enabled ? 1 : 0.2)
             .opacity(enabled ? 1 : 0.6)
-            .scaleEffect(configuration.isPressed ? 0.95 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: configuration.isPressed)
-            .clickSound(configuration.isPressed)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
@@ -311,7 +313,7 @@ struct OutlineButtonStyle: ButtonStyle {
     var height: CGFloat = 44
     var fullWidth = false
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        let styled = configuration.label
             .font(.jakarta(14, .bold))
             .foregroundStyle(Theme.pink)
             .lineLimit(1)
@@ -322,9 +324,7 @@ struct OutlineButtonStyle: ButtonStyle {
             .background(Palette.surface, in: Capsule())
             .overlay(Capsule().strokeBorder(Theme.pink.opacity(0.3), lineWidth: 1.4))
             .shadow(color: Palette.shadow, radius: 6, y: 2)
-            .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
-            .clickSound(configuration.isPressed)
+        return JellyPress(content: styled, pressed: configuration.isPressed, scale: 0.96, wobble: 0.05)
     }
 }
 

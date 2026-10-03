@@ -109,41 +109,82 @@ extension View {
     }
 }
 
-// Presses squish down quickly and spring back up with a little jelly
-// bounce, with a soft click (most buttons).
+// Presses squish down, then the button springs back with a cute jelly
+// wobble (a little wider, then a little taller, then it settles) and its
+// icons give a happy hop, with a soft click (most buttons).
 struct BouncyStyle: ButtonStyle {
     var scale: CGFloat = 0.93
     var sound = true
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? scale : 1)
-            .brightness(configuration.isPressed ? -0.03 : 0)
-            .animation(configuration.isPressed ? .easeOut(duration: 0.1) : .spring(response: 0.36, dampingFraction: 0.45), value: configuration.isPressed)
-            .clickSound(configuration.isPressed && sound)
+        JellyPress(content: configuration.label, pressed: configuration.isPressed, scale: scale, sound: sound)
     }
 }
 
-// Rows, links and text buttons: a gentle squish and fade while your finger
-// is down, then a soft spring back (quiet: they're everywhere).
+// Rows, links and text buttons: the same jelly, gentler, and quiet (they're
+// everywhere).
 struct SoftPressStyle: ButtonStyle {
     var scale: CGFloat = 0.97
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? scale : 1)
-            .opacity(configuration.isPressed ? 0.8 : 1)
-            .animation(configuration.isPressed ? .easeOut(duration: 0.1) : .spring(response: 0.34, dampingFraction: 0.55), value: configuration.isPressed)
+        JellyPress(content: configuration.label, pressed: configuration.isPressed, scale: scale, wobble: 0.035, sound: false, fade: true)
     }
 }
 
-// List rows inside a card: a soft pink highlight and a tiny squish.
+// List rows inside a card: a soft pink highlight, a tiny squish, and the
+// row's icon hops when you let go.
 struct RowPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .contentShape(Rectangle())
-            .background(configuration.isPressed ? Palette.surface2 : Color.clear)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(configuration.isPressed ? .easeOut(duration: 0.1) : .spring(response: 0.34, dampingFraction: 0.6), value: configuration.isPressed)
+        JellyPress(content: configuration.label.contentShape(Rectangle()).background(configuration.isPressed ? Palette.surface2 : Color.clear),
+                   pressed: configuration.isPressed, scale: 0.98, wobble: 0.015, sound: false)
     }
+}
+
+// The press itself. Down: a quick squish (and the click). Up: a springy
+// squash-and-stretch and a bounce of any icons inside. With Reduce Motion
+// it only dims a touch.
+struct JellyPress<Content: View>: View {
+    let content: Content
+    let pressed: Bool
+    var scale: CGFloat = 0.93
+    var wobble: CGFloat = 0.07
+    var sound = true
+    var fade = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var pops = 0
+
+    var body: some View {
+        content
+            .symbolEffect(.bounce, value: pops)
+            .scaleEffect(pressed && !reduceMotion ? scale : 1)
+            .brightness(pressed ? -0.04 : 0)
+            .opacity(fade && pressed ? 0.85 : 1)
+            .animation(.easeOut(duration: 0.1), value: pressed)
+            .keyframeAnimator(initialValue: Jelly(), trigger: pops) { view, jelly in
+                view.scaleEffect(x: jelly.x, y: jelly.y)
+            } keyframes: { _ in
+                KeyframeTrack(\.x) {
+                    CubicKeyframe(1 + wobble, duration: 0.1)
+                    CubicKeyframe(1 - wobble * 0.5, duration: 0.12)
+                    SpringKeyframe(1, duration: 0.32, spring: .bouncy)
+                }
+                KeyframeTrack(\.y) {
+                    CubicKeyframe(1 - wobble * 0.8, duration: 0.1)
+                    CubicKeyframe(1 + wobble * 0.5, duration: 0.12)
+                    SpringKeyframe(1, duration: 0.32, spring: .bouncy)
+                }
+            }
+            .onChange(of: pressed) { _, down in
+                if down {
+                    if sound { TapSound.play(.tap) }
+                } else if !reduceMotion {
+                    pops += 1
+                }
+            }
+    }
+}
+
+struct Jelly {
+    var x: CGFloat = 1
+    var y: CGFloat = 1
 }
 
 extension View {
