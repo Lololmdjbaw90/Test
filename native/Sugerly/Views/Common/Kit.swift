@@ -31,38 +31,88 @@ private struct RootBar: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    AccountButton()
-                }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    if let search {
-                        Button(action: search) {
-                            Image(systemName: "magnifyingglass")
-                        }
-                        .accessibilityLabel("Search")
-                    }
-                    Button {
-                        TapSound.play(.tap)
-                        bellTaps += 1
-                        model.showNotifications = true
-                    } label: {
-                        // The bell gives a little wiggle when tapped.
-                        Image(systemName: notes.unread > 0 ? "bell.badge.fill" : "bell")
-                            .symbolRenderingMode(.multicolor)
-                            .contentTransition(.symbolEffect(.replace))
-                            .symbolEffect(.bounce, value: bellTaps)
-                    }
-                    .accessibilityLabel("Notifications")
-                    .accessibilityValue(notes.unread > 0 ? "\(notes.unread) new" : "")
-                }
-                if create {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        PinkCircleButton(icon: "plus", label: "Create") { model.showCreate = true }
-                    }
-                }
-            }
+            .plainToolbar(leading: { AccountButton() }, trailing: { trailing })
+            .overlay(alignment: .topLeading) { MenuHintBubble() }
             .bottomDock()
+    }
+
+    private var trailing: some View {
+        HStack(spacing: 8) {
+            if let search {
+                Button {
+                    TapSound.play(.tap)
+                    search()
+                } label: {
+                    BarIcon(icon: "magnifyingglass")
+                }
+                .buttonStyle(BouncyStyle(scale: 0.88, sound: false))
+                .accessibilityLabel("Search")
+            }
+            Button {
+                TapSound.play(.tap)
+                bellTaps += 1
+                model.showNotifications = true
+            } label: {
+                // The bell gives a little wiggle when tapped.
+                BarIcon(icon: notes.unread > 0 ? "bell.badge.fill" : "bell", alert: notes.unread > 0, bounce: bellTaps)
+            }
+            .buttonStyle(BouncyStyle(scale: 0.88, sound: false))
+            .accessibilityLabel("Notifications")
+            .accessibilityValue(notes.unread > 0 ? "\(notes.unread) new" : "")
+            if create {
+                PinkCircleButton(icon: "plus", label: "Create") { model.showCreate = true }
+            }
+        }
+    }
+}
+
+extension View {
+    /// Top bar buttons in Sugerly's own solid look. On iOS 26 the bar's glass
+    /// bubbles around them are switched off: less glass, no wobbly glass
+    /// animation when you tap, and a lighter, smoother bar.
+    func plainToolbar<Leading: View, Trailing: View>(@ViewBuilder leading: () -> Leading, @ViewBuilder trailing: () -> Trailing) -> some View {
+        modifier(PlainToolbar(leading: leading(), trailing: trailing()))
+    }
+}
+
+private struct PlainToolbar<Leading: View, Trailing: View>: ViewModifier {
+    let leading: Leading
+    let trailing: Trailing
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.toolbar {
+                ToolbarItem(placement: .topBarLeading) { leading }
+                    .sharedBackgroundVisibility(.hidden)
+                ToolbarItem(placement: .topBarTrailing) { trailing }
+                    .sharedBackgroundVisibility(.hidden)
+            }
+        } else {
+            content.toolbar {
+                ToolbarItem(placement: .topBarLeading) { leading }
+                ToolbarItem(placement: .topBarTrailing) { trailing }
+            }
+        }
+    }
+}
+
+// A round top bar button: a white (or dark) circle with a thin edge.
+private struct BarIcon: View {
+    let icon: String
+    var alert = false
+    var bounce = 0
+
+    var body: some View {
+        Image(systemName: icon)
+            .font(.system(size: 15, weight: .semibold))
+            .symbolRenderingMode(alert ? .multicolor : .monochrome)
+            .foregroundStyle(Palette.text2)
+            .contentTransition(.symbolEffect(.replace))
+            .symbolEffect(.bounce, value: bounce)
+            .frame(width: 34, height: 34)
+            .background(Palette.surface, in: Circle())
+            .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
+            .contentShape(Circle())
     }
 }
 
@@ -128,12 +178,14 @@ struct PinkCircleButton: View {
             action()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .heavy))
+                .font(.system(size: 15, weight: .heavy))
+                .foregroundStyle(.white)
                 .symbolEffect(.bounce, value: bounce)
+                .frame(width: 34, height: 34)
+                .background(Theme.gradient, in: Circle())
+                .contentShape(Circle())
         }
-        .buttonStyle(.borderedProminent)
-        .buttonBorderShape(.circle)
-        .tint(Theme.main)
+        .buttonStyle(BouncyStyle(scale: 0.86, sound: false))
         .accessibilityLabel(label)
         .task {
             guard !reduceMotion else { return }
@@ -144,21 +196,12 @@ struct PinkCircleButton: View {
 }
 
 // The menu button in the top left corner: a little pill with the pink
-// menu lines and your picture, so it's clear it opens something. Everything
-// stays inside the pill (nothing sticks out to get cut off). The first time
-// you open the app, a small pink bubble under it says what it is, then goes
-// away by itself.
+// menu lines and your picture, so it's clear it opens something.
 struct AccountButton: View {
     @Environment(AppModel.self) private var model
-    @AppStorage("sugerly.hint.menu") private var hintSeen = false
-    @State private var hint = false
-    // Only one menu button (there's one on each tab) shows the hint.
-    @MainActor private static var hinting = false
 
     var body: some View {
         Button {
-            hintSeen = true
-            hint = false
             model.showMenu = true
         } label: {
             HStack(spacing: 7) {
@@ -170,71 +213,98 @@ struct AccountButton: View {
             .padding(.leading, 11)
             .padding(.trailing, 3)
             .frame(height: 34)
-            .background { MenuPillBackground() }
+            .background(Palette.surface, in: Capsule())
+            .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
             .contentShape(Capsule())
         }
         // (No click: the menu opening makes its own sound.)
         .buttonStyle(BouncyStyle(scale: 0.9, sound: false))
-        .popover(isPresented: $hint) {
-            MenuHint { hint = false }
-                .presentationCompactAdaptation(.popover)
-                .presentationBackground(Palette.surface)
-        }
         .accessibilityLabel("Menu")
         .accessibilityHint("Your profile, music, servers, settings and more")
-        .task { await showHintOnce() }
-    }
-
-    private func showHintOnce() async {
-        guard !hintSeen, !Self.hinting,
-              !ProcessInfo.processInfo.arguments.contains(where: { $0.hasSuffix("-ui-test") }) else { return }
-        Self.hinting = true
-        try? await Task.sleep(for: .seconds(1.2))
-        guard !Task.isCancelled, !hintSeen else { return }
-        hintSeen = true
-        hint = true
-        try? await Task.sleep(for: .seconds(5))
-        hint = false
     }
 }
 
-// The first-time hint: small, solid and pink, in the app's own style.
-private struct MenuHint: View {
-    var close: () -> Void
+// The first-time hint for the menu: a small pink-edged bubble just under
+// the menu button, once, a moment after the app opens. It goes away by
+// itself after 5 seconds, when tapped, or when the menu opens. (Drawn on
+// the page, not as a pop-up from the bar, so there's no glass and no lag.)
+private struct MenuHintBubble: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage("sugerly.hint.menu") private var seen = false
+    @State private var shown = false
+    // Only one page (there's one per tab) shows it.
+    @MainActor private static var claimed = false
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "line.3.horizontal")
-                .font(.system(size: 13, weight: .heavy))
-                .foregroundStyle(.white)
-                .frame(width: 30, height: 30)
-                .background(Theme.gradient, in: Circle())
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Your menu").font(.display(17)).foregroundStyle(Palette.text)
-                Text("Profile, music, servers & settings").font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)
-            }
+        ZStack(alignment: .topLeading) {
+            if shown { bubble }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .fixedSize()
+        .task { await showOnce() }
+        .onChange(of: model.showMenu) { _, open in
+            if open { seen = true; hide() }
+        }
+    }
+
+    private var bubble: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HintArrow()
+                .fill(Palette.surface)
+                .frame(width: 18, height: 9)
+                .padding(.leading, 26)
+            HStack(spacing: 10) {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 13, weight: .heavy))
+                    .foregroundStyle(.white)
+                    .frame(width: 30, height: 30)
+                    .background(Theme.gradient, in: Circle())
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Your menu").font(.display(17)).foregroundStyle(Palette.text)
+                    Text("Profile, music, servers & settings").font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.main.opacity(0.25), lineWidth: 1))
+        }
+        .shadow(color: Theme.main.opacity(0.16), radius: 12, y: 6)
+        .padding(.leading, 12)
+        .padding(.top, 2)
         .contentShape(Rectangle())
-        .onTapGesture(perform: close)
+        .onTapGesture { hide() }
+        .transition(.scale(scale: 0.85, anchor: .topLeading).combined(with: .opacity))
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
     }
+
+    private func showOnce() async {
+        guard !seen, !Self.claimed,
+              !ProcessInfo.processInfo.arguments.contains(where: { $0.hasSuffix("-ui-test") }) else { return }
+        Self.claimed = true
+        try? await Task.sleep(for: .seconds(1.2))
+        guard !Task.isCancelled, !seen else { return }
+        seen = true
+        withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.4, dampingFraction: 0.72)) { shown = true }
+        try? await Task.sleep(for: .seconds(5))
+        hide()
+    }
+
+    private func hide() {
+        guard shown else { return }
+        withAnimation(.easeOut(duration: 0.22)) { shown = false }
+    }
 }
 
-// On iOS 26 the top bar already puts its glass around the pill; before
-// that, a soft pink pill of its own.
-private struct MenuPillBackground: View {
-    var body: some View {
-        if #available(iOS 26.0, *) {
-            Color.clear
-        } else {
-            Capsule()
-                .fill(Theme.main.opacity(0.12))
-                .overlay(Capsule().strokeBorder(Theme.main.opacity(0.18), lineWidth: 1))
-        }
+// The little point on top of the hint bubble.
+private struct HintArrow: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.midX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        p.closeSubpath()
+        return p
     }
 }
 

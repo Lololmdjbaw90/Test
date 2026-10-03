@@ -209,14 +209,13 @@ struct ChatListView: View {
         .navigationTitle(section == 0 ? "Chats" : "Servers")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) { AccountButton() }
             ToolbarItem(placement: .principal) {
                 TitleSwitch(titles: ["Chats", "Servers"], selection: $section)
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                PinkCircleButton(icon: "square.and.pencil", label: "New message") { starting = true }
-            }
         }
+        .plainToolbar(leading: { AccountButton() }, trailing: {
+            PinkCircleButton(icon: "square.and.pencil", label: "New message") { starting = true }
+        })
         .bottomDock()
         .sheet(isPresented: $starting) {
             NewChatView { email in
