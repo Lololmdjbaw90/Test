@@ -72,7 +72,7 @@ final class EditorInteractionTests: XCTestCase {
 
     func testSocialLayouts() {
         app.buttons["Community"].tap()
-        XCTAssertTrue(app.buttons["Following"].waitForExistence(timeout: 5), "The feed tabs show on Community")
+        XCTAssertTrue(app.staticTexts["Little updates. Long conversations."].waitForExistence(timeout: 5))
         screenshot("community-page")
         app.buttons["Wall"].tap()
         XCTAssertTrue(app.buttons["Share fan art"].waitForExistence(timeout: 5))
