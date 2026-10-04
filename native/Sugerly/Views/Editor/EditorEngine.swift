@@ -325,7 +325,7 @@ final class EditorPlayer {
                 last = now
                 if next >= self.length {
                     next = 0
-                    self.music?.seek(to: .zero)
+                    self.music?.seek(to: .zero, completionHandler: { _ in })
                 }
                 self.time = next
                 let i = self.slideIndex(at: next)
