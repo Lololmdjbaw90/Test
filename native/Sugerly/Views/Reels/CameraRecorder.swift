@@ -370,19 +370,38 @@ struct CameraPreview: UIViewRepresentable {
     }
 }
 
-// The front camera's flash, like TikTok: the screen turns into a soft ring
-// light around you (and goes to full brightness while it's on).
-struct RingLight: View {
-    var cornerRadius: CGFloat
+// The colour of the front camera's light.
+enum FrontLightTone: String, CaseIterable, Identifiable {
+    case warm, white, pink
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .warm: return "Warm"
+        case .white: return "Cool"
+        case .pink: return "Pink"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .warm: return Color(red: 1, green: 0.94, blue: 0.84)
+        case .white: return Color(red: 0.96, green: 0.98, blue: 1)
+        case .pink: return Color(red: 1, green: 0.87, blue: 0.92)
+        }
+    }
+}
+
+// The front camera's flash (like TikTok and Instagram): the whole screen
+// around the picture becomes a soft, bright light panel that lights your
+// face, and the camera sits in a rounded window in the middle.
+struct FrontLight: View {
+    var tone: FrontLightTone
 
     var body: some View {
-        let warm = Color(red: 1, green: 0.97, blue: 0.93)
         ZStack {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(warm.opacity(0.6), lineWidth: 64)
-                .blur(radius: 16)
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(warm, lineWidth: 30)
+            tone.color
+            RadialGradient(colors: [.white, .white.opacity(0)], center: .center, startRadius: 60, endRadius: 560)
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
@@ -434,9 +453,13 @@ struct RecorderView: View {
     @State private var heldClip = false
     @State private var holdZoom: CGFloat = 1
     @State private var savedBrightness: CGFloat?
+    @AppStorage("sugerly.recorder.lightTone") private var lightTone: FrontLightTone = .warm
 
-    // Front camera + flash on: the ring light.
+    // Front camera + flash on: the light panel.
     private var ringLight: Bool { camera.flash && camera.position == .front && camera.authorized == true }
+    // How far in the camera window sits while the light is on.
+    private var lightInset: CGFloat { ringLight ? 16 : 0 }
+    private var windowCorner: CGFloat { 34 }
 
     var body: some View {
         watchers(screen)
@@ -462,16 +485,35 @@ struct RecorderView: View {
             let previewWidth = wide ? min(geo.size.width, geo.size.height * 0.6) : geo.size.width
             ZStack {
                 Color.black.ignoresSafeArea()
-                previewArea(wide: wide)
-                    .frame(width: previewWidth)
-                    .clipShape(RoundedRectangle(cornerRadius: wide ? 30 : 0, style: .continuous))
-                    .ignoresSafeArea(edges: wide ? [] : .all)
+                if ringLight { FrontLight(tone: lightTone).transition(.opacity) }
+                cameraWindow(wide: wide, width: previewWidth)
+                if flashScreen { photoFlash }
                 controls
-                    .frame(width: previewWidth)
+                    .frame(width: previewWidth - lightInset * 2)
+                    .padding(.vertical, ringLight ? 8 : 0)
             }
         }
         .preferredColorScheme(.dark)
         .statusBarHidden()
+    }
+
+    // The camera: the whole screen, or a rounded window inside the light.
+    private func cameraWindow(wide: Bool, width: CGFloat) -> some View {
+        let corner: CGFloat = wide || ringLight ? windowCorner : 0
+        let edges: Edge.Set = wide || ringLight ? [] : .all
+        return previewArea(wide: wide)
+            .frame(width: width - lightInset * 2)
+            .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+            .overlay { if ringLight { windowEdge } }
+            .background { if ringLight { windowGlow } }
+            .padding(.vertical, ringLight ? 8 : 0)
+            .ignoresSafeArea(edges: edges)
+    }
+
+    // The quick burst of light for a selfie photo.
+    private var photoFlash: some View {
+        let color: Color = ringLight ? lightTone.color : .white
+        return color.ignoresSafeArea().transition(.opacity)
     }
 
     // Starting and stopping the camera, and keeping it in step with the
@@ -516,8 +558,6 @@ struct RecorderView: View {
     private func previewArea(wide: Bool) -> some View {
         ZStack {
             cameraLayer
-            if ringLight { RingLight(cornerRadius: wide ? 30 : 0).transition(.opacity) }
-            if flashScreen { Color.white.ignoresSafeArea().transition(.opacity) }
             if countdown > 0 {
                 Text("\(countdown)")
                     .font(.display(140)).foregroundStyle(.white)
@@ -526,6 +566,54 @@ struct RecorderView: View {
                     .transition(.scale(scale: 2).combined(with: .opacity))
             }
         }
+    }
+
+    // A thin bright edge around the camera window, and a soft glow behind
+    // it (plain shapes, so the live camera itself is never blurred).
+    private var windowEdge: some View {
+        RoundedRectangle(cornerRadius: windowCorner, style: .continuous)
+            .strokeBorder(.white.opacity(0.9), lineWidth: 2)
+            .allowsHitTesting(false)
+    }
+
+    private var windowGlow: some View {
+        RoundedRectangle(cornerRadius: windowCorner, style: .continuous)
+            .stroke(.white, lineWidth: 10)
+            .blur(radius: 12)
+            .allowsHitTesting(false)
+    }
+
+    // Warm, cool or pink light.
+    private var lightTones: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "sun.max.fill")
+                .font(.system(size: 12, weight: .heavy))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 6)
+            ForEach(FrontLightTone.allCases) { t in
+                let on = lightTone == t
+                Button {
+                    withAnimation(.easeInOut(duration: 0.35)) { lightTone = t }
+                } label: {
+                    HStack(spacing: 5) {
+                        Circle().fill(t.color).frame(width: 12, height: 12)
+                            .overlay(Circle().strokeBorder(.black.opacity(0.15), lineWidth: 1))
+                        Text(t.title).font(.jakarta(12, .heavy))
+                    }
+                    .foregroundStyle(on ? Color(hex: 0x2A1620) : .white)
+                    .padding(.horizontal, 10)
+                    .frame(height: 30)
+                    .background(on ? Color.white : Color.clear, in: Capsule())
+                }
+                .buttonStyle(SoftPressStyle())
+                .accessibilityLabel("\(t.title) light")
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .padding(4)
+        .background(.black.opacity(0.5), in: Capsule())
+        .sensoryFeedback(.selection, trigger: lightTone)
+        .transition(.move(edge: .top).combined(with: .opacity))
     }
 
     @ViewBuilder
@@ -619,13 +707,14 @@ struct RecorderView: View {
                 }
             }
             .padding(.horizontal, 14)
+            if ringLight && !camera.recording { lightTones }
             HStack {
                 Spacer()
                 VStack(spacing: 12) {
                     roundButton("arrow.triangle.2.circlepath.camera.fill", label: "Flip camera") { flip() }
                     roundButton(camera.flash ? "bolt.fill" : "bolt.slash.fill", label: "Flash", active: camera.flash) {
                         camera.toggleFlash()
-                        showHint(camera.flash ? (camera.position == .front ? "Front flash on" : "Flash on") : "Flash off")
+                        showHint(camera.flash ? (camera.position == .front ? "Front light on: pick warm, cool or pink" : "Flash on") : "Flash off")
                     }
                     Button {
                         timer = timer == 0 ? 3 : timer == 3 ? 10 : 0
@@ -801,7 +890,16 @@ struct RecorderView: View {
             .padding(.bottom, 10)
         }
         .padding(.bottom, 12)
-        .background(LinearGradient(colors: [.clear, .black.opacity(0.5)], startPoint: .top, endPoint: .bottom).ignoresSafeArea())
+        .background { bottomShade }
+    }
+
+    // Keeps the buttons easy to read over the picture (inside the window's
+    // rounded corners while the front light is on).
+    private var bottomShade: some View {
+        LinearGradient(colors: [.clear, .black.opacity(0.5)], startPoint: .top, endPoint: .bottom)
+            .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: ringLight ? windowCorner : 0,
+                                              bottomTrailingRadius: ringLight ? windowCorner : 0, style: .continuous))
+            .ignoresSafeArea(edges: ringLight ? [] : .all)
     }
 
     // The big button: tap to start / pause, or hold to film while you hold

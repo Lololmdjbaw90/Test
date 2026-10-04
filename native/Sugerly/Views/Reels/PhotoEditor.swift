@@ -40,255 +40,44 @@ enum PhotoBaker {
     }
 }
 
-// The website's image editor, for posts and artworks: filters, adjust,
-// text, stickers, drawing, crop, rotate, undo.
+// The photo editor for posts and artworks: the same editor as reels, made
+// for one photo (its own shape, no timeline or sound), with Done giving the
+// finished photo back at full size.
 struct PhotoEditorView: View {
     let original: UIImage
     var onDone: (UIImage) -> Void
     @Environment(\.dismiss) private var dismiss
-
-    enum Tool: String, CaseIterable {
-        case filters = "Filters", crop = "Crop", adjust = "Adjust", text = "Text", stickers = "Stickers", draw = "Draw", rotate = "Rotate"
-        var icon: String {
-            switch self {
-            case .filters: return "camera.filters"
-            case .crop: return "crop"
-            case .adjust: return "slider.horizontal.3"
-            case .text: return "textformat"
-            case .stickers: return "star.square.on.square.fill"
-            case .draw: return "scribble.variable"
-            case .rotate: return "rotate.right"
-            }
-        }
-    }
-
-    struct Snapshot { var base: UIImage; var look: ReelLook; var stickers: [TextSticker]; var strokes: [DrawStroke] = [] }
-
-    @State private var base: UIImage
-    @State private var preview: UIImage?
-    @State private var look = ReelLook()
-    @State private var stickers: [TextSticker] = []
-    @State private var tool: Tool = .filters
-    @State private var history: [Snapshot] = []
-    @State private var editingText: TextSticker?
+    @State private var doc = EditorModel()
     @State private var saving = false
-    @State private var strokes: [DrawStroke] = []
-    @State private var drawing: DrawStroke?
-    @State private var penColor: UInt32 = 0xFFFFFF
-    @State private var penWidth: CGFloat = 0.012
-    @State private var penNeon = false
-    @State private var cropping: EditorCrop?
 
     init(image: UIImage, onDone: @escaping (UIImage) -> Void) {
         original = image
         self.onDone = onDone
-        _base = State(initialValue: image)
     }
-
-    private var aspect: CGFloat { max(0.2, base.size.width / max(1, base.size.height)) }
 
     var body: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 10) {
-                Button("Cancel") { dismiss() }.font(.jakarta(15, .bold)).foregroundStyle(.white.opacity(0.85))
-                Button { undo() } label: {
-                    Image(systemName: "arrow.uturn.backward").font(.system(size: 15, weight: .bold)).foregroundStyle(.white.opacity(history.isEmpty ? 0.35 : 1))
-                        .frame(width: 40, height: 40).background(.white.opacity(0.14), in: Circle())
-                }
-                .buttonStyle(BouncyStyle())
-                .disabled(history.isEmpty)
-                Spacer()
-                Text("Edit photo").font(.display(22)).foregroundStyle(.white)
-                Spacer()
-                Button { save() } label: {
-                    if saving { ProgressView().tint(.white) } else { Text("Done") }
-                }
-                .buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
-                .disabled(saving)
+        ZStack {
+            EditorPalette.backdrop.ignoresSafeArea()
+            if doc.hasMedia {
+                MediaEditor(doc: doc, primaryTitle: "Done", primaryIcon: "checkmark", busy: saving, backIcon: "xmark",
+                            onBack: { dismiss() }, onPrimary: { save() })
+                    .transition(.opacity)
+            } else {
+                ProgressView().tint(.white).controlSize(.large)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-
-            GeometryReader { geo in
-                let fit = fitted(in: geo.size)
-                ZStack {
-                    Image(uiImage: preview ?? base).resizable().frame(width: fit.width, height: fit.height)
-                    DrawingLayer(strokes: strokes, current: drawing)
-                    StickerCanvas(stickers: $stickers, size: fit, onEdit: { sticker in
-                        guard sticker.image == nil else { return }
-                        checkpoint()
-                        editingText = sticker
-                    }, onTapEmpty: {}, onSwipe: { _ in }, onBegin: { checkpoint() }, corner: 18)
-                    if tool == .draw {
-                        DrawCapture(strokes: $strokes, current: $drawing, color: penColor, width: penWidth, neon: penNeon) { checkpoint() }
-                    }
-                }
-                .frame(width: fit.width, height: fit.height)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .shadow(color: Theme.main.opacity(0.3), radius: 20)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .padding(.horizontal, 16)
-
-            panel.frame(height: 118)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(Tool.allCases, id: \.self) { t in
-                        Button {
-                            if t == .crop {
-                                cropping = EditorCrop(image: base, slide: 0)
-                                return
-                            }
-                            if t == .rotate {
-                                checkpoint()
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { base = PhotoBaker.rotate(base) }
-                                refreshPreview()
-                                return
-                            }
-                            withAnimation(.snappy) { tool = t }
-                            if t == .text { checkpoint(); editingText = TextSticker(text: "") }
-                        } label: {
-                            VStack(spacing: 4) {
-                                Image(systemName: t.icon).font(.system(size: 18, weight: .bold))
-                                Text(t.rawValue).font(.jakarta(11, .bold))
-                            }
-                            .foregroundStyle(tool == t ? .white : .white.opacity(0.65))
-                            .frame(width: 66, height: 56)
-                            .background(tool == t ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Color.white.opacity(0.1)), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        }
-                        .buttonStyle(BouncyStyle(scale: 0.9))
-                    }
-                }
-                .padding(.horizontal, 16)
-            }
-            .padding(.bottom, 12)
         }
-        .background(Color(hex: 0x140A11).ignoresSafeArea())
         .preferredColorScheme(.dark)
-        .onChange(of: look) { _, _ in refreshPreview() }
-        .fullScreenCover(item: $cropping) { job in
-            ImageCropper(image: job.image, circle: false, aspect: 1, choices: CropAspect.editor, title: "Move and pinch to crop", onDone: { rect in
-                cropping = nil
-                checkpoint()
-                let cropped = Cropping.crop(base, rect, maxSide: 3000)
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { base = cropped }
-                refreshPreview()
-            }, onCancel: { cropping = nil })
-            .preferredColorScheme(.dark)
-        }
-        .sheet(item: $editingText) { sticker in
-            TextStickerEditor(sticker: sticker) { updated in
-                if let i = stickers.firstIndex(where: { $0.id == updated.id }) { stickers[i] = updated } else { stickers.append(updated) }
-            } onDelete: { id in stickers.removeAll { $0.id == id } }
-            .presentationDetents([.height(470), .large])
-            .presentationCornerRadius(30)
-        }
-    }
-
-    private func fitted(in size: CGSize) -> CGSize {
-        let w = min(size.width, size.height * aspect)
-        return CGSize(width: w, height: w / aspect)
-    }
-
-    @ViewBuilder
-    private var panel: some View {
-        switch tool {
-        case .filters:
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(ReelFilter.allCases) { f in
-                        Button { checkpoint(); look.filter = f } label: {
-                            VStack(spacing: 6) {
-                                Image(uiImage: FilterThumbs.make(base, f)).resizable().scaledToFill()
-                                    .frame(width: 58, height: 76)
-                                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.white, lineWidth: look.filter == f ? 3 : 0))
-                                Text(f.rawValue).font(.jakarta(11, .bold)).foregroundStyle(.white.opacity(look.filter == f ? 1 : 0.7))
-                            }
-                        }
-                        .buttonStyle(BouncyStyle(scale: 0.88))
-                    }
-                }
-                .padding(.horizontal, 16)
-            }
-        case .adjust:
-            ScrollView {
-                VStack(spacing: 6) {
-                    slider("Brightness", "sun.max.fill", $look.adjust.brightness, -1...1)
-                    slider("Contrast", "circle.lefthalf.filled", $look.adjust.contrast, -1...1)
-                    slider("Saturation", "drop.fill", $look.adjust.saturation, -1...1)
-                    slider("Warmth", "thermometer.sun.fill", $look.adjust.warmth, -1...1)
-                    slider("Vignette", "camera.aperture", $look.adjust.vignette, 0...1)
-                }
-                .padding(.horizontal, 16)
-            }
-        case .text:
-            VStack(spacing: 10) {
-                Text("Drag · pinch · twist · tap to edit · drop on the bin to delete").font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.7))
-                Button { checkpoint(); editingText = TextSticker(text: "") } label: { Label("Add text", systemImage: "plus") }
-                    .buttonStyle(GradientButtonStyle(height: 44, fullWidth: false))
-            }
-            .frame(maxWidth: .infinity)
-        case .draw:
-            DrawPanel(color: $penColor, width: $penWidth, neon: $penNeon, canUndo: !strokes.isEmpty, onUndo: {
-                checkpoint()
-                _ = strokes.popLast()
-            }, onClear: {
-                checkpoint()
-                withAnimation { strokes.removeAll() }
-            })
-        case .stickers, .rotate, .crop:
-            StickerTray { image in
-                checkpoint()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                    stickers.append(TextSticker(text: "", x: CGFloat.random(in: 0.3...0.7), y: CGFloat.random(in: 0.3...0.7), image: image))
-                }
-            }
-        }
-    }
-
-    private func slider(_ title: String, _ icon: String, _ value: Binding<Double>, _ range: ClosedRange<Double>) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon).font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.pink).frame(width: 20)
-            Text(title).font(.jakarta(12, .bold)).foregroundStyle(.white).frame(width: 78, alignment: .leading)
-            Slider(value: value, in: range, onEditingChanged: { editing in if editing { checkpoint() } }).tint(Theme.pink)
-        }
-    }
-
-    private func refreshPreview() {
-        let chosen = look
-        let image = base
-        guard !chosen.isNeutral else { preview = nil; return }
-        Task {
-            let out = await FilterThumbs.applyAll(chosen, to: [image])
-            if chosen == look, image === base { preview = out.first }
-        }
-    }
-
-    private func checkpoint() {
-        history.append(Snapshot(base: base, look: look, stickers: stickers, strokes: strokes))
-        if history.count > 40 { history.removeFirst() }
-    }
-
-    private func undo() {
-        guard let last = history.popLast() else { return }
-        withAnimation(.snappy) {
-            base = last.base
-            look = last.look
-            stickers = last.stickers
-            strokes = last.strokes
-        }
-        refreshPreview()
+        .animation(.easeOut(duration: 0.25), value: doc.hasMedia)
+        .task { if !doc.hasMedia { await doc.openPhoto(original) } }
     }
 
     private func save() {
+        guard !saving else { return }
         saving = true
-        let image = base, chosen = look, marks = stickers, doodles = strokes
         Task {
-            let baked = await Task.detached(priority: .userInitiated) { PhotoBaker.bake(image, look: chosen, stickers: marks, strokes: doodles) }.value
+            let baked = await doc.bakedPhoto()
             saving = false
-            onDone(baked)
+            if let baked { onDone(baked) }
             dismiss()
         }
     }
