@@ -396,7 +396,7 @@ struct ReelTimeline: View {
         if start >= length - 0.01 { start = b[b.count - 2] }
         var end = nearest(stickers[i].end ?? length)
         if end <= start + 0.01 { end = b.first { $0 > start + 0.01 } ?? length }
-        withAnimation(.snappy) {
+        withMotion(Motion.standard) {
             stickers[i].start = start
             stickers[i].end = end >= length - 0.05 ? nil : end
         }
@@ -477,7 +477,7 @@ struct ReelTimeline: View {
     private func whole(_ id: UUID) {
         guard let i = stickers.firstIndex(where: { $0.id == id }) else { return }
         onCheckpoint()
-        withAnimation(.snappy) {
+        withMotion(Motion.standard) {
             stickers[i].start = 0
             stickers[i].end = nil
         }
@@ -485,7 +485,7 @@ struct ReelTimeline: View {
 
     private func delete(_ id: UUID) {
         onCheckpoint()
-        withAnimation(.snappy) { stickers.removeAll { $0.id == id } }
+        withMotion(Motion.standard) { stickers.removeAll { $0.id == id } }
         selected = nil
     }
 
@@ -495,7 +495,7 @@ struct ReelTimeline: View {
         guard next != slideSeconds[i] else { return }
         onCheckpoint()
         let old = slideBounds
-        withAnimation(.snappy) {
+        withMotion(Motion.standard) {
             slideSeconds[i] = next
             Self.remap(&stickers, from: old, to: Self.bounds(slideSeconds))
         }

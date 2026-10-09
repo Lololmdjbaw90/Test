@@ -160,7 +160,7 @@ struct SendToChatsSheet: View {
                                         Image(systemName: "checkmark").font(.system(size: 11, weight: .heavy)).foregroundStyle(.white)
                                             .frame(width: 22, height: 22).background(Theme.gradient, in: Circle())
                                             .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
-                                            .transition(.scale.combined(with: .opacity))
+                                            .transition(.pop)
                                     }
                                 }
                                 Text(t.name).font(.jakarta(11, .semibold)).foregroundStyle(Palette.text).lineLimit(1).frame(width: 66)
@@ -250,7 +250,7 @@ struct ReelShareSheet: View {
                                         Image(systemName: "checkmark").font(.system(size: 11, weight: .heavy)).foregroundStyle(.white)
                                             .frame(width: 22, height: 22).background(Theme.gradient, in: Circle())
                                             .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
-                                            .transition(.scale.combined(with: .opacity))
+                                            .transition(.pop)
                                     }
                                 }
                                 Text(t.name).font(.jakarta(11, .semibold)).foregroundStyle(Palette.text).lineLimit(1).frame(width: 66)
@@ -305,7 +305,7 @@ struct ReelShareSheet: View {
                     .frame(width: 26)
                     .accessibilityLabel("Playback speed")
                 ForEach([0.5, 1.0, 1.5, 2.0], id: \.self) { v in
-                    Button { withAnimation(.snappy) { speed = v } } label: {
+                    Button { withMotion(Motion.standard) { speed = v } } label: {
                         Text(Self.speedText(v)).font(.jakarta(14, .heavy))
                             .foregroundStyle(speed == v ? Color.white : Palette.text)
                             .frame(maxWidth: .infinity).frame(height: 38)
@@ -336,7 +336,7 @@ struct ReelShareSheet: View {
         }
         .padding(.bottom, 12)
         .background(Palette.bg)
-        .animation(.snappy, value: picked.isEmpty)
+        .motion(Motion.standard, value: picked.isEmpty)
     }
 
     static func speedText(_ v: Double) -> String { v == 1 ? "1x" : v == 0.5 ? "0.5x" : v == 1.5 ? "1.5x" : "2x" }
@@ -458,14 +458,15 @@ struct HeartBurstView: View {
             .foregroundStyle(Theme.gradient)
             .shadow(color: Theme.pink.opacity(0.6), radius: 18)
             .rotationEffect(.degrees(burst.angle))
-            .scaleEffect(phase == 0 ? 0.3 : phase == 1 ? 1.1 : 1.4)
-            .opacity(phase == 2 ? 0 : 1)
-            .offset(y: phase == 2 ? -70 : 0)
+            .scaleEffect(phase == 0 ? 0.6 : phase == 1 ? 1.1 : 1.3)
+            .opacity(phase == 0 ? 0 : phase == 2 ? 0 : 1)
+            .offset(y: phase == 2 ? -60 : 0)
             .position(burst.point)
             .allowsHitTesting(false)
             .onAppear {
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.5)) { phase = 1 }
-                withAnimation(.easeIn(duration: 0.45).delay(0.45)) { phase = 2 }
+                // A like is a moment worth a bounce; it floats away quicker.
+                withAnimation(Motion.pick(.spring(response: 0.28, dampingFraction: 0.55))) { phase = 1 }
+                withAnimation(Motion.pick(.easeOut(duration: 0.32)).delay(0.42)) { phase = 2 }
             }
     }
 }

@@ -496,11 +496,11 @@ struct ReelStudioView: View {
     private var postTopBar: some View {
         HStack {
             Button {
-                withAnimation { step = .edit }
+                withMotion { step = .edit }
                 doc.player.play()
             } label: {
                 Image(systemName: "chevron.left").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 40, height: 40).background(.white.opacity(0.12), in: Circle())
+                    .frame(width: 44, height: 44).background(.white.opacity(0.12), in: Circle())
             }
             .buttonStyle(BouncyStyle())
             .accessibilityLabel("Back")
@@ -508,7 +508,7 @@ struct ReelStudioView: View {
             Spacer()
             Text("New reel").font(.display(22)).foregroundStyle(.white)
             Spacer()
-            Color.clear.frame(width: 40, height: 40)
+            Color.clear.frame(width: 44, height: 44)
         }
         .padding(.horizontal, 14)
         .padding(.top, 6)
@@ -554,22 +554,16 @@ struct ReelStudioView: View {
     }
 
     private var commentsSwitch: some View {
-        Button { withAnimation(.snappy) { allowComments.toggle() } } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Allow comments").font(.jakarta(15, .bold)).foregroundStyle(.white)
-                    Text("You can change this later").font(.jakarta(12)).foregroundStyle(.white.opacity(0.6))
-                }
-                Spacer()
-                Capsule().fill(allowComments ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Color.white.opacity(0.2)))
-                    .frame(width: 52, height: 32)
-                    .overlay(alignment: allowComments ? .trailing : .leading) { Circle().fill(.white).frame(width: 26, height: 26).padding(3) }
+        // The iPhone's own switch, in your colour.
+        Toggle(isOn: $allowComments) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Allow comments").font(.jakarta(15, .bold)).foregroundStyle(.white)
+                Text("You can change this later").font(.jakarta(12)).foregroundStyle(.white.opacity(0.6))
             }
-            .padding(14)
-            .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
-        .buttonStyle(SoftPressStyle())
-        .accessibilityValue(allowComments ? "On" : "Off")
+        .tint(Theme.main)
+        .padding(14)
+        .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     private var postButtons: some View {
@@ -615,7 +609,7 @@ struct ReelStudioView: View {
             return
         }
         error = nil
-        withAnimation { step = .edit }
+        withMotion { step = .edit }
     }
 
     private func openPhotos(_ images: [UIImage]) async {
@@ -624,7 +618,7 @@ struct ReelStudioView: View {
         await doc.openSlides(images)
         loadingPick = false
         error = nil
-        withAnimation { step = .edit }
+        withMotion { step = .edit }
     }
 
     private func resetToPick() {
@@ -636,14 +630,14 @@ struct ReelStudioView: View {
         draftId = nil
         error = nil
         drafts = Drafts.reels()
-        withAnimation { step = .pick }
+        withMotion { step = .pick }
     }
 
     private func goToPost() {
         doc.player.pause()
         doc.selectedOverlay = nil
         postCover = nil
-        withAnimation { step = .post }
+        withMotion { step = .post }
         if doc.isVideo {
             Task { postCover = await doc.coverImage() }
         }
@@ -692,7 +686,7 @@ struct ReelStudioView: View {
         caption = d.caption
         allowComments = d.allowComments
         error = nil
-        withAnimation { step = .edit }
+        withMotion { step = .edit }
     }
 
     // MARK: posting

@@ -361,7 +361,7 @@ struct ServerHubView: View {
                         .foregroundStyle(selected == nil ? .white : Theme.main)
                         .frame(width: 50, height: 50)
                         .background(selected == nil ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.surface), in: RoundedRectangle(cornerRadius: selected == nil ? 16 : 25, style: .continuous))
-                } action: { withAnimation(.snappy) { selected = nil } }
+                } action: { withMotion(Motion.standard) { selected = nil } }
 
                 Capsule().fill(Palette.border).frame(width: 30, height: 2)
 
@@ -407,7 +407,7 @@ struct ServerHubView: View {
 
     private func open(_ server: Server) {
         if stores[server.id] == nil { stores[server.id] = ServerStore(server) }
-        withAnimation(.snappy) { selected = server.id }
+        withMotion(Motion.standard) { selected = server.id }
     }
 
     // Servers you're in come straight from membership (so an old server
@@ -821,7 +821,7 @@ struct CreateServerView: View {
                 Text("START FROM").font(.jakarta(11, .heavy)).tracking(1.2).foregroundStyle(Palette.muted)
                 VStack(spacing: 8) {
                     ForEach(ServerTemplate.allCases) { t in
-                        Button { withAnimation(.snappy) { template = t } } label: {
+                        Button { withMotion(Motion.standard) { template = t } } label: {
                             HStack(spacing: 14) {
                                 Image(systemName: t.icon).font(.system(size: 22, weight: .semibold)).foregroundStyle(Theme.gradient).frame(width: 50, height: 50).background(Theme.soft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                                 VStack(alignment: .leading, spacing: 2) {

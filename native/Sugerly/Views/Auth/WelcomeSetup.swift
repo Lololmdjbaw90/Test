@@ -105,7 +105,7 @@ struct WelcomeSetupView: View {
         }
         .ignoresSafeArea()
         .animation(.easeInOut(duration: 0.6), value: accent)
-        .onAppear { withAnimation(.easeInOut(duration: 8).repeatForever(autoreverses: true)) { drift = true } }
+        .onAppear { if !Motion.reduced { withAnimation(.easeInOut(duration: 8).repeatForever(autoreverses: true)) { drift = true } } }
     }
 
     private var topBar: some View {
@@ -235,7 +235,7 @@ struct WelcomeSetupView: View {
             }
             .buttonStyle(BouncyStyle(scale: 0.95))
             .accessibilityLabel("Choose a photo")
-            .onAppear { withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { pulse = true } }
+            .onAppear { if !Motion.reduced { withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { pulse = true } } }
             .stagger(appeared, 1)
 
             Button(picture == nil ? "Choose a photo" : "Choose another") { pickingPhoto = true }
@@ -464,7 +464,7 @@ struct WelcomeSetupView: View {
                 .overlay(Circle().strokeBorder(Theme.gradient, lineWidth: 4))
             }
             .overlay { SparkleBurst(radius: 100) }
-            Text("You're all set!").font(.display(40)).foregroundStyle(Theme.gradient)
+            Text("You're all set!").font(.display(40)).foregroundStyle(Theme.main)
             Text("Welcome to Sugerly, \(name). Here's a little gift to get you started.")
                 .font(.jakarta(15)).foregroundStyle(Palette.text2).multilineTextAlignment(.center).padding(.horizontal, 30)
             HStack(spacing: 10) {
@@ -561,7 +561,7 @@ struct WelcomeSetupView: View {
             }
             withAnimation(.spring(response: 0.55, dampingFraction: 0.75)) { done = true }
         } catch {
-            withAnimation { self.error = "Couldn't save that. Check your connection and try again." }
+            withMotion { self.error = "Couldn't save that. Check your connection and try again." }
         }
     }
 

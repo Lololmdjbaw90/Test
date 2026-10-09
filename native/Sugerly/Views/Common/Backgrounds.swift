@@ -624,7 +624,7 @@ struct BackgroundPicker: View {
                 HStack(spacing: 10) {
                     ForEach(AppBackground.allCases) { kind in
                         let on = choice == kind.rawValue
-                        Button { withAnimation(.snappy) { choice = kind.rawValue } } label: {
+                        Button { withMotion(Motion.standard) { choice = kind.rawValue } } label: {
                             VStack(spacing: 6) {
                                 ZStack {
                                     if kind == .off {

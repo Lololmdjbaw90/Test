@@ -237,7 +237,7 @@ struct MiniPlayer: View {
                                     .frame(width: 18, height: 18)
                                     .background(Theme.gradient, in: Circle())
                                     .offset(x: 4, y: 4)
-                                    .transition(.scale.combined(with: .opacity))
+                                    .transition(.pop)
                             }
                         }
                     VStack(alignment: .leading, spacing: 1) {
@@ -255,7 +255,7 @@ struct MiniPlayer: View {
                     }
                     Button { player.next() } label: { Image(systemName: "forward.fill").frame(width: 34, height: 40) }
                         .foregroundStyle(Palette.text2)
-                    Button { withAnimation(.snappy) { player.close() } } label: { Image(systemName: "xmark").frame(width: 30, height: 40) }
+                    Button { withMotion(Motion.standard) { player.close() } } label: { Image(systemName: "xmark").frame(width: 30, height: 40) }
                         .foregroundStyle(Palette.muted)
                 }
                 MiniProgress()

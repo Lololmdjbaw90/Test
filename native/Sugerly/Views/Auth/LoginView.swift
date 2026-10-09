@@ -37,8 +37,8 @@ struct LoginView: View {
                 }
 
                 HStack(spacing: 10) {
-                    Chip(title: "Log in", icon: "heart.fill", active: !register) { withAnimation(.snappy) { register = false } }
-                    Chip(title: "Sign up", icon: "sparkles", active: register) { withAnimation(.snappy) { register = true } }
+                    Chip(title: "Log in", icon: "heart.fill", active: !register) { withMotion(Motion.standard) { register = false } }
+                    Chip(title: "Sign up", icon: "sparkles", active: register) { withMotion(Motion.standard) { register = true } }
                 }
 
                 VStack(spacing: 12) {
@@ -141,11 +141,11 @@ struct LoginView: View {
     private func submit() async {
         error = nil
         info = nil
-        if register && !agreed { withAnimation { error = "Please agree to the Terms and Community Guidelines to sign up." }; return }
-        if register && name.trimmingCharacters(in: .whitespaces).isEmpty { withAnimation { error = "Pick a display name." }; return }
+        if register && !agreed { withMotion { error = "Please agree to the Terms and Community Guidelines to sign up." }; return }
+        if register && name.trimmingCharacters(in: .whitespaces).isEmpty { withMotion { error = "Pick a display name." }; return }
         if register {
             let check = ModEngine.analyze(name, kind: .name)
-            if check.blocked { withAnimation { error = check.reason }; return }
+            if check.blocked { withMotion { error = check.reason }; return }
         }
         busy = true
         defer { busy = false }
@@ -157,18 +157,18 @@ struct LoginView: View {
                 try await model.signIn(email: email, password: password)
             }
         } catch {
-            withAnimation { self.error = error.localizedDescription }
+            withMotion { self.error = error.localizedDescription }
         }
     }
 
     private func reset() async {
         error = nil
-        guard !email.isEmpty else { withAnimation { error = "Type your email above first." }; return }
+        guard !email.isEmpty else { withMotion { error = "Type your email above first." }; return }
         do {
             try await AuthClient.shared.sendPasswordReset(email: email)
-            withAnimation { info = "Check your email for a link to reset your password." }
+            withMotion { info = "Check your email for a link to reset your password." }
         } catch {
-            withAnimation { self.error = error.localizedDescription }
+            withMotion { self.error = error.localizedDescription }
         }
     }
 }

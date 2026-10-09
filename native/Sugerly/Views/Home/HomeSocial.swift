@@ -61,7 +61,7 @@ struct StoriesRow: View {
                 }
                 .buttonStyle(BouncyStyle(scale: 0.9))
                 ForEach(Array(stories.enumerated()), id: \.element.id) { i, story in
-                    bubble(story).transition(.scale.combined(with: .opacity)).swipeFade()
+                    bubble(story).transition(.pop).swipeFade()
                 }
             }
             .padding(.vertical, 6)
@@ -442,7 +442,7 @@ struct SuggestedPeople: View {
                     LazyHStack(spacing: 12) {
                         ForEach(list, id: \.email) { person in
                             card(person)
-                                .transition(.scale(scale: 0.6).combined(with: .opacity))
+                                .transition(.scale(scale: 0.85).combined(with: .opacity))
                         }
                     }
                     .padding(.vertical, 6)
@@ -469,7 +469,7 @@ struct SuggestedPeople: View {
         .padding(.vertical, 14)
         .sugarCard(radius: 24, padding: 0)
         .overlay(alignment: .topTrailing) {
-            Button { withAnimation(.snappy) { _ = hidden.insert(person.email) } } label: {
+            Button { withMotion(Motion.standard) { _ = hidden.insert(person.email) } } label: {
                 Image(systemName: "xmark").font(.system(size: 10, weight: .heavy)).foregroundStyle(Palette.muted)
                     .frame(width: 26, height: 26)
             }

@@ -147,7 +147,7 @@ struct SupportView: View {
             HStack(spacing: 8) {
                 ForEach(Pane.allCases, id: \.self) { s in
                     Chip(title: s.rawValue, icon: s == .chat ? "bubble.left.and.bubble.right.fill" : "flag.fill", active: section == s) {
-                        withAnimation(.snappy) { section = s }
+                        withMotion(Motion.standard) { section = s }
                     }
                 }
                 Spacer()
@@ -219,7 +219,7 @@ struct SupportChatView: View {
                     .animation(.spring(response: 0.4, dampingFraction: 0.85), value: messages.map(\.id))
                 }
                 .scrollDismissesKeyboard(.interactively)
-                .onChange(of: messages.count) { _, _ in withAnimation(.snappy) { proxy.scrollTo("end", anchor: .bottom) } }
+                .onChange(of: messages.count) { _, _ in withMotion(Motion.standard) { proxy.scrollTo("end", anchor: .bottom) } }
                 .onAppear { proxy.scrollTo("end", anchor: .bottom) }
             }
             composer
@@ -234,7 +234,7 @@ struct SupportChatView: View {
             guard let item else { return }
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) {
-                    withAnimation(.snappy) { photo = image }
+                    withMotion(Motion.standard) { photo = image }
                 }
                 picked = nil
             }
@@ -395,7 +395,7 @@ struct SupportChatView: View {
                     Image(uiImage: photo).resizable().scaledToFill().frame(width: 58, height: 58)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .overlay(alignment: .topTrailing) {
-                            Button { withAnimation(.snappy) { self.photo = nil } } label: {
+                            Button { withMotion(Motion.standard) { self.photo = nil } } label: {
                                 Image(systemName: "xmark").font(.system(size: 9, weight: .heavy)).foregroundStyle(.white)
                                     .frame(width: 20, height: 20).background(.black.opacity(0.6), in: Circle())
                             }
@@ -428,7 +428,7 @@ struct SupportChatView: View {
         .frame(maxWidth: 720)
         .frame(maxWidth: .infinity)
         .background(.bar)
-        .animation(.snappy, value: photo != nil)
+        .motion(Motion.standard, value: photo != nil)
     }
 
     private func load() async {
@@ -457,7 +457,7 @@ struct SupportChatView: View {
         let image = photo
         var temp = SupportMessage(["id": "pending-\(UUID().uuidString)", "ticket_id": ticketId, "text": text, "from_team": team, "created_date": FS.nowISO()])
         temp.pending = true
-        withAnimation(.snappy) { messages.append(temp); draft = ""; photo = nil }
+        withMotion(Motion.standard) { messages.append(temp); draft = ""; photo = nil }
         do {
             var url = ""
             if let image, let data = ImageTools.jpeg(image, maxSide: 1600) {
@@ -469,7 +469,7 @@ struct SupportChatView: View {
             await load()
             messages.removeAll { $0.id == temp.id }
         } catch {
-            withAnimation(.snappy) { messages.removeAll { $0.id == temp.id }; draft = text; photo = image }
+            withMotion(Motion.standard) { messages.removeAll { $0.id == temp.id }; draft = text; photo = image }
             model.showToast("Couldn't send — \(error.localizedDescription)", error: true)
         }
     }
@@ -515,7 +515,7 @@ struct MyReportsView: View {
         guard let me = model.me?.email else { return }
         let docs = (try? await FS.query("Report", [.equals("reporter_email", me)], limit: 200)) ?? []
         let mine = docs.filter { $0.str("target_type") != "support" }.sorted { $0.str("created_date") > $1.str("created_date") }
-        withAnimation(.snappy) { reports = mine }
+        withMotion(Motion.standard) { reports = mine }
     }
 }
 
@@ -591,7 +591,7 @@ struct SupportInbox: View {
                 ForEach(["Open", "Solved", "All"], id: \.self) { f in
                     let count = f == "Open" ? tickets.filter { !$0.solved && $0.teamUnread }.count : 0
                     Chip(title: count > 0 ? "\(f) · \(count) new" : f, icon: f == "Open" ? "tray.full.fill" : f == "Solved" ? "checkmark.seal.fill" : "square.stack.fill", active: filter == f) {
-                        withAnimation(.snappy) { filter = f }
+                        withMotion(Motion.standard) { filter = f }
                     }
                 }
             }
@@ -640,7 +640,7 @@ struct SupportInbox: View {
         defer { loading = false }
         guard let docs = try? await FS.query("SupportTicket", orderBy: "updated_date", limit: 300) else { return }
         let fresh = docs.map(SupportTicket.init)
-        if fresh != tickets { withAnimation(.snappy) { tickets = fresh } }
+        if fresh != tickets { withMotion(Motion.standard) { tickets = fresh } }
     }
 }
 

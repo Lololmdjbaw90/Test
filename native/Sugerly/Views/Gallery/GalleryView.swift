@@ -124,7 +124,7 @@ struct GalleryView: View {
             let missing = ids.filter { !have.contains($0) }
             guard !missing.isEmpty, let docs = try? await FS.getMany("Artwork", Array(missing.suffix(100))) else { return }
             let fresh = docs.values.map { Artwork($0) }.filter { a in !artworks.contains { $0.id == a.id } }
-            withAnimation(.snappy) { artworks.append(contentsOf: fresh) }
+            withMotion(Motion.standard) { artworks.append(contentsOf: fresh) }
         }
         .dropRemoved($artworks)
         .onReceive(NotificationCenter.default.publisher(for: ArtworkEvents.changed)) { note in
@@ -176,8 +176,8 @@ struct GalleryView: View {
                             RemoteImage(url: art.imageURL)
                                 .frame(width: geo.size.width, height: geo.size.height)
                                 // A slow zoom while each piece is on show.
-                                .scaleEffect(featuredIndex == i ? 1.08 : 1)
-                                .animation(.easeOut(duration: 5), value: featuredIndex)
+                                .scaleEffect(featuredIndex == i && !Motion.reduced ? 1.08 : 1)
+                                .animation(Motion.reduced ? nil : .easeOut(duration: 5), value: featuredIndex)
                                 .clipped()
                         }
                         .overlay {
@@ -327,11 +327,11 @@ struct GalleryView: View {
         LazyVStack(spacing: 16) {
             ForEach(Array(list.enumerated()), id: \.element.id) { i, art in
                 GalleryCard(artwork: art, liked: LikeBook.shared.isLiked(art, me: model.me?.email ?? ""), onOpen: { path.append(.artwork(art)) }, onLike: { toggleLike(art) }, onProfile: { path.append(.person(art.authorEmail)) })
-                    .scrollTransition(.animated(.spring(response: 0.5, dampingFraction: 0.8)).threshold(.visible(0.05))) { content, phase in
+                    .scrollTransition(.animated(Motion.enter).threshold(.visible(0.05))) { content, phase in
                         content
                             .opacity(phase.isIdentity ? 1 : 0)
-                            .scaleEffect(phase.isIdentity ? 1 : 0.9)
-                            .offset(y: phase == .bottomTrailing ? 30 : 0)
+                            .scaleEffect(phase.isIdentity || Motion.reduced ? 1 : 0.96)
+                            .offset(y: phase == .bottomTrailing && !Motion.reduced ? 14 : 0)
                     }
                     .onAppear { if i >= list.count - 3 { Task { await loadMore() } } }
             }
@@ -441,7 +441,7 @@ struct GalleryCard: View {
                         Image(systemName: "heart.fill").font(.system(size: 54)).foregroundStyle(Theme.gradient)
                             .shadow(color: Theme.main.opacity(0.5), radius: 12)
                     }
-                    .transition(.scale(scale: 0.3).combined(with: .opacity))
+                    .transition(.scale(scale: 0.8).combined(with: .opacity))
                     .allowsHitTesting(false)
                 }
             }
@@ -604,7 +604,7 @@ struct ArtworkDetailView: View {
     private func doubleTap() {
         if !liked { toggleLike() }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { heart = true }
-        Task { try? await Task.sleep(for: .milliseconds(700)); withAnimation { heart = false } }
+        Task { try? await Task.sleep(for: .milliseconds(700)); withMotion { heart = false } }
     }
 
     private func toggleLike() {

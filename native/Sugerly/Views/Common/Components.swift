@@ -481,7 +481,7 @@ struct ReportSheet: View {
     private func checkAlready() async {
         guard !me.isEmpty else { return }
         let docs = (try? await FS.query("Report", [.equals("reporter_email", me), .equals("target_id", target.id)], limit: 1)) ?? []
-        if !docs.isEmpty { withAnimation(.snappy) { already = true } }
+        if !docs.isEmpty { withMotion(Motion.standard) { already = true } }
     }
 
     private func send() async {
@@ -498,7 +498,7 @@ struct ReportSheet: View {
         do {
             try await FS.create("Report", report)
             if block && canBlock { await Privacy.setBlocked(target.ownerEmail, true, model: model) }
-            withAnimation { sent = true }
+            withMotion { sent = true }
         } catch {
             self.error = error.localizedDescription
         }

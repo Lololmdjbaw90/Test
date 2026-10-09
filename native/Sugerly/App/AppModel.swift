@@ -41,7 +41,7 @@ final class AppModel {
     func showToast(_ text: String, icon: String = "checkmark.circle.fill", error: Bool = false) {
         let next = Toast(text: text, icon: error ? "exclamationmark.circle.fill" : icon, error: error)
         TapSound.play(error || icon.hasPrefix("exclamationmark") ? .error : .chime)
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) { toast = next }
+        withMotion(.spring(response: 0.36, dampingFraction: 0.82)) { toast = next }
         Task {
             try? await Task.sleep(for: .seconds(2.4))
             if toast?.id == next.id { withAnimation(.easeOut(duration: 0.25)) { toast = nil } }
@@ -564,7 +564,7 @@ extension View {
     func dropRemoved<T: Identifiable>(_ list: Binding<[T]>) -> some View where T.ID == String {
         onChange(of: Removed.shared.ids, initial: true) { _, gone in
             guard !gone.isEmpty, list.wrappedValue.contains(where: { gone.contains($0.id) }) else { return }
-            withAnimation(.snappy) { list.wrappedValue.removeAll { gone.contains($0.id) } }
+            withMotion(Motion.standard) { list.wrappedValue.removeAll { gone.contains($0.id) } }
         }
     }
 }

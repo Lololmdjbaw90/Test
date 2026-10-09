@@ -469,7 +469,7 @@ struct RecorderView: View {
                     .presentationCornerRadius(30)
             }
             .confirmationDialog("Start over?", isPresented: $confirmRestart, titleVisibility: .visible) {
-                Button("Delete all clips", role: .destructive) { withAnimation { camera.restart() } }
+                Button("Delete all clips", role: .destructive) { withMotion { camera.restart() } }
             }
             .sensoryFeedback(.impact(weight: .light), trigger: countdown) { _, new in new > 0 }
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: countdown)
@@ -733,7 +733,7 @@ struct RecorderView: View {
                     .accessibilityLabel("Timer")
                     .accessibilityValue(timer == 0 ? "Off" : "\(timer) seconds")
                     if mode != .photo {
-                        Button { withAnimation(.snappy) { showSpeed.toggle() } } label: {
+                        Button { withMotion(Motion.standard) { showSpeed.toggle() } } label: {
                             Text(speedLabel(camera.speed)).font(.jakarta(13, .heavy)).foregroundStyle(.white)
                                 .frame(width: 44, height: 44)
                                 .background(camera.speed != 1 || showSpeed ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Color.black.opacity(0.35)), in: Circle())
@@ -748,7 +748,7 @@ struct RecorderView: View {
                             align.toggle()
                             if align { showHint("Line up with the end of your last clip") }
                         }
-                        .transition(.scale.combined(with: .opacity))
+                        .transition(.pop)
                     }
                 }
                 .opacity(camera.recording ? 0 : 1)
@@ -795,7 +795,7 @@ struct RecorderView: View {
     private var speedRow: some View {
         HStack(spacing: 4) {
             ForEach([0.5, 1.0, 2.0, 3.0], id: \.self) { v in
-                Button { withAnimation(.snappy) { camera.speed = v } } label: {
+                Button { withMotion(Motion.standard) { camera.speed = v } } label: {
                     Text(speedLabel(v)).font(.jakarta(13, .heavy))
                         .foregroundStyle(camera.speed == v ? Color(hex: 0x2A1620) : .white)
                         .frame(width: 58, height: 34)
@@ -819,12 +819,12 @@ struct RecorderView: View {
                             Image(uiImage: shots[i]).resizable().scaledToFill()
                                 .frame(width: 52, height: 70).clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 .overlay(alignment: .topTrailing) {
-                                    Button { withAnimation { _ = shots.remove(at: i) } } label: {
+                                    Button { withMotion { _ = shots.remove(at: i) } } label: {
                                         Image(systemName: "xmark.circle.fill").font(.system(size: 16)).foregroundStyle(.white, .black.opacity(0.6))
                                     }
                                     .offset(x: 5, y: -5)
                                 }
-                                .transition(.scale.combined(with: .opacity))
+                                .transition(.pop)
                         }
                     }
                     .padding(.horizontal, 16).padding(.top, 6)
@@ -834,8 +834,8 @@ struct RecorderView: View {
                 // Left: delete the last clip, or your drafts before you start.
                 Group {
                     if mode != .photo && !camera.clips.isEmpty && !camera.recording {
-                        roundButton("delete.backward.fill", size: 50, label: "Delete last clip") { withAnimation { camera.deleteLast() } }
-                            .transition(.scale.combined(with: .opacity))
+                        roundButton("delete.backward.fill", size: 50, label: "Delete last clip") { withMotion { camera.deleteLast() } }
+                            .transition(.pop)
                     } else if draftCount > 0, let onDrafts, camera.clips.isEmpty, shots.isEmpty, !camera.recording {
                         sideTile("tray.full.fill", "Drafts", action: onDrafts)
                     } else {
@@ -862,7 +862,7 @@ struct RecorderView: View {
                         .buttonStyle(BouncyStyle(scale: 0.85))
                         .disabled(merging)
                         .accessibilityLabel("Done")
-                        .transition(.scale.combined(with: .opacity))
+                        .transition(.pop)
                     } else if let onUpload, camera.clips.isEmpty, !camera.recording, countdown == 0 {
                         sideTile("photo.on.rectangle.angled", "Upload", action: onUpload)
                     } else {
@@ -876,7 +876,7 @@ struct RecorderView: View {
                     Button {
                         guard !camera.recording else { return }
                         if m == .short && camera.total > 15 { error = "You've already filmed more than 15s"; return }
-                        withAnimation(.snappy) { mode = m }
+                        withMotion(Motion.standard) { mode = m }
                     } label: {
                         VStack(spacing: 4) {
                             Text(m.rawValue).font(.jakarta(14, .heavy)).foregroundStyle(mode == m ? .white : .white.opacity(0.55))
@@ -1072,7 +1072,7 @@ struct RecorderView: View {
             }
         }
         .buttonStyle(BouncyStyle())
-        .transition(.scale.combined(with: .opacity))
+        .transition(.pop)
     }
 
     private func shutter() async {
@@ -1093,7 +1093,7 @@ struct RecorderView: View {
             camera.startClip()
         } else {
             if camera.flash && camera.position == .front {
-                withAnimation(.easeIn(duration: 0.08)) { flashScreen = true }
+                withAnimation(.easeOut(duration: 0.08)) { flashScreen = true }
                 try? await Task.sleep(for: .milliseconds(150))
             }
             camera.takePhoto()

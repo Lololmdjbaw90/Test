@@ -242,7 +242,7 @@ final class EditorModel {
 
     private func restore(_ s: Snapshot) {
         let photosChanged = s.photos.count != photos.count || !zip(s.photos, photos).allSatisfy { $0 === $1 }
-        withAnimation(.snappy) {
+        withMotion(Motion.standard) {
             look = s.look
             stickers = s.stickers
             strokes = s.strokes
@@ -321,7 +321,7 @@ final class EditorModel {
     func setSpeed(_ value: Double) {
         guard abs(value - speed) > 0.001 else { return }
         checkpoint()
-        withAnimation(.snappy) { speed = value }
+        withMotion(Motion.standard) { speed = value }
         if (trimEnd - trimStart) / value > 60 {
             trimEnd = trimStart + 60 * value
             player.setTrim(trimStart, trimEnd)
@@ -383,7 +383,7 @@ final class EditorModel {
         guard photos.indices.contains(i), photos.indices.contains(j), slideSeconds.count == photos.count else { return }
         checkpoint()
         let old = ReelTimeline.bounds(slideSeconds)
-        withAnimation(.snappy) {
+        withMotion(Motion.standard) {
             photos.swapAt(i, j)
             if bases.count == photos.count { bases.swapAt(i, j) }
             if previews.count == photos.count { previews.swapAt(i, j) }
@@ -400,7 +400,7 @@ final class EditorModel {
         checkpoint()
         let b = ReelTimeline.bounds(slideSeconds)
         let newLength = (b.last ?? 0) - slideSeconds[i]
-        withAnimation(.snappy) {
+        withMotion(Motion.standard) {
             photos.remove(at: i)
             if bases.count == photos.count + 1 { bases.remove(at: i) }
             if previews.count == photos.count + 1 { previews.remove(at: i) }
@@ -453,7 +453,7 @@ final class EditorModel {
     }
 
     func deleteSticker(_ id: UUID) {
-        withAnimation(.snappy) { stickers.removeAll { $0.id == id } }
+        withMotion(Motion.standard) { stickers.removeAll { $0.id == id } }
         if selectedOverlay == id { selectedOverlay = nil }
     }
 
@@ -489,7 +489,7 @@ final class EditorModel {
     func clearStrokes() {
         guard !strokes.isEmpty else { return }
         checkpoint()
-        withAnimation { strokes.removeAll() }
+        withMotion { strokes.removeAll() }
     }
 
     // MARK: sound

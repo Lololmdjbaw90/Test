@@ -52,7 +52,7 @@ struct VoiceRoomView: View {
                     if here {
                         ForEach(voice.participants) { p in
                             tile(name: p.isSelf ? "You" : p.name, picture: model.person(p.email)?.picture ?? p.picture, muted: p.muted, deafened: p.deafened, speaking: p.speaking, connecting: !p.isSelf && !p.connected, level: p.level)
-                                .transition(.scale(scale: 0.6).combined(with: .opacity))
+                                .transition(.scale(scale: 0.85).combined(with: .opacity))
                         }
                     } else {
                         ForEach(others) { p in
@@ -228,7 +228,7 @@ struct VoiceDock: View {
                     }
                     .buttonStyle(BouncyStyle())
                     .accessibilityLabel("Stop sharing")
-                    .transition(.scale.combined(with: .opacity))
+                    .transition(.pop)
                 }
                 Button { voice.toggleMute() } label: {
                     Image(systemName: voice.muted ? "mic.slash.fill" : "mic.fill").font(.system(size: 15, weight: .bold))

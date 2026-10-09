@@ -78,7 +78,7 @@ struct ChatView: View {
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: messages.last?.id) { _, id in
                 guard let id else { return }
-                withAnimation(.snappy) { proxy.scrollTo(id, anchor: .bottom) }
+                withMotion(Motion.standard) { proxy.scrollTo(id, anchor: .bottom) }
             }
         }
         .background(ChatWallpaper().ignoresSafeArea())
@@ -195,7 +195,7 @@ struct ChatView: View {
         } else {
             let mine = message.authorEmail == me
             let first = previous == nil || previous?.authorEmail != message.authorEmail || previous?.kind == "call" || gap(previous!, message) || !sameDay(previous!, message)
-            SwipeToReply(onReply: { withAnimation(.snappy) { replyTo = message }; typing = true }) {
+            SwipeToReply(onReply: { withMotion(Motion.standard) { replyTo = message }; typing = true }) {
                 ChatBubble(message: message, mine: mine, tail: first,
                            showName: conversation.isGroup && !mine && first,
                            read: mine && message.readBy.contains { $0 != me },
@@ -216,7 +216,7 @@ struct ChatView: View {
             }
         }
         .controlGroupStyle(.compactMenu)
-        Button { withAnimation(.snappy) { replyTo = message }; typing = true } label: { Label("Reply", systemImage: "arrowshape.turn.up.left") }
+        Button { withMotion(Motion.standard) { replyTo = message }; typing = true } label: { Label("Reply", systemImage: "arrowshape.turn.up.left") }
         if !message.displayText.isEmpty {
             Button { UIPasteboard.general.string = message.displayText; model.showToast("Copied", icon: "doc.on.doc.fill") } label: { Label("Copy", systemImage: "doc.on.doc") }
         }
@@ -335,7 +335,7 @@ struct ChatView: View {
                                     .frame(width: 34, height: 36)
                             }
                             .accessibilityLabel("Send a photo or video")
-                            .transition(.scale.combined(with: .opacity))
+                            .transition(.pop)
                         }
                     }
                     .padding(.horizontal, 6)
@@ -361,9 +361,9 @@ struct ChatView: View {
                 }
             }
         }
-        .animation(.snappy, value: draft.isEmpty)
-        .animation(.snappy, value: replyTo?.id)
-        .animation(.snappy, value: recorder.recording)
+        .motion(Motion.standard, value: draft.isEmpty)
+        .motion(Motion.standard, value: replyTo?.id)
+        .motion(Motion.standard, value: recorder.recording)
         .padding(.horizontal, 8)
         .padding(.top, 8)
         .padding(.bottom, 8)
@@ -384,7 +384,7 @@ struct ChatView: View {
                 Text(ChatBubble.preview(message)).font(.jakarta(13)).foregroundStyle(Palette.text2).lineLimit(1)
             }
             Spacer()
-            Button { withAnimation(.snappy) { replyTo = nil } } label: {
+            Button { withMotion(Motion.standard) { replyTo = nil } } label: {
                 Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(Palette.muted)
                     .frame(width: 30, height: 30).background(Palette.surface2, in: Circle())
             }
@@ -554,14 +554,14 @@ struct ChatView: View {
         var pending = Message(data)
         pending.id = "pending-\(UUID().uuidString)"
         pending.pending = true
-        withAnimation(.snappy) { messages.append(pending); replyTo = nil }
+        withMotion(Motion.standard) { messages.append(pending); replyTo = nil }
         do {
             let doc = try await FS.create("DirectMessage", data)
             let created = Message(doc)
             if let i = messages.firstIndex(where: { $0.id == pending.id }) { messages[i] = created }
             chats.upsert(created, me: me)
         } catch {
-            withAnimation { messages.removeAll { $0.id == pending.id } }
+            withMotion { messages.removeAll { $0.id == pending.id } }
             failed = "Couldn't send — \(error.localizedDescription)"
         }
     }
@@ -582,7 +582,7 @@ struct ChatView: View {
         switch media {
         case .photos(let images):
             for (i, image) in images.enumerated() {
-                withAnimation { uploading = images.count > 1 ? "Sending photo \(i + 1) of \(images.count)…" : "Sending photo…" }
+                withMotion { uploading = images.count > 1 ? "Sending photo \(i + 1) of \(images.count)…" : "Sending photo…" }
                 guard let jpeg = ImageTools.jpeg(image, maxSide: 1600) else { continue }
                 do {
                     let url = try await StorageClient.upload(jpeg, contentType: "image/jpeg", fileExtension: "jpg")
@@ -592,7 +592,7 @@ struct ChatView: View {
                 }
             }
         case .video(let file, let cover):
-            withAnimation { uploading = "Sending video…" }
+            withMotion { uploading = "Sending video…" }
             do {
                 let data = try Data(contentsOf: file)
                 guard data.count < 58 * 1024 * 1024 else { throw APIError(message: "That video is too big — trim it a little shorter.") }
@@ -606,7 +606,7 @@ struct ChatView: View {
                 failed = "Couldn't send the video — \(error.localizedDescription)"
             }
         }
-        withAnimation { uploading = nil }
+        withMotion { uploading = nil }
     }
 
     private func sendMedia(_ url: String) async {
@@ -636,7 +636,7 @@ struct ChatView: View {
     }
 
     private func delete(_ message: Message) {
-        withAnimation { messages.removeAll { $0.id == message.id } }
+        withMotion { messages.removeAll { $0.id == message.id } }
         ChatCache.save(conversation.id, messages)
         Task { try? await FS.delete("DirectMessage", message.id) }
     }
@@ -869,7 +869,7 @@ struct ChatBubble: View {
                     .shadow(color: .black.opacity(0.06), radius: 2, y: 1)
                 }
                 .buttonStyle(BouncyStyle(scale: 0.85))
-                .transition(.scale.combined(with: .opacity))
+                .transition(.pop)
             }
         }
         .padding(.horizontal, 10)

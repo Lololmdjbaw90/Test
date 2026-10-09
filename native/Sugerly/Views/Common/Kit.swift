@@ -360,7 +360,7 @@ private struct AppearFade: ViewModifier {
     func body(content: Content) -> some View {
         content
             .opacity(shown || reduceMotion ? 1 : 0)
-            .onAppear { withAnimation(.easeOut(duration: 0.24)) { shown = true } }
+            .onAppear { withAnimation(Motion.fade) { shown = true } }
             .onDisappear { shown = false }
     }
 }
@@ -376,8 +376,8 @@ private struct ScrollFade: ViewModifier {
             let vertical = axis == .vertical
             content.scrollTransition(.interactive.threshold(.visible(vertical ? 0.3 : 0.45)), axis: axis) { view, phase in
                 view
-                    .opacity(phase.isIdentity ? 1 : 0.4)
-                    .scaleEffect(phase.isIdentity ? 1 : (vertical ? 0.95 : 0.9))
+                    .opacity(phase.isIdentity ? 1 : 0.55)
+                    .scaleEffect(phase.isIdentity ? 1 : (vertical ? 0.97 : 0.94))
             }
         }
     }
@@ -416,7 +416,7 @@ struct TitleSwitch: View {
             ForEach(Array(titles.enumerated()), id: \.offset) { i, title in
                 Button {
                     if selection != i { TapSound.play(.select) }
-                    withAnimation(.snappy(duration: 0.28)) { selection = i }
+                    withMotion(Motion.standard) { selection = i }
                 } label: {
                     Text(title)
                         .font(.display(19))

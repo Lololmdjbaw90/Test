@@ -218,7 +218,7 @@ struct DailyContentEditor: View {
                 HStack(spacing: 8) {
                     ForEach(DailyContent.icons, id: \.self) { name in
                         let on = icon == name
-                        Button { withAnimation(.snappy) { icon = name } } label: {
+                        Button { withMotion(Motion.standard) { icon = name } } label: {
                             Image(systemName: name).font(.system(size: 16, weight: .bold))
                                 .foregroundStyle(on ? .white : Palette.text2)
                                 .frame(width: 40, height: 40)

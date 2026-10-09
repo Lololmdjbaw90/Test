@@ -109,23 +109,23 @@ extension View {
     }
 }
 
-// Presses squish down, then the button springs back with a cute jelly
-// wobble (a little wider, then a little taller, then it settles) and its
-// icons give a happy hop, with a soft click (most buttons).
+// Icon buttons: a squish the moment your finger lands (with a soft click),
+// a springy return with a tiny overshoot when you let go, and the icon
+// inside gives a little hop.
 struct BouncyStyle: ButtonStyle {
-    var scale: CGFloat = 0.93
+    var scale: CGFloat = 0.94
     var sound = true
     func makeBody(configuration: Configuration) -> some View {
         JellyPress(content: configuration.label, pressed: configuration.isPressed, scale: scale, sound: sound)
     }
 }
 
-// Rows, links and text buttons: the same jelly, gentler, and quiet (they're
-// everywhere).
+// Links and text buttons: the same, gentler and quiet (they're everywhere),
+// with no hop.
 struct SoftPressStyle: ButtonStyle {
     var scale: CGFloat = 0.97
     func makeBody(configuration: Configuration) -> some View {
-        JellyPress(content: configuration.label, pressed: configuration.isPressed, scale: scale, wobble: 0.035, sound: false, fade: true)
+        JellyPress(content: configuration.label, pressed: configuration.isPressed, scale: scale, sound: false, fade: true, hop: false)
     }
 }
 
@@ -134,20 +134,21 @@ struct SoftPressStyle: ButtonStyle {
 struct RowPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         JellyPress(content: configuration.label.contentShape(Rectangle()).background(configuration.isPressed ? Palette.surface2 : Color.clear),
-                   pressed: configuration.isPressed, scale: 0.98, wobble: 0.015, sound: false)
+                   pressed: configuration.isPressed, scale: 0.985, sound: false)
     }
 }
 
-// The press itself. Down: a quick squish (and the click). Up: a springy
-// squash-and-stretch and a bounce of any icons inside. With Reduce Motion
+// The press itself. Down answers straight away (fast ease-out, plus the
+// click on the same frame). Up is a spring, so a quick second tap carries
+// on from wherever the button is instead of restarting. With Reduce Motion
 // it only dims a touch.
 struct JellyPress<Content: View>: View {
     let content: Content
     let pressed: Bool
-    var scale: CGFloat = 0.93
-    var wobble: CGFloat = 0.07
+    var scale: CGFloat = 0.94
     var sound = true
     var fade = false
+    var hop = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pops = 0
 
@@ -157,34 +158,15 @@ struct JellyPress<Content: View>: View {
             .scaleEffect(pressed && !reduceMotion ? scale : 1)
             .brightness(pressed ? -0.04 : 0)
             .opacity(fade && pressed ? 0.85 : 1)
-            .animation(.easeOut(duration: 0.1), value: pressed)
-            .keyframeAnimator(initialValue: Jelly(), trigger: pops) { view, jelly in
-                view.scaleEffect(x: jelly.x, y: jelly.y)
-            } keyframes: { _ in
-                KeyframeTrack(\.x) {
-                    CubicKeyframe(1 + wobble, duration: 0.1)
-                    CubicKeyframe(1 - wobble * 0.5, duration: 0.12)
-                    SpringKeyframe(1, duration: 0.32, spring: .bouncy)
-                }
-                KeyframeTrack(\.y) {
-                    CubicKeyframe(1 - wobble * 0.8, duration: 0.1)
-                    CubicKeyframe(1 + wobble * 0.5, duration: 0.12)
-                    SpringKeyframe(1, duration: 0.32, spring: .bouncy)
-                }
-            }
+            .animation(pressed ? Motion.press : (reduceMotion ? Motion.fade : Motion.release), value: pressed)
             .onChange(of: pressed) { _, down in
                 if down {
                     if sound { TapSound.play(.tap) }
-                } else if !reduceMotion {
+                } else if hop && !reduceMotion {
                     pops += 1
                 }
             }
     }
-}
-
-struct Jelly {
-    var x: CGFloat = 1
-    var y: CGFloat = 1
 }
 
 extension View {
@@ -423,8 +405,8 @@ struct MainShell: View {
                 if let toast = model.toast {
                     ToastView(toast: toast)
                         .padding(.top, 6)
-                        .transition(.move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.9)))
-                        .onTapGesture { withAnimation { model.toast = nil } }
+                        .transition(.slideIn(from: .top))
+                        .onTapGesture { withMotion { model.toast = nil } }
                         .zIndex(10)
                 }
             }
@@ -432,7 +414,7 @@ struct MainShell: View {
                 if let incoming = calls.incoming {
                     IncomingCallBanner(call: incoming)
                         .padding(.top, 4)
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .transition(.slideIn(from: .top))
                         .zIndex(30)
                 }
             }
@@ -700,9 +682,9 @@ struct CreateSheet: View {
             .sugarCard(radius: 24, padding: 16)
         }
         .buttonStyle(BouncyStyle(scale: 0.95))
-        .scaleEffect(visible ? 1 : 0.88)
+        .scaleEffect(visible ? 1 : 0.92)
         .opacity(visible ? 1 : 0)
-        .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.72).delay(0.04 + Double(index) * 0.05), value: shown)
+        .animation(reduceMotion ? nil : Motion.enter.delay(0.03 + Double(index) * Motion.staggerStep), value: shown)
         .accessibilityLabel(title)
         .accessibilityHint(sub)
     }

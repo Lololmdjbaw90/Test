@@ -82,7 +82,7 @@ struct ChannelChatView: View {
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: messages.last?.id) { _, id in
                 guard let id else { return }
-                withAnimation(.snappy) { proxy.scrollTo(id, anchor: .bottom) }
+                withMotion(Motion.standard) { proxy.scrollTo(id, anchor: .bottom) }
             }
         }
         .sugarBackground()
@@ -251,7 +251,7 @@ struct ChannelChatView: View {
         if incremental && docs.count < page {
             let known = Set(messages.map(\.id))
             let fresh = incoming.filter { !known.contains($0.id) }
-            if !fresh.isEmpty { withAnimation(.snappy) { messages = (messages + fresh).sorted { $0.created < $1.created } } }
+            if !fresh.isEmpty { withMotion(Motion.standard) { messages = (messages + fresh).sorted { $0.created < $1.created } } }
         } else {
             // Refresh the newest page (edits, reactions, pins, deletions) but
             // keep any older history you've already scrolled back to.
@@ -306,14 +306,14 @@ struct ChannelChatView: View {
         pending.id = "pending-\(UUID().uuidString)"
         pending.created = FS.nowISO()
         pending.pending = true
-        withAnimation(.snappy) { messages.append(pending) }
+        withMotion(Motion.standard) { messages.append(pending) }
         do {
             let doc = try await FS.create("ChannelMessage", data)
             let created = ChannelMessage(doc)
             if let i = messages.firstIndex(where: { $0.id == pending.id }) { messages[i] = created }
             mentions(text, me: meProfile)
         } catch {
-            withAnimation { messages.removeAll { $0.id == pending.id } }
+            withMotion { messages.removeAll { $0.id == pending.id } }
             draft = text
             failed = "Couldn't send — \(error.localizedDescription)"
         }
@@ -340,7 +340,7 @@ struct ChannelChatView: View {
         do {
             let url = try await StorageClient.upload(jpeg, contentType: "image/jpeg", fileExtension: "jpg")
             let doc = try await FS.create("ChannelMessage", Servers.message(channel: channel.id, server: server.id, me: meProfile, text: "", imageURL: url))
-            withAnimation(.snappy) { messages.append(ChannelMessage(doc)) }
+            withMotion(Motion.standard) { messages.append(ChannelMessage(doc)) }
         } catch {
             failed = "Couldn't send the photo — \(error.localizedDescription)"
         }
@@ -352,7 +352,7 @@ struct ChannelChatView: View {
         do {
             let doc = try await FS.create("ChannelMessage", Servers.message(channel: channel.id, server: server.id, me: meProfile, text: "", imageURL: url, reply: replyTo))
             replyTo = nil
-            withAnimation(.snappy) { messages.append(ChannelMessage(doc)) }
+            withMotion(Motion.standard) { messages.append(ChannelMessage(doc)) }
         } catch {
             failed = "Couldn't send — \(error.localizedDescription)"
         }
@@ -378,7 +378,7 @@ struct ChannelChatView: View {
     }
 
     private func delete(_ message: ChannelMessage) {
-        withAnimation { messages.removeAll { $0.id == message.id } }
+        withMotion { messages.removeAll { $0.id == message.id } }
         Task { try? await FS.delete("ChannelMessage", message.id) }
     }
 }

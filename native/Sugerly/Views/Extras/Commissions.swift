@@ -297,7 +297,7 @@ struct CommissionsView: View {
             .padding(.bottom, 30)
             .frame(maxWidth: 900)
             .frame(maxWidth: .infinity)
-            .animation(.snappy, value: tab)
+            .motion(Motion.standard, value: tab)
         }
         .sugarBackground()
         .navigationTitle("Commissions")
@@ -339,7 +339,7 @@ struct CommissionsView: View {
                 heroStat("\(selling.filter { $0.status.isActive }.count)", "to make")
             }
             Button {
-                if myListings.isEmpty { creating = true } else { withAnimation(.snappy) { tab = .shop } }
+                if myListings.isEmpty { creating = true } else { withMotion(Motion.standard) { tab = .shop } }
             } label: {
                 Label(myListings.isEmpty ? "Open your shop" : "Go to your shop", systemImage: "storefront.fill")
                     .font(.jakarta(14, .heavy)).foregroundStyle(Theme.main)
@@ -418,7 +418,7 @@ struct CommissionsView: View {
             HStack(spacing: 8) {
                 ForEach(Filter.allCases, id: \.self) { f in
                     Chip(title: f.rawValue, icon: f == .all ? "square.grid.2x2.fill" : f == .open ? "circle.fill" : f == .budget ? "tag.fill" : "star.fill", active: filter == f) {
-                        withAnimation(.snappy) { filter = f }
+                        withMotion(Motion.standard) { filter = f }
                     }
                 }
             }
@@ -449,7 +449,7 @@ struct CommissionsView: View {
         let past = buying.filter { !$0.status.isActive }
         if buying.isEmpty && !loading {
             EmptyCard(icon: "bag.fill", title: "No orders yet", text: "Find an artist you love in Explore and send them a request.", actionTitle: "Explore shops") {
-                withAnimation(.snappy) { tab = .explore }
+                withMotion(Motion.standard) { tab = .explore }
             }
         }
         if !active.isEmpty {
@@ -479,7 +479,7 @@ struct CommissionsView: View {
     private var shopTab: some View {
         if payoutsReady == false {
             SetUpPayoutsNotice()
-            PayoutInfoCard { withAnimation(.snappy) { payoutsReady = true } }
+            PayoutInfoCard { withMotion(Motion.standard) { payoutsReady = true } }
         }
         EarningsCard(orders: selling)
         let requests = selling.filter { $0.status == .requested }
@@ -927,7 +927,7 @@ struct CommissionDetail: View {
                     Text("PICK A SIZE").font(.jakarta(11, .heavy)).tracking(1.2).foregroundStyle(Palette.muted)
                     VStack(spacing: 10) {
                         ForEach(Array(commission.tiers.enumerated()), id: \.offset) { i, t in
-                            Button { withAnimation(.snappy) { tierIndex = i } } label: { tierCard(t, picked: i == tierIndex) }
+                            Button { withMotion(Motion.standard) { tierIndex = i } } label: { tierCard(t, picked: i == tierIndex) }
                                 .buttonStyle(BouncyStyle(scale: 0.98))
                         }
                     }
@@ -989,7 +989,7 @@ struct CommissionDetail: View {
                 if let days = t.days { Label("Ready in about \(days) day\(days == 1 ? "" : "s")", systemImage: "clock").font(.jakarta(11, .semibold)).foregroundStyle(Palette.muted) }
             }
             Spacer(minLength: 8)
-            Text(Money.format(t.price, commission.currency)).font(.display(22)).foregroundStyle(Theme.gradient)
+            Text(Money.format(t.price, commission.currency)).font(.display(22)).foregroundStyle(Theme.main)
         }
         .padding(14)
         .background(picked ? Theme.soft : Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -1078,7 +1078,7 @@ struct CommissionRequestSheet: View {
                             Image(uiImage: refs[i]).resizable().scaledToFill().frame(width: 76, height: 76)
                                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                                 .overlay(alignment: .topTrailing) {
-                                    Button { withAnimation { _ = refs.remove(at: i) } } label: {
+                                    Button { withMotion { _ = refs.remove(at: i) } } label: {
                                         Image(systemName: "xmark.circle.fill").font(.system(size: 20)).foregroundStyle(.white, .black.opacity(0.5))
                                     }
                                     .offset(x: 6, y: -6)
@@ -1109,7 +1109,7 @@ struct CommissionRequestSheet: View {
             Task {
                 for item in list {
                     if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data), refs.count < 4 {
-                        withAnimation(.snappy) { refs.append(image) }
+                        withMotion(Motion.standard) { refs.append(image) }
                     }
                 }
                 items = []
@@ -1289,7 +1289,7 @@ struct CommissionOrderView: View {
                 Text(o.title.isEmpty ? "Commission" : o.title).font(.display(22)).foregroundStyle(Palette.text).lineLimit(2)
                 if !o.tier.isEmpty { Text(o.tier).font(.jakarta(13, .bold)).foregroundStyle(Palette.muted) }
                 HStack(spacing: 8) {
-                    Text(Money.format(o.price, o.currency)).font(.display(22)).foregroundStyle(Theme.gradient)
+                    Text(Money.format(o.price, o.currency)).font(.display(22)).foregroundStyle(Theme.main)
                     OrderStatusBadge(status: o.status)
                 }
             }
@@ -1553,7 +1553,7 @@ struct CommissionOrderView: View {
         defer { loading = false }
         guard let doc = try? await FS.get("CommissionOrder", orderId) else { return }
         let fresh = CommissionOrder(doc)
-        if fresh != order { withAnimation(.snappy) { order = fresh } }
+        if fresh != order { withMotion(Motion.standard) { order = fresh } }
     }
 
     private func notifyOther(_ o: CommissionOrder, _ message: String) {
@@ -1677,8 +1677,8 @@ struct ZoomableRemoteImage: View {
                 .scaleEffect(scale)
                 .gesture(MagnifyGesture()
                     .onChanged { v in scale = min(5, max(1, base * v.magnification)) }
-                    .onEnded { _ in base = scale; if scale < 1.05 { withAnimation(.snappy) { scale = 1; base = 1 } } })
-                .onTapGesture(count: 2) { withAnimation(.snappy) { scale = scale > 1 ? 1 : 2.5; base = scale } }
+                    .onEnded { _ in base = scale; if scale < 1.05 { withMotion(Motion.standard) { scale = 1; base = 1 } } })
+                .onTapGesture(count: 2) { withMotion(Motion.standard) { scale = scale > 1 ? 1 : 2.5; base = scale } }
             Button { dismiss() } label: {
                 Image(systemName: "xmark").font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
                     .frame(width: 40, height: 40).background(.white.opacity(0.2), in: Circle())
@@ -1721,7 +1721,7 @@ struct DeliverSheet: View {
                         Image(uiImage: images[i]).resizable().scaledToFill().frame(height: 110).frame(maxWidth: .infinity)
                             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                             .overlay(alignment: .topTrailing) {
-                                Button { withAnimation { _ = images.remove(at: i) } } label: {
+                                Button { withMotion { _ = images.remove(at: i) } } label: {
                                     Image(systemName: "xmark.circle.fill").font(.system(size: 20)).foregroundStyle(.white, .black.opacity(0.5))
                                 }
                                 .padding(4)
@@ -1745,7 +1745,7 @@ struct DeliverSheet: View {
             Task {
                 for item in list {
                     if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data), images.count < 8 {
-                        withAnimation(.snappy) { images.append(image) }
+                        withMotion(Motion.standard) { images.append(image) }
                     }
                 }
                 items = []
@@ -1915,7 +1915,7 @@ struct NewCommissionView: View {
                             TextField("Size name (e.g. Headshot)", text: $tier.name).font(.jakarta(14, .semibold))
                             TextField("Price", text: $tier.price).keyboardType(.decimalPad).font(.jakarta(14, .bold)).multilineTextAlignment(.trailing).frame(width: 76)
                             if tiers.count > 1 {
-                                Button { withAnimation { tiers.removeAll { $0.id == tier.id } } } label: { Image(systemName: "minus.circle.fill").foregroundStyle(Palette.muted) }
+                                Button { withMotion { tiers.removeAll { $0.id == tier.id } } } label: { Image(systemName: "minus.circle.fill").foregroundStyle(Palette.muted) }
                                     .buttonStyle(SoftPressStyle())
                             }
                         }
@@ -1929,7 +1929,7 @@ struct NewCommissionView: View {
                     .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
                 }
                 if tiers.count < 5 {
-                    Button { withAnimation(.snappy) { tiers.append(TierDraft()) } } label: { Label("Add a size", systemImage: "plus") }
+                    Button { withMotion(Motion.standard) { tiers.append(TierDraft()) } } label: { Label("Add a size", systemImage: "plus") }
                         .font(.jakarta(13, .bold)).foregroundStyle(Theme.main)
                 }
                 SugarField(placeholder: "Tags: portrait, anime, pets", text: $tags)
@@ -1952,7 +1952,7 @@ struct NewCommissionView: View {
             Task {
                 for item in list {
                     if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data), sampleCount < 6 {
-                        withAnimation(.snappy) { samples.append(image) }
+                        withMotion(Motion.standard) { samples.append(image) }
                     }
                 }
                 items = []
@@ -1961,7 +1961,7 @@ struct NewCommissionView: View {
     }
 
     private func removeButton(_ action: @escaping () -> Void) -> some View {
-        Button { withAnimation { action() } } label: {
+        Button { withMotion { action() } } label: {
             Image(systemName: "xmark.circle.fill").font(.system(size: 20)).foregroundStyle(.white, .black.opacity(0.5))
         }
         .offset(x: 6, y: -6)

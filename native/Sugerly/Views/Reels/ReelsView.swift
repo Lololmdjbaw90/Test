@@ -230,7 +230,7 @@ struct ReelsView: View {
             refreshBadge
             HStack(spacing: 22) {
                 ForEach([("following", "Following"), ("foryou", "For you")], id: \.0) { id, title in
-                    Button { withAnimation(.snappy) { feed = id; activeId = shown.first?.id } } label: {
+                    Button { withMotion(Motion.standard) { feed = id; activeId = shown.first?.id } } label: {
                         VStack(spacing: 4) {
                             Text(title).font(.jakarta(17, .bold)).foregroundStyle(.white.opacity(feed == id ? 1 : 0.6))
                             Capsule().fill(.white).frame(width: feed == id ? 24 : 6, height: 3).opacity(feed == id ? 1 : 0)
@@ -348,8 +348,8 @@ struct ReelsView: View {
     // A brand-new For You page: fresh reels, unseen ones first.
     private func refresh() async {
         guard !refreshing else { return }
-        withAnimation(.snappy) { refreshing = true }
-        defer { withAnimation(.snappy) { refreshing = false } }
+        withMotion(Motion.standard) { refreshing = true }
+        defer { withMotion(Motion.standard) { refreshing = false } }
         async let top = Self.hot(below: nil, limit: 15)
         guard let docs = try? await FS.query("Reel", orderBy: "created_date", limit: Self.pageSize + 10) else { return }
         let newest = docs.map(Reel.init)
@@ -420,7 +420,7 @@ struct ReelsView: View {
         advance(from: id)
         Task {
             try? await Task.sleep(for: .milliseconds(450))
-            withAnimation(.snappy) { reels.removeAll { $0.id == id } }
+            withMotion(Motion.standard) { reels.removeAll { $0.id == id } }
         }
     }
 
@@ -535,7 +535,7 @@ struct ReelPage: View {
                 .allowsHitTesting(false)
             if paused {
                 Image(systemName: "play.fill").font(.system(size: 60)).foregroundStyle(.white.opacity(0.85)).shadow(radius: 10)
-                    .transition(.scale.combined(with: .opacity))
+                    .transition(.pop)
                     .allowsHitTesting(false)
             }
             ForEach(hearts) { HeartBurstView(burst: $0) }
@@ -543,7 +543,7 @@ struct ReelPage: View {
                 VStack {
                     HStack {
                         Spacer()
-                        Button { withAnimation(.snappy) { clearMode = false } } label: {
+                        Button { withMotion(Motion.standard) { clearMode = false } } label: {
                             Label("Show", systemImage: "eye.fill").font(.jakarta(13, .bold)).foregroundStyle(.white)
                                 .padding(.horizontal, 14).frame(height: 36).background(.black.opacity(0.4), in: Capsule())
                         }
@@ -684,7 +684,7 @@ struct ReelPage: View {
                 .padding(.top, insets.top + 6)
             }
             if muted && active {
-                Button { withAnimation(.snappy) { muted = false } } label: {
+                Button { withMotion(Motion.standard) { muted = false } } label: {
                     Label("Tap for sound", systemImage: "speaker.slash.fill")
                         .font(.jakarta(14, .bold)).foregroundStyle(.white)
                         .padding(.horizontal, 16).frame(height: 38)
@@ -692,7 +692,7 @@ struct ReelPage: View {
                 }
                 .buttonStyle(BouncyStyle())
                 .padding(.top, showBack ? 10 : insets.top + 50)
-                .transition(.scale.combined(with: .opacity))
+                .transition(.pop)
             }
             Spacer()
             HStack(alignment: .bottom, spacing: 12) {
@@ -744,7 +744,7 @@ struct ReelPage: View {
                     .overlay(Capsule().strokeBorder(.white.opacity(0.25), lineWidth: 1))
             }
             if !reel.caption.isEmpty {
-                Button { withAnimation(.snappy) { captionOpen.toggle() } } label: {
+                Button { withMotion(Motion.standard) { captionOpen.toggle() } } label: {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(ReelCaption.styled(reel.caption)).font(.jakarta(15)).foregroundStyle(.white)
                             .lineLimit(captionOpen ? 12 : 2).multilineTextAlignment(.leading)
@@ -787,7 +787,7 @@ struct ReelPage: View {
                                 .contentTransition(.symbolEffect(.replace))
                                 .offset(y: 11)
                                 .onTapGesture { follow() }
-                                .transition(.scale.combined(with: .opacity))
+                                .transition(.pop)
                         }
                     }
             }
@@ -883,7 +883,7 @@ struct ReelPage: View {
     }
 
     private func togglePause() {
-        withAnimation(.snappy) { paused.toggle() }
+        withMotion(Motion.standard) { paused.toggle() }
         if paused {
             video?.pause()
             sound?.pause()

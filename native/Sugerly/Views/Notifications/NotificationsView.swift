@@ -87,7 +87,7 @@ struct NotificationsPage: View {
         .sugarBackground()
         .roundTitle("Notifications")
         .refreshable { await notes.refresh(me: model.me?.email ?? "") }
-        .animation(.snappy, value: filter)
+        .motion(Motion.standard, value: filter)
         .onAppear { appeared = true }
         .onDisappear { notes.markAllRead() }
     }
@@ -106,7 +106,7 @@ struct NotificationsPage: View {
                     .font(.jakarta(13, .medium)).foregroundStyle(.white.opacity(0.9))
                     .fixedSize(horizontal: false, vertical: true)
                 if unread > 0 {
-                    Button { withAnimation(.snappy) { notes.markAllRead() } } label: {
+                    Button { withMotion(Motion.standard) { notes.markAllRead() } } label: {
                         Label("Mark all read", systemImage: "checkmark.circle.fill")
                             .font(.jakarta(13, .heavy)).foregroundStyle(Theme.main)
                             .padding(.horizontal, 14).frame(height: 34)
@@ -114,7 +114,7 @@ struct NotificationsPage: View {
                     }
                     .buttonStyle(BouncyStyle(scale: 0.92))
                     .padding(.top, 4)
-                    .transition(.scale.combined(with: .opacity))
+                    .transition(.pop)
                 }
             }
             Spacer(minLength: 0)
@@ -128,7 +128,7 @@ struct NotificationsPage: View {
                 .allowsHitTesting(false)
         }
         .shadow(color: Theme.main.opacity(0.28), radius: 16, y: 8)
-        .animation(.snappy, value: unread)
+        .motion(Motion.standard, value: unread)
     }
 
     // Colourful chips, with how many new ones each has.
@@ -162,8 +162,8 @@ struct NotificationsPage: View {
                 tappable(b)
                     .scrollFade()
                     .opacity(appeared || reduceMotion ? 1 : 0)
-                    .offset(y: appeared || reduceMotion ? 0 : 18)
-                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(Double(min(i, 8)) * 0.045), value: appeared)
+                    .offset(y: appeared || reduceMotion ? 0 : 10)
+                    .animation(Motion.staggered(Motion.enter, i), value: appeared)
             }
         }
         if !shown.isEmpty && notes.hasOlder {
@@ -555,7 +555,7 @@ struct AdminView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(Tab.allCases, id: \.self) { t in
-                            Chip(title: t.rawValue, icon: t.icon, active: tab == t) { withAnimation(.snappy) { tab = t; search = "" } }
+                            Chip(title: t.rawValue, icon: t.icon, active: tab == t) { withMotion(Motion.standard) { tab = t; search = "" } }
                         }
                     }
                     .padding(.vertical, 2)
@@ -799,7 +799,7 @@ struct AdminView: View {
         do {
             try await FS.delete(item.collection, item.id)
             _ = try? await FS.create("Log", ["action": "moderation_delete", "details": "Deleted \(item.label.lowercased()) \(item.id)", "user_email": model.me?.email ?? ""])
-            withAnimation(.snappy) { data.items.removeAll { $0.id == item.id && $0.collection == item.collection } }
+            withMotion(Motion.standard) { data.items.removeAll { $0.id == item.id && $0.collection == item.collection } }
             if item.collection == "Community" { data.servers.removeAll { $0.id == item.id } }
             model.showToast("\(item.label) deleted", icon: "trash.fill")
         } catch {
@@ -949,7 +949,7 @@ struct AdminView: View {
             HStack(spacing: 8) {
                 ForEach(["Open", "Urgent", "Done", "All"], id: \.self) { f in
                     Chip(title: f, icon: f == "Urgent" ? "exclamationmark.triangle.fill" : f == "Done" ? "checkmark.seal.fill" : f == "Open" ? "tray.full.fill" : "square.stack.fill", active: reportFilter == f) {
-                        withAnimation(.snappy) { reportFilter = f }
+                        withMotion(Motion.standard) { reportFilter = f }
                     }
                 }
             }
@@ -1107,7 +1107,7 @@ struct AdminView: View {
             try? await Support.send(to: owner, text: text, fromTeam: true, kind: "notice", model: model)
         }
         let ids = Set(g.reports.map { $0.str("id") })
-        withAnimation(.snappy) {
+        withMotion(Motion.standard) {
             for i in reports.indices where ids.contains(reports[i].str("id")) && reports[i].str("status") != "resolved" {
                 reports[i]["status"] = "resolved"
                 reports[i]["resolution"] = resolution
@@ -1143,7 +1143,7 @@ struct AdminView: View {
             Text("Presets").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 10)], spacing: 10) {
                 ForEach(presets, id: \.0) { name, p, s in
-                    Button { withAnimation(.snappy) { primary = Color(hex: p); secondary = Color(hex: s) } } label: {
+                    Button { withMotion(Motion.standard) { primary = Color(hex: p); secondary = Color(hex: s) } } label: {
                         VStack(spacing: 6) {
                             Circle().fill(LinearGradient(colors: [Color(hex: s), Color(hex: p)], startPoint: .topLeading, endPoint: .bottomTrailing))
                                 .frame(width: 44, height: 44).shadow(color: Color(hex: p).opacity(0.4), radius: 6, y: 3)

@@ -281,7 +281,7 @@ private struct GradientButtonBody: View {
     @Environment(\.isEnabled) private var enabled
 
     var body: some View {
-        JellyPress(content: styled, pressed: configuration.isPressed, scale: 0.95, wobble: 0.05)
+        JellyPress(content: styled, pressed: configuration.isPressed, scale: 0.96)
     }
 
     private var styled: some View {
@@ -305,7 +305,7 @@ private struct GradientButtonBody: View {
             .shadow(color: Theme.main.opacity(configuration.isPressed ? 0.2 : 0.38), radius: configuration.isPressed ? 6 : 14, y: configuration.isPressed ? 3 : 7)
             .saturation(enabled ? 1 : 0.2)
             .opacity(enabled ? 1 : 0.6)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .animation(Motion.press, value: configuration.isPressed)
     }
 }
 
@@ -324,7 +324,7 @@ struct OutlineButtonStyle: ButtonStyle {
             .background(Palette.surface, in: Capsule())
             .overlay(Capsule().strokeBorder(Theme.pink.opacity(0.3), lineWidth: 1.4))
             .shadow(color: Palette.shadow, radius: 6, y: 2)
-        return JellyPress(content: styled, pressed: configuration.isPressed, scale: 0.96, wobble: 0.05)
+        return JellyPress(content: styled, pressed: configuration.isPressed, scale: 0.97)
     }
 }
 
@@ -355,9 +355,9 @@ struct Chip: View {
             }
             .contentShape(Capsule())
         }
-        .buttonStyle(BouncyStyle(scale: 0.92))
+        .buttonStyle(BouncyStyle(scale: 0.95))
         .sensoryFeedback(.selection, trigger: active)
-        .animation(.snappy(duration: 0.25), value: active)
+        .motion(Motion.standard, value: active)
     }
 }
 
@@ -573,7 +573,7 @@ struct SparkleBurst: View {
                     } animation: { phase in
                         switch phase {
                         case 1: return .easeOut(duration: 0.45).delay(p.delay)
-                        case 2: return .easeIn(duration: 0.4).delay(0.15)
+                        case 2: return .easeOut(duration: 0.3).delay(0.12)
                         default: return .linear(duration: 0.01)
                         }
                     }
@@ -589,7 +589,14 @@ struct SparkleBurst: View {
 
 // A soft light sweeping across a placeholder, like the website's .skeleton.
 struct Shimmer: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func body(content: Content) -> some View {
+        // With Reduce Motion on, the placeholder stays still.
+        if reduceMotion { content } else { sweeping(content) }
+    }
+
+    private func sweeping(_ content: Content) -> some View {
         content.overlay {
             TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
                 let t = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.4) / 1.4
@@ -609,12 +616,13 @@ struct Shimmer: ViewModifier {
 extension View {
     func shimmer() -> some View { modifier(Shimmer()) }
 
-    // Sections float up one after another when a page opens.
+    // Sections rise a few points and fade in one after another when a page
+    // opens (quickly: the page is usable straight away).
     func stagger(_ shown: Bool, _ index: Int) -> some View {
         self
             .opacity(shown ? 1 : 0)
-            .offset(y: shown ? 0 : 22)
-            .animation(.spring(response: 0.55, dampingFraction: 0.85).delay(Double(min(index, 10)) * 0.05), value: shown)
+            .offset(y: shown || Motion.reduced ? 0 : 10)
+            .animation(Motion.staggered(Motion.enter, index), value: shown)
     }
 }
 

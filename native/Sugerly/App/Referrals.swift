@@ -102,8 +102,8 @@ struct InviteCard: View {
                     .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.main.opacity(0.35), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])))
                 Button {
                     UIPasteboard.general.string = code
-                    withAnimation(.snappy) { copied = true }
-                    Task { try? await Task.sleep(for: .seconds(1.6)); withAnimation(.snappy) { copied = false } }
+                    withMotion(Motion.standard) { copied = true }
+                    Task { try? await Task.sleep(for: .seconds(1.6)); withMotion(Motion.standard) { copied = false } }
                 } label: {
                     Image(systemName: copied ? "checkmark" : "doc.on.doc").font(.system(size: 15, weight: .bold))
                         .frame(width: 46, height: 46)

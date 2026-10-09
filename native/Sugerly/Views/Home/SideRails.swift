@@ -123,7 +123,7 @@ struct PaletteOfTheDay: View {
                     let code = String(format: "#%06X", hex)
                     Button {
                         UIPasteboard.general.string = code
-                        withAnimation(.snappy) { copied = code }
+                        withMotion(Motion.standard) { copied = code }
                     } label: {
                         RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(hex: hex))
                             .frame(height: 44)

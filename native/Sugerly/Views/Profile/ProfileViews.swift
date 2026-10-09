@@ -338,7 +338,7 @@ struct ProfileContent: View {
             case .saved: return (t.rawValue, "bookmark.fill")
             }
         }
-        return SectionSwitch(options: options, selection: Binding(get: { list.firstIndex(of: tab) ?? 0 }, set: { i in withAnimation(.snappy) { tab = list[i] } }))
+        return SectionSwitch(options: options, selection: Binding(get: { list.firstIndex(of: tab) ?? 0 }, set: { i in withMotion(Motion.standard) { tab = list[i] } }))
     }
 
     @ViewBuilder
@@ -483,7 +483,7 @@ struct ProfileContent: View {
         let postIds = Array(me.savedPosts.reversed().prefix(60))
         let reelIds = Array(me.savedReels.reversed().prefix(60))
         let artIds = Array(me.savedArtworks.reversed().prefix(60))
-        withAnimation(.snappy) {
+        withMotion(Motion.standard) {
             savedPosts = savedPosts.filter { postIds.contains($0.id) }
             savedReels = savedReels.filter { reelIds.contains($0.id) }
             savedArt = savedArt.filter { artIds.contains($0.id) }
@@ -505,7 +505,7 @@ struct ProfileContent: View {
         var artById: [String: Artwork] = [:]
         for art in savedArt { artById[art.id] = art }
         for (id, doc) in artDocs { artById[id] = Artwork(doc) }
-        withAnimation(.snappy) {
+        withMotion(Motion.standard) {
             savedPosts = postIds.compactMap { postsById[$0] }
             savedReels = reelIds.compactMap { reelsById[$0] }
             savedArt = artIds.compactMap { artById[$0] }
@@ -620,7 +620,7 @@ struct EditProfileView: View {
         }
         .sheet(item: Binding(get: { gifFor.map { GifTarget(avatar: $0) } }, set: { gifFor = $0?.avatar })) { target in
             GifPickerSheet { url in
-                withAnimation(.snappy) {
+                withMotion(Motion.standard) {
                     if target.avatar { avatar = .link(url) } else { banner = .link(url); removeBanner = false }
                 }
             }
@@ -651,7 +651,7 @@ struct EditProfileView: View {
             Menu {
                 Button { pickingFor = false; showPicker = true } label: { Label("Choose a photo", systemImage: "photo") }
                 Button { nitroOnly { gifFor = false } } label: { Label(nitro ? "Choose a GIF" : "Choose a GIF (MimiPlus)", systemImage: "photo.stack") }
-                if hasBanner { Button(role: .destructive) { withAnimation { banner = nil; removeBanner = true } } label: { Label("Remove banner", systemImage: "trash") } }
+                if hasBanner { Button(role: .destructive) { withMotion { banner = nil; removeBanner = true } } label: { Label("Remove banner", systemImage: "trash") } }
             } label: {
                 ZStack {
                     bannerPreview
@@ -731,13 +731,13 @@ struct EditProfileView: View {
             let gifSide: CGFloat = job.avatar ? 512 : 1200
             if let data = await Task.detached(priority: .userInitiated, operation: { Cropping.cropGIF(gif, rect, maxSide: gifSide) }).value,
                let preview = AnimatedImages.decode(data, maxPixel: gifSide) {
-                withAnimation(.snappy) { if job.avatar { avatar = .gif(data, preview) } else { banner = .gif(data, preview); removeBanner = false } }
+                withMotion(Motion.standard) { if job.avatar { avatar = .gif(data, preview) } else { banner = .gif(data, preview); removeBanner = false } }
                 return
             }
         }
         let image = job.image
         let cropped = await Task.detached(priority: .userInitiated) { Cropping.crop(image, rect, maxSide: side) }.value
-        withAnimation(.snappy) { if job.avatar { avatar = .image(cropped) } else { banner = .image(cropped); removeBanner = false } }
+        withMotion(Motion.standard) { if job.avatar { avatar = .image(cropped) } else { banner = .image(cropped); removeBanner = false } }
     }
 
     // MARK: Nitro + style
@@ -768,7 +768,7 @@ struct EditProfileView: View {
                     ForEach(NameStyles.all) { style in
                         let locked = style.premium && !nitro
                         Button {
-                            if locked { shop = true } else { withAnimation(.snappy) { nameStyle = style.id } }
+                            if locked { shop = true } else { withMotion(Motion.standard) { nameStyle = style.id } }
                         } label: {
                             VStack(spacing: 6) {
                                 NameText(name: name.isEmpty ? "Name" : name, style: style.id, size: 18, display: true, nitro: true)
@@ -800,7 +800,7 @@ struct EditProfileView: View {
             Text(title).font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    Button { withAnimation(.snappy) { selection.wrappedValue = "" } } label: {
+                    Button { withMotion(Motion.standard) { selection.wrappedValue = "" } } label: {
                         Image(systemName: "circle.slash").font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.muted)
                             .frame(width: 38, height: 38).background(Palette.surface2, in: Circle())
                             .overlay(Circle().strokeBorder(selection.wrappedValue.isEmpty ? Theme.main : Palette.border, lineWidth: 2))
@@ -808,7 +808,7 @@ struct EditProfileView: View {
                     ForEach(ProfileColors.swatches.indices, id: \.self) { i in
                         let swatch = ProfileColors.swatches[i]
                         let on = selection.wrappedValue.lowercased() == swatch.0
-                        Button { withAnimation(.snappy) { selection.wrappedValue = swatch.0 } } label: {
+                        Button { withMotion(Motion.standard) { selection.wrappedValue = swatch.0 } } label: {
                             Circle().fill(Color(hex: swatch.1)).frame(width: 38, height: 38)
                                 .overlay { if on { Image(systemName: "checkmark").font(.system(size: 14, weight: .heavy)).foregroundStyle(.white) } }
                                 .overlay(Circle().strokeBorder(.white, lineWidth: on ? 3 : 0))
@@ -832,7 +832,7 @@ struct EditProfileView: View {
             FlowLayout(spacing: 8) {
                 ForEach(ProfileEffect.all) { item in
                     Chip(title: item.label, icon: item.icon, active: effect == item.id) {
-                        if nitro || item.id.isEmpty { withAnimation(.snappy) { effect = item.id } } else { shop = true }
+                        if nitro || item.id.isEmpty { withMotion(Motion.standard) { effect = item.id } } else { shop = true }
                     }
                 }
             }
@@ -841,7 +841,7 @@ struct EditProfileView: View {
                 Text("How many").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
                 HStack(spacing: 8) {
                     ForEach(ProfileEffect.amounts, id: \.0) { amount, label in
-                        Chip(title: label, active: effectAmount == amount) { withAnimation(.snappy) { effectAmount = amount } }
+                        Chip(title: label, active: effectAmount == amount) { withMotion(Motion.standard) { effectAmount = amount } }
                     }
                 }
             }
@@ -1009,7 +1009,7 @@ struct MyColorsPicker: View {
                 Text("Sub tones").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
                 ForEach(0..<ideas.count, id: \.self) { i in
                     let tone = ideas[i]
-                    Button { withAnimation(.snappy) { sub = tone } } label: {
+                    Button { withMotion(Motion.standard) { sub = tone } } label: {
                         Circle().fill(tone).frame(width: 28, height: 28)
                             .overlay(Circle().strokeBorder(.white, lineWidth: 2))
                             .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1).padding(-1))
@@ -1106,7 +1106,7 @@ struct SettingsView: View {
             Section {
                 VStack(spacing: 6) {
                     BrandLogo(height: 30)
-                    Text("Sugerly for iPhone & iPad").font(.cute(16)).foregroundStyle(Theme.gradient)
+                    Text("Sugerly for iPhone & iPad").font(.cute(16)).foregroundStyle(Theme.main)
                 }
                 .frame(maxWidth: .infinity)
                 .listRowBackground(Color.clear)
@@ -1231,7 +1231,7 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity)
                         .accessibilityLabel(accent.label)
                     }
-                    Button { withAnimation(.snappy) { ownColours.toggle() } } label: {
+                    Button { withMotion(Motion.standard) { ownColours.toggle() } } label: {
                         swatch(AngularGradient(colors: [Color(hex: 0xFF7AA2), Color(hex: 0xFFD166), Color(hex: 0x5FD3B0), Color(hex: 0x7CBEFF), Color(hex: 0xB19CFF), Color(hex: 0xFF7AA2)], center: .center),
                                picked: model.myColors != nil, ring: Theme.main, icon: model.myColors == nil ? "plus" : nil)
                     }

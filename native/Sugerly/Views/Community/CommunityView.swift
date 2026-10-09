@@ -268,7 +268,7 @@ struct CommunityView: View {
                                         if i == 0 {
                                             Image(systemName: "crown.fill").font(.system(size: 15, weight: .bold)).foregroundStyle(Color(hex: 0xF0A020))
                                                 .offset(y: -13)
-                                                .phaseAnimator([false, true]) { v, tilt in v.rotationEffect(.degrees(tilt ? -10 : 10)) } animation: { _ in .easeInOut(duration: 1.1) }
+                                                .phaseAnimator(Motion.reduced ? [false] : [false, true]) { v, tilt in v.rotationEffect(.degrees(tilt ? -8 : 8)) } animation: { _ in .easeInOut(duration: 1.2) }
                                         }
                                     }
                                 Text(person?.displayName ?? "").font(.jakarta(11, .bold)).foregroundStyle(Palette.text).lineLimit(1)
@@ -361,7 +361,7 @@ struct CommunityView: View {
             let missing = ids.filter { !have.contains($0) }
             guard !missing.isEmpty, let docs = try? await FS.getMany("CommunityPost", Array(missing.suffix(100))) else { return }
             let fresh = docs.values.map { Post($0) }.filter { p in !store.posts.contains { $0.id == p.id } }
-            withAnimation(.snappy) { store.posts.append(contentsOf: fresh) }
+            withMotion(Motion.standard) { store.posts.append(contentsOf: fresh) }
         }
         .onAppear { appeared = true }
     }
@@ -432,7 +432,7 @@ struct CommunityView: View {
 
     private func tagChip(_ t: String) -> some View {
         let on = tag == t
-        return Button { withAnimation(.snappy) { tag = on ? nil : t } } label: {
+        return Button { withMotion(Motion.standard) { tag = on ? nil : t } } label: {
             HStack(spacing: 5) {
                 Text("#\(t)").font(.jakarta(13, .bold))
                 if on { Image(systemName: "xmark").font(.system(size: 10, weight: .black)) }
@@ -473,9 +473,9 @@ struct CommunityView: View {
                         }
                     }
                     .buttonStyle(BouncyStyle())
-                    .scaleEffect(appeared ? 1 : 0.4)
+                    .scaleEffect(appeared || Motion.reduced ? 1 : 0.88)
                     .opacity(appeared ? 1 : 0)
-                    .animation(.spring(response: 0.5, dampingFraction: 0.62).delay(0.15 + Double(min(i, 10)) * 0.05), value: appeared)
+                    .animation(Motion.staggered(Motion.enter, i).delay(0.1), value: appeared)
                 }
             }
             .padding(.horizontal, 4)
@@ -506,13 +506,13 @@ struct CommunityView: View {
                         .padding(.vertical, 16)
                         .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                         .overlay(alignment: .topTrailing) {
-                            Button { withAnimation(.snappy) { _ = dismissed.insert(person.email) } } label: {
+                            Button { withMotion(Motion.standard) { _ = dismissed.insert(person.email) } } label: {
                                 Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.muted).frame(width: 34, height: 34)
                             }
                         }
                         .contentShape(RoundedRectangle(cornerRadius: 24))
                         .onTapGesture { path.append(.person(person.email)) }
-                        .transition(.scale.combined(with: .opacity))
+                        .transition(.pop)
                     }
                 }
             }
@@ -756,11 +756,10 @@ struct PostCard: View {
         .contentShape(Rectangle())
         .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1).allowsHitTesting(false) }
         // Posts glide up and fade in as they come into view.
-        .scrollTransition(.animated(.spring(response: 0.5, dampingFraction: 0.86)).threshold(.visible(0.08))) { content, phase in
+        .scrollTransition(.animated(Motion.enter).threshold(.visible(0.08))) { content, phase in
             content
                 .opacity(phase.isIdentity ? 1 : 0)
-                .offset(y: phase == .bottomTrailing ? 28 : 0)
-                .scaleEffect(phase.isIdentity ? 1 : 0.97, anchor: .top)
+                .offset(y: phase == .bottomTrailing && !Motion.reduced ? 12 : 0)
         }
     }
 
@@ -1138,7 +1137,7 @@ struct CommentsScreen<Header: View>: View {
                 HStack {
                     Text("Replying to \(replyTo.authorName)").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
                     Spacer()
-                    Button { withAnimation { self.replyTo = nil } } label: { Image(systemName: "xmark.circle.fill") }.foregroundStyle(Palette.muted)
+                    Button { withMotion { self.replyTo = nil } } label: { Image(systemName: "xmark.circle.fill") }.foregroundStyle(Palette.muted)
                 }
                 .padding(.horizontal, 6)
             }
@@ -1175,7 +1174,7 @@ struct CommentsScreen<Header: View>: View {
         let cutoff = fresh.map(\.created).min() ?? ""
         let older = comments.filter { $0.created < cutoff }
         if comments.isEmpty { hasOlder = docs.count >= Self.pageSize }
-        withAnimation(.snappy) { comments = (older + fresh).sorted { $0.created < $1.created } }
+        withMotion(Motion.standard) { comments = (older + fresh).sorted { $0.created < $1.created } }
     }
 
     private func loadOlder() async {
@@ -1186,11 +1185,11 @@ struct CommentsScreen<Header: View>: View {
         hasOlder = docs.count >= Self.pageSize
         let known = Set(comments.map(\.id))
         let page = docs.map(Comment.init).filter { !known.contains($0.id) }
-        withAnimation(.snappy) { comments = (page + comments).sorted { $0.created < $1.created } }
+        withMotion(Motion.standard) { comments = (page + comments).sorted { $0.created < $1.created } }
     }
 
     private func reply(to comment: Comment) {
-        withAnimation { replyTo = comment }
+        withMotion { replyTo = comment }
         typing = true
     }
 
@@ -1217,7 +1216,7 @@ struct CommentsScreen<Header: View>: View {
         do {
             let created = try await FS.create(collection, data)
             TapSound.play(.send)
-            withAnimation(.snappy) {
+            withMotion(Motion.standard) {
                 comments.append(Comment(created))
                 if !text.isEmpty { draft = "" }
             }
@@ -1247,7 +1246,7 @@ struct CommentsScreen<Header: View>: View {
     }
 
     private func delete(_ c: Comment) {
-        withAnimation { comments.removeAll { $0.id == c.id || $0.parentId == c.id } }
+        withMotion { comments.removeAll { $0.id == c.id || $0.parentId == c.id } }
         Task { try? await FS.delete(collection, c.id) }
     }
 }
@@ -1267,7 +1266,7 @@ struct SendButton: View {
         }
         .buttonStyle(BouncyStyle(scale: 0.85))
         .disabled(!enabled)
-        .animation(.snappy, value: enabled)
+        .motion(Motion.standard, value: enabled)
     }
 }
 
@@ -1392,7 +1391,7 @@ struct NewPostView: View {
                     .frame(height: 260).frame(maxWidth: .infinity)
                     .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                     .overlay(alignment: .topTrailing) {
-                        Button { withAnimation(.snappy) { gif = "" } } label: {
+                        Button { withMotion(Motion.standard) { gif = "" } } label: {
                             Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
                                 .frame(width: 32, height: 32).background(.black.opacity(0.45), in: Circle())
                         }
@@ -1400,7 +1399,7 @@ struct NewPostView: View {
                     }
             }
         }
-        .sheet(isPresented: $gifs) { GifPickerSheet { url in withAnimation(.snappy) { gif = url; image = nil; item = nil } } }
+        .sheet(isPresented: $gifs) { GifPickerSheet { url in withMotion(Motion.standard) { gif = url; image = nil; item = nil } } }
         .onAppear { drafts = Drafts.posts() }
         .confirmationDialog("Save this post as a draft?", isPresented: $askDraft, titleVisibility: .visible) {
             Button("Save draft") {
@@ -1414,7 +1413,7 @@ struct NewPostView: View {
     }
 
     private func openDraft(_ d: Drafts.Post) {
-        withAnimation(.snappy) {
+        withMotion(Motion.standard) {
             draftId = d.id
             title = d.title
             text = d.text
@@ -1690,7 +1689,7 @@ struct PhotoPickerCard: View {
         .animation(.easeOut(duration: 0.2), value: loading)
         .fullScreenCover(isPresented: $editing) {
             if let image {
-                PhotoEditorView(image: image) { edited in withAnimation(.snappy) { self.image = edited } }
+                PhotoEditorView(image: image) { edited in withMotion(Motion.standard) { self.image = edited } }
             }
         }
         .onChange(of: item) { _, newItem in
@@ -1715,7 +1714,7 @@ struct PhotoPickerCard: View {
             .padding(8)
             .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
             .overlay(alignment: .topTrailing) {
-                Button { withAnimation(.snappy) { self.image = nil; item = nil } } label: {
+                Button { withMotion(Motion.standard) { self.image = nil; item = nil } } label: {
                     Image(systemName: "xmark").font(.system(size: 13, weight: .black)).foregroundStyle(.white)
                         .frame(width: 34, height: 34).background(.black.opacity(0.5), in: Circle())
                         .contentShape(Circle())
@@ -1750,7 +1749,7 @@ struct PhotoPickerCard: View {
         failed = false
         defer { loading = false }
         guard let data = try? await newItem.loadTransferable(type: Data.self) else {
-            if item == newItem { withAnimation { failed = true } }
+            if item == newItem { withMotion { failed = true } }
             return
         }
         let shrunk = await Task.detached(priority: .userInitiated) { ImagePipeline.downsample(data, maxPixel: 2560) }.value
@@ -1758,7 +1757,7 @@ struct PhotoPickerCard: View {
         if let shrunk {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { image = shrunk }
         } else {
-            withAnimation { failed = true }
+            withMotion { failed = true }
         }
     }
 }

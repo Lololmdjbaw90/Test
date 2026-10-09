@@ -431,9 +431,9 @@ struct IncomingCallBanner: View {
                 ForEach(0..<2) { i in
                     Circle().stroke(Palette.success.opacity(0.5), lineWidth: 2)
                         .frame(width: 56, height: 56)
-                        .scaleEffect(pulse ? 1.6 : 1)
-                        .opacity(pulse ? 0 : 0.9)
-                        .animation(.easeOut(duration: 1.6).repeatForever(autoreverses: false).delay(Double(i) * 0.8), value: pulse)
+                        .scaleEffect(pulse && !Motion.reduced ? 1.6 : 1)
+                        .opacity(pulse && !Motion.reduced ? 0 : 0.9)
+                        .animation(Motion.reduced ? nil : .easeOut(duration: 1.6).repeatForever(autoreverses: false).delay(Double(i) * 0.8), value: pulse)
                 }
                 Avatar(url: call.isGroup ? call.callerPicture : call.picture(for: me), name: call.title(for: me), size: 52)
             }
@@ -457,8 +457,8 @@ struct IncomingCallBanner: View {
             } label: {
                 Image(systemName: "phone.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
                     .frame(width: 48, height: 48).background(Palette.success, in: Circle())
-                    .rotationEffect(.degrees(pulse ? -12 : 12))
-                    .animation(.easeInOut(duration: 0.18).repeatForever(autoreverses: true), value: pulse)
+                    .rotationEffect(.degrees(Motion.reduced ? 0 : (pulse ? -10 : 10)))
+                    .animation(Motion.reduced ? nil : .easeInOut(duration: 0.18).repeatForever(autoreverses: true), value: pulse)
             }
             .buttonStyle(BouncyStyle(scale: 0.85))
             .accessibilityLabel("Answer")
@@ -536,7 +536,7 @@ struct CallScreen: View {
                 selfPreview(mine)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                     .padding(.top, 70).padding(.trailing, 18)
-                    .transition(.scale(scale: 0.6, anchor: .topTrailing).combined(with: .opacity))
+                    .transition(.scale(scale: 0.85, anchor: .topTrailing).combined(with: .opacity))
             }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: stage?.0.id)
@@ -617,9 +617,9 @@ struct CallScreen: View {
                 ForEach(0..<3) { i in
                     Circle().stroke(Theme.light.opacity(0.35), lineWidth: 2)
                         .frame(width: 160, height: 160)
-                        .scaleEffect(ringing ? 1.5 + Double(i) * 0.25 : 1)
-                        .opacity(ringing ? 0 : 0.7)
-                        .animation(.easeOut(duration: 2).repeatForever(autoreverses: false).delay(Double(i) * 0.6), value: ringing)
+                        .scaleEffect(ringing && !Motion.reduced ? 1.5 + Double(i) * 0.25 : 1)
+                        .opacity(ringing && !Motion.reduced ? 0 : 0.7)
+                        .animation(Motion.reduced ? nil : .easeOut(duration: 2).repeatForever(autoreverses: false).delay(Double(i) * 0.6), value: ringing)
                 }
                 Avatar(url: call?.picture(for: me) ?? "", name: title, size: 150)
                     .overlay(Circle().strokeBorder(.white.opacity(0.25), lineWidth: 2))
@@ -693,7 +693,7 @@ struct CallScreen: View {
                     .padding(.vertical, 16)
                     .background(.white.opacity(p.speaking ? 0.12 : 0.06), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(p.speaking ? Palette.success.opacity(0.8) : .white.opacity(0.08), lineWidth: p.speaking ? 2 : 1))
-                    .transition(.scale.combined(with: .opacity))
+                    .transition(.pop)
                 }
             }
             .padding(.horizontal, 20)
@@ -738,7 +738,7 @@ struct CallScreen: View {
         }
         .overlay(alignment: .bottomTrailing) {
             if p.video == "camera" {
-                Button { withAnimation(.snappy) { stageFill.toggle() } } label: {
+                Button { withMotion(Motion.standard) { stageFill.toggle() } } label: {
                     Image(systemName: stageFill ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                         .font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
                         .frame(width: 36, height: 36).background(.ultraThinMaterial, in: Circle())
@@ -750,7 +750,7 @@ struct CallScreen: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .onTapGesture(count: 2) { if p.video == "camera" { withAnimation(.snappy) { stageFill.toggle() } } }
+        .onTapGesture(count: 2) { if p.video == "camera" { withMotion(Motion.standard) { stageFill.toggle() } } }
     }
 
     // One slim row of buttons while a picture is showing, so it gets the room.

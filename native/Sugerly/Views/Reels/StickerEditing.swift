@@ -115,7 +115,7 @@ struct StickerCanvas: View {
                         .animation(.spring(response: 0.25, dampingFraction: 0.6), value: overTrash)
                         .padding(.bottom, 16)
                 }
-                .transition(.scale.combined(with: .opacity))
+                .transition(.pop)
                 .allowsHitTesting(false)
             }
             StickerTouchLayer(
@@ -183,7 +183,7 @@ struct StickerCanvas: View {
         }
         guard let i = stickers.firstIndex(where: { $0.id == id }) else { return }
         if isOverTrash(id, t) {
-            withAnimation(.snappy) { stickers.remove(at: i) }
+            withMotion(Motion.standard) { stickers.remove(at: i) }
             selected = nil
             return
         }
@@ -489,7 +489,7 @@ struct TextStickerEditor: View {
         sample.text = "Aa"
         sample.style = st
         sample.scale = 1
-        return Button { withAnimation(.snappy) { sticker.style = st } } label: {
+        return Button { withMotion(Motion.standard) { sticker.style = st } } label: {
             VStack(spacing: 5) {
                 StickerLabel(sticker: sample, width: 250)
                     .frame(height: 44)

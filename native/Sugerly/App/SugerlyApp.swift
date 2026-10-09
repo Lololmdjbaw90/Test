@@ -247,19 +247,16 @@ struct SettingUpCover: View {
     }
 }
 
+// The icon stays still (Mimi never moves); only its sparkles twinkle.
 struct SplashView: View {
-    @State private var pulse = false
     var body: some View {
         VStack(spacing: 16) {
             AppBadge(size: 132)
-                .rotationEffect(.degrees(pulse ? 5 : -5))
             BrandLogo(height: 58)
             ProgressView().tint(Theme.main)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .sugarBackground()
-        .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
-        .onAppear { pulse = true }
     }
 }
 

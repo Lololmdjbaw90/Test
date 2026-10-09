@@ -398,7 +398,7 @@ struct BannerPatternPicker: View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 10)], spacing: 10) {
             ForEach(BannerPattern.all) { item in
                 let active = selection == item.id
-                Button { withAnimation(.snappy) { selection = item.id } } label: {
+                Button { withMotion(Motion.standard) { selection = item.id } } label: {
                     VStack(spacing: 6) {
                         ZStack {
                             LinearGradient(colors: [light, tint], startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -412,7 +412,7 @@ struct BannerPatternPicker: View {
                                 Image(systemName: "checkmark.circle.fill").font(.system(size: 16, weight: .bold))
                                     .foregroundStyle(.white, Palette.text)
                                     .padding(5)
-                                    .transition(.scale.combined(with: .opacity))
+                                    .transition(.pop)
                             }
                         }
                         Text(item.label).font(.jakarta(12, active ? .heavy : .semibold)).foregroundStyle(active ? Palette.text : Palette.text2)
@@ -441,7 +441,7 @@ struct AvatarFramePicker: View {
                 let active = selection == item.id
                 let locked = item.premium && !nitro
                 Button {
-                    if locked { onLocked() } else { withAnimation(.snappy) { selection = item.id } }
+                    if locked { onLocked() } else { withMotion(Motion.standard) { selection = item.id } }
                 } label: {
                     VStack(spacing: 6) {
                         ZStack {
@@ -671,7 +671,7 @@ struct NitroShopView: View {
 
     private func planCard(_ p: NitroStyle.Plan) -> some View {
         let on = plan == p.id
-        return Button { withAnimation(.snappy) { plan = p.id } } label: {
+        return Button { withMotion(Motion.standard) { plan = p.id } } label: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text(p.title).font(.jakarta(15, .heavy))

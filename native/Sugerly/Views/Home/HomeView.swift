@@ -123,7 +123,7 @@ struct DailyRewardSheet: View {
                 if reward != nil { SparkleBurst(radius: 95) }
             }
 
-            Text(reward == nil ? "Daily reward!" : "+\(reward ?? 0) coins").font(.display(38)).foregroundStyle(Theme.gradient)
+            Text(reward == nil ? "Daily reward!" : "+\(reward ?? 0) coins").font(.display(38)).foregroundStyle(Theme.main)
             Text(reward == nil ? "Log in every day to grow your streak and earn more coins." : "See you tomorrow — your streak is \(max(1, DailyReward.status(model.me).streak)) days!")
                 .font(.jakarta(15)).foregroundStyle(Palette.text2).multilineTextAlignment(.center).padding(.horizontal, 30)
 
@@ -164,7 +164,7 @@ struct DailyRewardSheet: View {
                         }
                         if got != nil { RewardSound.play() }
                     } catch {
-                        withAnimation(.snappy) { failed = true }
+                        withMotion(Motion.standard) { failed = true }
                     }
                 }
             } label: {
@@ -323,7 +323,7 @@ struct HomeView: View {
             HStack(spacing: 10) {
                 Image(systemName: "megaphone.fill").font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
                 Text(site.announcement).font(.jakarta(14, .bold)).foregroundStyle(.white).frame(maxWidth: .infinity, alignment: .leading)
-                Button { withAnimation(.snappy) { dismissedAnnouncement = site.announcement } } label: {
+                Button { withMotion(Motion.standard) { dismissedAnnouncement = site.announcement } } label: {
                     Image(systemName: "xmark").font(.system(size: 12, weight: .heavy)).foregroundStyle(.white.opacity(0.85)).frame(width: 30, height: 30)
                 }
                 .accessibilityLabel("Close announcement")
@@ -740,7 +740,7 @@ private struct HomeSectionEntrance: ViewModifier {
         let visible = shown || reduceMotion
         content
             .opacity(visible ? 1 : 0)
-            .offset(y: visible ? 0 : 18)
-            .animation(reduceMotion ? nil : .spring(response: 0.55, dampingFraction: 0.86).delay(Double(min(index, 7)) * 0.05), value: shown)
+            .offset(y: visible ? 0 : 10)
+            .animation(reduceMotion ? nil : Motion.enter.delay(Double(min(index, 7)) * Motion.staggerStep), value: shown)
     }
 }

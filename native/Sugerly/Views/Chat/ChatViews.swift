@@ -299,7 +299,7 @@ struct ChatListView: View {
         .frame(maxWidth: 760)
         .frame(maxWidth: .infinity)
         .background { Palette.bg.ignoresSafeArea() }
-        .animation(.snappy, value: shown.map(\.id))
+        .motion(Motion.standard, value: shown.map(\.id))
         .refreshable { await store.refresh(me: model.me?.email ?? "") }
     }
 
@@ -311,7 +311,7 @@ struct ChatListView: View {
         .listRowBackground(c.unread > 0 ? Theme.main.opacity(0.07) : Color.clear)
         .listRowSeparatorTint(Palette.border)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) { withAnimation(.snappy) { store.close(c.id) } } label: {
+            Button(role: .destructive) { withMotion(Motion.standard) { store.close(c.id) } } label: {
                 Label(c.isGroup ? "Hide" : "Close", systemImage: "xmark.circle")
             }
         }
@@ -325,7 +325,7 @@ struct ChatListView: View {
             if c.unread > 0 {
                 Button { store.markRead(c.id) } label: { Label("Mark as read", systemImage: "checkmark.bubble") }
             }
-            Button(role: .destructive) { withAnimation(.snappy) { store.close(c.id) } } label: {
+            Button(role: .destructive) { withMotion(Motion.standard) { store.close(c.id) } } label: {
                 Label(c.isGroup ? "Hide chat" : "Close DM", systemImage: "xmark.circle")
             }
         }

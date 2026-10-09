@@ -85,7 +85,7 @@ struct MediaEditor: View {
         }
         .background(EditorPalette.backdrop.ignoresSafeArea())
         .preferredColorScheme(.dark)
-        .animation(.spring(response: 0.38, dampingFraction: 0.86), value: tool)
+        .motion(.spring(response: 0.34, dampingFraction: 0.9), value: tool)
         .sensoryFeedback(.selection, trigger: tool)
         .sheet(item: $editingText) { sticker in
             TextStickerEditor(sticker: sticker) { updated in
@@ -142,7 +142,7 @@ struct MediaEditor: View {
                     ToolRail(tools: tools) { pick($0) }
                         .padding(.top, 8)
                         .padding(.trailing, 4)
-                        .transition(.opacity.combined(with: .move(edge: .trailing)))
+                        .transition(.slideIn(from: .trailing))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -186,7 +186,7 @@ struct MediaEditor: View {
             ToolPanel(title: tool.title, icon: tool.icon, onDone: { self.tool = nil }) {
                 panel(tool)
             }
-            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .transition(.slideIn(from: .bottom))
         } else if doc.isPhoto {
             Color.clear.frame(height: 10)
         } else {
@@ -273,7 +273,7 @@ struct EditorTopBar: View {
             Image(systemName: icon)
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(.white.opacity(enabled ? 1 : 0.3))
-                .frame(width: 40, height: 40)
+                .frame(width: 44, height: 44)
                 .background(.white.opacity(0.12), in: Circle())
         }
         .buttonStyle(BouncyStyle(scale: 0.88))
@@ -467,8 +467,10 @@ struct ToolPanel<Content: View>: View {
                     Image(systemName: "checkmark")
                         .font(.system(size: 14, weight: .heavy))
                         .foregroundStyle(.white)
-                        .frame(width: 34, height: 34)
+                        .frame(width: 36, height: 36)
                         .background(Theme.gradient, in: Circle())
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(BouncyStyle(scale: 0.86))
                 .accessibilityLabel("Done")
@@ -508,7 +510,7 @@ private struct FiltersPanel: View {
                             .frame(width: 60, height: 80)
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white, lineWidth: on ? 3 : 0))
-                            .shadow(color: on ? Theme.pink.opacity(0.6) : .clear, radius: 8)
+                            .shadow(color: on ? Theme.pink.opacity(0.45) : .clear, radius: 8, y: 4)
                             Text(f.rawValue)
                                 .font(.jakarta(11, on ? .heavy : .bold))
                                 .foregroundStyle(.white.opacity(on ? 1 : 0.65))
@@ -770,7 +772,7 @@ private struct PlaybackBar: View {
                     .font(.system(size: 15, weight: .heavy))
                     .foregroundStyle(.white)
                     .contentTransition(.symbolEffect(.replace))
-                    .frame(width: 40, height: 40)
+                    .frame(width: 44, height: 44)
                     .background(.white.opacity(0.12), in: Circle())
             }
             .buttonStyle(BouncyStyle(scale: 0.88))

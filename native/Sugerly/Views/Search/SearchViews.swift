@@ -31,7 +31,7 @@ struct FollowButton: View {
             }
             .buttonStyle(BouncyStyle(scale: 0.9))
             .sensoryFeedback(.impact(weight: .light), trigger: following)
-            .animation(.snappy, value: following)
+            .motion(Motion.standard, value: following)
         }
     }
 
@@ -146,7 +146,7 @@ struct PeopleView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(filters.indices, id: \.self) { i in
-                            Chip(title: filters[i], active: filter == i) { withAnimation(.snappy) { filter = i } }
+                            Chip(title: filters[i], active: filter == i) { withMotion(Motion.standard) { filter = i } }
                         }
                     }
                     .padding(.vertical, 2)
@@ -285,7 +285,7 @@ struct SearchField: View {
         .background(Palette.surface, in: Capsule())
         .overlay(Capsule().strokeBorder(focused ? Theme.main.opacity(0.5) : Palette.border, lineWidth: focused ? 1.5 : 1))
         .shadow(color: focused ? Theme.main.opacity(0.15) : .clear, radius: 10, y: 4)
-        .animation(.snappy, value: focused)
+        .motion(Motion.standard, value: focused)
         .onAppear { if autofocus { focused = true } }
     }
 }
