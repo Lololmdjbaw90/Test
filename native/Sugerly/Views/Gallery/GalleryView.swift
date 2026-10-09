@@ -259,20 +259,22 @@ struct GalleryView: View {
                         case .saved: return ("bookmark.fill", [0xB19CFF, 0x7C5CF0])
                         }
                     }()
-                    Button { withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { sort = s; medium = "all" } } label: {
+                    Button { withMotion(Motion.standard) { sort = s; medium = "all" } } label: {
                         tile(s.rawValue, look.0, look.1, on: on)
                     }
                     .buttonStyle(BouncyStyle(scale: 0.93))
                 }
                 ForEach(mediums.dropFirst(), id: \.self) { m in
-                    Button { withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { medium = medium == m ? "all" : m } } label: {
+                    Button { withMotion(Motion.standard) { medium = medium == m ? "all" : m } } label: {
                         tile(m.capitalized, "paintbrush.pointed.fill", [0x7CBEFF, 0x2F80E0], on: medium == m)
                     }
                     .buttonStyle(BouncyStyle(scale: 0.93))
                 }
             }
-            .padding(.vertical, 6).padding(.horizontal, 2)
+            .padding(.vertical, 8).padding(.horizontal, 2)
         }
+        // The tiles' soft shadows aren't cut off at the edges of the row.
+        .scrollClipDisabled()
     }
 
     private func tile(_ title: String, _ icon: String, _ colors: [UInt32], on: Bool) -> some View {
@@ -288,8 +290,9 @@ struct GalleryView: View {
         .frame(width: 118, height: 84, alignment: .leading)
         .background(LinearGradient(colors: colors.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.white.opacity(on ? 0.95 : 0.25), lineWidth: on ? 2.5 : 1))
-        .scaleEffect(on ? 1.04 : 1)
-        .shadow(color: Color(hex: colors.last ?? 0).opacity(on ? 0.45 : 0.2), radius: on ? 10 : 5, y: 4)
+        // A soft shadow under the tile (deeper on the one you picked), not a
+        // glow around it.
+        .shadow(color: Color(hex: colors.last ?? 0).opacity(on ? 0.32 : 0.14), radius: on ? 8 : 4, y: on ? 5 : 3)
         .opacity(on || (sort == .newest && medium == "all") ? 1 : 0.85)
     }
 
@@ -562,8 +565,7 @@ struct ArtworkDetailView: View {
                     }
                     .buttonStyle(GradientButtonStyle(height: 44, fullWidth: false))
                     .sensoryFeedback(.impact(weight: .light), trigger: liked)
-                    Button { toggleSave() } label: { Label(saved ? "Saved" : "Save", systemImage: saved ? "bookmark.fill" : "bookmark") }
-                        .buttonStyle(OutlineButtonStyle())
+                    MorphPill(on: saved, offTitle: "Save", onTitle: "Saved", offIcon: "bookmark", onIcon: "bookmark.fill", size: .large) { toggleSave() }
                     ShareLink(item: ReelLinks.artwork(artwork.id), subject: Text(artwork.title), message: Text("\(artwork.title) by \(artwork.authorName) on Sugerly")) { Image(systemName: "paperplane.fill") }
                         .buttonStyle(OutlineButtonStyle())
                     Spacer()

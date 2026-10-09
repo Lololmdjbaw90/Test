@@ -524,12 +524,16 @@ struct ServerCard: View {
                         } else if joined {
                             Text("Open").font(.jakarta(12, .heavy)).foregroundStyle(Theme.main)
                                 .padding(.horizontal, 12).frame(height: 30).background(Theme.soft, in: Capsule())
+                                .transition(.blurSwap)
                         } else {
                             Text("Join").font(.jakarta(12, .heavy)).foregroundStyle(.white)
                                 .padding(.horizontal, 14).frame(height: 30).background(Theme.gradient, in: Capsule())
-                                .shadow(color: Theme.main.opacity(0.35), radius: 6, y: 3)
+                                .shadow(color: Theme.main.opacity(0.3), radius: 6, y: 3)
+                                .transition(.blurSwap)
                         }
                     }
+                    // Join turns into Open in one soft morph.
+                    .motion(.spring(response: 0.34, dampingFraction: 0.78), value: joined)
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 30)

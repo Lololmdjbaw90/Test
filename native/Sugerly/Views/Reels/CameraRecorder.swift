@@ -36,6 +36,11 @@ final class RecorderModel: NSObject {
     var position: AVCaptureDevice.Position = .back
     var clips: [Clip] = []
     var recording = false
+    // Stop was tapped; the camera is still finishing the clip's file.
+    var stopping = false
+    // Filming, as far as the screen is concerned: it ends the moment you tap
+    // stop, without waiting for the file.
+    var live: Bool { recording && !stopping }
     var current: Double = 0
     var flash = false
     var photoMode = false
@@ -211,13 +216,15 @@ final class RecorderModel: NSObject {
     }
 
     func stopClip() {
-        guard recording else { return }
+        guard recording, !stopping else { return }
+        stopping = true
         movieOutput.stopRecording()
         soundPlayer?.pause()
     }
 
     fileprivate func finished(_ url: URL, _ seconds: Double) {
         recording = false
+        stopping = false
         progressTask?.cancel()
         current = 0
         if seconds > 0.2 {
@@ -435,6 +442,8 @@ struct RecorderView: View {
     @State private var countdown = 0
     @State private var shots: [UIImage] = []
     @State private var flashScreen = false
+    // The quick dark blink when a photo is taken (like the iPhone camera).
+    @State private var blink = false
     @State private var merging = false
     @State private var error: String?
     @State private var pinchStart: CGFloat = 1
@@ -488,6 +497,11 @@ struct RecorderView: View {
                 if ringLight { FrontLight(tone: lightTone).transition(.opacity) }
                 cameraWindow(wide: wide, width: previewWidth)
                 if flashScreen { photoFlash }
+                if blink {
+                    Color.black.opacity(0.45).ignoresSafeArea()
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
                 controls
                     .frame(width: previewWidth - lightInset * 2)
                     .padding(.vertical, ringLight ? 8 : 0)
@@ -903,27 +917,14 @@ struct RecorderView: View {
     }
 
     // The big button: tap to start / pause, or hold to film while you hold
-    // (it grows, and sliding up zooms in).
+    // (it grows, and sliding up zooms in). It answers your finger straight
+    // away: the middle squishes as you touch it, and the moment filming
+    // starts or stops it turns into a rounded square or back into a circle
+    // (without waiting for the camera to catch up).
     private var recordButton: some View {
-        ZStack {
-            Circle().strokeBorder(.white.opacity(0.9), lineWidth: 5).frame(width: 84, height: 84)
-            if mode != .photo {
-                Circle()
-                    .trim(from: 0, to: camera.total / camera.maxSeconds)
-                    .stroke(Theme.gradient, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .frame(width: 84, height: 84)
-                RoundedRectangle(cornerRadius: camera.recording ? 10 : 34, style: .continuous)
-                    .fill(Theme.gradient)
-                    .frame(width: camera.recording ? 34 : 68, height: camera.recording ? 34 : 68)
-            } else {
-                Circle().fill(.white).frame(width: 68, height: 68)
-            }
-        }
-        .shadow(color: Theme.main.opacity(camera.recording ? 0.7 : 0.3), radius: camera.recording ? 18 : 8)
-        .scaleEffect(heldClip ? 1.18 : (pressStart != nil ? 0.92 : 1))
-        .animation(.spring(response: 0.28, dampingFraction: 0.7), value: heldClip)
-        .animation(.spring(response: 0.2, dampingFraction: 0.7), value: pressStart != nil)
+        let filming = camera.live
+        return RecordDial(photo: mode == .photo, filming: filming, pressed: pressStart != nil, held: heldClip,
+                          progress: camera.total / max(1, camera.maxSeconds))
         .contentShape(Circle())
         .gesture(DragGesture(minimumDistance: 0)
             .updating($pressing) { _, state, _ in state = true }
@@ -937,9 +938,9 @@ struct RecorderView: View {
             .onEnded { _ in pressUp() })
         .allowsHitTesting(countdown == 0 && !merging)
         .opacity(merging ? 0.6 : 1)
-        .sensoryFeedback(.impact(weight: .medium), trigger: camera.recording)
+        .sensoryFeedback(.impact(weight: .medium), trigger: filming)
         .accessibilityElement()
-        .accessibilityLabel(mode == .photo ? "Take photo" : camera.recording ? "Stop filming" : "Film")
+        .accessibilityLabel(mode == .photo ? "Take photo" : filming ? "Stop filming" : "Film")
         .accessibilityHint(mode == .photo ? "" : "Tap to start and stop, or hold to film while you hold")
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { Task { await shutter() } }
@@ -1095,10 +1096,15 @@ struct RecorderView: View {
             if camera.flash && camera.position == .front {
                 withAnimation(.easeOut(duration: 0.08)) { flashScreen = true }
                 try? await Task.sleep(for: .milliseconds(150))
+                camera.takePhoto()
+                try? await Task.sleep(for: .milliseconds(120))
+                withAnimation(.easeOut(duration: 0.3)) { flashScreen = false }
+            } else {
+                camera.takePhoto()
+                blink = true
+                try? await Task.sleep(for: .milliseconds(50))
+                withAnimation(.easeOut(duration: 0.2)) { blink = false }
             }
-            camera.takePhoto()
-            try? await Task.sleep(for: .milliseconds(120))
-            withAnimation(.easeOut(duration: 0.3)) { flashScreen = false }
         }
     }
 
@@ -1116,6 +1122,48 @@ struct RecorderView: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+// The record button's look (kept apart so the camera screen stays quick to
+// build). The middle squishes the instant a finger lands; filming turns it
+// into a rounded square inside a slightly bigger ring with the progress.
+struct RecordDial: View {
+    let photo: Bool
+    let filming: Bool
+    let pressed: Bool
+    let held: Bool
+    let progress: Double
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(.white.opacity(filming ? 0.2 : 0.12))
+                .overlay(Circle().strokeBorder(.white.opacity(0.95), lineWidth: 5))
+                .frame(width: 84, height: 84)
+                .scaleEffect(filming ? 1.14 : 1)
+            if photo {
+                Circle().fill(.white).frame(width: 68, height: 68)
+                    .scaleEffect(pressed ? 0.86 : 1)
+            } else {
+                Circle()
+                    .trim(from: 0, to: min(1, max(0, progress)))
+                    .stroke(Theme.gradient, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .frame(width: 84, height: 84)
+                    .scaleEffect(filming ? 1.14 : 1)
+                RoundedRectangle(cornerRadius: filming ? 9 : 34, style: .continuous)
+                    .fill(Theme.gradient)
+                    .frame(width: filming ? 32 : 68, height: filming ? 32 : 68)
+                    .scaleEffect(pressed && !filming ? 0.88 : 1)
+            }
+        }
+        .frame(width: 100, height: 100)
+        .scaleEffect(held ? 1.1 : 1)
+        .shadow(color: .black.opacity(0.22), radius: 10, y: 4)
+        .animation(Motion.press, value: pressed)
+        .animation(Motion.standard, value: filming)
+        .animation(Motion.standard, value: held)
     }
 }
 

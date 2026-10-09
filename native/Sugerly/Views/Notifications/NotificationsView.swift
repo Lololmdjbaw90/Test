@@ -1,13 +1,14 @@
 import SwiftUI
 import UIKit
 
-// Notifications: a page of its own (the bell in the top bar). A pink card on
-// top says how many are new (with Mimi), colourful filter chips, then
-// Today / This week / Earlier as soft cards that float in one after another:
-// who did it (their picture with a coloured badge for what happened), their
-// name in bold, what they said in a little bubble, and the picture of the
-// post on the right. New ones have a pink stripe and edge. Likes on the same
-// thing come together in one card ("Mia and 3 others liked your post").
+// Notifications: a page of its own (the bell in the top bar). A clean list,
+// like the iPhone's own apps: filter chips, then "New" first and Today /
+// This week / Earlier after it, each as one rounded group of rows split by
+// thin lines. A row is their picture (with a small badge for what happened),
+// their name in bold with what they did and how long ago, what they said
+// underneath, and the post's picture (or Follow back) on the right. Unseen
+// ones have a soft pink tint and a dot. Likes on the same thing come together
+// in one row ("Mia and 3 others liked your post").
 struct NotificationsPage: View {
     @Binding var path: [Route]
     @Environment(AppModel.self) private var model
@@ -37,7 +38,7 @@ struct NotificationsPage: View {
         }
     }
 
-    // Likes on the same thing collapse into one card ("Mia and 3 others liked…").
+    // Likes on the same thing collapse into one row ("Mia and 3 others liked…").
     struct Bundle: Identifiable {
         var items: [AppNotification]
         var id: String { items[0].id }
@@ -45,16 +46,21 @@ struct NotificationsPage: View {
         var unread: Bool { items.contains { !$0.read } }
     }
 
-    // Today / This week / Earlier.
+    // New (not seen yet), then Today / This week / Earlier.
     private var groups: [(String, [Bundle])] {
         let now = Date()
         var buckets: [String: [AppNotification]] = [:]
         for n in shown {
-            let age = now.timeIntervalSince(Dates.parse(n.created) ?? now)
-            let key = age < 86_400 ? "Today" : age < 7 * 86_400 ? "This week" : "Earlier"
+            let key: String
+            if !n.read {
+                key = "New"
+            } else {
+                let age = now.timeIntervalSince(Dates.parse(n.created) ?? now)
+                key = age < 86_400 ? "Today" : age < 7 * 86_400 ? "This week" : "Earlier"
+            }
             buckets[key, default: []].append(n)
         }
-        return ["Today", "This week", "Earlier"].compactMap { (key: String) -> (String, [Bundle])? in
+        return ["New", "Today", "This week", "Earlier"].compactMap { (key: String) -> (String, [Bundle])? in
             guard let list = buckets[key], !list.isEmpty else { return nil }
             var bundles: [Bundle] = []
             var index: [String: Int] = [:]
@@ -72,13 +78,12 @@ struct NotificationsPage: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12) {
-                hero
+            LazyVStack(alignment: .leading, spacing: 18) {
                 filterChips
                 content
             }
             .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.top, 4)
             .padding(.bottom, 30)
             .frame(maxWidth: 680)
             .frame(maxWidth: .infinity)
@@ -86,52 +91,35 @@ struct NotificationsPage: View {
         .appearFade()
         .sugarBackground()
         .roundTitle("Notifications")
+        .modifier(TrailingBarItem(item: markAllButton))
         .refreshable { await notes.refresh(me: model.me?.email ?? "") }
         .motion(Motion.standard, value: filter)
+        .motion(Motion.standard, value: notes.unread)
         .onAppear { appeared = true }
         .onDisappear { notes.markAllRead() }
     }
 
     // MARK: top
 
-    // "3 new" (or "All caught up") on a pink card with Mimi.
-    private var hero: some View {
-        let unread = notes.unread
-        return HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(unread > 0 ? "\(unread) new" : "All caught up")
-                    .font(.display(28)).foregroundStyle(.white)
-                    .contentTransition(.numericText())
-                Text(unread > 0 ? "Likes, follows and comments waiting for you" : "We'll ring the bell when something happens")
-                    .font(.jakarta(13, .medium)).foregroundStyle(.white.opacity(0.9))
-                    .fixedSize(horizontal: false, vertical: true)
-                if unread > 0 {
-                    Button { withMotion(Motion.standard) { notes.markAllRead() } } label: {
-                        Label("Mark all read", systemImage: "checkmark.circle.fill")
-                            .font(.jakarta(13, .heavy)).foregroundStyle(Theme.main)
-                            .padding(.horizontal, 14).frame(height: 34)
-                            .background(.white, in: Capsule())
-                    }
-                    .buttonStyle(BouncyStyle(scale: 0.92))
-                    .padding(.top, 4)
-                    .transition(.pop)
-                }
+    // "Mark all read", in the top bar while there's something new.
+    @ViewBuilder
+    private var markAllButton: some View {
+        if notes.unread > 0 {
+            Button { withMotion(Motion.standard) { notes.markAllRead() } } label: {
+                Label("Read all", systemImage: "checkmark")
+                    .font(.jakarta(13, .heavy)).foregroundStyle(Theme.main)
+                    .padding(.horizontal, 12).frame(height: 34)
+                    .background(Palette.surface, in: Capsule())
+                    .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
+                    .contentShape(Capsule())
             }
-            Spacer(minLength: 0)
-            MimiBuddy(icon: unread > 0 ? "bell.fill" : "checkmark", mood: unread > 0 ? .happy : .sleepy, size: 84, animated: false)
+            .buttonStyle(BouncyStyle(scale: 0.92))
+            .accessibilityLabel("Mark all as read")
+            .transition(.pop)
         }
-        .padding(18)
-        .background(Theme.gradient, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(LinearGradient(colors: [.white.opacity(0.22), .clear], startPoint: .top, endPoint: .center))
-                .allowsHitTesting(false)
-        }
-        .shadow(color: Theme.main.opacity(0.28), radius: 16, y: 8)
-        .motion(Motion.standard, value: unread)
     }
 
-    // Colourful chips, with how many new ones each has.
+    // Filter chips, with how many new ones each has.
     private var filterChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -157,14 +145,7 @@ struct NotificationsPage: View {
                       mood: .sleepy)
         }
         ForEach(groups, id: \.0) { group in
-            groupHeader(group.0, group.1.count)
-            ForEach(Array(group.1.enumerated()), id: \.element.id) { i, b in
-                tappable(b)
-                    .scrollFade()
-                    .opacity(appeared || reduceMotion ? 1 : 0)
-                    .offset(y: appeared || reduceMotion ? 0 : 10)
-                    .animation(Motion.staggered(Motion.enter, i), value: appeared)
-            }
+            section(group.0, group.1)
         }
         if !shown.isEmpty && notes.hasOlder {
             HStack(spacing: 8) {
@@ -177,84 +158,115 @@ struct NotificationsPage: View {
         }
     }
 
-    private func groupHeader(_ title: String, _ count: Int) -> some View {
-        HStack(spacing: 8) {
-            Text(title).font(.display(20)).foregroundStyle(Palette.text)
-            Text("\(count)")
-                .font(.jakarta(12, .heavy)).foregroundStyle(Theme.main)
-                .padding(.horizontal, 8).frame(height: 22)
-                .background(Theme.soft, in: Capsule())
+    // MARK: a section
+
+    // A title, then its rows in one rounded group with thin lines between.
+    private func section(_ title: String, _ bundles: [Bundle]) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+        return VStack(alignment: .leading, spacing: 8) {
+            sectionTitle(title, bundles.count)
+            VStack(spacing: 0) {
+                ForEach(Array(bundles.enumerated()), id: \.element.id) { i, b in
+                    if i > 0 {
+                        Rectangle().fill(Palette.border).frame(height: 1).padding(.leading, 70)
+                    }
+                    tappable(b)
+                        .opacity(appeared || reduceMotion ? 1 : 0)
+                        .offset(y: appeared || reduceMotion ? 0 : 8)
+                        .animation(Motion.staggered(Motion.enter, i), value: appeared)
+                        .transition(.rise)
+                }
+            }
+            .background(Palette.surface, in: shape)
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(Palette.border, lineWidth: 1))
+            .background { shape.fill(Palette.surface).shadow(color: Palette.shadow, radius: 10, y: 4) }
         }
-        .padding(.top, 10)
+    }
+
+    private func sectionTitle(_ title: String, _ count: Int) -> some View {
+        HStack(spacing: 6) {
+            Text(title).font(.jakarta(15, .heavy)).foregroundStyle(title == "New" ? Theme.main : Palette.text)
+            if title == "New" {
+                Text("\(count)")
+                    .font(.jakarta(11, .heavy)).foregroundStyle(.white)
+                    .padding(.horizontal, 7).frame(height: 19)
+                    .background(Theme.main, in: Capsule())
+                    .contentTransition(.numericText())
+            }
+        }
         .padding(.leading, 4)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }
 
-    // MARK: a card
+    // MARK: a row
 
-    // The whole card squishes and wobbles when tapped (cards with a Follow
-    // button keep a plain tap so Follow still works on its own).
+    // Rows with a Follow back button keep a plain tap, so Follow works on
+    // its own; the rest light up like a list row when pressed.
     @ViewBuilder
     private func tappable(_ b: Bundle) -> some View {
         if b.first.type == "follow" && !b.first.fromEmail.isEmpty {
-            card(b)
+            row(b)
                 .contentShape(Rectangle())
                 .onTapGesture { open(b) }
                 .accessibilityElement(children: .combine)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityAction { open(b) }
         } else {
-            Button { open(b) } label: { card(b) }
-                .buttonStyle(SoftPressStyle(scale: 0.97))
+            Button { open(b) } label: { row(b) }
+                .buttonStyle(RowPressStyle())
                 .accessibilityElement(children: .combine)
         }
     }
 
-    private func card(_ b: Bundle) -> some View {
-        let n = b.first
+    private func row(_ b: Bundle) -> some View {
         let words = headline(b)
-        return HStack(alignment: .top, spacing: 12) {
+        return HStack(alignment: .center, spacing: 12) {
             picture(b)
-            details(b, words)
-            if let image = postImage(n) {
-                RemoteImage(url: image)
-                    .frame(width: 54, height: 54)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+            VStack(alignment: .leading, spacing: 3) {
+                (sentence(words.names, words.rest)
+                    + Text("  ") + Text(Dates.ago(b.first.created)).font(.jakarta(13)).foregroundColor(Palette.muted))
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if let quote = words.quote, !quote.isEmpty {
+                    Text(quote)
+                        .font(.jakarta(14)).foregroundStyle(Palette.text2)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
+            trailing(b)
         }
-        .padding(14)
-        .sugarCard(radius: 22)
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(Theme.main.opacity(b.unread ? 0.35 : 0), lineWidth: 1.5)
-                .allowsHitTesting(false)
-        }
+        .padding(.leading, 16)
+        .padding(.trailing, 14)
+        .padding(.vertical, 12)
+        .background(b.unread ? Theme.main.opacity(0.06) : Color.clear)
         .overlay(alignment: .leading) {
             if b.unread {
-                Capsule().fill(Theme.gradient).frame(width: 4).padding(.vertical, 18).padding(.leading, 5)
+                Circle().fill(Theme.main).frame(width: 7, height: 7)
+                    .padding(.leading, 5)
+                    .transition(.opacity)
             }
         }
     }
 
-    // Who did what, what they said, when, and Follow back.
-    private func details(_ b: Bundle, _ words: (names: String, rest: String, quote: String?)) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            sentence(words.names, words.rest)
-                .lineLimit(3)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            if let quote = words.quote, !quote.isEmpty { bubble(quote) }
-            when(b)
-            if b.first.type == "follow" && !b.first.fromEmail.isEmpty {
-                FollowButton(email: b.first.fromEmail, compact: true)
-            }
+    // Follow back for a new follower; otherwise the post's picture.
+    @ViewBuilder
+    private func trailing(_ b: Bundle) -> some View {
+        if b.first.type == "follow" && !b.first.fromEmail.isEmpty {
+            FollowButton(email: b.first.fromEmail, compact: true, offTitle: "Follow back")
+        } else if let image = postImage(b.first) {
+            RemoteImage(url: image)
+                .frame(width: 46, height: 46)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
         }
     }
 
-    // Their picture (two if a few people did it) with a coloured badge for
-    // what happened.
+    // Their picture (two if a few people did it) with a small badge for what
+    // happened.
     private func picture(_ b: Bundle) -> some View {
         var seen = Set<String>()
         var people: [AppNotification] = []
@@ -266,53 +278,28 @@ struct NotificationsPage: View {
         return ZStack(alignment: .bottomTrailing) {
             if people.count > 1 {
                 ZStack(alignment: .topLeading) {
-                    face(people[1], 34)
-                    face(people[0], 34)
+                    face(people[1], 30)
+                    face(people[0], 30)
                         .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
-                        .offset(x: 14, y: 14)
+                        .offset(x: 12, y: 12)
                 }
-                .frame(width: 50, height: 50, alignment: .topLeading)
+                .frame(width: 44, height: 44, alignment: .topLeading)
             } else if let one = people.first {
-                face(one, 48)
+                face(one, 44)
             }
             Image(systemName: icon(type))
-                .font(.system(size: 10, weight: .black))
+                .font(.system(size: 9, weight: .black))
                 .foregroundStyle(.white)
-                .frame(width: 22, height: 22)
+                .frame(width: 19, height: 19)
                 .background(LinearGradient(colors: tint(type), startPoint: .topLeading, endPoint: .bottomTrailing), in: Circle())
                 .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
                 .offset(x: 4, y: 4)
         }
-        .frame(width: 50, height: 50)
+        .frame(width: 44, height: 44)
     }
 
     private func face(_ n: AppNotification, _ size: CGFloat) -> some View {
         Avatar(url: model.person(n.fromEmail)?.picture ?? n.fromPicture, name: n.fromName, size: size)
-    }
-
-    // What they said, in a little speech bubble.
-    private func bubble(_ text: String) -> some View {
-        Text(text)
-            .font(.jakarta(14)).foregroundStyle(Palette.text2)
-            .lineLimit(3)
-            .padding(.horizontal, 12).padding(.vertical, 8)
-            .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-    }
-
-    // "2h ago", in pink with a "New" tag if you haven't seen it.
-    private func when(_ b: Bundle) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "clock").font(.system(size: 10, weight: .bold))
-            Text(Dates.ago(b.first.created))
-            if b.unread {
-                Text("New")
-                    .font(.jakarta(10, .heavy)).foregroundStyle(.white)
-                    .padding(.horizontal, 7).frame(height: 18)
-                    .background(Theme.gradient, in: Capsule())
-            }
-        }
-        .font(.jakarta(12, .semibold))
-        .foregroundStyle(b.unread ? Theme.main : Palette.muted)
     }
 
     private func sentence(_ names: String, _ rest: String) -> Text {
@@ -422,6 +409,25 @@ struct NotificationsPage: View {
             if !id.isEmpty { Task { if let doc = try? await FS.get("Reel", id) { path.append(.reel(Reel(doc))) } } }
         default:
             if !n.fromEmail.isEmpty { path.append(.person(n.fromEmail)) }
+        }
+    }
+}
+
+// One button on the right of the top bar, in Sugerly's own look (no glass
+// bubble around it on iOS 26).
+private struct TrailingBarItem<Item: View>: ViewModifier {
+    let item: Item
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.toolbar {
+                ToolbarItem(placement: .topBarTrailing) { item }
+                    .sharedBackgroundVisibility(.hidden)
+            }
+        } else {
+            content.toolbar {
+                ToolbarItem(placement: .topBarTrailing) { item }
+            }
         }
     }
 }

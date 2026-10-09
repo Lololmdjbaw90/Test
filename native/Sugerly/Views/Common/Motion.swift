@@ -81,6 +81,27 @@ extension AnyTransition {
     }
 }
 
+extension AnyTransition {
+    /// One thing turning into another in the same spot (a word changing):
+    /// the old one blurs and fades out as the new one sharpens in, so the eye
+    /// sees a single change rather than two things overlapping.
+    static var blurSwap: AnyTransition {
+        guard !Motion.reduced else { return .opacity }
+        return .modifier(active: BlurFade(amount: 1), identity: BlurFade(amount: 0))
+    }
+}
+
+struct BlurFade: ViewModifier {
+    let amount: Double
+
+    func body(content: Content) -> some View {
+        content
+            .blur(radius: 4 * amount)
+            .opacity(1 - amount)
+            .scaleEffect(1 - 0.08 * amount)
+    }
+}
+
 extension View {
     /// `.animation(_:value:)` that becomes a short fade with Reduce Motion on.
     func motion<V: Equatable>(_ animation: Animation, value: V) -> some View {

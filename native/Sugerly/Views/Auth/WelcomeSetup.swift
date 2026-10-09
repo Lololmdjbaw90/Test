@@ -378,21 +378,11 @@ struct WelcomeSetupView: View {
                             .font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(1)
                     }
                     Spacer(minLength: 6)
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.65)) {
+                    MorphPill(on: on, offTitle: "Follow", onTitle: "Following") {
+                        withMotion(.spring(response: 0.34, dampingFraction: 0.78)) {
                             if on { follows.remove(person.email) } else { follows.insert(person.email) }
                         }
-                    } label: {
-                        Text(on ? "Following" : "Follow")
-                            .font(.jakarta(13, .bold))
-                            .foregroundStyle(on ? Theme.main : .white)
-                            .padding(.horizontal, 14).frame(height: 34)
-                            .background {
-                                if on { Capsule().fill(Theme.soft) } else { Capsule().fill(Theme.gradient) }
-                            }
                     }
-                    .buttonStyle(BouncyStyle(scale: 0.9))
-                    .sensoryFeedback(.selection, trigger: on)
                 }
                 .padding(12)
                 .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))

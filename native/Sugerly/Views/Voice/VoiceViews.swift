@@ -1,12 +1,17 @@
 import SwiftUI
+import WebRTC
 
-// A voice channel: who's in it (glowing when they talk), and big round
-// controls to join, mute, deafen and hang up.
+// A server voice channel, looking like a call: a dark stage with a tile for
+// everyone in it (their camera or screen when they show it, otherwise their
+// picture with a green ring that breathes as they talk), and one floating
+// bar to mute, deafen, show your camera, share your screen or leave. Before
+// you join you see who's inside and a big Join button.
 struct VoiceRoomView: View {
     let server: Server
     let channel: ServerChannel
     @Environment(AppModel.self) private var model
     @Environment(VoiceEngine.self) private var voice
+    @Environment(\.dismiss) private var dismiss
     @State private var store: ServerStore
     @State private var joining = false
 
@@ -18,75 +23,30 @@ struct VoiceRoomView: View {
 
     private var here: Bool { voice.room?.id == channel.id }
     private var access: Access { store.access(model.me?.email ?? "", siteAdmin: model.me?.isAdmin ?? false) }
+    private var others: [VoicePresenceInfo] { store.voice[channel.id] ?? [] }
 
     var body: some View {
-        VStack(spacing: 18) {
-            VStack(spacing: 6) {
-                Image(systemName: "speaker.wave.3.fill").font(.system(size: 24, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 60, height: 60).background(Theme.gradient, in: Circle())
-                    .shadow(color: Theme.main.opacity(0.45), radius: 14, y: 6)
-                    .symbolEffect(.variableColor.iterative, isActive: here)
-                Text(channel.name).font(.display(30)).foregroundStyle(Palette.text)
-                if here, let since = voice.joinedAt {
-                    HStack(spacing: 8) {
-                        TimelineView(.periodic(from: since, by: 1)) { t in
-                            Label("Voice connected · \(Self.clock(t.date.timeIntervalSince(since)))", systemImage: "phone.connection.fill")
-                                .monospacedDigit()
-                        }
-                        if let ping = voice.ping {
-                            Label("\(ping) ms", systemImage: "cellularbars")
-                                .foregroundStyle(ping < 150 ? Palette.success : ping < 300 ? Palette.warning : Palette.danger)
-                        }
+        ZStack {
+            CallBackdrop()
+            VStack(spacing: 12) {
+                topBar
+                ScrollView {
+                    VStack(spacing: 14) {
+                        if here { liveGrid } else { lobby }
                     }
-                    .font(.jakarta(13, .semibold)).foregroundStyle(Palette.success)
-                    Text("\(voice.participants.count) here\(voice.systemCall ? " · shows as a call on your phone" : "")")
-                        .font(.jakarta(11, .semibold)).foregroundStyle(Palette.muted)
-                } else {
-                    Text("\(others.count) in the channel").font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
                 }
+                .scrollBounceBehavior(.basedOnSize)
+                notices
+                controls
             }
-            .padding(.top, 12)
-
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 14)], spacing: 14) {
-                    if here {
-                        ForEach(voice.participants) { p in
-                            tile(name: p.isSelf ? "You" : p.name, picture: model.person(p.email)?.picture ?? p.picture, muted: p.muted, deafened: p.deafened, speaking: p.speaking, connecting: !p.isSelf && !p.connected, level: p.level)
-                                .transition(.scale(scale: 0.85).combined(with: .opacity))
-                        }
-                    } else {
-                        ForEach(others) { p in
-                            tile(name: model.person(p.email)?.displayName ?? p.name, picture: model.person(p.email)?.picture ?? p.picture, muted: p.muted, deafened: p.deafened, speaking: false, connecting: false)
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-                .animation(.spring(response: 0.45, dampingFraction: 0.75), value: voice.participants.map(\.id))
-                if !here && others.isEmpty {
-                    Text("Nobody's here yet — hop in and wait for friends").font(.jakarta(14)).foregroundStyle(Palette.muted).padding(.top, 30)
-                }
-            }
-
-            if let error = voice.error {
-                Text(error).font(.jakarta(13, .semibold)).foregroundStyle(Palette.danger).multilineTextAlignment(.center).padding(.horizontal, 20)
-            }
-
-            controls
-                .padding(.bottom, 20)
+            .padding(.bottom, 14)
         }
-        .frame(maxWidth: .infinity)
-        .background(alignment: .top) {
-            // A soft green glow breathes behind the room while you're connected.
-            if here {
-                Circle().fill(Palette.success.opacity(voice.participants.contains { $0.speaking } ? 0.22 : 0.1))
-                    .frame(width: 420, height: 420).blur(radius: 90).offset(y: -120)
-                    .animation(.easeInOut(duration: 0.4), value: voice.participants.contains { $0.speaking })
-                    .allowsHitTesting(false)
-            }
-        }
-        .sugarBackground()
-        .navigationTitle(channel.name)
-        .navigationBarTitleDisplayMode(.inline)
+        .environment(\.colorScheme, .dark)
+        .toolbar(.hidden, for: .navigationBar)
+        .motion(.spring(response: 0.4, dampingFraction: 0.86), value: here)
+        .motion(.spring(response: 0.4, dampingFraction: 0.86), value: voice.participants.map(\.id))
         .task {
             await store.load()
             while !Task.isCancelled && !here {
@@ -96,68 +56,160 @@ struct VoiceRoomView: View {
         }
     }
 
-    private var others: [VoicePresenceInfo] { store.voice[channel.id] ?? [] }
+    // MARK: top
+
+    private var topBar: some View {
+        HStack(spacing: 12) {
+            CallTopButton(icon: "chevron.left", label: "Back") { dismiss() }
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Image(systemName: "speaker.wave.2.fill").font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Theme.light)
+                        .symbolEffect(.variableColor.iterative, isActive: here && !Motion.reduced)
+                    Text(channel.name).font(.display(21)).foregroundStyle(.white).lineLimit(1)
+                }
+                Text(server.name).font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+            }
+            Spacer(minLength: 6)
+            status
+            if here { CallAudioButton() }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+    }
+
+    // Connected · 02:14 (with the line quality), or how many are inside.
+    @ViewBuilder
+    private var status: some View {
+        if here, let since = voice.joinedAt {
+            HStack(spacing: 6) {
+                Circle().fill(Palette.success).frame(width: 7, height: 7)
+                TimelineView(.periodic(from: since, by: 1)) { t in
+                    Text(Self.clock(t.date.timeIntervalSince(since))).monospacedDigit()
+                }
+                if let ping = voice.ping {
+                    Image(systemName: "cellularbars", variableValue: ping < 180 ? 1 : ping < 400 ? 0.66 : 0.33)
+                        .foregroundStyle(ping < 180 ? Palette.success : ping < 400 ? Palette.warning : Palette.danger)
+                        .accessibilityLabel(ping < 180 ? "Good connection" : ping < 400 ? "OK connection" : "Poor connection")
+                }
+            }
+            .font(.jakarta(12, .bold)).foregroundStyle(.white)
+            .padding(.horizontal, 10).frame(height: 30)
+            .background(.white.opacity(0.1), in: Capsule())
+            .transition(.pop)
+        } else if !here {
+            Label("\(others.count)", systemImage: "person.2.fill")
+                .font(.jakarta(12, .bold)).foregroundStyle(.white.opacity(0.8))
+                .padding(.horizontal, 10).frame(height: 30)
+                .background(.white.opacity(0.1), in: Capsule())
+                .accessibilityLabel("\(others.count) in the channel")
+        }
+    }
 
     private static func clock(_ seconds: TimeInterval) -> String {
         let s = Int(max(0, seconds))
         return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60) : String(format: "%02d:%02d", s / 60, s % 60)
     }
 
-    // Discord-style: a green ring when someone talks, and a soft green circle
-    // behind them that grows the louder they are.
-    private func tile(name: String, picture: String, muted: Bool, deafened: Bool, speaking: Bool, connecting: Bool, level: Double = 0) -> some View {
-        VStack(spacing: 8) {
-            ZStack {
-                Circle()
-                    .fill(Palette.success.opacity(0.22))
-                    .frame(width: 86, height: 86)
-                    .scaleEffect(speaking ? 1.02 + level * 0.3 : 0.85)
-                    .opacity(speaking ? 1 : 0)
-                Circle()
-                    .strokeBorder(Palette.success, lineWidth: 3.5)
-                    .frame(width: 90, height: 90)
-                    .opacity(speaking ? 1 : 0)
-                Avatar(url: picture, name: name, size: 78)
-                    .opacity(connecting ? 0.55 : 1)
-            }
-            .frame(width: 112, height: 112)
-            .shadow(color: speaking ? Palette.success.opacity(0.45) : .clear, radius: 10 + level * 10)
-            .animation(.easeOut(duration: 0.14), value: level)
-            .animation(.spring(response: 0.25, dampingFraction: 0.65), value: speaking)
-            .overlay(alignment: .bottomTrailing) {
-                if muted || deafened {
-                    Image(systemName: deafened ? "speaker.slash.fill" : "mic.slash.fill").font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
-                        .frame(width: 26, height: 26).background(Palette.danger, in: Circle())
-                        .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
-                        .offset(x: -10, y: -10)
+    // MARK: people
+
+    // Everyone in the room: one big tile on your own, two stacked, then two
+    // columns.
+    private var liveGrid: some View {
+        let list = voice.participants
+        let columns = list.count <= 2 ? [GridItem(.flexible())] : [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+        let height: CGFloat = list.count <= 1 ? 320 : list.count == 2 ? 220 : 190
+        return VStack(spacing: 12) {
+            LazyVGrid(columns: columns, spacing: 12) {
+                ForEach(list) { p in
+                    tile(p).frame(height: height).transition(.pop)
                 }
             }
-            Text(name).font(.jakarta(13, .bold)).foregroundStyle(speaking ? Palette.success : Palette.text).lineLimit(1)
-            if connecting { Text("connecting…").font(.jakarta(10)).foregroundStyle(Palette.muted) }
+            if list.count <= 1 {
+                Text("Waiting for others to hop in…")
+                    .font(.jakarta(13, .semibold)).foregroundStyle(.white.opacity(0.6))
+                    .padding(.top, 4)
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .background(speaking ? Palette.success.opacity(0.08) : Palette.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(speaking ? Palette.success.opacity(0.4) : Palette.border, lineWidth: 1))
-        .animation(.easeOut(duration: 0.2), value: speaking)
+    }
+
+    private func tile(_ p: VoiceEngine.Participant) -> some View {
+        let track: RTCVideoTrack? = p.isSelf ? (voice.cameraOn ? voice.localVideo : nil) : (p.video.isEmpty ? nil : voice.remoteVideo[p.id])
+        return CallTile(name: p.isSelf ? "You" : (model.person(p.email)?.displayName ?? p.name),
+                        picture: model.person(p.email)?.picture ?? p.picture,
+                        muted: p.muted, deafened: p.deafened, speaking: p.speaking, level: p.level,
+                        connecting: !p.isSelf && !p.connected, video: track,
+                        mirror: p.isSelf && voice.frontCamera, isScreen: p.video == "screen")
+    }
+
+    // Before joining: who's in there.
+    @ViewBuilder
+    private var lobby: some View {
+        if others.isEmpty {
+            VStack(spacing: 12) {
+                Image(systemName: "speaker.wave.2.fill").font(.system(size: 30, weight: .bold)).foregroundStyle(.white)
+                    .frame(width: 84, height: 84).background(Theme.gradient, in: Circle())
+                    .shadow(color: .black.opacity(0.3), radius: 12, y: 6)
+                Text("Nobody's here yet").font(.display(24)).foregroundStyle(.white)
+                Text("Hop in and your friends will see you're waiting.")
+                    .font(.jakarta(14)).foregroundStyle(.white.opacity(0.65)).multilineTextAlignment(.center)
+            }
+            .padding(.top, 50)
+            .frame(maxWidth: .infinity)
+        } else {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                ForEach(others) { p in
+                    CallTile(name: model.person(p.email)?.displayName ?? p.name,
+                             picture: model.person(p.email)?.picture ?? p.picture,
+                             muted: p.muted, deafened: p.deafened, isScreen: p.video == "screen", avatarSize: 70)
+                        .frame(height: 170)
+                }
+            }
+        }
+    }
+
+    // MARK: bottom
+
+    @ViewBuilder
+    private var notices: some View {
+        if let error = voice.error {
+            Label(error, systemImage: "exclamationmark.triangle.fill")
+                .font(.jakarta(13, .semibold)).foregroundStyle(Color(hex: 0xFFD166))
+                .multilineTextAlignment(.center)
+                .padding(12).frame(maxWidth: .infinity)
+                .background(.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .padding(.horizontal, 16)
+        }
+        if here && voice.sharingScreen {
+            HStack(spacing: 10) {
+                Image(systemName: "rectangle.on.rectangle").font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.light)
+                Text("You're sharing your screen").font(.jakarta(13, .bold)).foregroundStyle(.white)
+                Spacer(minLength: 0)
+                Button("Stop") { voice.stopScreenShare() }
+                    .font(.jakarta(13, .heavy)).foregroundStyle(.white)
+                    .padding(.horizontal, 14).padding(.vertical, 7)
+                    .background(Palette.danger, in: Capsule())
+                    .buttonStyle(BouncyStyle(scale: 0.9))
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .padding(.horizontal, 16)
+            .transition(.slideIn(from: .bottom))
+        }
     }
 
     @ViewBuilder
     private var controls: some View {
         if here {
-            HStack(spacing: 14) {
-                round(voice.muted ? "mic.slash.fill" : "mic.fill", active: voice.muted, label: voice.muted ? "Unmute" : "Mute") { voice.toggleMute() }
+            CallBar {
+                CallButton(icon: voice.muted ? "mic.slash.fill" : "mic.fill", label: voice.muted ? "Unmute" : "Mute", on: voice.muted) { voice.toggleMute() }
                     .disabled(!access.can(.speak))
-                round(voice.deafened ? "speaker.slash.fill" : "headphones", active: voice.deafened, label: voice.deafened ? "Undeafen" : "Deafen") { voice.toggleDeafen() }
-                round(voice.speaker ? "speaker.wave.3.fill" : "iphone", active: false, label: voice.speaker ? "Use earpiece" : "Use speaker") { voice.toggleSpeaker() }
-                Button { Task { await voice.leave() } } label: {
-                    Image(systemName: "phone.down.fill").font(.system(size: 24, weight: .bold)).foregroundStyle(.white)
-                        .frame(width: 72, height: 72).background(Palette.danger, in: Circle())
-                        .shadow(color: Palette.danger.opacity(0.5), radius: 12, y: 5)
-                }
-                .buttonStyle(BouncyStyle(scale: 0.88))
-                .accessibilityLabel("Leave voice")
+                CallButton(icon: voice.deafened ? "speaker.slash.fill" : "headphones", label: voice.deafened ? "Undeafen" : "Deafen", on: voice.deafened) { voice.toggleDeafen() }
+                CallButton(icon: voice.cameraOn ? "video.fill" : "video.slash.fill", label: "Camera", on: voice.cameraOn) { Task { await voice.toggleCamera() } }
+                CallButton(icon: "rectangle.on.rectangle", label: voice.sharingScreen ? "Stop share" : "Share", on: voice.sharingScreen) { voice.toggleScreenShare() }
+                CallButton(icon: "phone.down.fill", label: "Leave", danger: true) { Task { await voice.leave() } }
             }
+            .transition(.slideIn(from: .bottom))
         } else {
             Button {
                 guard let me = model.me else { return }
@@ -167,26 +219,17 @@ struct VoiceRoomView: View {
                     joining = false
                 }
             } label: {
-                if joining || voice.connecting { ProgressView().tint(.white) } else { Label("Join voice", systemImage: "phone.fill") }
+                if joining || voice.connecting {
+                    ProgressView().tint(.white)
+                } else {
+                    Label("Join voice", systemImage: "phone.fill")
+                }
             }
             .buttonStyle(GradientButtonStyle(height: 58))
-            .padding(.horizontal, 30)
+            .padding(.horizontal, 24)
             .disabled(!access.can(.connect) || joining)
+            .transition(.slideIn(from: .bottom))
         }
-    }
-
-    private func round(_ icon: String, active: Bool, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon).font(.system(size: 22, weight: .bold))
-                .foregroundStyle(active ? .white : Theme.main)
-                .frame(width: 64, height: 64)
-                .background(active ? AnyShapeStyle(Palette.danger) : AnyShapeStyle(Theme.soft), in: Circle())
-                .overlay(Circle().strokeBorder(active ? Color.clear : Theme.main.opacity(0.2), lineWidth: 1))
-                .contentTransition(.symbolEffect(.replace))
-        }
-        .buttonStyle(BouncyStyle(scale: 0.88))
-        .accessibilityLabel(label)
-        .sensoryFeedback(.impact(weight: .light), trigger: active)
     }
 }
 

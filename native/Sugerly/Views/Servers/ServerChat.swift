@@ -69,6 +69,9 @@ struct ChannelChatView: View {
                                           nameColor: store.nameColor(message.authorEmail), roleName: store.topRole(message.authorEmail)?.name,
                                           me: me, onReact: { react(message, $0) }, onProfile: { profile = message.authorEmail })
                             .id(message.id)
+                            // Long-press lifts the message on a soft card
+                            // of its own shape.
+                            .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 16, style: .continuous))
                             .contextMenu { menu(message) }
                     }
                 }

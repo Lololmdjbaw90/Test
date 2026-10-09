@@ -348,7 +348,8 @@ struct Chip: View {
                 if active {
                     Capsule().fill(Theme.gradient)
                         .overlay(Capsule().fill(LinearGradient(colors: [.white.opacity(0.25), .clear], startPoint: .top, endPoint: .center)).padding(1))
-                        .shadow(color: Theme.pink.opacity(0.35), radius: 8, y: 4)
+                        // Small, so it never gets cut off in a scrolling row.
+                        .shadow(color: Theme.pink.opacity(0.28), radius: 4, y: 2)
                 } else {
                     Capsule().fill(Palette.surface).overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
                 }

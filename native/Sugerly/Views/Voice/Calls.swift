@@ -527,12 +527,13 @@ struct CallScreen: View {
                     .scrollBounceBehavior(.basedOnSize)
                 }
                 notices
-                if stage != nil { compactControls } else { controls }
+                bar
             }
             .padding(.bottom, 20)
             .animation(.spring(response: 0.45, dampingFraction: 0.85), value: alone)
             .animation(.spring(response: 0.45, dampingFraction: 0.85), value: others.count)
-            if voice.cameraOn, let mine = voice.localVideo {
+            // (In a group your own tile shows your camera already.)
+            if voice.cameraOn, let mine = voice.localVideo, others.count <= 1 || stage != nil {
                 selfPreview(mine)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                     .padding(.top, 70).padding(.trailing, 18)
@@ -552,13 +553,7 @@ struct CallScreen: View {
 
     // A still background (moving blurred lights redrew the whole screen on
     // every frame and made the call stutter when anything else happened).
-    private var background: some View {
-        ZStack {
-            LinearGradient(colors: [Color(hex: 0x2A1320), Color(hex: 0x12080E)], startPoint: .top, endPoint: .bottom)
-            RadialGradient(colors: [Theme.main.opacity(0.35), .clear], center: .init(x: 0.5, y: 0.32), startRadius: 10, endRadius: 360)
-        }
-        .ignoresSafeArea()
-    }
+    private var background: some View { CallBackdrop() }
 
     private var topBar: some View {
         HStack {
@@ -576,11 +571,17 @@ struct CallScreen: View {
                 HStack(spacing: 6) {
                     Image(systemName: "lock.fill").font(.system(size: 10, weight: .bold))
                     if !alone, voice.joinedAt != nil { timer } else { Text("Encrypted") }
+                    quality
                 }
                 .font(.jakarta(12, .bold)).foregroundStyle(.white.opacity(0.65))
             }
             Spacer()
-            quality.frame(width: 44, height: 44)
+            HStack(spacing: 8) {
+                if let id = call?.conversationId, !id.isEmpty {
+                    CallTopButton(icon: "bubble.left.and.bubble.right.fill", label: "Chat") { openChat() }
+                }
+                CallAudioButton()
+            }
         }
         .padding(.horizontal, 20)
         .padding(.top, 8)
@@ -592,7 +593,7 @@ struct CallScreen: View {
         if let ping = voice.ping, !alone {
             let color = ping < 180 ? Palette.success : ping < 400 ? Color(hex: 0xFFD166) : Palette.danger
             Image(systemName: "cellularbars", variableValue: ping < 180 ? 1 : ping < 400 ? 0.66 : 0.33)
-                .font(.system(size: 16, weight: .bold)).foregroundStyle(color)
+                .font(.system(size: 11, weight: .bold)).foregroundStyle(color)
                 .accessibilityLabel(ping < 180 ? "Good connection" : ping < 400 ? "OK connection" : "Poor connection")
         }
     }
@@ -674,31 +675,30 @@ struct CallScreen: View {
             .contentTransition(.opacity)
     }
 
-    // Groups: a tile for everyone.
+    // Groups: a tile for everyone, with their camera or screen when they
+    // show it.
     private var group: some View {
-        VStack(spacing: 14) {
+        let list = voice.participants
+        return VStack(spacing: 14) {
             Text(title).font(.display(28)).foregroundStyle(.white).lineLimit(1)
-            let list = voice.participants
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                 ForEach(list) { p in
-                    VStack(spacing: 8) {
-                        speakingAvatar(p, size: 76)
-                        HStack(spacing: 4) {
-                            if p.muted { Image(systemName: "mic.slash.fill").font(.system(size: 10, weight: .bold)).foregroundStyle(Palette.danger) }
-                            if !p.video.isEmpty { Image(systemName: p.video == "screen" ? "rectangle.on.rectangle" : "video.fill").font(.system(size: 10, weight: .bold)).foregroundStyle(Theme.light) }
-                            Text(name(p)).font(.jakarta(13, .bold)).foregroundStyle(.white).lineLimit(1)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(.white.opacity(p.speaking ? 0.12 : 0.06), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(p.speaking ? Palette.success.opacity(0.8) : .white.opacity(0.08), lineWidth: p.speaking ? 2 : 1))
-                    .transition(.pop)
+                    CallTile(name: name(p), picture: model.person(p.email)?.picture ?? p.picture,
+                             muted: p.muted, deafened: p.deafened, speaking: p.speaking, level: p.level,
+                             connecting: !p.isSelf && !p.connected, video: track(p),
+                             mirror: p.isSelf && voice.frontCamera, isScreen: p.video == "screen", avatarSize: 72)
+                        .frame(height: 190)
+                        .transition(.pop)
                 }
             }
-            .padding(.horizontal, 20)
-            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: list.map(\.id))
+            .padding(.horizontal, 16)
+            .motion(.spring(response: 0.4, dampingFraction: 0.86), value: list.map(\.id))
         }
+    }
+
+    private func track(_ p: VoiceEngine.Participant) -> RTCVideoTrack? {
+        if p.isSelf { return voice.cameraOn ? voice.localVideo : nil }
+        return p.video.isEmpty ? nil : voice.remoteVideo[p.id]
     }
 
     private func speakingAvatar(_ p: VoiceEngine.Participant, size: CGFloat) -> some View {
@@ -753,43 +753,21 @@ struct CallScreen: View {
         .onTapGesture(count: 2) { if p.video == "camera" { withMotion(Motion.standard) { stageFill.toggle() } } }
     }
 
-    // One slim row of buttons while a picture is showing, so it gets the room.
-    private var compactControls: some View {
-        HStack(spacing: 10) {
-            roundControl(voice.muted ? "mic.slash.fill" : "mic.fill", on: voice.muted, label: voice.muted ? "Unmute" : "Mute") { voice.toggleMute() }
-            roundControl(voice.cameraOn ? "video.fill" : "video.slash.fill", on: voice.cameraOn, label: "Camera") { Task { await voice.toggleCamera() } }
-            roundControl("rectangle.on.rectangle", on: voice.sharingScreen, label: voice.sharingScreen ? "Stop share" : "Share screen") { voice.toggleScreenShare() }
-            roundControl(voice.speaker ? "speaker.wave.3.fill" : "speaker.fill", on: voice.speaker, label: "Speaker") { voice.toggleSpeaker() }
-            Button {
+    // One floating bar of buttons, the same whether or not a picture is
+    // showing: mute, camera, share your screen, speaker, end.
+    private var bar: some View {
+        CallBar {
+            CallButton(icon: voice.muted ? "mic.slash.fill" : "mic.fill", label: voice.muted ? "Unmute" : "Mute", on: voice.muted) { voice.toggleMute() }
+            CallButton(icon: voice.cameraOn ? "video.fill" : "video.slash.fill", label: "Camera", on: voice.cameraOn) { Task { await voice.toggleCamera() } }
+            CallButton(icon: "rectangle.on.rectangle", label: voice.sharingScreen ? "Stop share" : "Share", on: voice.sharingScreen) { voice.toggleScreenShare() }
+            CallButton(icon: voice.speaker ? "speaker.wave.3.fill" : "speaker.fill", label: "Speaker", on: voice.speaker) { voice.toggleSpeaker() }
+            CallButton(icon: "phone.down.fill", label: "End", danger: true) {
                 guard !ending else { return }
                 ending = true
                 Task { await calls.hangUp(); ending = false }
-            } label: {
-                Image(systemName: "phone.down.fill").font(.system(size: 20, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 54, height: 54)
-                    .background(Palette.danger, in: Circle())
             }
-            .buttonStyle(BouncyStyle(scale: 0.88))
             .disabled(ending)
-            .accessibilityLabel("End call")
         }
-        .padding(10)
-        .background(.ultraThinMaterial.opacity(0.9), in: Capsule())
-        .overlay(Capsule().strokeBorder(.white.opacity(0.1), lineWidth: 1))
-        .padding(.horizontal, 16)
-    }
-
-    private func roundControl(_ icon: String, on: Bool, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon).font(.system(size: 19, weight: .bold))
-                .foregroundStyle(on ? Color(hex: 0x1A0E15) : .white)
-                .frame(width: 54, height: 54)
-                .background(on ? Color.white : Color.white.opacity(0.14), in: Circle())
-                .contentTransition(.symbolEffect(.replace))
-        }
-        .buttonStyle(BouncyStyle(scale: 0.85))
-        .accessibilityLabel(label)
-        .sensoryFeedback(.impact(weight: .light), trigger: on)
     }
 
     // Your own camera in a small corner card; tap the arrows to flip it.
@@ -852,66 +830,6 @@ struct CallScreen: View {
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 12)
-    }
-
-    private var controls: some View {
-        VStack(spacing: 16) {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 14) {
-                control(voice.muted ? "mic.slash.fill" : "mic.fill", on: voice.muted, label: voice.muted ? "Unmute" : "Mute") { voice.toggleMute() }
-                control(voice.cameraOn ? "video.fill" : "video.slash.fill", on: voice.cameraOn, label: voice.cameraOn ? "Camera on" : "Camera") {
-                    Task { await voice.toggleCamera() }
-                }
-                control("rectangle.on.rectangle", on: voice.sharingScreen, label: voice.sharingScreen ? "Stop share" : "Share screen") { voice.toggleScreenShare() }
-                control(voice.speaker ? "speaker.wave.3.fill" : "speaker.fill", on: voice.speaker, label: "Speaker") { voice.toggleSpeaker() }
-                VStack(spacing: 8) {
-                    RoutePicker()
-                        .frame(width: 62, height: 62)
-                        .background(Color.white.opacity(0.14), in: Circle())
-                        .accessibilityLabel("Audio output")
-                    Text("Audio").font(.jakarta(12, .bold)).foregroundStyle(.white.opacity(0.75))
-                }
-                control("bubble.left.and.bubble.right.fill", on: false, label: "Chat") { openChat() }
-            }
-            Button {
-                guard !ending else { return }
-                ending = true
-                Task { await calls.hangUp(); ending = false }
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "phone.down.fill").font(.system(size: 20, weight: .bold))
-                    Text("End call").font(.jakarta(16, .heavy))
-                }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity).frame(height: 58)
-                .background(Palette.danger, in: Capsule())
-                .shadow(color: Palette.danger.opacity(0.45), radius: 14, y: 6)
-            }
-            .buttonStyle(BouncyStyle(scale: 0.95))
-            .disabled(ending)
-            .accessibilityLabel("End call")
-        }
-        .padding(.horizontal, 18)
-        .padding(.top, 18)
-        .padding(.bottom, 16)
-        .background(.ultraThinMaterial.opacity(0.9), in: RoundedRectangle(cornerRadius: 36, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 36, style: .continuous).strokeBorder(.white.opacity(0.1), lineWidth: 1))
-        .padding(.horizontal, 16)
-    }
-
-    private func control(_ icon: String, on: Bool, label: String, action: @escaping () -> Void) -> some View {
-        VStack(spacing: 8) {
-            Button(action: action) {
-                Image(systemName: icon).font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(on ? Color(hex: 0x1A0E15) : .white)
-                    .frame(width: 62, height: 62)
-                    .background(on ? Color.white : Color.white.opacity(0.14), in: Circle())
-                    .contentTransition(.symbolEffect(.replace))
-            }
-            .buttonStyle(BouncyStyle(scale: 0.85))
-            .accessibilityLabel(label)
-            .sensoryFeedback(.impact(weight: .light), trigger: on)
-            Text(label).font(.jakarta(12, .bold)).foregroundStyle(.white.opacity(0.75)).lineLimit(1).minimumScaleFactor(0.8)
-        }
     }
 
     // Opens this call's chat and keeps the call going in the little bar.

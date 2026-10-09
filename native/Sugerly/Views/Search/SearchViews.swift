@@ -5,33 +5,14 @@ import SwiftUI
 struct FollowButton: View {
     let email: String
     var compact = false
+    var offTitle = "Follow"
     @Environment(AppModel.self) private var model
 
     private var following: Bool { model.me?.following.contains(email) ?? false }
 
     var body: some View {
         if email != model.me?.email {
-            Button { toggle() } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: following ? "checkmark" : "plus").font(.system(size: 11, weight: .heavy))
-                    Text(following ? "Following" : "Follow")
-                }
-                .font(.jakarta(compact ? 12 : 13, .heavy))
-                .foregroundStyle(following ? Theme.main : .white)
-                .padding(.horizontal, compact ? 12 : 16)
-                .frame(height: compact ? 30 : 34)
-                .background {
-                    if following {
-                        Capsule().fill(Theme.soft)
-                    } else {
-                        Capsule().fill(Theme.gradient).shadow(color: Theme.main.opacity(0.35), radius: 6, y: 3)
-                    }
-                }
-                .contentTransition(.symbolEffect(.replace))
-            }
-            .buttonStyle(BouncyStyle(scale: 0.9))
-            .sensoryFeedback(.impact(weight: .light), trigger: following)
-            .motion(Motion.standard, value: following)
+            MorphPill(on: following, offTitle: offTitle, onTitle: "Following", size: compact ? .small : .regular) { toggle() }
         }
     }
 

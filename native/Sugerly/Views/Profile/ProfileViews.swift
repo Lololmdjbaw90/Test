@@ -277,12 +277,8 @@ struct ProfileContent: View {
                 Button { settings = true } label: { Image(systemName: "gearshape.fill").font(.system(size: 17, weight: .bold)) }
                     .buttonStyle(OutlineButtonStyle())
             } else {
-                Button { toggleFollow() } label: {
-                    Label(following ? "Following" : "Follow", systemImage: following ? "checkmark" : "person.badge.plus")
-                }
-                .buttonStyle(GradientButtonStyle(height: 44))
-                .opacity(following ? 0.75 : 1)
-                .sensoryFeedback(.success, trigger: following)
+                MorphPill(on: following, offTitle: "Follow", onTitle: "Following", offIcon: "person.badge.plus",
+                          size: .large, fullWidth: true) { toggleFollow() }
                 Button { openChat() } label: { Label("Message", systemImage: "paperplane.fill") }
                     .buttonStyle(OutlineButtonStyle(fullWidth: true))
                 if onReport != nil || onBlock != nil {

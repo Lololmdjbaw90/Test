@@ -201,10 +201,10 @@ struct ChatView: View {
                            read: mine && message.readBy.contains { $0 != me },
                            me: me,
                            onReact: { react(message, $0) },
-                           onQuote: { scrollTarget in _ = scrollTarget })
+                           onQuote: { scrollTarget in _ = scrollTarget },
+                           menuItems: { AnyView(menu(message)) })
             }
             .padding(.top, first ? 6 : 0)
-            .contextMenu { menu(message) }
         }
     }
 
@@ -751,6 +751,9 @@ struct ChatBubble: View {
     var me = ""
     var onReact: (String) -> Void = { _ in }
     var onQuote: (String) -> Void = { _ in }
+    // Long-press menu. Only the bubble itself lifts (in its own shape), not
+    // the whole width of the chat.
+    var menuItems: (() -> AnyView)? = nil
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
 
@@ -775,10 +778,14 @@ struct ChatBubble: View {
                         MessageMedia(url: message.imageURL)
                         meta.padding(.horizontal, 8).padding(.vertical, 3).background(Palette.surface.opacity(0.9), in: Capsule())
                     }
+                    .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .modifier(BubbleMenu(items: menuItems))
                 } else {
                     content
                         .padding(4)
                         .background { bubbleFill }
+                        .contentShape(.contextMenuPreview, BubbleShape(mine: mine, tail: tail))
+                        .modifier(BubbleMenu(items: menuItems))
                         .opacity(message.pending ? 0.7 : 1)
                 }
                 if !mine { Spacer(minLength: 54) }
@@ -881,6 +888,19 @@ struct ChatBubble: View {
         let palette: [UInt32] = [0xD9577F, 0x7C5CF0, 0x16A37F, 0xEE6E40, 0x2F80E0, 0xB8438A, 0x0E9AA7, 0xC77D10]
         let sum = email.unicodeScalars.reduce(0) { $0 + Int($1.value) }
         return Color(hex: palette[sum % palette.count])
+    }
+}
+
+// The long-press menu on a message bubble, when it has one.
+private struct BubbleMenu: ViewModifier {
+    let items: (() -> AnyView)?
+
+    func body(content: Content) -> some View {
+        if let items {
+            content.contextMenu { items() }
+        } else {
+            content
+        }
     }
 }
 

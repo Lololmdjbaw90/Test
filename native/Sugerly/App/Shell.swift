@@ -406,7 +406,13 @@ struct MainShell: View {
                     ToastView(toast: toast)
                         .padding(.top, 6)
                         .transition(.slideIn(from: .top))
-                        .onTapGesture { withMotion { model.toast = nil } }
+                        .onTapGesture { withMotion(Motion.exit) { model.toast = nil } }
+                        // A flick up sends it away.
+                        .gesture(DragGesture(minimumDistance: 6).onEnded { v in
+                            if v.translation.height < -8 || v.predictedEndTranslation.height < -40 {
+                                withMotion(Motion.exit) { model.toast = nil }
+                            }
+                        })
                         .zIndex(10)
                 }
             }

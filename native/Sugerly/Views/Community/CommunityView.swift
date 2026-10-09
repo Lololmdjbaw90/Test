@@ -547,6 +547,8 @@ struct PostCard: View {
     @State private var confirmDelete = false
     @State private var sendSheet = false
     @State private var likeBurst: UUID?
+    // Just followed: the button stays a moment to show "Following", then goes.
+    @State private var justFollowed = false
 
     private var me: String { model.me?.email ?? "" }
     private var liked: Bool { LikeBook.shared.isLiked(post, me: me) }
@@ -688,13 +690,9 @@ struct PostCard: View {
                     if author?.isNitro == true { NitroBadge(compact: true) }
                     Text(Dates.ago(post.created)).font(.jakarta(13)).foregroundStyle(Palette.muted).lineLimit(1)
                     Spacer(minLength: 4)
-                    if post.authorEmail != me && !following {
-                        Button { follow() } label: {
-                            Text("Follow").font(.jakarta(12, .heavy)).foregroundStyle(Theme.main)
-                                .padding(.horizontal, 10).frame(height: 28)
-                                .overlay(Capsule().strokeBorder(Theme.main.opacity(0.4), lineWidth: 1.2))
-                        }
-                        .buttonStyle(BouncyStyle())
+                    if post.authorEmail != me && (!following || justFollowed) {
+                        MorphPill(on: following, offTitle: "Follow", onTitle: "Following", size: .small) { follow() }
+                            .transition(.pop)
                     }
                     moreMenu
                 }
@@ -834,13 +832,9 @@ struct PostCard: View {
                 }
             }
             Spacer(minLength: 4)
-            if post.authorEmail != me && !following {
-                Button { follow() } label: {
-                    Label("Follow", systemImage: "plus").font(.jakarta(12, .heavy)).foregroundStyle(.white)
-                        .padding(.horizontal, 12).frame(height: 30)
-                        .background(Theme.gradient, in: Capsule())
-                }
-                .buttonStyle(BouncyStyle())
+            if post.authorEmail != me && (!following || justFollowed) {
+                MorphPill(on: following, offTitle: "Follow", onTitle: "Following", size: .small) { follow() }
+                    .transition(.pop)
             }
             Menu {
                 if !post.text.isEmpty { Button { UIPasteboard.general.string = post.text; model.showToast("Copied", icon: "doc.on.doc.fill") } label: { Label("Copy text", systemImage: "doc.on.doc") } }
@@ -988,7 +982,13 @@ struct PostCard: View {
     private func open() { if openable { path.append(.post(post)) } }
 
     private func follow() {
-        guard let me = model.me else { return }
+        guard let me = model.me, !following else { return }
+        justFollowed = true
+        Task {
+            // "Following" shows for a moment, then the button tucks away.
+            try? await Task.sleep(for: .seconds(1.4))
+            withMotion(Motion.exit) { justFollowed = false }
+        }
         Task {
             try? await model.updateMe(["following": me.following + [post.authorEmail]])
             Notify.send(to: post.authorEmail, from: me, type: "follow", message: "\(me.displayName) started following you", link: "/Profile?email=\(me.email)")
