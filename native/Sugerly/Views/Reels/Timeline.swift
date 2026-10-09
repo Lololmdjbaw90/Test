@@ -235,11 +235,15 @@ struct ReelTimeline: View {
                     lane(sticker, w)
                 }
             }
+            // Room inside the scrolling area for the trim handles (they sit
+            // just outside a bar that starts or ends at the edge) and its
+            // shadow, so neither gets cut off.
+            .padding(.horizontal, 18)
+            .padding(.vertical, 4)
         }
         .scrollBounceBehavior(.basedOnSize)
         .scrollDisabled(dragBase != nil)
-        .padding(.horizontal, 12)
-        .padding(.horizontal, -12)
+        .padding(.horizontal, -18)
     }
 
     private func lane(_ sticker: TextSticker, _ w: CGFloat) -> some View {
@@ -301,7 +305,7 @@ struct ReelTimeline: View {
             }
             .clipShape(shape)
             .overlay(shape.strokeBorder(.white, lineWidth: selected ? 2 : 0))
-            .shadow(color: selected ? Theme.main.opacity(0.6) : .clear, radius: 6)
+            .shadow(color: .black.opacity(selected ? 0.3 : 0), radius: 3, y: 2)
     }
 
     private func barStyle(for s: TextSticker) -> AnyShapeStyle {

@@ -139,6 +139,7 @@ struct VoiceRoomView: View {
                         picture: model.person(p.email)?.picture ?? p.picture,
                         muted: p.muted, deafened: p.deafened, speaking: p.speaking, level: p.level,
                         connecting: !p.isSelf && !p.connected, video: track,
+                        session: p.isSelf ? voice.cameraSession : nil,
                         mirror: p.isSelf && voice.frontCamera, isScreen: p.video == "screen")
     }
 

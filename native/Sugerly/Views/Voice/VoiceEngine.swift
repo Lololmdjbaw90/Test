@@ -60,6 +60,9 @@ final class VoiceEngine: NSObject {
     var frontCamera = true
     var remoteVideo: [String: RTCVideoTrack] = [:]   // by peer id
     private(set) var localVideo: RTCVideoTrack?
+    // The camera itself, for showing your own picture straight from it
+    // (sharper, and no graphics overlay on top).
+    var cameraSession: AVCaptureSession? { cameraOn ? cameraCapturer?.captureSession : nil }
     @ObservationIgnored private var videoSource: RTCVideoSource?
     @ObservationIgnored private var cameraCapturer: RTCCameraVideoCapturer?
     @ObservationIgnored private var screenCapturer: RTCVideoCapturer?

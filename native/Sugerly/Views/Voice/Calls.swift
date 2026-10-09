@@ -686,6 +686,7 @@ struct CallScreen: View {
                     CallTile(name: name(p), picture: model.person(p.email)?.picture ?? p.picture,
                              muted: p.muted, deafened: p.deafened, speaking: p.speaking, level: p.level,
                              connecting: !p.isSelf && !p.connected, video: track(p),
+                             session: p.isSelf ? voice.cameraSession : nil,
                              mirror: p.isSelf && voice.frontCamera, isScreen: p.video == "screen", avatarSize: 72)
                         .frame(height: 190)
                         .transition(.pop)
@@ -773,7 +774,13 @@ struct CallScreen: View {
     // Your own camera in a small corner card; tap the arrows to flip it.
     private func selfPreview(_ track: RTCVideoTrack) -> some View {
         ZStack(alignment: .bottomTrailing) {
-            VideoTrackView(track: track, fill: true, mirror: voice.frontCamera)
+            Group {
+                if let session = voice.cameraSession {
+                    CameraSessionView(session: session)
+                } else {
+                    VideoTrackView(track: track, fill: true, mirror: voice.frontCamera)
+                }
+            }
                 .frame(width: 104, height: 150)
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(.white.opacity(0.35), lineWidth: 1.5))

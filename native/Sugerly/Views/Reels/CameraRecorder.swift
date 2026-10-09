@@ -467,7 +467,7 @@ struct RecorderView: View {
     // Front camera + flash on: the light panel.
     private var ringLight: Bool { camera.flash && camera.position == .front && camera.authorized == true }
     // How far in the camera window sits while the light is on.
-    private var lightInset: CGFloat { ringLight ? 16 : 0 }
+    private var lightInset: CGFloat { ringLight ? 22 : 0 }
     private var windowCorner: CGFloat { 34 }
 
     var body: some View {
@@ -504,7 +504,7 @@ struct RecorderView: View {
                 }
                 controls
                     .frame(width: previewWidth - lightInset * 2)
-                    .padding(.vertical, ringLight ? 8 : 0)
+                    .padding(.vertical, ringLight ? 14 : 0)
             }
         }
         .preferredColorScheme(.dark)
@@ -520,7 +520,7 @@ struct RecorderView: View {
             .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
             .overlay { if ringLight { windowEdge } }
             .background { if ringLight { windowGlow } }
-            .padding(.vertical, ringLight ? 8 : 0)
+            .padding(.vertical, ringLight ? 14 : 0)
             .ignoresSafeArea(edges: edges)
     }
 
@@ -708,7 +708,11 @@ struct RecorderView: View {
 
     private var topControls: some View {
         VStack(spacing: 10) {
-            if mode != .photo { progressBar.padding(.horizontal, 14) }
+            // The clip bar only once there's something filmed (an empty grey
+            // line along the top looked like a glitch).
+            if mode != .photo && (!camera.clips.isEmpty || camera.recording) {
+                progressBar.padding(.horizontal, 14).transition(.opacity)
+            }
             HStack(spacing: 10) {
                 roundButton("xmark", label: "Close") { camera.stop(); onClose() }
                 Spacer(minLength: 6)

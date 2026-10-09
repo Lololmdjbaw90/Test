@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 import WebRTC
 
 // Pieces shared by chat calls and server voice rooms, so both look and move
@@ -26,6 +27,8 @@ struct CallTile: View {
     var level: Double = 0
     var connecting = false
     var video: RTCVideoTrack? = nil
+    // Your own camera: shown straight from it instead of the video track.
+    var session: AVCaptureSession? = nil
     var mirror = false
     var isScreen = false
     var avatarSize: CGFloat = 84
@@ -35,7 +38,10 @@ struct CallTile: View {
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             shape.fill(.white.opacity(speaking ? 0.1 : 0.06))
-            if let video {
+            if let session {
+                CameraSessionView(session: session)
+                    .clipShape(shape)
+            } else if let video {
                 VideoTrackView(track: video, fill: !isScreen, mirror: mirror)
                     .clipShape(shape)
             } else {
@@ -168,6 +174,29 @@ struct CallTopButton: View {
         }
         .buttonStyle(BouncyStyle(scale: 0.88))
         .accessibilityLabel(label)
+    }
+}
+
+// Your own camera, straight from it (the iPhone mirrors the front camera
+// itself, like FaceTime).
+struct CameraSessionView: UIViewRepresentable {
+    let session: AVCaptureSession
+
+    final class PreviewView: UIView {
+        override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
+        var preview: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
+    }
+
+    func makeUIView(context: Context) -> PreviewView {
+        let view = PreviewView()
+        view.backgroundColor = .black
+        view.preview.videoGravity = .resizeAspectFill
+        view.preview.session = session
+        return view
+    }
+
+    func updateUIView(_ view: PreviewView, context: Context) {
+        if view.preview.session !== session { view.preview.session = session }
     }
 }
 
