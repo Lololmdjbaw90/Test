@@ -319,8 +319,10 @@ struct ProfileContent: View {
     private func stat(_ n: Int, _ label: String) -> some View {
         VStack(spacing: 3) {
             Text("\(n)").font(.display(26)).foregroundStyle(Palette.text).monospacedDigit()
-            Text(label).font(.jakarta(10, .bold)).tracking(0.6).foregroundStyle(Palette.muted)
+            Text(label).font(.jakarta(10, .bold)).tracking(0.4).foregroundStyle(Palette.muted)
+                .lineLimit(1).minimumScaleFactor(0.6)
         }
+        .padding(.horizontal, 4)
         .frame(maxWidth: .infinity)
     }
 

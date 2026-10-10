@@ -271,8 +271,8 @@ struct AvatarFrameView: View {
             case "solid":
                 Circle().strokeBorder(color, lineWidth: 4)
             case "double":
-                Circle().strokeBorder(color, lineWidth: 3)
-                Circle().strokeBorder(color.opacity(0.45), lineWidth: 2).padding(-6)
+                Circle().strokeBorder(color.opacity(0.45), lineWidth: 2)
+                Circle().strokeBorder(color, lineWidth: 3).padding(5)
             case "dashed":
                 Circle().strokeBorder(color, style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [6, 5]))
             case "glow":

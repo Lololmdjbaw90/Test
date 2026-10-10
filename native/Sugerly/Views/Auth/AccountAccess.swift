@@ -416,7 +416,7 @@ struct QuickLoginSheet: View {
         ScrollView {
             VStack(spacing: 20) {
                 AccessHeader(icon: "qrcode", title: "Quick login",
-                             text: "On a phone where you're logged in, open Sugerly → Settings → Log in another device, then scan this or type the code.")
+                             text: "On a phone where you're logged in to Sugerly, scan this with the Camera app and tap Yes. Or go to Settings → Log in another device and type the code.")
                 qrCard
                 statusLine
                 if let error { AccessMessage(text: error) }
@@ -438,7 +438,7 @@ struct QuickLoginSheet: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 28, style: .continuous).fill(.white)
                     .shadow(color: Theme.main.opacity(0.18), radius: 18, y: 8)
-                if !code.isEmpty, let image = QRCode.image("SUGERLY-QUICK:\(code)") {
+                if !code.isEmpty, let image = QRCode.image("sugerly://quick?c=\(code)") {
                     Image(uiImage: image)
                         .interpolation(.none)
                         .resizable()
@@ -576,6 +576,8 @@ enum QRCode {
 // MARK: - Quick login: the phone that's already logged in
 
 struct QuickApproveSheet: View {
+    // From a scanned link (the iPhone's Camera app opened Sugerly on it).
+    var initialCode: String? = nil
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var typed = ""
@@ -610,6 +612,12 @@ struct QuickApproveSheet: View {
         .motion(Motion.standard, value: error)
         .sensoryFeedback(.success, trigger: device) { _, new in new != nil }
         .sensoryFeedback(.success, trigger: done)
+        .task {
+            if let initialCode, device == nil {
+                typed = initialCode
+                await check(initialCode)
+            }
+        }
     }
 
     private var scan: some View {
@@ -681,9 +689,17 @@ struct QuickApproveSheet: View {
     }
 
     static func code(in scanned: String) -> String? {
-        guard scanned.hasPrefix("SUGERLY-QUICK:") else { return nil }
-        let code = clean(String(scanned.dropFirst("SUGERLY-QUICK:".count)))
-        return code.count == 6 ? code : nil
+        var raw: String
+        if let link = URLComponents(string: scanned), link.scheme?.lowercased() == "sugerly",
+           let value = link.queryItems?.first(where: { $0.name == "c" })?.value {
+            raw = value
+        } else if scanned.hasPrefix("SUGERLY-QUICK:") {
+            raw = String(scanned.dropFirst("SUGERLY-QUICK:".count))
+        } else {
+            return nil
+        }
+        raw = clean(raw)
+        return raw.count == 6 ? raw : nil
     }
 
     private func check(_ text: String) async {
@@ -717,6 +733,12 @@ struct QuickApproveSheet: View {
             withMotion { self.error = error.localizedDescription }
         }
     }
+}
+
+// A quick-login code from a scanned link.
+struct QuickLink: Identifiable {
+    let code: String
+    var id: String { code }
 }
 
 // Four rounded corners showing where the code goes.

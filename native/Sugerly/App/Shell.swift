@@ -361,6 +361,7 @@ private struct ChatTab: View {
 // iPhone's own tab bar with five tabs, each with its own pages. Your
 // account, the bell and the + live in the top bar of each tab's first page.
 struct MainShell: View {
+    @State private var quickLink: QuickLink?
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
     @State private var nav = Navigator()
@@ -483,10 +484,15 @@ struct MainShell: View {
         .onOpenURL { url in
             guard url.scheme?.lowercased() == "sugerly" else { return }
             let parts = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            if url.host()?.lowercased() == "quick", let code = parts?.queryItems?.first(where: { $0.name == "c" })?.value {
+                quickLink = QuickLink(code: code)
+                return
+            }
             let target = parts?.queryItems?.first(where: { ["id", "art", "post", "reel", "conversation"].contains($0.name) })?.value
                 ?? url.pathComponents.dropFirst().first ?? ""
             Task { await open(url.host()?.lowercased() ?? "", target) }
         }
+        .sheet(item: $quickLink) { link in QuickApproveSheet(initialCode: link.code) }
         .task {
             calls.attach(voice: voice)
         }

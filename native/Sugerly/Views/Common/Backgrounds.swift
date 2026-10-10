@@ -92,8 +92,9 @@ struct HeaderWallpaper: View {
                 .id("\(kind.rawValue)-\(still)-\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)")
                 .mask {
                     LinearGradient(stops: [
-                        .init(color: .black, location: 0),
-                        .init(color: .black.opacity(0.75), location: 0.4),
+                        .init(color: .clear, location: 0),
+                        .init(color: .black.opacity(0.8), location: 0.36),
+                        .init(color: .black.opacity(0.7), location: 0.5),
                         .init(color: .clear, location: 1),
                     ], startPoint: .top, endPoint: .bottom)
                 }
