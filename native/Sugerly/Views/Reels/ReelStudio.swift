@@ -997,7 +997,7 @@ struct SoundPicker: View {
             .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
             ScrollView {
                 LazyVStack(spacing: 6) {
-                    if tracks.isEmpty { ProgressView().padding(30) }
+                    if tracks.isEmpty { SugarLoader().padding(30) }
                     ForEach(tracks) { t in
                         HStack(spacing: 12) {
                             Button {

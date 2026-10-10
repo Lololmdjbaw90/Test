@@ -104,32 +104,63 @@ struct MusicView: View {
         .fullScreenCover(isPresented: $uploading) { NewTrackView() }
     }
 
+    // The newest upload, on its own cover art (blurred behind, tilted in
+    // front), with little bars dancing while it plays.
     private func hero(_ t: Track) -> some View {
-        HStack(spacing: 16) {
-            RemoteImage(url: t.coverURL)
-                .overlay { if t.coverURL.isEmpty { Image(systemName: "music.note").font(.system(size: 30)).foregroundStyle(.white.opacity(0.8)) } }
-                .frame(width: 110, height: 110)
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .shadow(color: .black.opacity(0.25), radius: 10, y: 6)
+        let playing = player.isPlaying(t)
+        let shape = RoundedRectangle(cornerRadius: 30, style: .continuous)
+        return HStack(spacing: 16) {
+            ZStack(alignment: .bottomTrailing) {
+                RemoteImage(url: t.coverURL)
+                    .overlay { if t.coverURL.isEmpty { Image(systemName: "music.note").font(.system(size: 30)).foregroundStyle(.white.opacity(0.8)) } }
+                    .frame(width: 120, height: 120)
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(.white.opacity(0.4), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.3), radius: 14, y: 8)
+                    .rotationEffect(.degrees(playing ? 0 : -3))
+                if playing {
+                    EqualizerBars(height: 16)
+                        .padding(.horizontal, 9).padding(.vertical, 7)
+                        .background(.black.opacity(0.45), in: Capsule())
+                        .offset(x: 8, y: 8)
+                        .transition(.pop)
+                }
+            }
             VStack(alignment: .leading, spacing: 6) {
-                Label("PICKED FOR YOU", systemImage: "sparkles").font(.jakarta(11, .heavy)).tracking(1.2).foregroundStyle(.white.opacity(0.85))
-                Text(t.title).font(.display(26)).foregroundStyle(.white).lineLimit(1)
-                Text(t.artist).font(.jakarta(14)).foregroundStyle(.white.opacity(0.85))
+                Label("Picked for you", systemImage: "sparkles")
+                    .font(.jakarta(12, .heavy)).foregroundStyle(.white)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(.white.opacity(0.2), in: Capsule())
+                Text(t.title).font(.display(25)).foregroundStyle(.white)
+                    .lineLimit(2).minimumScaleFactor(0.8)
+                Text(t.artist).font(.jakarta(14, .semibold)).foregroundStyle(.white.opacity(0.85)).lineLimit(1)
                 Button { player.play(t, in: tracks) } label: {
-                    Label(player.isPlaying(t) ? "Pause" : "Play", systemImage: player.isPlaying(t) ? "pause.fill" : "play.fill")
-                        .font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
+                    Label(playing ? "Pause" : "Play", systemImage: playing ? "pause.fill" : "play.fill")
+                        .font(.jakarta(15, .bold)).foregroundStyle(Theme.main)
+                        .contentTransition(.symbolEffect(.replace))
                         .padding(.horizontal, 20).frame(height: 42)
                         .background(.white, in: Capsule())
+                        .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
                 }
                 .buttonStyle(BouncyStyle())
+                .padding(.top, 4)
             }
             Spacer(minLength: 0)
         }
         .padding(18)
         .background {
-            RoundedRectangle(cornerRadius: 30, style: .continuous).fill(Theme.gradient)
-                .shadow(color: Theme.pink.opacity(0.35), radius: 16, y: 8)
+            ZStack {
+                Theme.gradient
+                Color.clear.overlay { RemoteImage(url: t.coverURL) }
+                    .blur(radius: 34)
+                    .opacity(0.5)
+                LinearGradient(colors: [.black.opacity(0.0), .black.opacity(0.22)], startPoint: .top, endPoint: .bottom)
+            }
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(.white.opacity(0.25), lineWidth: 1))
+            .shadow(color: Theme.pink.opacity(0.35), radius: 16, y: 8)
         }
+        .motion(Motion.playful, value: playing)
     }
 
     private var chartsSection: some View {

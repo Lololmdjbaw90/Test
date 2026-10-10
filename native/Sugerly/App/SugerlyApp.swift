@@ -253,7 +253,7 @@ struct SplashView: View {
         VStack(spacing: 16) {
             AppBadge(size: 132)
             BrandLogo(height: 58)
-            ProgressView().tint(Theme.main)
+            SugarLoader(size: 13)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .sugarBackground()

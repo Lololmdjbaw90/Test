@@ -1542,7 +1542,7 @@ struct ComposerScaffold<Content: View>: View {
                 ZStack {
                     Color.black.opacity(0.08).ignoresSafeArea()
                     VStack(spacing: 12) {
-                        ProgressView().controlSize(.large).tint(Theme.main)
+                        SugarLoader(size: 16)
                         Text(status ?? "Posting…").font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
                             .multilineTextAlignment(.center)
                             .contentTransition(.opacity)
@@ -1658,7 +1658,7 @@ struct PhotoPickerCard: View {
                     PhotosPicker(selection: $item, matching: .images) {
                         VStack(spacing: 10) {
                             if loading {
-                                ProgressView().controlSize(.large).tint(Theme.main)
+                                SugarLoader(size: 16)
                                 Text("Opening your picture…").font(.jakarta(15, .bold)).foregroundStyle(Theme.pink)
                             } else {
                                 Image(systemName: "photo.badge.plus")

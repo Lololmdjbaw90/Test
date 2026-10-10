@@ -25,7 +25,7 @@ struct PersonView: View {
                                onReport: { reporting = ReportSheet.Target(id: person.email, type: "user", ownerEmail: person.email, preview: person.displayName, link: "/Profile?email=\(person.email)") },
                                onBlock: { confirmBlock = true }, isBlocked: isBlocked)
             } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).sugarBackground()
+                SugarLoader(size: 14).frame(maxWidth: .infinity, maxHeight: .infinity).sugarBackground()
             }
         }
         .navigationTitle(person?.displayName ?? "")
@@ -343,7 +343,7 @@ struct ProfileContent: View {
     @ViewBuilder
     private var grid: some View {
         if loading {
-            ProgressView().frame(maxWidth: .infinity).padding(30)
+            SugarLoader().frame(maxWidth: .infinity).padding(30)
         } else {
             switch tab {
             case .posts:

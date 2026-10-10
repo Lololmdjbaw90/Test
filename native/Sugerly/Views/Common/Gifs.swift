@@ -208,7 +208,7 @@ struct GifPickerSheet: View {
                 }
             }
             if loading {
-                ProgressView().tint(Theme.main).padding(20)
+                SugarLoader().padding(20)
             } else if items.isEmpty {
                 Text("Nothing found — try another word").font(.jakarta(14, .semibold)).foregroundStyle(Palette.muted).padding(30)
             }

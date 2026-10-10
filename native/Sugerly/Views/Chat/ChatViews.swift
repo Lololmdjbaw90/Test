@@ -528,7 +528,7 @@ struct NewChatView: View {
             .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
             ScrollView {
                 LazyVStack(spacing: 8) {
-                    if model.people.isEmpty { ProgressView().padding(30) }
+                    if model.people.isEmpty { SugarLoader().padding(30) }
                     ForEach(people) { person in
                         Button { onPick(person.email) } label: {
                             HStack(spacing: 12) {
