@@ -8,39 +8,47 @@ import CoreImage.CIFilterBuiltins
 // done by Sugerly's login server (netlify/functions/account.mjs).
 
 enum AccountServer {
-    static let url = URL(string: "\(Payments.base)/account")!
+    // The live website first. While Netlify isn't publishing new versions of
+    // it (it skips them when the account runs out of credits), the same
+    // login server also runs on the preview copy Netlify keeps building.
+    static let urls = [
+        URL(string: "\(Payments.base)/account")!,
+        URL(string: "https://deploy-preview-2--sugerly.netlify.app/.netlify/functions/account")!,
+    ]
 
     @discardableResult
     static func call(_ action: String, _ payload: [String: Any] = [:], signedIn: Bool = false) async throws -> [String: Any] {
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 30
-        request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if signedIn {
-            // Not the Authorization header: Netlify can answer that one itself.
-            request.setValue(try await AuthClient.shared.token(), forHTTPHeaderField: "X-Sugerly-Token")
-        }
         var body = payload
         body["action"] = action
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await URLSession.shared.data(for: request)
-        } catch {
-            throw APIError(message: "No connection — check your internet and try again.", status: -1)
-        }
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
-        guard (200..<300).contains(status) else {
-            // A 404 without our JSON: the login server isn't on the website yet.
-            if status == 404 && json["error"] == nil {
-                throw APIError(message: "This isn't switched on yet — the Sugerly website needs its newest update.", status: status, code: "NOT_DEPLOYED")
+        let data = try JSONSerialization.data(withJSONObject: body)
+        let token = signedIn ? try await AuthClient.shared.token() : nil
+        var lastError = APIError(message: "This isn't switched on yet — the Sugerly website needs its newest update.", status: 404, code: "NOT_DEPLOYED")
+        for url in urls {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.timeoutInterval = 30
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            // Not the Authorization header: Netlify can answer that one itself.
+            if let token { request.setValue(token, forHTTPHeaderField: "X-Sugerly-Token") }
+            request.httpBody = data
+            let reply: Data
+            let response: URLResponse
+            do {
+                (reply, response) = try await URLSession.shared.data(for: request)
+            } catch {
+                throw APIError(message: "No connection — check your internet and try again.", status: -1)
             }
-            throw APIError(message: json["error"] as? String ?? "Something went wrong (\(status)).", status: status)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let json = (try? JSONSerialization.jsonObject(with: reply)) as? [String: Any] ?? [:]
+            if (200..<300).contains(status) { return json }
+            // A 404 without our JSON: the login server isn't on this copy of
+            // the website, so try the next one.
+            if status == 404 && json["error"] == nil { continue }
+            lastError = APIError(message: json["error"] as? String ?? "Something went wrong (\(status)).", status: status)
+            throw lastError
         }
-        return json
+        throw lastError
     }
 }
 
