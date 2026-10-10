@@ -853,12 +853,12 @@ struct ChatBubble: View {
                 VoiceNoteBubble(id: message.id, url: message.audioURL, seconds: message.audioSeconds, mine: mine)
                     .overlay(alignment: .bottomTrailing) { meta.padding(.trailing, 6).padding(.bottom, 2) }
             } else if !message.displayText.isEmpty {
-                ZStack(alignment: .bottomTrailing) {
-                    (Text(message.displayText) + Text(verbatim: mine ? "\u{2002}\u{2002}\u{2002}\u{2002}\u{2002}\u{2002}\u{2002}\u{2002}" : "\u{2002}\u{2002}\u{2002}\u{2002}\u{2002}\u{2002}"))
+                HStack(alignment: .lastTextBaseline, spacing: 6) {
+                    Text(message.displayText)
                         .font(.jakarta(15.5))
                         .foregroundStyle(Palette.text)
-                        .padding(.horizontal, 8).padding(.top, 4).padding(.bottom, 6)
-                    meta.padding(.trailing, 7).padding(.bottom, 4)
+                        .padding(.leading, 8).padding(.top, 4).padding(.bottom, 6)
+                    meta.fixedSize().padding(.trailing, 7)
                 }
             } else {
                 HStack { Spacer(minLength: 0); meta }.padding(.horizontal, 6).padding(.bottom, 3)

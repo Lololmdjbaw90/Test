@@ -428,11 +428,11 @@ final class AppModel {
     private func leaveGently(_ finish: (() -> Void)? = nil) async {
         leaving = true
         defer { leaving = false }
-        withAnimation(.easeOut(duration: 0.25)) {
-            showMenu = false
-            showNotifications = false
-            showCreate = false
-        }
+        // Sheets close with their own animation (a custom one made the
+        // menu's exit jump now and then).
+        showMenu = false
+        showCreate = false
+        withAnimation(.easeOut(duration: 0.25)) { showNotifications = false }
         // Let the "Log out?" question finish closing, then slide sheets down.
         try? await Task.sleep(for: .milliseconds(300))
         if closeSheets(animated: true) { try? await Task.sleep(for: .milliseconds(380)) }

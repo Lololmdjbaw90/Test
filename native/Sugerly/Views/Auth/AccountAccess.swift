@@ -452,9 +452,15 @@ struct QuickLoginSheet: View {
                 }
                 if status == "expired" || status == "denied" {
                     Button { round += 1 } label: {
-                        Label("Make a new code", systemImage: "arrow.clockwise")
+                        Label("New code", systemImage: "arrow.clockwise")
+                            .font(.jakarta(15, .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 18)
+                            .frame(height: 42)
+                            .background(Theme.gradient, in: Capsule())
+                            .shadow(color: Theme.main.opacity(0.3), radius: 8, y: 3)
                     }
-                    .buttonStyle(GradientButtonStyle(height: 44, fullWidth: false))
+                    .buttonStyle(BouncyStyle(scale: 0.92))
                     .transition(.pop)
                 }
             }

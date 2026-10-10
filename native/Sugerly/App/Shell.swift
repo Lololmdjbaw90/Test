@@ -427,7 +427,7 @@ struct MainShell: View {
             .sheet(isPresented: accountShown, onDismiss: openPending) {
                 AccountView { route in
                     pendingRoute = route
-                    model.showMenu = false
+                    Task { @MainActor in model.showMenu = false }
                 }
             }
             .sheet(isPresented: createShown, onDismiss: {
