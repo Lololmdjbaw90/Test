@@ -360,6 +360,9 @@ struct ReelStudioView: View {
     @State private var showDrafts = false
     @State private var items: [PhotosPickerItem] = []
     @State private var loadingPick = false
+    // The last picture from the editor, blurred behind the camera while it
+    // wakes up again (so going back never shows a black screen).
+    @State private var backdrop: UIImage?
 
     // posting
     @State private var caption = ""
@@ -417,7 +420,8 @@ struct ReelStudioView: View {
         }, onClose: { dismiss() },
         onUpload: { library = true },
         draftCount: isChat ? 0 : drafts.count,
-        onDrafts: { showDrafts = true })
+        onDrafts: { showDrafts = true },
+        backdrop: backdrop)
         .overlay {
             if loadingPick {
                 ProgressView().tint(.white).controlSize(.large)
@@ -622,6 +626,7 @@ struct ReelStudioView: View {
     }
 
     private func resetToPick() {
+        backdrop = doc.thumbs.first ?? doc.previews.first
         doc.clear()
         doc.setSound(nil)
         caption = ""

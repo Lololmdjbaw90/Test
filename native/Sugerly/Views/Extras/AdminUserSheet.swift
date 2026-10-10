@@ -10,6 +10,7 @@ struct AdminUserSheet: View {
     @State private var banDays = 7
     @State private var busy = false
     @State private var confirmBan = false
+    @State private var confirmDelete = false
 
     private var user: UserProfile? { model.person(email) }
     private var isOwner: Bool { FirebaseConfig.siteOwners.contains(model.me?.email ?? "") }
@@ -33,6 +34,7 @@ struct AdminUserSheet: View {
                         coins(user).disabled(!canManage || busy).opacity(canManage ? 1 : 0.5)
                         nitro(user).disabled(!canManage || busy).opacity(canManage ? 1 : 0.5)
                         ban(user).disabled(!canManage || busy).opacity(canManage ? 1 : 0.5)
+                        deleteBox(user).disabled(!canManage || busy).opacity(canManage ? 1 : 0.5)
                     }
                     .padding(16)
                 }
@@ -51,6 +53,11 @@ struct AdminUserSheet: View {
                 }
             } message: {
                 Text("They'll see a ban screen and can't use Sugerly until it ends or you lift it.")
+            }
+            .confirmationDialog("Delete \(user?.displayName ?? "this account")?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button("Delete account forever", role: .destructive) { Task { await deleteAccount() } }
+            } message: {
+                Text("Their login, profile, posts, reels, art, comments and messages are deleted. This can't be undone.")
             }
         }
     }
@@ -152,7 +159,35 @@ struct AdminUserSheet: View {
         }
     }
 
+    private func deleteBox(_ u: UserProfile) -> some View {
+        box("Delete account", icon: "trash.fill") {
+            Text("Removes their login and everything they posted. Use this for spam, bots or when someone asks you to.")
+                .font(.jakarta(13)).foregroundStyle(Palette.text2)
+            Button(role: .destructive) { confirmDelete = true } label: {
+                Label("Delete account", systemImage: "trash.fill").font(.jakarta(15, .bold)).foregroundStyle(.white)
+                    .frame(maxWidth: .infinity).frame(height: 44)
+                    .background(Palette.danger, in: Capsule())
+            }
+            .buttonStyle(BouncyStyle(scale: 0.96))
+        }
+    }
+
     // MARK: actions
+
+    private func deleteAccount() async {
+        guard let u = user else { return }
+        busy = true
+        defer { busy = false }
+        do {
+            let json = try await AccountServer.call("admin-delete", ["email": u.email], signedIn: true)
+            let removed = json["removed"] as? Int ?? 0
+            await model.loadPeople()
+            model.showToast("\(u.displayName)'s account is deleted\(removed > 0 ? " (\(removed) things removed)" : "")", icon: "trash.fill")
+            dismiss()
+        } catch {
+            model.showToast("Couldn't delete — \(error.localizedDescription)", error: true)
+        }
+    }
 
     private func changeCoins(_ sign: Int) async {
         guard let u = user, let n = Int(amount.filter(\.isNumber)), n > 0 else {

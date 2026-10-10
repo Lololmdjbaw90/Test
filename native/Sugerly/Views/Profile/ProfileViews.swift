@@ -1063,6 +1063,8 @@ struct SettingsView: View {
     @State private var contacting = false
     @State private var confirmDelete = false
     @State private var deletePassword = ""
+    @State private var backupCodes = false
+    @State private var approvingLogin = false
     @State private var confirmLogout = false
     @State private var deleting = false
     @State private var error: String?
@@ -1098,6 +1100,7 @@ struct SettingsView: View {
             privacyGroup
             soundsGroup
             helpGroup
+            securityGroup
             accountGroup
             Section {
                 VStack(spacing: 6) {
@@ -1124,6 +1127,8 @@ struct SettingsView: View {
         .sheet(item: $legal) { doc in LegalView(doc: doc) }
         .sheet(isPresented: $contacting) { NavigationStack { SupportView() }.presentationCornerRadius(30) }
         .sheet(isPresented: $editing) { EditProfileView() }
+        .sheet(isPresented: $backupCodes) { BackupCodesSheet() }
+        .sheet(isPresented: $approvingLogin) { QuickApproveSheet() }
         .confirmationDialog("Log out of Sugerly?", isPresented: $confirmLogout, titleVisibility: .visible) {
             Button("Log out", role: .destructive) { model.signOut() }
         }
@@ -1313,6 +1318,20 @@ struct SettingsView: View {
                 IconRow(title: "Help & support chat", detail: "Chat with the team, follow your reports", icon: "bubble.left.and.bubble.right.fill", colors: [0x7CB2FF, 0x3B82F6], chevron: true)
             }
         } header: { ListHeader(title: "HELP & LEGAL") }
+    }
+
+    // Other ways into your account (see Views/Auth/AccountAccess.swift).
+    private var securityGroup: some View {
+        Section {
+            Button { approvingLogin = true } label: {
+                IconRow(title: "Log in another device", detail: "Scan the QR code on a new iPhone or iPad", icon: "qrcode.viewfinder", colors: [0xB19CFF, 0x7C5CF0], chevron: true)
+            }
+            Button { backupCodes = true } label: {
+                IconRow(title: "Backup codes", detail: "Log in even if you can't get your emails", icon: "key.horizontal.fill", colors: [0xFFC46B, 0xF0A020], chevron: true)
+            }
+        } header: {
+            ListHeader(title: "LOGIN & SECURITY")
+        }
     }
 
     private var accountGroup: some View {

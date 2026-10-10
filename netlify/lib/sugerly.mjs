@@ -38,7 +38,7 @@ export class Problem extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 
-export async function handle(event, work) {
+export async function handle(event, work, what = "payment server") {
   const early = preflight(event);
   if (early) return early;
   try {
@@ -47,7 +47,7 @@ export async function handle(event, work) {
     const status = e instanceof Problem ? e.status : 500;
     if (status === 500) console.error(e);
     // Unexpected errors keep a short reason so problems can be found quickly.
-    return reply(status, { error: e instanceof Problem ? e.message : `Something went wrong on the payment server (${String(e?.message || e).slice(0, 140)}). Please try again.` });
+    return reply(status, { error: e instanceof Problem ? e.message : `Something went wrong on the ${what} (${String(e?.message || e).slice(0, 140)}). Please try again.` });
   }
 }
 
@@ -121,9 +121,11 @@ function cleanPem(value) {
   return `-----BEGIN PRIVATE KEY-----\n${middle.match(/.{1,64}/g).join("\n")}\n-----END PRIVATE KEY-----\n`;
 }
 
-let cachedToken = null;
-async function googleToken() {
-  if (cachedToken && cachedToken.expires > Date.now() + 60_000) return cachedToken.value;
+const DATASTORE = "https://www.googleapis.com/auth/datastore";
+const tokens = new Map();
+async function googleToken(scope = DATASTORE) {
+  const cached = tokens.get(scope);
+  if (cached && cached.expires > Date.now() + 60_000) return cached.value;
   let key;
   try {
     key = serviceAccount();
@@ -138,7 +140,7 @@ async function googleToken() {
   const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
   const unsigned = `${b64({ alg: "RS256", typ: "JWT" })}.${b64({
     iss: key.client_email, sub: key.client_email, aud: "https://oauth2.googleapis.com/token",
-    scope: "https://www.googleapis.com/auth/datastore", iat: now, exp: now + 3600,
+    scope, iat: now, exp: now + 3600,
   })}`;
   let signature;
   try {
@@ -158,8 +160,8 @@ async function googleToken() {
     // Usually the key was deleted in Google Cloud or doesn't match the email.
     throw new Problem(503, `Payments setup: Google refused the Firebase key on Netlify (${data.error_description || data.error || res.status}). Make a new key and put it in Netlify.`);
   }
-  cachedToken = { value: data.access_token, expires: Date.now() + data.expires_in * 1000 };
-  return cachedToken.value;
+  tokens.set(scope, { value: data.access_token, expires: Date.now() + data.expires_in * 1000 });
+  return data.access_token;
 }
 
 const DOCS = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents`;
@@ -230,6 +232,54 @@ export async function addDoc(collection, fields) {
   return doc ? fromDocument(doc) : null;
 }
 
+// Creates the document, or replaces it whole.
+export async function setDoc(collection, id, fields) {
+  const doc = await firestore(`/${collection}/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ fields: Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, encode(v)])) }),
+  });
+  return doc ? fromDocument(doc) : null;
+}
+
+export async function deleteDoc(collection, id) {
+  if (!id || /[/]/.test(id)) return;
+  await firestore(`/${collection}/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export function docName(collection, id) {
+  return `projects/${PROJECT}/databases/(default)/documents/${collection}/${id}`;
+}
+
+// Documents where every [field, op, value] matches (op: EQUAL, ARRAY_CONTAINS…).
+export async function findMany(collection, filters, limit = 300) {
+  const where = filters.map(([field, op, value]) => ({ fieldFilter: { field: { fieldPath: field }, op, value: encode(value) } }));
+  const res = await firestore(":runQuery", {
+    method: "POST",
+    body: JSON.stringify({ structuredQuery: {
+      from: [{ collectionId: collection }],
+      where: where.length === 1 ? where[0] : { compositeFilter: { op: "AND", filters: where } },
+      limit,
+    } }),
+  });
+  return (res || []).filter((r) => r.document).map((r) => fromDocument(r.document));
+}
+
+// Several changes at once (up to 500): deletes, or removing from a list.
+export async function commit(writes) {
+  if (!writes.length) return;
+  await firestore(":commit", { method: "POST", body: JSON.stringify({ writes }) });
+}
+
+export function removeFromList(collection, id, field, value) {
+  return {
+    transform: {
+      document: docName(collection, id),
+      fieldTransforms: [{ fieldPath: field, removeAllFromArray: { values: [encode(value)] } }],
+    },
+    currentDocument: { exists: true },
+  };
+}
+
 export async function findOne(collection, field, value) {
   const res = await firestore(":runQuery", {
     method: "POST",
@@ -237,6 +287,110 @@ export async function findOne(collection, field, value) {
   });
   const hit = (res || []).find((r) => r.document);
   return hit ? fromDocument(hit.document) : null;
+}
+
+// ---- Firebase Auth (as the server) -----------------------------------------
+
+const AUTH_SCOPE = "https://www.googleapis.com/auth/identitytoolkit https://www.googleapis.com/auth/cloud-platform";
+
+async function authAdmin(method, payload) {
+  const res = await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${PROJECT}/accounts${method}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${await googleToken(AUTH_SCOPE)}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 || res.status === 403) {
+    throw new Problem(503, `Login setup: the Firebase key on Netlify can't manage accounts (${data.error?.status || res.status}).`);
+  }
+  if (!res.ok) {
+    const code = String(data.error?.message || res.status);
+    if (code.includes("WEAK_PASSWORD")) throw new Problem(400, "Use at least 6 characters for your password.");
+    if (code.includes("USER_NOT_FOUND")) throw new Problem(404, "That account doesn't exist any more.");
+    throw new Error(`Auth ${res.status}: ${code}`);
+  }
+  return data;
+}
+
+// The account for an email: { uid, email, disabled }, or null.
+export async function findAccount(email) {
+  const clean = String(email || "").trim().toLowerCase();
+  if (!clean.includes("@")) return null;
+  const data = await authAdmin(":lookup", { email: [clean] });
+  const user = data.users?.[0];
+  return user ? { uid: user.localId, email: String(user.email || clean).toLowerCase(), disabled: !!user.disabled } : null;
+}
+
+export function setPassword(uid, password) {
+  return authAdmin(":update", { localId: uid, password });
+}
+
+export function deleteAccount(uid) {
+  return authAdmin(":delete", { localId: uid });
+}
+
+// A one-time sign-in pass for an account: the app trades it for a normal
+// session (signInWithCustomToken). Good for an hour, used once.
+export function customToken(uid) {
+  const key = serviceAccount();
+  const now = Math.floor(Date.now() / 1000);
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+  const unsigned = `${b64({ alg: "RS256", typ: "JWT" })}.${b64({
+    iss: key.client_email, sub: key.client_email,
+    aud: "https://identitytoolkit.googleapis.com/google.identity.identitytoolkit.v1.IdentityToolkit",
+    iat: now, exp: now + 3600, uid,
+  })}`;
+  const signature = crypto.createSign("RSA-SHA256").update(unsigned).sign(key.private_key).toString("base64url");
+  return `${unsigned}.${signature}`;
+}
+
+// Codes are only ever stored as this keyed fingerprint, never as typed.
+export function fingerprint(text) {
+  return crypto.createHmac("sha256", `sugerly-login:${serviceAccount().private_key}`).update(String(text)).digest("hex");
+}
+
+export function sameFingerprint(a, b) {
+  const x = Buffer.from(String(a || ""));
+  const y = Buffer.from(String(b || ""));
+  return x.length === y.length && x.length > 0 && crypto.timingSafeEqual(x, y);
+}
+
+// ---- email -----------------------------------------------------------------
+
+// Sugerly's own emails (login and password codes). Either service works:
+//   BREVO_API_KEY + MAIL_FROM (the sender address you verified in Brevo), or
+//   RESEND_API_KEY + MAIL_FROM (an address on the domain you verified there).
+export function mailReady() {
+  return Boolean((process.env.BREVO_API_KEY || process.env.RESEND_API_KEY || "").trim());
+}
+
+export async function sendMail({ to, subject, html, text }) {
+  const from = (process.env.MAIL_FROM || "").trim();
+  const name = "Sugerly";
+  const brevo = (process.env.BREVO_API_KEY || "").trim();
+  const resend = (process.env.RESEND_API_KEY || "").trim();
+  let res;
+  if (brevo) {
+    if (!from) throw new Problem(503, "Email setup: add MAIL_FROM on Netlify (the sender email you verified in Brevo).");
+    res = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: { "api-key": brevo, "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ sender: { name, email: from }, to: [{ email: to }], subject, htmlContent: html, textContent: text }),
+    });
+  } else if (resend) {
+    res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${resend}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: `${name} <${from || "onboarding@resend.dev"}>`, to: [to], subject, html, text }),
+    });
+  } else {
+    throw new Problem(503, "Email codes aren't switched on yet.");
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401) throw new Problem(503, "Email setup: the email service didn't accept the API key on Netlify.");
+    throw new Problem(502, `The email didn't send (${String(data.message || data.code || res.status).slice(0, 120)}).`);
+  }
 }
 
 // Sugerly's cut of each commission, set by admins (Site settings).

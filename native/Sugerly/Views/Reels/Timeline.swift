@@ -6,6 +6,10 @@ import PhotosUI
 // sticker and photo on top. Drag a bar to move when it shows, pick it and
 // drag its ends to make it shorter or longer, drag across the strip to
 // scrub. Tap a slide to make it longer or shorter, move it or remove it.
+//
+// Kept calm on purpose: no boxes behind the bars, one colour per kind of
+// bar, and the picked bar gets the iPhone's trim frame (white, with its
+// handles inside it, so nothing sticks out or gets cut off at the edges).
 struct ReelTimeline: View {
     let length: Double
     let playhead: Double
@@ -28,26 +32,32 @@ struct ReelTimeline: View {
     var onDeleteSlide: (Int) -> Void
 
     @State private var dragBase: (start: Double, end: Double)?
+    // The bar being moved (it lifts while you hold it).
+    @State private var lifting: UUID?
     @State private var scrubbing = false
     @State private var timingEditor = false
 
-    private let trackHeight: CGFloat = 46
-    private let laneHeight: CGFloat = 40
-    private let rulerHeight: CGFloat = 18
+    private let trackHeight: CGFloat = 48
+    private let laneHeight: CGFloat = 34
+    private let rulerHeight: CGFloat = 16
+    private let gap: CGFloat = 8
+    private let barCorner: CGFloat = 9
+    // The white trim handles inside a picked bar.
+    private let tabWidth: CGFloat = 13
     private var isSlideshow: Bool { !slides.isEmpty }
     private var slideBounds: [Double] { Self.bounds(slideSeconds) }
     private var shortest: Double { isSlideshow ? 0.5 : 0.3 }
 
     var body: some View {
-        VStack(spacing: 7) {
+        VStack(spacing: 10) {
             controls
             GeometryReader { geo in
                 let w = max(1, geo.size.width)
                 ZStack(alignment: .topLeading) {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: gap) {
                         ruler(w)
                         mainTrack(w)
-                        lanes(w).frame(height: max(44, geo.size.height - trackHeight - rulerHeight - 12))
+                        lanes(w).frame(height: max(laneHeight + 8, geo.size.height - trackHeight - rulerHeight - gap * 2))
                     }
                     playheadLine(w, height: geo.size.height)
                 }
@@ -57,6 +67,7 @@ struct ReelTimeline: View {
         .padding(.horizontal, 16)
         .sensoryFeedback(.selection, trigger: selected)
         .sensoryFeedback(.selection, trigger: selectedSlide)
+        .sensoryFeedback(.impact(weight: .light), trigger: lifting) { _, new in new != nil }
         .sheet(isPresented: $timingEditor, onDismiss: { onScrub(false) }) {
             if let id = selected, let index = stickers.firstIndex(where: { $0.id == id }) {
                 OverlayTimingEditor(sticker: $stickers[index], length: length, onSeek: onSeek) {
@@ -74,16 +85,17 @@ struct ReelTimeline: View {
             Button(action: onTogglePlay) {
                 Image(systemName: playing ? "pause.fill" : "play.fill")
                     .font(.system(size: 13, weight: .black)).foregroundStyle(.white)
-                    .frame(width: 34, height: 34)
-                    .background(Theme.gradient, in: Circle())
+                    .contentTransition(.symbolEffect(.replace))
+                    .frame(width: 36, height: 36)
+                    .background(Theme.main, in: Circle())
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(BouncyStyle(scale: 0.88))
             .accessibilityLabel(playing ? "Pause" : "Play")
-            (Text(Self.clock(playhead)).foregroundStyle(.white) + Text(" / \(Self.clock(length))").foregroundStyle(.white.opacity(0.55)))
+            (Text(Self.clock(playhead)).foregroundStyle(.white) + Text("  \(Self.clock(length))").foregroundStyle(.white.opacity(0.4)))
                 .font(.jakarta(12, .heavy)).monospacedDigit()
                 .lineLimit(1).minimumScaleFactor(0.7)
-                .padding(.horizontal, 10).frame(height: 30)
-                .background(.white.opacity(0.1), in: Capsule())
             Spacer(minLength: 0)
             Button(action: onAddText) { addLabel("Text", "textformat") }
                 .buttonStyle(BouncyStyle(scale: 0.9))
@@ -95,22 +107,21 @@ struct ReelTimeline: View {
     }
 
     private func addLabel(_ title: String, _ icon: String) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 5) {
             Image(systemName: icon).font(.system(size: 10, weight: .black))
             Text(title).font(.jakarta(11, .heavy))
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, 9)
-        .frame(height: 30)
-        .background(.white.opacity(0.14), in: Capsule())
-        .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+        .padding(.horizontal, 10)
+        .frame(height: 32)
+        .background(EditorPalette.chip, in: Capsule())
     }
 
     // MARK: time ruler
 
-    // A tick every step, labelled, with a smaller tick in between.
+    // A small tick and its time every step, a dot in between.
     private var rulerStep: Double {
-        let raw = max(0.1, length) / 6
+        let raw = max(0.1, length) / 5
         return [0.5, 1, 2, 5, 10, 15, 30, 60].first { $0 >= raw } ?? 60
     }
 
@@ -120,21 +131,22 @@ struct ReelTimeline: View {
         return Canvas { ctx, size in
             var t = 0.0
             while t <= total + 0.0001 {
-                let x = CGFloat(t / total) * size.width
+                let x = min(size.width - 0.5, max(0.5, CGFloat(t / total) * size.width))
                 var tick = Path()
-                tick.move(to: CGPoint(x: x, y: size.height - 5))
+                tick.move(to: CGPoint(x: x, y: size.height - 6))
                 tick.addLine(to: CGPoint(x: x, y: size.height))
-                ctx.stroke(tick, with: .color(.white.opacity(0.5)), lineWidth: 1)
+                ctx.stroke(tick, with: .color(.white.opacity(0.35)), lineWidth: 1)
                 if t + step / 2 < total {
                     let hx = CGFloat((t + step / 2) / total) * size.width
-                    var half = Path()
-                    half.move(to: CGPoint(x: hx, y: size.height - 3))
-                    half.addLine(to: CGPoint(x: hx, y: size.height))
-                    ctx.stroke(half, with: .color(.white.opacity(0.25)), lineWidth: 1)
+                    ctx.fill(Path(ellipseIn: CGRect(x: hx - 1, y: size.height - 3, width: 2, height: 2)),
+                             with: .color(.white.opacity(0.25)))
                 }
-                let label = ctx.resolve(Text(Self.seconds(t)).font(.jakarta(9, .bold)).foregroundStyle(.white.opacity(0.6)))
-                let anchor: UnitPoint = t == 0 ? .topLeading : (x > size.width - 14 ? .topTrailing : .top)
-                ctx.draw(label, at: CGPoint(x: x, y: 0), anchor: anchor)
+                // The time sits just right of its tick, unless it would
+                // run off the end.
+                let label = ctx.resolve(Text(Self.seconds(t)).font(.jakarta(9, .bold)).foregroundStyle(.white.opacity(0.5)))
+                if x + 4 + label.measure(in: size).width <= size.width {
+                    ctx.draw(label, at: CGPoint(x: x + 4, y: size.height / 2 - 1), anchor: .leading)
+                }
                 t += step
             }
         }
@@ -149,22 +161,26 @@ struct ReelTimeline: View {
     @ViewBuilder
     private func mainTrack(_ w: CGFloat) -> some View {
         if isSlideshow {
-            HStack(spacing: 2) {
+            HStack(spacing: 3) {
                 ForEach(slides.indices, id: \.self) { i in
                     let secs = slideSeconds.indices.contains(i) ? slideSeconds[i] : 3
-                    let sw = max(12, CGFloat(secs / max(0.1, length)) * w - 2)
+                    let sw = max(12, CGFloat(secs / max(0.1, length)) * w - 3)
+                    let picked = selectedSlide == i
                     Image(uiImage: slides[i]).resizable().scaledToFill()
                         .frame(width: sw, height: trackHeight).clipped()
                         .overlay(alignment: .bottomLeading) {
                             if sw > 30 {
                                 Text(Self.seconds(secs)).font(.jakarta(9, .heavy)).foregroundStyle(.white)
-                                    .padding(.horizontal, 4).padding(.vertical, 1)
-                                    .background(.black.opacity(0.5), in: Capsule())
-                                    .padding(3)
+                                    .monospacedDigit()
+                                    .contentTransition(.numericText())
+                                    .padding(.horizontal, 5).padding(.vertical, 2)
+                                    .background(.black.opacity(0.45), in: Capsule())
+                                    .padding(4)
                             }
                         }
                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(.white, lineWidth: selectedSlide == i ? 2.5 : 0))
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(.white, lineWidth: picked ? 2.5 : 0))
+                        .opacity(selectedSlide == nil || picked ? 1 : 0.5)
                         .contentShape(Rectangle())
                         .onTapGesture {
                             selected = nil
@@ -174,6 +190,7 @@ struct ReelTimeline: View {
                 }
             }
             .frame(width: w, height: trackHeight, alignment: .leading)
+            .motion(Motion.standard, value: selectedSlide)
             .gesture(scrub(w, minimum: 8))
         } else {
             HStack(spacing: 0) {
@@ -183,9 +200,9 @@ struct ReelTimeline: View {
                 }
             }
             .frame(width: w, height: trackHeight, alignment: .leading)
-            .background(.white.opacity(0.1))
+            .background(.white.opacity(0.06))
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.white.opacity(0.14), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.white.opacity(0.08), lineWidth: 1))
             .contentShape(Rectangle())
             .gesture(scrub(w, minimum: 0))
         }
@@ -206,16 +223,22 @@ struct ReelTimeline: View {
             }
     }
 
+    // A white line with a small rounded knob over the ruler. It stays inside
+    // the timeline at both ends, and the knob grows a little while you scrub.
     private func playheadLine(_ w: CGFloat, height: CGFloat) -> some View {
+        let knob: CGFloat = 10
         let x = CGFloat(min(max(0, playhead), length) / max(0.1, length)) * w
-        return VStack(spacing: -1) {
-            Circle().fill(.white).frame(width: 12, height: 12)
-                .overlay(Circle().fill(Theme.main).frame(width: 5, height: 5))
-            Capsule().fill(.white).frame(width: 2.5)
+        let center = min(max(knob / 2, x), w - knob / 2)
+        return VStack(spacing: -3) {
+            RoundedRectangle(cornerRadius: 3.5, style: .continuous).fill(.white)
+                .frame(width: knob, height: 15)
+                .scaleEffect(scrubbing ? 1.18 : 1, anchor: .top)
+            Capsule().fill(.white).frame(width: 2)
         }
-        .frame(width: 12, height: height + 4)
-        .shadow(color: .black.opacity(0.45), radius: 2)
-        .offset(x: x - 6, y: -2)
+        .frame(width: knob, height: height)
+        .shadow(color: .black.opacity(0.4), radius: 1.5)
+        .offset(x: center - knob / 2)
+        .motion(Motion.release, value: scrubbing)
         .allowsHitTesting(false)
     }
 
@@ -223,23 +246,32 @@ struct ReelTimeline: View {
 
     private func lanes(_ w: CGFloat) -> some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 5) {
+            VStack(spacing: 6) {
                 if stickers.isEmpty {
-                    Label("Add text, stickers or photos — each one gets a bar here", systemImage: "plus.circle")
-                        .font(.jakarta(11, .semibold)).foregroundStyle(.white.opacity(0.6))
-                        .lineLimit(1).minimumScaleFactor(0.8)
-                        .frame(width: w, height: laneHeight + 6)
-                        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(.white.opacity(0.22), style: StrokeStyle(lineWidth: 1, dash: [4, 4])))
+                    Button(action: onAddText) {
+                        HStack(spacing: 7) {
+                            Image(systemName: "plus.circle.fill").font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(Theme.main)
+                            Text("Add text, stickers or photos")
+                                .font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.6))
+                                .lineLimit(1).minimumScaleFactor(0.8)
+                        }
+                        .frame(width: w, height: laneHeight + 4)
+                        .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: barCorner, style: .continuous))
+                    }
+                    .buttonStyle(SoftPressStyle())
+                    .transition(.opacity)
                 }
                 ForEach(stickers) { sticker in
                     lane(sticker, w)
+                        .transition(.pop)
                 }
             }
-            // Room inside the scrolling area for the trim handles (they sit
-            // just outside a bar that starts or ends at the edge) and its
-            // shadow, so neither gets cut off.
+            // Room for a lifted bar's shadow (and the trim handles' wider
+            // touch area) inside the scrolling area, so neither is cut off.
             .padding(.horizontal, 18)
-            .padding(.vertical, 4)
+            .padding(.vertical, 6)
+            .motion(Motion.standard, value: stickers.map(\.id))
         }
         .scrollBounceBehavior(.basedOnSize)
         .scrollDisabled(dragBase != nil)
@@ -250,16 +282,22 @@ struct ReelTimeline: View {
         let total = max(0.1, length)
         let start = min(max(0, sticker.start), max(0, length - min(shortest, length)))
         let end = max(start, min(sticker.end ?? length, length))
-        let x0 = CGFloat(start / total) * w
-        let x1 = max(x0 + 16, CGFloat(end / total) * w)
         let isSelected = selected == sticker.id
+        // A picked bar is never narrower than its two handles.
+        let minWidth: CGFloat = isSelected ? tabWidth * 2 + 10 : 16
+        let x0 = min(CGFloat(start / total) * w, max(0, w - minWidth))
+        let x1 = min(w, max(x0 + minWidth, CGFloat(end / total) * w))
+        let lifted = lifting == sticker.id
         return ZStack(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(0.06))
+            Color.clear
                 .frame(width: w, height: laneHeight)
+                .contentShape(Rectangle())
                 .onTapGesture { selected = nil }
-            bar(sticker, selected: isSelected, width: min(w, x1) - x0, span: end - start)
-                .frame(width: min(w, x1) - x0, height: laneHeight)
+            bar(sticker, selected: isSelected, dimmed: selected != nil && !isSelected, lifted: lifted,
+                width: x1 - x0, span: end - start)
+                .frame(width: x1 - x0, height: laneHeight)
                 .offset(x: x0)
+                .zIndex(1)
                 .onTapGesture {
                     selectedSlide = nil
                     selected = sticker.id
@@ -271,47 +309,73 @@ struct ReelTimeline: View {
                 .accessibilityAddTraits(.isButton)
                 .accessibilityIdentifier("overlay-track-\(sticker.id)")
             if isSelected {
-                handle(left: true).offset(x: x0 - 16).highPriorityGesture(edgeGesture(sticker.id, w, left: true)).accessibilityIdentifier("overlay-start")
-                handle(left: false).offset(x: min(w, x1) - 16).highPriorityGesture(edgeGesture(sticker.id, w, left: false)).accessibilityIdentifier("overlay-end")
+                // Touch areas over the handles, wider than they look.
+                grabArea(left: true)
+                    .offset(x: x0 - 14)
+                    .zIndex(2)
+                    .highPriorityGesture(edgeGesture(sticker.id, w, left: true))
+                    .accessibilityIdentifier("overlay-start")
+                grabArea(left: false)
+                    .offset(x: x1 - tabWidth - 13)
+                    .zIndex(2)
+                    .highPriorityGesture(edgeGesture(sticker.id, w, left: false))
+                    .accessibilityIdentifier("overlay-end")
             }
         }
         .frame(width: w, height: laneHeight, alignment: .leading)
         .coordinateSpace(name: sticker.id)
     }
 
-    private func bar(_ s: TextSticker, selected: Bool, width: CGFloat, span: Double) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
-        return shape.fill(barStyle(for: s))
+    private func bar(_ s: TextSticker, selected: Bool, dimmed: Bool, lifted: Bool, width: CGFloat, span: Double) -> some View {
+        let shape = RoundedRectangle(cornerRadius: barCorner, style: .continuous)
+        return shape.fill(barColor(for: s))
             .overlay(alignment: .leading) {
-                HStack(spacing: 5) {
+                HStack(spacing: 6) {
                     if let image = s.image {
                         Image(uiImage: image).resizable().scaledToFill()
                             .frame(width: 20, height: 20)
                             .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                     } else {
                         Image(systemName: s.isEmoji ? "face.smiling" : "textformat").font(.system(size: 10, weight: .black))
+                            .opacity(0.85)
                     }
                     Text(label(s)).font(.jakarta(11, .bold)).lineLimit(1)
-                    if width > 110 {
+                    if selected && width > 120 {
                         Spacer(minLength: 4)
-                        Text(Self.seconds((span * 10).rounded() / 10)).font(.jakarta(9, .heavy)).monospacedDigit()
-                            .padding(.horizontal, 5).padding(.vertical, 2)
-                            .background(.black.opacity(0.22), in: Capsule())
+                        Text(Self.seconds((span * 10).rounded() / 10)).font(.jakarta(10, .heavy)).monospacedDigit()
+                            .contentTransition(.numericText())
+                            .opacity(0.85)
+                            .transition(.opacity)
                     }
                 }
                 .foregroundStyle(.white)
-                .padding(.leading, selected ? 10 : 6)
-                .padding(.trailing, selected ? 10 : 5)
+                .padding(.horizontal, selected ? tabWidth + 7 : 9)
             }
             .clipShape(shape)
-            .overlay(shape.strokeBorder(.white, lineWidth: selected ? 2 : 0))
-            .shadow(color: .black.opacity(selected ? 0.3 : 0), radius: 3, y: 2)
+            .overlay {
+                if selected {
+                    TrimFrame(corner: barCorner, tab: tabWidth)
+                        .transition(frameIn)
+                }
+            }
+            .scaleEffect(lifted ? 1.04 : 1)
+            .shadow(color: .black.opacity(lifted ? 0.4 : 0), radius: lifted ? 8 : 0, y: lifted ? 5 : 0)
+            .opacity(dimmed ? 0.5 : 1)
+            .motion(Motion.standard, value: selected)
+            .motion(Motion.release, value: lifted)
+            .motion(Motion.fade, value: dimmed)
     }
 
-    private func barStyle(for s: TextSticker) -> AnyShapeStyle {
-        if s.framed { return AnyShapeStyle(Color(hex: 0x5FA8FF)) }
-        if s.image != nil { return AnyShapeStyle(Color(hex: 0x9F86FF)) }
-        return AnyShapeStyle(Theme.gradient)
+    // The trim frame settles onto the bar from a touch bigger.
+    private var frameIn: AnyTransition {
+        Motion.reduced ? .opacity : .opacity.combined(with: .scale(scale: 1.08))
+    }
+
+    // One calm colour for each kind of bar.
+    private func barColor(for s: TextSticker) -> Color {
+        if s.framed { return Color(hex: 0x5FA8FF) }
+        if s.image != nil { return Color(hex: 0x9F86FF) }
+        return Theme.main
     }
 
     private func label(_ s: TextSticker) -> String {
@@ -320,16 +384,14 @@ struct ReelTimeline: View {
         return s.text.replacingOccurrences(of: "\n", with: " ")
     }
 
-    private func handle(left: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 5, style: .continuous).fill(.white)
-            .frame(width: 14, height: laneHeight)
-            .overlay {
-                Image(systemName: left ? "chevron.compact.left" : "chevron.compact.right")
-                    .font(.system(size: 13, weight: .heavy)).foregroundStyle(Theme.main)
-            }
-            .shadow(color: .black.opacity(0.35), radius: 2)
-            .padding(.horizontal, 9)
+    // Where a finger can grab a handle: the handle plus some room around it.
+    private func grabArea(left: Bool) -> some View {
+        Color.clear
+            .frame(width: tabWidth + 27, height: laneHeight + 8)
             .contentShape(Rectangle())
+            .accessibilityElement()
+            .accessibilityLabel(left ? "Trim start" : "Trim end")
+            .accessibilityAddTraits(.isButton)
     }
 
     // Drag the whole bar: same length, new time.
@@ -342,6 +404,7 @@ struct ReelTimeline: View {
                     onCheckpoint()
                     selectedSlide = nil
                     selected = id
+                    lifting = id
                     dragBase = (stickers[i].start, min(length, stickers[i].end ?? length))
                 }
                 guard let base = dragBase else { return }
@@ -355,6 +418,7 @@ struct ReelTimeline: View {
             }
             .onEnded { _ in
                 dragBase = nil
+                lifting = nil
                 snap(id)
                 onScrub(false)
             }
@@ -408,8 +472,25 @@ struct ReelTimeline: View {
 
     // MARK: bottom row
 
-    @ViewBuilder
+    // What the row under the timeline shows, so it can slide from one to
+    // the next.
+    private var selectionKey: String {
+        if let selected { return selected.uuidString }
+        if let selectedSlide { return "slide-\(selectedSlide)" }
+        return "none"
+    }
+
     private var selectionBar: some View {
+        ZStack {
+            selectionContent
+        }
+        .frame(height: 34)
+        .frame(maxWidth: .infinity)
+        .motion(Motion.standard, value: selectionKey)
+    }
+
+    @ViewBuilder
+    private var selectionContent: some View {
         if let id = selected, let sticker = stickers.first(where: { $0.id == id }) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -421,27 +502,30 @@ struct ReelTimeline: View {
                     chip("Delete", "trash.fill", danger: true) { delete(id) }
                 }
             }
-            .frame(height: 32)
+            .id(id)
+            .transition(.rise)
         } else if let i = selectedSlide, slideSeconds.indices.contains(i) {
             HStack(spacing: 8) {
                 chip("", "chevron.left") { onMoveSlide(i, i - 1) }
                     .disabled(i == 0).opacity(i == 0 ? 0.4 : 1)
                 chip("", "minus") { changeSlide(i, -0.5) }
                 Text("Slide \(i + 1) · \(Self.seconds(slideSeconds[i]))")
-                    .font(.jakarta(12, .bold)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.8)
+                    .font(.jakarta(12, .bold)).foregroundStyle(.white).monospacedDigit()
+                    .contentTransition(.numericText())
+                    .lineLimit(1).minimumScaleFactor(0.8)
                 chip("", "plus") { changeSlide(i, 0.5) }
                 chip("", "chevron.right") { onMoveSlide(i, i + 1) }
                     .disabled(i >= slides.count - 1).opacity(i >= slides.count - 1 ? 0.4 : 1)
                 Spacer(minLength: 0)
                 if slides.count > 1 { chip("", "trash.fill", danger: true) { onDeleteSlide(i) } }
             }
-            .frame(height: 32)
+            .transition(.rise)
         } else {
-            Text(isSlideshow ? "Tap a slide to change how long it shows · drag a bar to pick its slides" : "Drag across the strip to scrub · drag a bar to move it · tap a bar to trim it")
-                .font(.jakarta(11, .semibold)).foregroundStyle(.white.opacity(0.6))
+            Text(isSlideshow ? "Tap a slide to change how long it shows · drag a bar to move it" : "Drag the strip to scrub · drag a bar to move it · tap it to trim")
+                .font(.jakarta(11, .semibold)).foregroundStyle(.white.opacity(0.5))
                 .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.85)
                 .frame(maxWidth: .infinity)
-                .frame(height: 32)
+                .transition(.opacity)
         }
     }
 
@@ -452,10 +536,9 @@ struct ReelTimeline: View {
                 if !title.isEmpty { Text(title).font(.jakarta(11, .heavy)) }
             }
             .foregroundStyle(danger ? Palette.danger : .white)
-            .padding(.horizontal, title.isEmpty ? 0 : 11)
-            .frame(minWidth: 32, minHeight: 30)
-            .background(.white.opacity(0.14), in: Capsule())
-            .overlay(Capsule().strokeBorder(.white.opacity(0.16), lineWidth: 1))
+            .padding(.horizontal, title.isEmpty ? 0 : 12)
+            .frame(minWidth: 34, minHeight: 32)
+            .background(danger ? AnyShapeStyle(Palette.danger.opacity(0.14)) : AnyShapeStyle(EditorPalette.chip), in: Capsule())
         }
         .buttonStyle(BouncyStyle(scale: 0.9))
     }
@@ -567,5 +650,36 @@ struct ReelTimeline: View {
 
     static func seconds(_ t: Double) -> String {
         t.rounded() == t ? "\(Int(t))s" : String(format: "%.1fs", t)
+    }
+}
+
+// The iPhone's trim frame around the picked bar: a white outline with a
+// handle at each end, drawn inside the bar so it's never cut off.
+private struct TrimFrame: View {
+    let corner: CGFloat
+    let tab: CGFloat
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .strokeBorder(.white, lineWidth: 2.5)
+            HStack(spacing: 0) {
+                handle(leading: true)
+                Spacer(minLength: 0)
+                handle(leading: false)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func handle(leading: Bool) -> some View {
+        UnevenRoundedRectangle(topLeadingRadius: leading ? corner : 0,
+                               bottomLeadingRadius: leading ? corner : 0,
+                               bottomTrailingRadius: leading ? 0 : corner,
+                               topTrailingRadius: leading ? 0 : corner,
+                               style: .continuous)
+            .fill(.white)
+            .frame(width: tab)
+            .overlay(Capsule().fill(Theme.main).frame(width: 2.5, height: 12))
     }
 }

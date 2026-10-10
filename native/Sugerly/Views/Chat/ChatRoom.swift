@@ -65,7 +65,7 @@ struct ChatView: View {
                         }
                         row(message, previous: previous)
                             .id(message.id)
-                            .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
+                            .transition(Self.arrival(mine: message.authorEmail == me))
                     }
                 }
                 .padding(.horizontal, 10)
@@ -183,6 +183,22 @@ struct ChatView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
+    }
+
+    // A new message springs up out of its own side, from a little smaller,
+    // like it was just sent (or just arrived).
+    static func arrival(mine: Bool) -> AnyTransition {
+        guard !Motion.reduced else { return .opacity }
+        return .asymmetric(
+            insertion: .scale(scale: 0.6, anchor: mine ? .bottomTrailing : .bottomLeading)
+                .combined(with: .offset(y: 14))
+                .combined(with: .opacity),
+            removal: .opacity.animation(Motion.exit))
+    }
+
+    // How a message arrives: a quick spring with a little bounce.
+    static var arrive: Animation {
+        Motion.pick(.spring(response: 0.38, dampingFraction: 0.72))
     }
 
     // MARK: rows
@@ -483,7 +499,7 @@ struct ChatView: View {
             ChatCache.save(conversation.id, messages)
         } else if !fresh.isEmpty || !loaded {
             if !loaded { hasOlder = docs.count >= page }
-            withAnimation(loaded ? .snappy : nil) {
+            withAnimation(loaded ? Self.arrive : nil) {
                 messages = (messages + fresh).sorted { $0.created < $1.created }
             }
             ChatCache.save(conversation.id, messages)
@@ -554,7 +570,7 @@ struct ChatView: View {
         var pending = Message(data)
         pending.id = "pending-\(UUID().uuidString)"
         pending.pending = true
-        withMotion(Motion.standard) { messages.append(pending); replyTo = nil }
+        withAnimation(Self.arrive) { messages.append(pending); replyTo = nil }
         do {
             let doc = try await FS.create("DirectMessage", data)
             let created = Message(doc)

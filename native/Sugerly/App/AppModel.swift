@@ -67,6 +67,13 @@ final class AppModel {
         await enterGently { self.phase = self.entryPhase }
     }
 
+    // Email code, backup code or quick login: the server's one-time pass.
+    func signIn(token: String, email: String?) async throws {
+        try await auth.signIn(customToken: token, email: email)
+        try await loadProfile()
+        await enterGently { self.phase = self.entryPhase }
+    }
+
     func signUp(name: String, email: String, password: String) async throws {
         try await auth.signUp(email: email, password: password, name: name)
         try await loadProfile(newName: name)

@@ -33,6 +33,9 @@ final class RecorderModel: NSObject {
     private var configured = false
 
     var authorized: Bool?
+    // The camera is sending pictures (the preview fades in then, instead of
+    // popping up out of black).
+    var running = false
     var position: AVCaptureDevice.Position = .back
     var clips: [Clip] = []
     var recording = false
@@ -61,9 +64,13 @@ final class RecorderModel: NSObject {
         if !configured { configure() }
         let session = self.session
         await Task.detached { session.startRunning() }.value
+        // A moment for the first pictures to reach the screen.
+        try? await Task.sleep(for: .milliseconds(140))
+        running = session.isRunning
     }
 
     func stop() {
+        running = false
         let session = self.session
         Task.detached { session.stopRunning() }
         progressTask?.cancel()
@@ -431,6 +438,9 @@ struct RecorderView: View {
     // Your saved drafts (none in chats).
     var draftCount = 0
     var onDrafts: (() -> Void)? = nil
+    // What was just being edited, shown softly blurred while the camera
+    // wakes up when you come back from the editor (instead of black).
+    var backdrop: UIImage? = nil
 
     enum Mode: String { case short = "15s", video = "60s", photo = "Photo" }
 
@@ -484,7 +494,7 @@ struct RecorderView: View {
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: countdown)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: camera.recording)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: camera.clips.count)
-            .animation(.easeInOut(duration: 0.25), value: ringLight)
+            .animation(Motion.pick(.spring(response: 0.42, dampingFraction: 0.84)), value: ringLight)
             .animation(.easeInOut(duration: 0.25), value: align)
     }
 
@@ -518,8 +528,7 @@ struct RecorderView: View {
         return previewArea(wide: wide)
             .frame(width: width - lightInset * 2)
             .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
-            .overlay { if ringLight { windowEdge } }
-            .background { if ringLight { windowGlow } }
+            .background { if ringLight { windowShadow } }
             .padding(.vertical, ringLight ? 14 : 0)
             .ignoresSafeArea(edges: edges)
     }
@@ -582,61 +591,83 @@ struct RecorderView: View {
         }
     }
 
-    // A thin bright edge around the camera window, and a soft glow behind
-    // it (plain shapes, so the live camera itself is never blurred).
-    private var windowEdge: some View {
+    // The camera window sits on the light like a card: no outline, just a
+    // soft shadow under it (a plain shape, so the camera is never blurred).
+    private var windowShadow: some View {
         RoundedRectangle(cornerRadius: windowCorner, style: .continuous)
-            .strokeBorder(.white.opacity(0.9), lineWidth: 2)
+            .fill(.black)
+            .shadow(color: Color(hex: 0x4A1830).opacity(0.22), radius: 18, y: 8)
             .allowsHitTesting(false)
     }
 
-    private var windowGlow: some View {
-        RoundedRectangle(cornerRadius: windowCorner, style: .continuous)
-            .stroke(.white, lineWidth: 10)
-            .blur(radius: 12)
-            .allowsHitTesting(false)
-    }
-
-    // Warm, cool or pink light.
-    private var lightTones: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "sun.max.fill")
-                .font(.system(size: 12, weight: .heavy))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 6)
+    // Warm, cool or pink light: three round swatches that spring out of the
+    // flash button while the front light is on.
+    private var toneTray: some View {
+        HStack(spacing: 8) {
             ForEach(FrontLightTone.allCases) { t in
                 let on = lightTone == t
                 Button {
                     withAnimation(.easeInOut(duration: 0.35)) { lightTone = t }
+                    showHint("\(t.title) light")
                 } label: {
-                    HStack(spacing: 5) {
-                        Circle().fill(t.color).frame(width: 12, height: 12)
-                            .overlay(Circle().strokeBorder(.black.opacity(0.15), lineWidth: 1))
-                        Text(t.title).font(.jakarta(12, .heavy))
-                    }
-                    .foregroundStyle(on ? Color(hex: 0x2A1620) : .white)
-                    .padding(.horizontal, 10)
-                    .frame(height: 30)
-                    .background(on ? Color.white : Color.clear, in: Capsule())
+                    Circle().fill(t.color)
+                        .frame(width: 26, height: 26)
+                        .overlay(Circle().strokeBorder(.black.opacity(0.12), lineWidth: 1))
+                        .padding(3)
+                        .overlay(Circle().strokeBorder(.white, lineWidth: on ? 2.5 : 0))
+                        .scaleEffect(on ? 1.06 : 0.9)
+                        .frame(width: 36, height: 44)
+                        .contentShape(Rectangle())
                 }
-                .buttonStyle(SoftPressStyle())
+                .buttonStyle(BouncyStyle(scale: 0.85))
                 .accessibilityLabel("\(t.title) light")
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
-        .padding(4)
-        .background(.black.opacity(0.5), in: Capsule())
+        .padding(.horizontal, 6)
+        .background(.black.opacity(0.35), in: Capsule())
+        .overlay(Capsule().strokeBorder(.white.opacity(0.25), lineWidth: 1))
+        .motion(Motion.release, value: lightTone)
         .sensoryFeedback(.selection, trigger: lightTone)
-        .transition(.move(edge: .top).combined(with: .opacity))
+    }
+
+    // Grows out of the flash button and tucks back into it.
+    private var trayMotion: AnyTransition {
+        Motion.reduced ? .opacity : .scale(scale: 0.3, anchor: .trailing).combined(with: .opacity)
     }
 
     @ViewBuilder
     private var cameraLayer: some View {
-        if camera.authorized == true {
-            livePreview
-        } else if camera.authorized == false {
+        if camera.authorized == false {
             accessOff
+        } else {
+            ZStack {
+                waitingBackdrop
+                if camera.authorized == true {
+                    livePreview
+                        .opacity(camera.running ? 1 : 0)
+                }
+            }
+            .animation(.easeOut(duration: 0.4), value: camera.running)
         }
+    }
+
+    // Behind the camera while it wakes up: what you were just editing,
+    // softly blurred, or a dark pink wash.
+    private var waitingBackdrop: some View {
+        Color.clear
+            .overlay {
+                if let backdrop {
+                    Image(uiImage: backdrop).resizable().scaledToFill()
+                        .blur(radius: 26)
+                        .scaleEffect(1.15)
+                        .overlay(Color.black.opacity(0.3))
+                } else {
+                    LinearGradient(colors: [Color(hex: 0x2A1320), Color(hex: 0x12080E)], startPoint: .top, endPoint: .bottom)
+                }
+            }
+            .clipped()
+            .allowsHitTesting(false)
     }
 
     private var livePreview: some View {
@@ -725,7 +756,6 @@ struct RecorderView: View {
                 }
             }
             .padding(.horizontal, 14)
-            if ringLight && !camera.recording { lightTones }
             HStack {
                 Spacer()
                 VStack(spacing: 12) {
@@ -734,6 +764,15 @@ struct RecorderView: View {
                         camera.toggleFlash()
                         showHint(camera.flash ? (camera.position == .front ? "Front light on: pick warm, cool or pink" : "Flash on") : "Flash off")
                     }
+                    .overlay(alignment: .trailing) {
+                        if ringLight && !camera.recording {
+                            toneTray
+                                .fixedSize()
+                                .offset(x: -54)
+                                .transition(trayMotion)
+                        }
+                    }
+                    .zIndex(1)
                     Button {
                         timer = timer == 0 ? 3 : timer == 3 ? 10 : 0
                         showHint(timer == 0 ? "Timer off" : "\(timer)s timer: tap the button, then get ready")

@@ -12,9 +12,17 @@ struct LoginView: View {
     @State private var info: String?
     @State private var legal: LegalDoc?
     @State private var invite = ""
+    @State private var access: Access?
+    @State private var showWays = false
     @FocusState private var focus: Field?
 
     enum Field { case name, email, password }
+
+    // The other ways in (see AccountAccess.swift).
+    enum Access: String, Identifiable {
+        case code, reset, quick, backup
+        var id: String { rawValue }
+    }
 
     var body: some View {
         ScrollView {
@@ -110,9 +118,10 @@ struct LoginView: View {
                 .disabled(busy)
 
                 if !register {
-                    Button("Forgot password?") { Task { await reset() } }
+                    Button("Forgot password?") { access = .reset }
                         .font(.jakarta(13, .bold))
                         .foregroundStyle(Theme.main)
+                    otherWays
                 }
             }
             .padding(.horizontal, 24)
@@ -124,6 +133,60 @@ struct LoginView: View {
         .sugarBackground()
         .sensoryFeedback(.error, trigger: error)
         .sheet(item: $legal) { doc in LegalView(doc: doc) }
+        .sheet(item: $access) { way in
+            switch way {
+            case .code: EmailCodeSheet(purpose: .login, email: email)
+            case .reset: EmailCodeSheet(purpose: .reset, email: email)
+            case .quick: QuickLoginSheet()
+            case .backup: BackupLoginSheet(email: email)
+            }
+        }
+        .onAppear {
+            guard !showWays else { return }
+            withAnimation(Motion.pick(Motion.enter).delay(0.15)) { showWays = true }
+        }
+    }
+
+    // Email code, quick login and backup codes, as three soft tiles.
+    private var otherWays: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 10) {
+                Capsule().fill(Theme.main.opacity(0.18)).frame(height: 1.5)
+                Text("or log in with").font(.jakarta(12, .bold)).foregroundStyle(Palette.muted).fixedSize()
+                Capsule().fill(Theme.main.opacity(0.18)).frame(height: 1.5)
+            }
+            HStack(spacing: 10) {
+                wayTile("Email code", icon: "envelope.badge.fill", index: 0) { access = .code }
+                wayTile("Quick login", icon: "qrcode", index: 1) { access = .quick }
+                wayTile("Backup code", icon: "key.horizontal.fill", index: 2) { access = .backup }
+            }
+        }
+        .padding(.top, 6)
+    }
+
+    private func wayTile(_ title: String, icon: String, index: Int, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(Theme.gradient, in: Circle())
+                Text(title)
+                    .font(.jakarta(12, .heavy))
+                    .foregroundStyle(Palette.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.main.opacity(0.18), lineWidth: 1.5))
+        }
+        .buttonStyle(BouncyStyle(scale: 0.94))
+        .opacity(showWays ? 1 : 0)
+        .offset(y: showWays || Motion.reduced ? 0 : 14)
+        .animation(Motion.staggered(Motion.enter, index).delay(0.15), value: showWays)
     }
 
     private func field<Content: View>(icon: String, content: Content) -> some View {
@@ -156,17 +219,6 @@ struct LoginView: View {
             } else {
                 try await model.signIn(email: email, password: password)
             }
-        } catch {
-            withMotion { self.error = error.localizedDescription }
-        }
-    }
-
-    private func reset() async {
-        error = nil
-        guard !email.isEmpty else { withMotion { error = "Type your email above first." }; return }
-        do {
-            try await AuthClient.shared.sendPasswordReset(email: email)
-            withMotion { info = "Check your email for a link to reset your password." }
         } catch {
             withMotion { self.error = error.localizedDescription }
         }
