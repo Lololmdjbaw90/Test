@@ -16,6 +16,9 @@ struct AccentCard<Art: View>: View {
     var height: CGFloat = 78
     @ViewBuilder var art: () -> Art
 
+    private var edgeColor: Color { picked ? main : light.opacity(0.7) }
+    private var edge: StrokeStyle { picked ? StrokeStyle(lineWidth: 2.5) : StrokeStyle(lineWidth: 1.4, dash: [5, 4]) }
+
     var body: some View {
         VStack(spacing: 6) {
             ZStack(alignment: .bottom) {
@@ -35,8 +38,7 @@ struct AccentCard<Art: View>: View {
             .frame(maxWidth: .infinity)
             .overlay {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(picked ? main : light.opacity(0.7),
-                                  style: picked ? StrokeStyle(lineWidth: 2.5) : StrokeStyle(lineWidth: 1.4, dash: [5, 4]))
+                    .strokeBorder(edgeColor, style: edge)
             }
             .overlay(alignment: .topTrailing) {
                 if picked {
