@@ -113,7 +113,7 @@ struct StatusSheet: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 6) {
                                 ForEach(Array(clearOptions.enumerated()), id: \.offset) { i, option in
-                                    Chip(title: option.0, active: clearAfter == i) { withAnimation(.snappy) { clearAfter = i } }
+                                    Chip(title: option.0, active: clearAfter == i) { withMotion(Motion.standard) { clearAfter = i } }
                                 }
                             }
                         }
@@ -122,7 +122,7 @@ struct StatusSheet: View {
                         Text("Online status").font(.jakarta(13, .heavy)).foregroundStyle(Palette.text2)
                         VStack(spacing: 0) {
                             ForEach([Presence.online, .idle, .dnd, .invisible]) { p in
-                                Button { withAnimation(.snappy) { presence = p } } label: {
+                                Button { withMotion(Motion.standard) { presence = p } } label: {
                                     HStack(spacing: 12) {
                                         PresenceDot(presence: p, size: 20)
                                         VStack(alignment: .leading, spacing: 1) {
@@ -132,13 +132,13 @@ struct StatusSheet: View {
                                         Spacer()
                                         if presence == p {
                                             Image(systemName: "checkmark.circle.fill").font(.system(size: 20)).foregroundStyle(Theme.main)
-                                                .transition(.scale.combined(with: .opacity))
+                                                .transition(.pop)
                                         }
                                     }
                                     .padding(.horizontal, 14).padding(.vertical, 12)
                                     .contentShape(Rectangle())
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(SoftPressStyle())
                                 if p != .invisible { Divider().padding(.leading, 46) }
                             }
                         }
@@ -227,7 +227,7 @@ struct PeopleListSheet: View {
                     }
                 }
                 .padding(16)
-                .animation(.snappy, value: emails)
+                .motion(Motion.standard, value: emails)
             }
             .background(Palette.bg)
             .navigationTitle(kind == .blocked ? "Blocked" : "Ignored")

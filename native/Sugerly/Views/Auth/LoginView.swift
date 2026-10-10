@@ -12,16 +12,26 @@ struct LoginView: View {
     @State private var info: String?
     @State private var legal: LegalDoc?
     @State private var invite = ""
+    @State private var access: Access?
+    @State private var showWays = false
     @FocusState private var focus: Field?
 
     enum Field { case name, email, password }
 
+    // The other ways in (see AccountAccess.swift).
+    enum Access: String, Identifiable {
+        case code, reset, quick, backup
+        var id: String { rawValue }
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 22) {
-                BrandLogo(height: 84)
+                AppBadge(size: 104)
+                    .padding(.top, 40)
+                BrandLogo(height: 64)
                     .shadow(color: Theme.main.opacity(0.4), radius: 22)
-                    .padding(.top, 48)
+                    .padding(.top, -8)
                     .accessibilityLabel("Sugerly")
 
                 VStack(spacing: 6) {
@@ -35,8 +45,8 @@ struct LoginView: View {
                 }
 
                 HStack(spacing: 10) {
-                    Chip(title: "Log in", icon: "heart.fill", active: !register) { withAnimation(.snappy) { register = false } }
-                    Chip(title: "Sign up", icon: "sparkles", active: register) { withAnimation(.snappy) { register = true } }
+                    Chip(title: "Log in", icon: "heart.fill", active: !register) { withMotion(Motion.standard) { register = false } }
+                    Chip(title: "Sign up", icon: "sparkles", active: register) { withMotion(Motion.standard) { register = true } }
                 }
 
                 VStack(spacing: 12) {
@@ -87,15 +97,15 @@ struct LoginView: View {
 
                 if let error {
                     Label(error, systemImage: "exclamationmark.circle.fill")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.red)
+                        .font(.jakarta(13, .semibold))
+                        .foregroundStyle(Palette.danger)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .transition(.opacity)
                 }
                 if let info {
                     Label(info, systemImage: "checkmark.circle.fill")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.green)
+                        .font(.jakarta(13, .semibold))
+                        .foregroundStyle(Palette.success)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
@@ -108,9 +118,10 @@ struct LoginView: View {
                 .disabled(busy)
 
                 if !register {
-                    Button("Forgot password?") { Task { await reset() } }
+                    Button("Forgot password?") { access = .reset }
                         .font(.jakarta(13, .bold))
                         .foregroundStyle(Theme.main)
+                    otherWays
                 }
             }
             .padding(.horizontal, 24)
@@ -122,6 +133,60 @@ struct LoginView: View {
         .sugarBackground()
         .sensoryFeedback(.error, trigger: error)
         .sheet(item: $legal) { doc in LegalView(doc: doc) }
+        .sheet(item: $access) { way in
+            switch way {
+            case .code: EmailCodeSheet(purpose: .login, email: email)
+            case .reset: EmailCodeSheet(purpose: .reset, email: email)
+            case .quick: QuickLoginSheet()
+            case .backup: BackupLoginSheet(email: email)
+            }
+        }
+        .onAppear {
+            guard !showWays else { return }
+            withAnimation(Motion.pick(Motion.enter).delay(0.15)) { showWays = true }
+        }
+    }
+
+    // Email code, quick login and backup codes, as three soft tiles.
+    private var otherWays: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 10) {
+                Capsule().fill(Theme.main.opacity(0.18)).frame(height: 1.5)
+                Text("or log in with").font(.jakarta(12, .bold)).foregroundStyle(Palette.muted).fixedSize()
+                Capsule().fill(Theme.main.opacity(0.18)).frame(height: 1.5)
+            }
+            HStack(spacing: 10) {
+                wayTile("Email code", icon: "envelope.badge.fill", index: 0) { access = .code }
+                wayTile("Quick login", icon: "qrcode", index: 1) { access = .quick }
+                wayTile("Backup code", icon: "key.horizontal.fill", index: 2) { access = .backup }
+            }
+        }
+        .padding(.top, 6)
+    }
+
+    private func wayTile(_ title: String, icon: String, index: Int, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(Theme.gradient, in: Circle())
+                Text(title)
+                    .font(.jakarta(12, .heavy))
+                    .foregroundStyle(Palette.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.main.opacity(0.18), lineWidth: 1.5))
+        }
+        .buttonStyle(BouncyStyle(scale: 0.94))
+        .opacity(showWays ? 1 : 0)
+        .offset(y: showWays || Motion.reduced ? 0 : 14)
+        .animation(Motion.staggered(Motion.enter, index).delay(0.15), value: showWays)
     }
 
     private func field<Content: View>(icon: String, content: Content) -> some View {
@@ -139,11 +204,11 @@ struct LoginView: View {
     private func submit() async {
         error = nil
         info = nil
-        if register && !agreed { withAnimation { error = "Please agree to the Terms and Community Guidelines to sign up." }; return }
-        if register && name.trimmingCharacters(in: .whitespaces).isEmpty { withAnimation { error = "Pick a display name." }; return }
+        if register && !agreed { withMotion { error = "Please agree to the Terms and Community Guidelines to sign up." }; return }
+        if register && name.trimmingCharacters(in: .whitespaces).isEmpty { withMotion { error = "Pick a display name." }; return }
         if register {
             let check = ModEngine.analyze(name, kind: .name)
-            if check.blocked { withAnimation { error = check.reason }; return }
+            if check.blocked { withMotion { error = check.reason }; return }
         }
         busy = true
         defer { busy = false }
@@ -155,18 +220,7 @@ struct LoginView: View {
                 try await model.signIn(email: email, password: password)
             }
         } catch {
-            withAnimation { self.error = error.localizedDescription }
-        }
-    }
-
-    private func reset() async {
-        error = nil
-        guard !email.isEmpty else { withAnimation { error = "Type your email above first." }; return }
-        do {
-            try await AuthClient.shared.sendPasswordReset(email: email)
-            withAnimation { info = "Check your email for a link to reset your password." }
-        } catch {
-            withAnimation { self.error = error.localizedDescription }
+            withMotion { self.error = error.localizedDescription }
         }
     }
 }
@@ -199,7 +253,7 @@ enum LegalDoc: String, Identifiable, CaseIterable {
             ("No warranty", "Sugerly is provided \"as is\". We work hard to keep it running and safe, but we can't promise it will always be available or error-free. To the extent the law allows, we aren't liable for indirect or consequential losses. Nothing in these Terms limits rights you have by law as a consumer."),
             ("Apple", "If you use the iPhone or iPad app, these Terms are between you and Sugerly, not Apple. Apple isn't responsible for the app, its content, support or any claims about it, and Apple and its subsidiaries may enforce these Terms as third-party beneficiaries."),
             ("Changes", "We may update these Terms. If the changes are important we'll tell you in the app (What's new). Using Sugerly after that means you accept the new Terms."),
-            ("Contact", "Questions or requests? Email sugerlysupport@gmail.com, or use Contact us in the app (Settings → Help & legal) or on the Help page of the website. We usually reply within 2 days."),
+            ("Contact", "Questions or requests? Email sugerlysupport@gmail.com, or use the Help & support chat in the app (Settings → Help & legal, or Help & support in the menu) or on the Help page of the website. We usually reply within 2 days."),
         ]
         case .privacy: return [
             ("What we collect", "Account details you give us: email address, display name, profile picture, banner and bio. What you create: artworks, posts, reels, music, comments, messages, likes, follows and reports. If you use commissions: your orders, prices and payment status (card details go straight to Stripe; we never see or store your full card number). Artists can add a PayPal email for payouts, which only admins can see. We don't collect your location, contacts or advertising identifiers, and we don't track you across other apps or websites."),
@@ -215,7 +269,7 @@ enum LegalDoc: String, Identifiable, CaseIterable {
             ("Children", "Sugerly isn't for children under 13 and we don't knowingly collect their data. If you believe a child under 13 has an account, contact us and we'll delete it."),
             ("Security", "Data is sent over encrypted connections and protected by Firebase security rules that only let people read and change what they're allowed to. Only our payment server can mark an order as paid."),
             ("Changes", "We'll tell you in the app if this policy changes in an important way."),
-            ("Contact", "Questions or requests? Email sugerlysupport@gmail.com, or use Contact us in the app (Settings → Help & legal) or on the Help page of the website. We usually reply within 2 days."),
+            ("Contact", "Questions or requests? Email sugerlysupport@gmail.com, or use the Help & support chat in the app (Settings → Help & legal, or Help & support in the menu) or on the Help page of the website. We usually reply within 2 days."),
         ]
         case .guidelines: return [
             ("Be kind", "Sugerly is a friendly place for artists. Give feedback kindly, celebrate each other's work, and never bully, harass or threaten anyone."),
@@ -250,56 +304,3 @@ struct LegalView: View {
     }
 }
 
-// Contact the Sugerly team. Lands in Admin → Reports as a "support" request
-// (same as the website's Help page); the team answers by direct message.
-struct ContactUsSheet: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    @State private var text = ""
-    @State private var sending = false
-    @State private var error: String?
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("How can we help?", text: $text, axis: .vertical)
-                        .lineLimit(5...10)
-                } footer: {
-                    Text("Questions, problems, account or privacy requests. We'll reply with a message in Sugerly, usually within 2 days. You can also email sugerlysupport@gmail.com.")
-                }
-                if let error { Section { Text(error).foregroundStyle(.red) } }
-            }
-            .navigationTitle("Contact us")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(sending ? "Sending…" : "Send") { Task { await send() } }
-                        .disabled(sending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-        }
-    }
-
-    private func send() async {
-        guard let me = model.me else { return }
-        sending = true
-        defer { sending = false }
-        let now = FS.nowISO()
-        let request: Doc = [
-            "target_type": "support", "target_id": me.email, "target_owner_email": me.email, "target_preview": "",
-            "link": "/Profile?email=\(me.email.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? me.email)",
-            "reason": "Support request", "details": String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1000)),
-            "reporter_email": me.email, "reporter_name": me.displayName, "status": "open",
-            "created_by": me.email, "created_date": now, "updated_date": now,
-        ]
-        do {
-            try await FS.create("Report", request)
-            dismiss()
-            model.showToast("Sent! We'll reply in your messages", icon: "paperplane.fill")
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-}

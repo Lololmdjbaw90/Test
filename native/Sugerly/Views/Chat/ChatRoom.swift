@@ -11,6 +11,7 @@ import AVFoundation
 // shared reels and call buttons in the header.
 struct ChatView: View {
     let conversation: Conversation
+    var loadMessages = true
     @Environment(AppModel.self) private var model
     @Environment(ChatStore.self) private var chats
     @Environment(CallCenter.self) private var calls
@@ -64,17 +65,20 @@ struct ChatView: View {
                         }
                         row(message, previous: previous)
                             .id(message.id)
-                            .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
+                            .transition(Self.arrival(mine: message.authorEmail == me))
                     }
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 10)
+                // On iPad the conversation stays a readable width.
+                .frame(maxWidth: 760)
+                .frame(maxWidth: .infinity)
             }
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: messages.last?.id) { _, id in
                 guard let id else { return }
-                withAnimation(.snappy) { proxy.scrollTo(id, anchor: .bottom) }
+                withMotion(Motion.standard) { proxy.scrollTo(id, anchor: .bottom) }
             }
         }
         .background(ChatWallpaper().ignoresSafeArea())
@@ -124,10 +128,12 @@ struct ChatView: View {
             Alerts.shared.openConversation = conversation.id
         }
         .onDisappear {
+            typing = false
             if Alerts.shared.openConversation == conversation.id { Alerts.shared.openConversation = nil }
             recorder.cancel()
         }
         .task {
+            guard loadMessages else { loaded = true; return }
             restoreCache()
             await poll()
         }
@@ -145,7 +151,7 @@ struct ChatView: View {
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SoftPressStyle())
     }
 
     private var status: String {
@@ -167,7 +173,6 @@ struct ChatView: View {
     private var emptyState: some View {
         VStack(spacing: 12) {
             Avatar(url: conversation.picture(model), name: conversation.title(model), size: 88)
-                .overlay(Circle().strokeBorder(Theme.gradient, lineWidth: 3))
                 .shadow(color: Theme.pink.opacity(0.3), radius: 14, y: 6)
             Text(conversation.title(model)).font(.display(28)).foregroundStyle(Palette.text)
             Label("Messages here are just between you\(conversation.isGroup ? " all" : " two")", systemImage: "lock.fill")
@@ -180,6 +185,22 @@ struct ChatView: View {
         .padding(.top, 60)
     }
 
+    // A new message springs up out of its own side, from a little smaller,
+    // like it was just sent (or just arrived).
+    static func arrival(mine: Bool) -> AnyTransition {
+        guard !Motion.reduced else { return .opacity }
+        return .asymmetric(
+            insertion: .scale(scale: 0.6, anchor: mine ? .bottomTrailing : .bottomLeading)
+                .combined(with: .offset(y: 14))
+                .combined(with: .opacity),
+            removal: .opacity.animation(Motion.exit))
+    }
+
+    // How a message arrives: a quick spring with a little bounce.
+    static var arrive: Animation {
+        Motion.pick(.spring(response: 0.38, dampingFraction: 0.72))
+    }
+
     // MARK: rows
 
     @ViewBuilder
@@ -190,16 +211,16 @@ struct ChatView: View {
         } else {
             let mine = message.authorEmail == me
             let first = previous == nil || previous?.authorEmail != message.authorEmail || previous?.kind == "call" || gap(previous!, message) || !sameDay(previous!, message)
-            SwipeToReply(onReply: { withAnimation(.snappy) { replyTo = message }; typing = true }) {
+            SwipeToReply(onReply: { withMotion(Motion.standard) { replyTo = message }; typing = true }) {
                 ChatBubble(message: message, mine: mine, tail: first,
                            showName: conversation.isGroup && !mine && first,
                            read: mine && message.readBy.contains { $0 != me },
                            me: me,
                            onReact: { react(message, $0) },
-                           onQuote: { scrollTarget in _ = scrollTarget })
+                           onQuote: { scrollTarget in _ = scrollTarget },
+                           menuItems: { AnyView(menu(message)) })
             }
             .padding(.top, first ? 6 : 0)
-            .contextMenu { menu(message) }
         }
     }
 
@@ -211,14 +232,14 @@ struct ChatView: View {
             }
         }
         .controlGroupStyle(.compactMenu)
-        Button { withAnimation(.snappy) { replyTo = message }; typing = true } label: { Label("Reply", systemImage: "arrowshape.turn.up.left") }
+        Button { withMotion(Motion.standard) { replyTo = message }; typing = true } label: { Label("Reply", systemImage: "arrowshape.turn.up.left") }
         if !message.displayText.isEmpty {
             Button { UIPasteboard.general.string = message.displayText; model.showToast("Copied", icon: "doc.on.doc.fill") } label: { Label("Copy", systemImage: "doc.on.doc") }
         }
         if message.authorEmail == me {
             Button(role: .destructive) { confirmDelete = message } label: { Label("Delete message", systemImage: "trash") }
         } else {
-            Button { reporting = ReportSheet.Target(id: message.id, type: "message", ownerEmail: message.authorEmail, preview: message.text, link: "/DirectMessages") } label: { Label("Report", systemImage: "flag") }
+            Button { reporting = ReportSheet.Target(id: message.id, type: "message", ownerEmail: message.authorEmail, preview: message.text, link: "/DirectMessages", collection: "DirectMessage", media: [message.imageURL, message.audioURL, message.videoURL].first(where: { !$0.isEmpty }) ?? "") } label: { Label("Report", systemImage: "flag") }
         }
     }
 
@@ -278,6 +299,8 @@ struct ChatView: View {
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .background {
             Palette.bg.opacity(0.96)
                 .overlay(alignment: .top) { Rectangle().fill(Palette.border).frame(height: 0.5) }
@@ -308,18 +331,13 @@ struct ChatView: View {
             } else {
                 HStack(alignment: .bottom, spacing: 8) {
                     HStack(alignment: .bottom, spacing: 4) {
-                        Menu {
-                            Button { studio = true } label: { Label("Photo or video", systemImage: "camera.on.rectangle") }
-                            Button { gifs = true } label: { Label("GIFs & stickers", systemImage: "photo.stack") }
-                        } label: {
-                            Image(systemName: "plus").font(.system(size: 19, weight: .semibold)).foregroundStyle(Palette.text2)
-                                .frame(width: 36, height: 36)
-                        }
                         TextField("Message", text: $draft, axis: .vertical)
+                            .accessibilityIdentifier("chat-message-input")
                             .font(.jakarta(16))
                             .lineLimit(1...6)
                             .focused($typing)
                             .padding(.vertical, 8)
+                            .padding(.leading, 10)
                         Button { gifs = true } label: {
                             Text("GIF").font(.jakarta(11, .heavy)).foregroundStyle(Palette.text2)
                                 .padding(.horizontal, 5).padding(.vertical, 2)
@@ -333,7 +351,7 @@ struct ChatView: View {
                                     .frame(width: 34, height: 36)
                             }
                             .accessibilityLabel("Send a photo or video")
-                            .transition(.scale.combined(with: .opacity))
+                            .transition(.pop)
                         }
                     }
                     .padding(.horizontal, 6)
@@ -359,12 +377,14 @@ struct ChatView: View {
                 }
             }
         }
-        .animation(.snappy, value: draft.isEmpty)
-        .animation(.snappy, value: replyTo?.id)
-        .animation(.snappy, value: recorder.recording)
+        .motion(Motion.standard, value: draft.isEmpty)
+        .motion(Motion.standard, value: replyTo?.id)
+        .motion(Motion.standard, value: recorder.recording)
         .padding(.horizontal, 8)
         .padding(.top, 8)
         .padding(.bottom, 8)
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
         .background {
             Palette.bg.opacity(0.96)
                 .overlay(alignment: .top) { Rectangle().fill(Palette.border).frame(height: 0.5) }
@@ -380,7 +400,7 @@ struct ChatView: View {
                 Text(ChatBubble.preview(message)).font(.jakarta(13)).foregroundStyle(Palette.text2).lineLimit(1)
             }
             Spacer()
-            Button { withAnimation(.snappy) { replyTo = nil } } label: {
+            Button { withMotion(Motion.standard) { replyTo = nil } } label: {
                 Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(Palette.muted)
                     .frame(width: 30, height: 30).background(Palette.surface2, in: Circle())
             }
@@ -479,7 +499,7 @@ struct ChatView: View {
             ChatCache.save(conversation.id, messages)
         } else if !fresh.isEmpty || !loaded {
             if !loaded { hasOlder = docs.count >= page }
-            withAnimation(loaded ? .snappy : nil) {
+            withAnimation(loaded ? Self.arrive : nil) {
                 messages = (messages + fresh).sorted { $0.created < $1.created }
             }
             ChatCache.save(conversation.id, messages)
@@ -550,14 +570,14 @@ struct ChatView: View {
         var pending = Message(data)
         pending.id = "pending-\(UUID().uuidString)"
         pending.pending = true
-        withAnimation(.snappy) { messages.append(pending); replyTo = nil }
+        withAnimation(Self.arrive) { messages.append(pending); replyTo = nil }
         do {
             let doc = try await FS.create("DirectMessage", data)
             let created = Message(doc)
             if let i = messages.firstIndex(where: { $0.id == pending.id }) { messages[i] = created }
             chats.upsert(created, me: me)
         } catch {
-            withAnimation { messages.removeAll { $0.id == pending.id } }
+            withMotion { messages.removeAll { $0.id == pending.id } }
             failed = "Couldn't send — \(error.localizedDescription)"
         }
     }
@@ -567,6 +587,7 @@ struct ChatView: View {
         guard !text.isEmpty, let data = payload(text: text, imageURL: "") else { return }
         guard await TextGuard.clear([text], kind: .message, model: model) else { return }
         draft = ""
+        TapSound.play(.send)
         await post(data)
     }
 
@@ -577,7 +598,7 @@ struct ChatView: View {
         switch media {
         case .photos(let images):
             for (i, image) in images.enumerated() {
-                withAnimation { uploading = images.count > 1 ? "Sending photo \(i + 1) of \(images.count)…" : "Sending photo…" }
+                withMotion { uploading = images.count > 1 ? "Sending photo \(i + 1) of \(images.count)…" : "Sending photo…" }
                 guard let jpeg = ImageTools.jpeg(image, maxSide: 1600) else { continue }
                 do {
                     let url = try await StorageClient.upload(jpeg, contentType: "image/jpeg", fileExtension: "jpg")
@@ -587,7 +608,7 @@ struct ChatView: View {
                 }
             }
         case .video(let file, let cover):
-            withAnimation { uploading = "Sending video…" }
+            withMotion { uploading = "Sending video…" }
             do {
                 let data = try Data(contentsOf: file)
                 guard data.count < 58 * 1024 * 1024 else { throw APIError(message: "That video is too big — trim it a little shorter.") }
@@ -601,7 +622,7 @@ struct ChatView: View {
                 failed = "Couldn't send the video — \(error.localizedDescription)"
             }
         }
-        withAnimation { uploading = nil }
+        withMotion { uploading = nil }
     }
 
     private func sendMedia(_ url: String) async {
@@ -631,7 +652,7 @@ struct ChatView: View {
     }
 
     private func delete(_ message: Message) {
-        withAnimation { messages.removeAll { $0.id == message.id } }
+        withMotion { messages.removeAll { $0.id == message.id } }
         ChatCache.save(conversation.id, messages)
         Task { try? await FS.delete("DirectMessage", message.id) }
     }
@@ -746,6 +767,9 @@ struct ChatBubble: View {
     var me = ""
     var onReact: (String) -> Void = { _ in }
     var onQuote: (String) -> Void = { _ in }
+    // Long-press menu. Only the bubble itself lifts (in its own shape), not
+    // the whole width of the chat.
+    var menuItems: (() -> AnyView)? = nil
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
 
@@ -770,10 +794,14 @@ struct ChatBubble: View {
                         MessageMedia(url: message.imageURL)
                         meta.padding(.horizontal, 8).padding(.vertical, 3).background(Palette.surface.opacity(0.9), in: Capsule())
                     }
+                    .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .modifier(BubbleMenu(items: menuItems))
                 } else {
                     content
                         .padding(4)
                         .background { bubbleFill }
+                        .contentShape(.contextMenuPreview, BubbleShape(mine: mine, tail: tail))
+                        .modifier(BubbleMenu(items: menuItems))
                         .opacity(message.pending ? 0.7 : 1)
                 }
                 if !mine { Spacer(minLength: 54) }
@@ -825,12 +853,12 @@ struct ChatBubble: View {
                 VoiceNoteBubble(id: message.id, url: message.audioURL, seconds: message.audioSeconds, mine: mine)
                     .overlay(alignment: .bottomTrailing) { meta.padding(.trailing, 6).padding(.bottom, 2) }
             } else if !message.displayText.isEmpty {
-                ZStack(alignment: .bottomTrailing) {
-                    (Text(message.displayText) + Text(verbatim: mine ? "\u{2002}\u{2002}\u{2002}\u{2002}\u{2002}\u{2002}\u{2002}\u{2002}" : "\u{2002}\u{2002}\u{2002}\u{2002}\u{2002}\u{2002}"))
+                HStack(alignment: .lastTextBaseline, spacing: 6) {
+                    Text(message.displayText)
                         .font(.jakarta(15.5))
                         .foregroundStyle(Palette.text)
-                        .padding(.horizontal, 8).padding(.top, 4).padding(.bottom, 6)
-                    meta.padding(.trailing, 7).padding(.bottom, 4)
+                        .padding(.leading, 8).padding(.top, 4).padding(.bottom, 6)
+                    meta.fixedSize().padding(.trailing, 7)
                 }
             } else {
                 HStack { Spacer(minLength: 0); meta }.padding(.horizontal, 6).padding(.bottom, 3)
@@ -864,7 +892,7 @@ struct ChatBubble: View {
                     .shadow(color: .black.opacity(0.06), radius: 2, y: 1)
                 }
                 .buttonStyle(BouncyStyle(scale: 0.85))
-                .transition(.scale.combined(with: .opacity))
+                .transition(.pop)
             }
         }
         .padding(.horizontal, 10)
@@ -876,6 +904,19 @@ struct ChatBubble: View {
         let palette: [UInt32] = [0xD9577F, 0x7C5CF0, 0x16A37F, 0xEE6E40, 0x2F80E0, 0xB8438A, 0x0E9AA7, 0xC77D10]
         let sum = email.unicodeScalars.reduce(0) { $0 + Int($1.value) }
         return Color(hex: palette[sum % palette.count])
+    }
+}
+
+// The long-press menu on a message bubble, when it has one.
+private struct BubbleMenu: ViewModifier {
+    let items: (() -> AnyView)?
+
+    func body(content: Content) -> some View {
+        if let items {
+            content.contextMenu { items() }
+        } else {
+            content
+        }
     }
 }
 
@@ -984,7 +1025,7 @@ struct SharedReelCard: View {
     var body: some View {
         Group {
             if let loaded {
-                NavigationLink(value: Route.reel(loaded)) { card }.buttonStyle(.plain)
+                NavigationLink(value: Route.reel(loaded)) { card }.buttonStyle(SoftPressStyle())
             } else {
                 card
             }

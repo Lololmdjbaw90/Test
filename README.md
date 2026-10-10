@@ -48,8 +48,8 @@ Demo login (offline mode only): **admin@mimilocks.local / admin123**.
 
 ## Fonts, sounds & haptics
 
-- Fonts are bundled with the app: Bubbly (headings), Cute Here (labels and
-  Bubbly's missing digits) and Plus Jakarta Sans (body). Sources are in
+- OFL fonts are bundled with the app: Bubblegum Sans (headings), Caveat Brush
+  (playful labels) and Plus Jakarta Sans (body). Sources are in
   `brand/`, the web versions in `src/assets/fonts/`.
 - `src/lib/feedback.js` plays haptics (native Taptic Engine in the iOS app)
   and tiny synthesized sounds: `feedback("like" | "save" | "send" | "success" |

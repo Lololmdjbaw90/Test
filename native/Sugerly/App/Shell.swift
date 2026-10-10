@@ -19,33 +19,20 @@ enum Route: Hashable {
     case server(Server)
     case channel(Server, ServerChannel)
     case voice(Server, ServerChannel)
+    case support
+    case supportTicket(String)
+    case notifications
 }
 
 enum AppTab: Hashable {
-    case home, community, gallery, reels, chat, me
-    var order: Int {
-        switch self {
-        case .home: 0
-        case .community: 1
-        case .gallery: 2
-        case .reels: 3
-        case .chat: 4
-        case .me: 5
-        }
-    }
+    case home, community, gallery, reels, chat
 }
 
 enum Composer: String, Identifiable { case post, artwork, reel, track; var id: String { rawValue } }
 
-// Pages open and close with the iPhone's own smooth animation. (Turning it
-// off made pages jump, and could leave a page without its top bar, so the
-// back button wasn't there.)
-extension Binding where Value == [Route] {
-    var instant: Binding<[Route]> { self }
-}
-
-// Swipe from the left edge to go back, even though pages use our own back
-// button (hiding the system one normally turns the swipe off too).
+// Swipe from the left edge to go back on every page, also on the full
+// screen ones (Reels, Music) whose top bar is hidden: hiding the bar
+// normally turns the swipe off too.
 extension UINavigationController: @retroactive UIGestureRecognizerDelegate {
     override open func viewDidLoad() {
         super.viewDidLoad()
@@ -53,33 +40,26 @@ extension UINavigationController: @retroactive UIGestureRecognizerDelegate {
     }
 
     public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        viewControllers.count > 1
+        viewControllers.count > 1 && transitionCoordinator == nil && presentedViewController == nil
     }
 }
 
-// Where a tap leads, shared by every tab's navigation stack.
+// Where a tap leads, shared by every tab. Every page has exactly one back
+// button: iPhone's own, in iPhone's own top bar (pages never add one).
 struct RouteView: View {
     let route: Route
     @Binding var path: [Route]
+    var loadContent = true
 
     var body: some View {
         page
-            // Our own back button (the swipe from the left edge works too).
-            .navigationBarBackButtonHidden(true)
+            .navigationBarBackButtonHidden(fullScreen)
             .toolbar(fullScreen ? .hidden : .visible, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { back() } label: {
-                        Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold))
-                            .frame(width: 36, height: 36)
-                            .contentShape(Rectangle())
-                    }
-                    .accessibilityLabel("Back")
-                }
-            }
+            .toolbar(focused ? .hidden : .automatic, for: .tabBar)
+            .bottomDock(!focused)
     }
 
-    // Reels and Music bring their own back button.
+    // Reels and Music fill the screen and bring their own back button.
     private var fullScreen: Bool {
         switch route {
         case .reel, .music: return true
@@ -87,9 +67,13 @@ struct RouteView: View {
         }
     }
 
-    private func back() {
-        guard !path.isEmpty else { return }
-        withAnimation(.smooth(duration: 0.3)) { _ = path.popLast() }
+    // Chats, comments and full screen pages get the whole screen: the tab
+    // bar slides away so the typing bar sits at the bottom.
+    private var focused: Bool {
+        switch route {
+        case .chat, .channel, .voice, .post, .artwork, .reel, .music, .support, .supportTicket: return true
+        default: return false
+        }
     }
 
     @ViewBuilder
@@ -97,21 +81,24 @@ struct RouteView: View {
         switch route {
         case .post(let post): PostDetailView(postId: post.id, initial: post, path: $path)
         case .person(let email): PersonView(email: email, path: $path)
-        case .chat(let conversation): ChatView(conversation: conversation)
+        case .chat(let conversation): ChatView(conversation: conversation, loadMessages: loadContent)
         case .artwork(let artwork): ArtworkDetailView(artwork: artwork, path: $path)
         case .reel(let reel): SingleReelView(reel: reel, path: $path)
         case .gallery: GalleryView(path: $path)
         case .music: MusicView(path: $path)
         case .admin: AdminView()
-        case .servers: ServerHubView(path: $path).navigationTitle("Servers").navigationBarTitleDisplayMode(.inline).sugarBackground()
+        case .servers: ServersHome(path: $path)
         case .people: PeopleView(path: $path)
         case .commissions: CommissionsView(path: $path)
         case .commissionOrder(let id): CommissionOrderView(orderId: id, path: $path)
         case .topArtists: TopArtistsView(path: $path)
         case .updates: UpdatesView()
-        case .server(let server): ServerHubView(path: $path, initial: server).navigationTitle(server.name).navigationBarTitleDisplayMode(.inline).sugarBackground()
+        case .server(let server): ServerPage(server: server, path: $path)
         case .channel(let server, let channel): ChannelChatView(server: server, channel: channel)
         case .voice(let server, let channel): VoiceRoomView(server: server, channel: channel)
+        case .support: SupportView()
+        case .supportTicket(let email): SupportTicketView(email: email)
+        case .notifications: NotificationsPage(path: $path)
         }
     }
 }
@@ -120,18 +107,65 @@ extension View {
     func sugarRoutes(_ path: Binding<[Route]>) -> some View {
         navigationDestination(for: Route.self) { route in RouteView(route: route, path: path) }
     }
-
 }
 
-// Presses squish a little and spring back, with a light tap (all buttons).
+// Icon buttons: a squish the moment your finger lands (with a soft click),
+// a springy return with a tiny overshoot when you let go, and the icon
+// inside gives a little hop.
 struct BouncyStyle: ButtonStyle {
-    var scale: CGFloat = 0.93
+    var scale: CGFloat = 0.94
+    var sound = true
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? scale : 1)
-            .brightness(configuration.isPressed ? -0.03 : 0)
-            .animation(.spring(response: 0.28, dampingFraction: 0.55), value: configuration.isPressed)
-            .clickSound(configuration.isPressed)
+        JellyPress(content: configuration.label, pressed: configuration.isPressed, scale: scale, sound: sound)
+    }
+}
+
+// Links and text buttons: the same, gentler and quiet (they're everywhere),
+// with no hop.
+struct SoftPressStyle: ButtonStyle {
+    var scale: CGFloat = 0.97
+    func makeBody(configuration: Configuration) -> some View {
+        JellyPress(content: configuration.label, pressed: configuration.isPressed, scale: scale, sound: false, fade: true, hop: false)
+    }
+}
+
+// List rows inside a card: a soft pink highlight, a tiny squish, and the
+// row's icon hops when you let go.
+struct RowPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        JellyPress(content: configuration.label.contentShape(Rectangle()).background(configuration.isPressed ? Palette.surface2 : Color.clear),
+                   pressed: configuration.isPressed, scale: 0.985, sound: false)
+    }
+}
+
+// The press itself. Down answers straight away (fast ease-out, plus the
+// click on the same frame). Up is a spring, so a quick second tap carries
+// on from wherever the button is instead of restarting. With Reduce Motion
+// it only dims a touch.
+struct JellyPress<Content: View>: View {
+    let content: Content
+    let pressed: Bool
+    var scale: CGFloat = 0.94
+    var sound = true
+    var fade = false
+    var hop = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var pops = 0
+
+    var body: some View {
+        content
+            .symbolEffect(.bounce, value: pops)
+            .scaleEffect(pressed && !reduceMotion ? scale : 1)
+            .brightness(pressed ? -0.04 : 0)
+            .opacity(fade && pressed ? 0.85 : 1)
+            .animation(pressed ? Motion.press : (reduceMotion ? Motion.fade : Motion.release), value: pressed)
+            .onChange(of: pressed) { _, down in
+                if down {
+                    if sound { TapSound.play(.tap) }
+                } else if hop && !reduceMotion {
+                    pops += 1
+                }
+            }
     }
 }
 
@@ -142,151 +176,305 @@ extension View {
     }
 }
 
+// Soft sounds: the menu and the + sheet whoosh open and closed, and a
+// little bell rings when a message or notification comes in (not for what's
+// already waiting when the app opens).
+private struct ShellSounds: ViewModifier {
+    let chats: ChatStore
+    let notes: NotificationsStore
+    @Environment(AppModel.self) private var model
+    @State private var ready = false
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: model.showMenu) { _, open in TapSound.play(open ? .open : .close) }
+            .onChange(of: model.showCreate) { _, open in TapSound.play(open ? .open : .close) }
+            .onChange(of: chats.unread) { old, new in if ready && new > old { TapSound.play(.receive) } }
+            .onChange(of: notes.unread) { old, new in if ready && new > old { TapSound.play(.receive) } }
+            .task {
+                try? await Task.sleep(for: .seconds(8))
+                ready = true
+            }
+    }
+}
+
+// Which tab is open and the pages open on each tab. Each tab's pages only
+// redraw that tab: opening your account, the + or a sheet doesn't redraw
+// all five tabs (that made opening them stutter).
+@MainActor
+@Observable
+final class Navigator {
+    var tab: AppTab = .home
+    var home: [Route] = []
+    var community: [Route] = []
+    var gallery: [Route] = []
+    var reels: [Route] = []
+    var chat: [Route] = []
+    // The page that makes a post / drawing / reel / track.
+    var composer: Composer?
+
+    subscript(_ t: AppTab) -> [Route] {
+        get {
+            switch t {
+            case .home: return home
+            case .community: return community
+            case .gallery: return gallery
+            case .reels: return reels
+            case .chat: return chat
+            }
+        }
+        set {
+            switch t {
+            case .home: home = newValue
+            case .community: community = newValue
+            case .gallery: gallery = newValue
+            case .reels: reels = newValue
+            case .chat: chat = newValue
+            }
+        }
+    }
+
+    // A tab's pages. A quick double tap opens a page once, not twice (which
+    // used to need two taps on Back to get out again).
+    func path(_ t: AppTab) -> Binding<[Route]> {
+        Binding(get: { self[t] }, set: { next in
+            var clean: [Route] = []
+            for route in next where clean.last != route { clean.append(route) }
+            self[t] = clean
+        })
+    }
+
+    // Opens a page on the tab you're on.
+    func push(_ route: Route) {
+        guard self[tab].last != route else { return }
+        self[tab].append(route)
+    }
+}
+
+// The five tabs, each its own view with its own pages.
+private struct ShellTabs: View {
+    let nav: Navigator
+    @Environment(ChatStore.self) private var chats
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    // Tapping the tab you're already on takes it back to its first page.
+    private var selection: Binding<AppTab> {
+        Binding(get: { nav.tab }, set: { next in
+            if next == nav.tab { nav[next] = [] }
+            TapSound.play(.select)
+            nav.tab = next
+        })
+    }
+
+    var body: some View {
+        TabView(selection: selection) {
+            HomeTab(nav: nav)
+                .environment(\.horizontalSizeClass, sizeClass)
+                .tabItem { Label("Home", systemImage: "house") }
+                .tag(AppTab.home)
+            CommunityTab(nav: nav)
+                .environment(\.horizontalSizeClass, sizeClass)
+                .tabItem { Label("Community", systemImage: "person.2") }
+                .tag(AppTab.community)
+            GalleryTab(nav: nav)
+                .environment(\.horizontalSizeClass, sizeClass)
+                .tabItem { Label("Fan Art", systemImage: "paintpalette") }
+                .tag(AppTab.gallery)
+            ReelsTab(nav: nav)
+                .environment(\.horizontalSizeClass, sizeClass)
+                .tabItem { Label("Reels", systemImage: "play.rectangle") }
+                .tag(AppTab.reels)
+            ChatTab(nav: nav)
+                .environment(\.horizontalSizeClass, sizeClass)
+                .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
+                .badge(chats.unread)
+                .tag(AppTab.chat)
+        }
+        .compactTabBar()
+        .tint(Theme.main)
+        // iPad: the tab bar sits at the bottom like on iPhone. (iPadOS puts
+        // the tabs at the top, squeezed in with each page's title and
+        // buttons, which looked crowded.) The pages inside keep their iPad
+        // layout.
+        .environment(\.horizontalSizeClass, .compact)
+    }
+}
+
+private struct HomeTab: View {
+    let nav: Navigator
+    var body: some View {
+        let path = nav.path(.home)
+        NavigationStack(path: path) {
+            HomeView(path: path, compose: { nav.composer = $0 })
+                .sugarRoutes(path)
+        }
+    }
+}
+
+private struct CommunityTab: View {
+    let nav: Navigator
+    var body: some View {
+        let path = nav.path(.community)
+        NavigationStack(path: path) {
+            CommunityView(path: path, compose: { nav.composer = .post })
+                .sugarRoutes(path)
+        }
+    }
+}
+
+private struct GalleryTab: View {
+    let nav: Navigator
+    var body: some View {
+        let path = nav.path(.gallery)
+        NavigationStack(path: path) {
+            GalleryView(path: path, isRoot: true)
+                .sugarRoutes(path)
+        }
+    }
+}
+
+private struct ReelsTab: View {
+    let nav: Navigator
+    @Environment(CallCenter.self) private var calls
+    var body: some View {
+        let path = nav.path(.reels)
+        NavigationStack(path: path) {
+            ReelsView(visible: nav.tab == .reels && nav.reels.isEmpty && !calls.showScreen, path: path, create: { nav.composer = .reel })
+                .sugarRoutes(path)
+        }
+    }
+}
+
+private struct ChatTab: View {
+    let nav: Navigator
+    var body: some View {
+        let path = nav.path(.chat)
+        NavigationStack(path: path) {
+            ChatListView(path: path)
+                .sugarRoutes(path)
+        }
+    }
+}
+
 // MARK: - App shell
 
+// iPhone's own tab bar with five tabs, each with its own pages. Your
+// account, the bell and the + live in the top bar of each tab's first page.
 struct MainShell: View {
+    @State private var quickLink: QuickLink?
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
-    @State private var tab: AppTab = .home
+    @State private var nav = Navigator()
     @State private var chats = ChatStore()
     @State private var posts = PostsStore()
     @State private var player = Player()
     @State private var notes = NotificationsStore()
-    @State private var voice = VoiceEngine()
-    @State private var calls = CallCenter()
-    @State private var homePath: [Route] = []
-    @State private var communityPath: [Route] = []
-    @State private var galleryPath: [Route] = []
-    @State private var reelsPath: [Route] = []
-    @State private var chatPath: [Route] = []
-    @State private var mePath: [Route] = []
-    @State private var creating = false
+    @State private var voice = VoiceEngine.shared
+    @State private var calls = CallCenter.shared
     @State private var pendingComposer: Composer?
-    @State private var composer: Composer?
-    @State private var typing = false
+    @State private var pendingRoute: Route?
     @State private var dailyShown = false
-    @State private var menuSheet: MenuSheet?
+    @State private var openedAt = Date()
 
-    private var currentPath: [Route] {
-        switch tab {
-        case .home: return homePath
-        case .community: return communityPath
-        case .gallery: return galleryPath
-        case .reels: return reelsPath
-        case .chat: return chatPath
-        case .me: return mePath
-        }
-    }
-    private var barHidden: Bool { typing || !currentPath.isEmpty }
-
-    private var currentPathBinding: Binding<[Route]> {
-        switch tab {
-        case .home: return $homePath.instant
-        case .community: return $communityPath.instant
-        case .gallery: return $galleryPath.instant
-        case .reels: return $reelsPath.instant
-        case .chat: return $chatPath.instant
-        case .me: return $mePath.instant
-        }
+    // Right after logging in, background refreshes wait a moment so the first
+    // screen can draw smoothly (coming back to the app doesn't wait).
+    private func settle(_ seconds: Double) async {
+        let left = seconds - Date().timeIntervalSince(openedAt)
+        if left > 0 { try? await Task.sleep(for: .seconds(left)) }
     }
 
-    // The six tabs, each with its own navigation stack.
-    private var tabs: some View {
-        TabView(selection: $tab) {
-            NavigationStack(path: $homePath.instant) {
-                HomeView(path: $homePath.instant, compose: { composer = $0 }).sugarRoutes($homePath.instant)
-            }
-            .tag(AppTab.home)
-            .toolbar(.hidden, for: .tabBar)
-
-            NavigationStack(path: $communityPath.instant) {
-                CommunityView(path: $communityPath.instant, compose: { composer = .post }).sugarRoutes($communityPath.instant)
-            }
-            .tag(AppTab.community)
-            .toolbar(.hidden, for: .tabBar)
-
-            NavigationStack(path: $galleryPath.instant) {
-                GalleryView(path: $galleryPath.instant, isRoot: true).sugarRoutes($galleryPath.instant)
-            }
-            .tag(AppTab.gallery)
-            .toolbar(.hidden, for: .tabBar)
-
-            NavigationStack(path: $reelsPath.instant) {
-                ReelsView(visible: tab == .reels && reelsPath.isEmpty && !calls.showScreen, path: $reelsPath.instant, create: { composer = .reel }).sugarRoutes($reelsPath.instant)
-            }
-            .tag(AppTab.reels)
-            .toolbar(.hidden, for: .tabBar)
-
-            NavigationStack(path: $chatPath.instant) {
-                ChatListView(path: $chatPath.instant).sugarRoutes($chatPath.instant)
-            }
-            .tag(AppTab.chat)
-            .toolbar(.hidden, for: .tabBar)
-
-            NavigationStack(path: $mePath.instant) {
-                PersonView(email: model.me?.email ?? "", path: $mePath.instant)
-                    .sugarTopBar($mePath.instant)
-                    .sugarRoutes($mePath.instant)
-            }
-            .tag(AppTab.me)
-            .toolbar(.hidden, for: .tabBar)
-        }
+    private var accountShown: Binding<Bool> {
+        Binding(get: { model.showMenu }, set: { model.showMenu = $0 })
     }
 
-    // Pop-ups over everything: notifications and the quick menu.
-    @ViewBuilder
-    private var popups: some View {
-        if model.showNotifications {
-            NotificationsPopup(path: currentPathBinding) {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { model.showNotifications = false }
-            }
-            .transition(.opacity)
-            .zIndex(5)
-        }
-        if model.showMenu {
-            QuickMenu(close: closeMenu, go: { route in
-                closeMenu()
-                currentPathBinding.wrappedValue.append(route)
-            }, open: { sheet in
-                closeMenu()
-                menuSheet = sheet
-            })
-            .transition(.opacity)
-            .zIndex(6)
-        }
+    private var createShown: Binding<Bool> {
+        Binding(get: { model.showCreate }, set: { model.showCreate = $0 })
     }
 
-    @ViewBuilder
-    private func menuSheetView(_ sheet: MenuSheet) -> some View {
-        switch sheet {
-        case .settings: SettingsView()
-        case .shop: NitroShopView()
-        case .status: StatusSheet().presentationCornerRadius(30)
-        case .legal(let doc): LegalView(doc: doc)
-        }
+    private var callShown: Binding<Bool> {
+        Binding(get: { calls.showScreen }, set: { calls.showScreen = $0 })
     }
 
-    // Tabs, tab bar, pop-ups and the shared stores.
-    private var core: some View {
-        tabs
-        .environment(\.backgroundPaused, menuSheet != nil || composer != nil || model.showMenu || model.showNotifications)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if !barHidden {
-                VStack(spacing: 8) {
-                    VoiceDock()
-                    if tab != .reels { MiniPlayer() }
-                    SugarTabBar(tab: $tab, unread: chats.unread, dark: tab == .reels) { creating = true }
+    private var composerShown: Binding<Composer?> {
+        Binding(get: { nav.composer }, set: { nav.composer = $0 })
+    }
+
+    // The tabs with everything that opens over them.
+    private var framed: some View {
+        ShellTabs(nav: nav)
+            .overlay(alignment: .top) {
+                if let toast = model.toast {
+                    ToastView(toast: toast)
+                        .padding(.top, 6)
+                        .transition(.slideIn(from: .top))
+                        .onTapGesture { withMotion(Motion.exit) { model.toast = nil } }
+                        // A flick up sends it away.
+                        .gesture(DragGesture(minimumDistance: 6).onEnded { v in
+                            if v.translation.height < -8 || v.predictedEndTranslation.height < -40 {
+                                withMotion(Motion.exit) { model.toast = nil }
+                            }
+                        })
+                        .zIndex(10)
                 }
-                .padding(.bottom, 2)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-        }
-        .overlay { ZStack { popups } }
-        .sheet(item: $menuSheet) { sheet in menuSheetView(sheet) }
+            .overlay(alignment: .top) {
+                if let incoming = calls.incoming {
+                    IncomingCallBanner(call: incoming)
+                        .padding(.top, 4)
+                        .transition(.slideIn(from: .top))
+                        .zIndex(30)
+                }
+            }
+            .sheet(isPresented: accountShown, onDismiss: openPending) {
+                AccountView { route in
+                    pendingRoute = route
+                    Task { @MainActor in model.showMenu = false }
+                }
+            }
+            .sheet(isPresented: createShown, onDismiss: {
+                if let pendingComposer { nav.composer = pendingComposer; self.pendingComposer = nil }
+            }) {
+                CreateSheet { choice in pendingComposer = choice; model.showCreate = false }
+                    .presentationDetents([.height(460), .large])
+                    .presentationCornerRadius(34)
+            }
+            .fullScreenCover(item: composerShown) { kind in
+                switch kind {
+                case .post: NewPostView { await posts.load() }
+                case .artwork: NewArtworkView()
+                case .track: NewTrackView()
+                case .reel: ReelStudioView()
+                }
+            }
+            .fullScreenCover(isPresented: callShown) {
+                CallScreen().environment(calls).environment(voice).environment(model)
+            }
+            .sheet(isPresented: $dailyShown) {
+                DailyRewardSheet().presentationDetents([.height(520)]).presentationCornerRadius(34)
+            }
+    }
+
+    // A page picked in your account opens once the sheet has slid away.
+    private func openPending() {
+        guard let route = pendingRoute else { return }
+        pendingRoute = nil
+        nav.push(route)
+    }
+
+    var body: some View {
+        framed
         .onChange(of: model.tabRequest) { _, next in
             guard let next else { return }
-            tab = next
+            nav.tab = next
             model.tabRequest = nil
+        }
+        .modifier(ShellSounds(chats: chats, notes: notes))
+        // The bell (and a notification tapped) opens the notifications page
+        // on the tab you're on.
+        .onChange(of: model.showNotifications) { _, show in
+            guard show else { return }
+            model.showNotifications = false
+            nav.push(.notifications)
         }
         .onChange(of: Alerts.shared.destination) { _, dest in
             guard let dest else { return }
@@ -294,42 +482,17 @@ struct MainShell: View {
             Task { await open(dest.kind, dest.target) }
         }
         .onOpenURL { url in
-            // Widgets: sugerly://chat, sugerly://gallery, sugerly://alerts …
-            Task { await open(url.host() ?? "", "") }
-        }
-        .overlay(alignment: .top) {
-            if let toast = model.toast {
-                ToastView(toast: toast)
-                    .padding(.top, 6)
-                    .transition(.move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.9)))
-                    .onTapGesture { withAnimation { model.toast = nil } }
-                    .zIndex(10)
+            guard url.scheme?.lowercased() == "sugerly" else { return }
+            let parts = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            if url.host()?.lowercased() == "quick", let code = parts?.queryItems?.first(where: { $0.name == "c" })?.value {
+                quickLink = QuickLink(code: code)
+                return
             }
+            let target = parts?.queryItems?.first(where: { ["id", "art", "post", "reel", "conversation"].contains($0.name) })?.value
+                ?? url.pathComponents.dropFirst().first ?? ""
+            Task { await open(url.host()?.lowercased() ?? "", target) }
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: barHidden)
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: player.track?.id)
-        .environment(chats)
-        .environment(posts)
-        .environment(player)
-        .environment(notes)
-        .environment(voice)
-        .environment(calls)
-    }
-
-    var body: some View {
-        core
-        .overlay(alignment: .top) {
-            if let incoming = calls.incoming {
-                IncomingCallBanner(call: incoming)
-                    .environment(calls)
-                    .padding(.top, 4)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .zIndex(30)
-            }
-        }
-        .fullScreenCover(isPresented: Binding(get: { calls.showScreen }, set: { calls.showScreen = $0 })) {
-            CallScreen().environment(calls).environment(voice).environment(model)
-        }
+        .sheet(item: $quickLink) { link in QuickApproveSheet(initialCode: link.code) }
         .task {
             calls.attach(voice: voice)
         }
@@ -338,50 +501,37 @@ struct MainShell: View {
             player.pause()
             if calls.current != nil { Task { await calls.hangUp() } }
             if voice.room != nil { Task { await voice.leave(silent: true) } }
+            calls.reset()
         }
         .task(id: model.me?.email) {
-            if let me = model.me { await calls.watch(me: me) }
+            guard let me = model.me else { return }
+            // This phone can be rung while the app is closed.
+            await IncomingCalls.shared.upload()
+            await calls.watch(me: me)
         }
         // Joining a call: the song stops so you can hear each other.
         .onChange(of: voice.room?.id) { _, id in
             if id != nil, player.playing { player.pause() }
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: voice.room?.id)
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in typing = true }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in typing = false }
-        .sheet(isPresented: $creating, onDismiss: {
-            if let pendingComposer { composer = pendingComposer; self.pendingComposer = nil }
-        }) {
-            CreateSheet { choice in pendingComposer = choice; creating = false }
-                .presentationDetents([.height(430)])
-                .presentationCornerRadius(34)
-        }
         .onChange(of: model.soundRequest?.id) { _, id in
-            if id != nil { composer = .reel }
-        }
-        .fullScreenCover(item: $composer) { kind in
-            switch kind {
-            case .post: NewPostView { await posts.load() }
-            case .artwork: NewArtworkView()
-            case .track: NewTrackView()
-            case .reel: ReelStudioView()
-            }
-        }
-        .sheet(isPresented: $dailyShown) {
-            DailyRewardSheet().presentationDetents([.height(520)]).presentationCornerRadius(34)
+            if id != nil { nav.composer = .reel }
         }
         .task {
             // First the notifications question (only ever asked once), then
             // the daily reward. On a new account both used to pop up at the
-            // same moment and the reward sheet could get stuck.
+            // same moment and the reward sheet could get stuck. Nothing pops
+            // up while the "Setting things up" screen is still showing.
+            while model.settingUp { try? await Task.sleep(for: .milliseconds(200)) }
+            try? await Task.sleep(for: .seconds(1))
             await Alerts.shared.requestPermission()
-            try? await Task.sleep(for: .seconds(1.2))
+            try? await Task.sleep(for: .seconds(1.5))
             if model.me?.lastDailyClaim != DailyReward.todayKey() { dailyShown = true }
         }
         // Live names, pictures and online status while the app is open
         // (and straight away when you come back to it).
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
+            await settle(2.5)
             var tick = 0
             while !Task.isCancelled {
                 await model.syncProfiles(presence: tick % 2 == 0)
@@ -399,6 +549,7 @@ struct MainShell: View {
                 }
             }
             guard scenePhase == .active else { return }
+            await settle(1.2)
             var tick = 0
             while !Task.isCancelled {
                 let me = model.me?.email ?? ""
@@ -416,29 +567,34 @@ struct MainShell: View {
                 Alerts.shared.setBadge(chats.unread + notes.unread)
                 WidgetBridge.update(model: model, unreadDMs: chats.unread, unreadAlerts: notes.unread)
                 tick += 1
-                let base: Double = tab == .chat ? 6 : 15
+                let base: Double = nav.tab == .chat ? 6 : 15
                 try? await Task.sleep(for: .seconds(base * (FS.missingIndex.contains("DirectMessage") ? 2 : 1)))
             }
         }
+        .environment(chats)
+        .environment(posts)
+        .environment(player)
+        .environment(notes)
+        .environment(voice)
+        .environment(calls)
     }
 }
 
 extension MainShell {
-    fileprivate func closeMenu() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) { model.showMenu = false }
-    }
-
     // Opens the place a notification or widget points at.
     func open(_ kind: String, _ target: String) async {
-        // Close pop-ups first, and let a tab switch finish before opening a
-        // page on it: doing both in the same instant could lock up the screen.
-        if model.showMenu || model.showNotifications {
+        // Close your account or the + sheet first, and let a tab switch
+        // finish before opening a page on it: doing both in the same instant
+        // could lock up the screen.
+        if model.showMenu || model.showCreate {
+            pendingRoute = nil
             model.showMenu = false
-            if kind != "alerts" && kind != "social" { model.showNotifications = false }
+            model.showCreate = false
+            try? await Task.sleep(for: .milliseconds(450))
         }
         let switching: (AppTab) async -> Void = { next in
-            guard tab != next else { return }
-            tab = next
+            guard nav.tab != next else { return }
+            nav.tab = next
             try? await Task.sleep(for: .milliseconds(350))
         }
         switch kind {
@@ -448,220 +604,39 @@ extension MainShell {
             let me = model.me?.email ?? ""
             if chats.conversations.first(where: { $0.id == target }) == nil { await chats.refresh(me: me) }
             if let c = chats.conversations.first(where: { $0.id == target }) {
-                chatPath = [.chat(c)]
+                nav.chat = [.chat(c)]
             } else if target.contains("__dm__") {
                 let members = target.components(separatedBy: "__dm__")
-                chatPath = [.chat(Conversation(id: target, members: members, isGroup: false, groupName: "", last: nil, unread: 0))]
+                nav.chat = [.chat(Conversation(id: target, members: members, isGroup: false, groupName: "", last: nil, unread: 0))]
             }
         case "server":
             await switching(.chat)
             UserDefaults.standard.set(1, forKey: "sugerly.chat.section")
-            if !target.isEmpty, let doc = try? await FS.get("Community", target) { chatPath = [.server(Server(doc))] }
-        case "reels": tab = .reels
-        case "gallery": tab = .gallery
-        case "home": tab = .home
+            if !target.isEmpty, let doc = try? await FS.get("Community", target) { nav.chat = [.server(Server(doc))] }
+        case "reels", "reel":
+            await switching(.reels)
+            if target.isEmpty { nav.reels = [] }
+            else if let doc = try? await FS.get("Reel", target) { nav.reels = [.reel(Reel(doc))] }
+            else { model.showToast("This reel is no longer available.", error: true) }
+        case "gallery", "artwork":
+            await switching(.gallery)
+            if target.isEmpty { nav.gallery = [] }
+            else if let doc = try? await FS.get("Artwork", target) { nav.gallery = [.artwork(Artwork(doc))] }
+            else { model.showToast("This artwork is no longer available.", error: true) }
+        case "community", "post":
+            await switching(.community)
+            if target.isEmpty { nav.community = [] }
+            else if let doc = try? await FS.get("CommunityPost", target) { nav.community = [.post(Post(doc))] }
+            else { model.showToast("This post is no longer available.", error: true) }
+        case "home": nav.tab = .home; nav.home = []
         case "alerts", "social":
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { model.showNotifications = true }
+            model.showNotifications = true
+        case "support":
+            await switching(.home)
+            let ticket = URLComponents(string: target)?.queryItems?.first { $0.name == "ticket" }?.value ?? ""
+            nav.home = [ticket.isEmpty ? .support : .supportTicket(ticket)]
         default: break
         }
-    }
-}
-
-// MARK: - Floating tab bar: one soft pill, the pink + raised in the middle
-
-struct SugarTabBar: View {
-    @Binding var tab: AppTab
-    var unread: Int
-    var dark: Bool
-    var onCreate: () -> Void
-    @Namespace private var lens
-    @State private var plusSpin = false
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        HStack(spacing: 0) {
-            item(.home, "Home", "house", "house.fill")
-            item(.community, "Community", "person.2", "person.2.fill")
-            item(.gallery, "Fan Art", "paintpalette", "paintpalette.fill")
-            Button {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.55)) { plusSpin.toggle() }
-                onCreate()
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .rotationEffect(.degrees(plusSpin ? 90 : 0))
-                    .frame(width: 58, height: 58)
-                    .background(Theme.gradient, in: Circle())
-                    .overlay(Circle().fill(LinearGradient(colors: [.white.opacity(0.3), .clear], startPoint: .top, endPoint: .center)).padding(2))
-                    .shadow(color: Theme.main.opacity(0.45), radius: 12, y: 5)
-            }
-            .buttonStyle(BouncyStyle(scale: 0.85))
-            .padding(.horizontal, 4)
-            .accessibilityLabel("Create")
-            item(.reels, "Reels", "film.stack", "film.stack.fill")
-            item(.chat, "Chat", "bubble.left", "bubble.left.fill", badge: unread)
-            meItem
-        }
-        .padding(.horizontal, 6)
-        .frame(height: 70)
-        .background {
-            Capsule().fill(dark ? Color(hex: 0x2A2226) : Palette.surface)
-                .overlay(Capsule().strokeBorder(dark ? Color.white.opacity(0.1) : Palette.border, lineWidth: 1))
-                .shadow(color: dark ? .black.opacity(0.4) : Theme.main.opacity(0.14), radius: 18, y: 8)
-        }
-        .animation(.spring(response: 0.38, dampingFraction: 0.75), value: tab)
-        .padding(.horizontal, 12)
-    }
-
-    private func item(_ t: AppTab, _ title: String, _ icon: String, _ filled: String, badge: Int = 0) -> some View {
-        let active = tab == t
-        return Button { select(t) } label: {
-            VStack(spacing: 3) {
-                Image(systemName: active ? filled : icon)
-                    .font(.system(size: 19, weight: .medium))
-                    .symbolEffect(.bounce.up, value: active)
-                Text(title).font(.jakarta(10, .bold)).lineLimit(1).minimumScaleFactor(0.65)
-            }
-            .foregroundStyle(active ? (dark ? AnyShapeStyle(Color.white) : AnyShapeStyle(Theme.main)) : AnyShapeStyle(dark ? Color.white.opacity(0.6) : Palette.muted))
-            .frame(maxWidth: .infinity)
-            .frame(height: 56)
-            .background { lensView(active) }
-            .overlay(alignment: .topTrailing) { badgeView(badge) }
-            .contentShape(Capsule())
-        }
-        .buttonStyle(BouncyStyle(scale: 0.88))
-        .sensoryFeedback(.selection, trigger: active)
-        .accessibilityLabel(title)
-    }
-
-    private var meItem: some View {
-        let active = tab == .me
-        return Button { select(.me) } label: {
-            VStack(spacing: 3) {
-                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 22)
-                    .overlay(Circle().strokeBorder(active ? Theme.main : Color.clear, lineWidth: 1.5))
-                Text("Me").font(.jakarta(10, .bold))
-            }
-            .foregroundStyle(active ? (dark ? AnyShapeStyle(Color.white) : AnyShapeStyle(Theme.main)) : AnyShapeStyle(dark ? Color.white.opacity(0.6) : Palette.muted))
-            .frame(maxWidth: .infinity)
-            .frame(height: 56)
-            .background { lensView(active) }
-            .contentShape(Capsule())
-        }
-        .buttonStyle(BouncyStyle(scale: 0.88))
-        .sensoryFeedback(.selection, trigger: active)
-        .accessibilityLabel("Your profile")
-    }
-
-    @ViewBuilder
-    private func lensView(_ active: Bool) -> some View {
-        if active {
-            Capsule()
-                .fill(dark ? Color.white.opacity(0.12) : Color.white)
-                .overlay(Capsule().fill(dark ? Color.clear : Theme.main.opacity(0.06)))
-                .shadow(color: dark ? .clear : Theme.main.opacity(0.18), radius: 8, y: 3)
-                .padding(.horizontal, 2)
-                .matchedGeometryEffect(id: "lens", in: lens)
-        }
-    }
-
-    @ViewBuilder
-    private func badgeView(_ badge: Int) -> some View {
-        if badge > 0 {
-            Text(badge > 9 ? "9+" : "\(badge)")
-                .font(.jakarta(10, .heavy))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 5)
-                .frame(minWidth: 18, minHeight: 18)
-                .background(Theme.gradient, in: Capsule())
-                .overlay(Capsule().strokeBorder(dark ? Color.clear : .white, lineWidth: 1.5))
-                .offset(x: -2, y: 2)
-                .transition(.scale.combined(with: .opacity))
-        }
-    }
-
-    private func select(_ t: AppTab) {
-        guard tab != t else { return }
-        var tx = Transaction()
-        tx.disablesAnimations = true
-        withTransaction(tx) { tab = t }
-    }
-}
-
-// MARK: - Top bar (logo, notifications, you)
-
-struct TopBar: View {
-    @Binding var path: [Route]
-    var title: String? = nil
-    @Environment(AppModel.self) private var model
-    @Environment(NotificationsStore.self) private var notes
-    @State private var searching = false
-
-    var body: some View {
-        HStack(spacing: 10) {
-            BrandLogo(height: 34)
-            Spacer()
-            Button { searching = true } label: {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(Palette.text2)
-                    .frame(width: 42, height: 42)
-                    .background(Palette.surface, in: Circle())
-                    .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
-                    .shadow(color: Palette.shadow, radius: 6, y: 2)
-            }
-            .buttonStyle(BouncyStyle())
-            .accessibilityLabel("Search")
-            Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { model.showNotifications = true } } label: {
-                Image(systemName: "bell.fill")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Palette.text2)
-                    .frame(width: 42, height: 42)
-                    .background(Palette.surface, in: Circle())
-                    .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
-                    .shadow(color: Palette.shadow, radius: 6, y: 2)
-                    .overlay(alignment: .topTrailing) {
-                        if notes.unread > 0 {
-                            Text(notes.unread > 9 ? "9+" : "\(notes.unread)")
-                                .font(.jakarta(10, .heavy)).foregroundStyle(.white)
-                                .frame(minWidth: 18, minHeight: 18)
-                                .background(Theme.gradient, in: Capsule())
-                                .offset(x: 4, y: -4)
-                        }
-                    }
-            }
-            .buttonStyle(BouncyStyle())
-            .accessibilityLabel("Notifications")
-            Button { withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) { model.showMenu = true } } label: {
-                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 38, ring: true,
-                       presence: Presence(rawValue: model.me?.presence ?? "") ?? .online)
-                    .shadow(color: Theme.pink.opacity(0.3), radius: 6, y: 3)
-            }
-            .buttonStyle(BouncyStyle())
-            .accessibilityLabel("Menu")
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background {
-            Rectangle().fill(Palette.bg)
-                .overlay(alignment: .bottom) { Rectangle().fill(Palette.border.opacity(0.7)).frame(height: 0.5) }
-                .ignoresSafeArea(edges: .top)
-        }
-        .sheet(isPresented: $searching) {
-            SearchView { route in path.append(route) }
-                .presentationDetents([.large])
-                .presentationCornerRadius(34)
-        }
-    }
-}
-
-extension View {
-    // Tab root screens: our own top bar instead of the system navigation bar.
-    func sugarTopBar(_ path: Binding<[Route]>) -> some View {
-        self
-            .toolbar(.hidden, for: .navigationBar)
-            .safeAreaInset(edge: .top, spacing: 0) { TopBar(path: path) }
     }
 }
 
@@ -669,42 +644,63 @@ extension View {
 
 struct CreateSheet: View {
     var onPick: (Composer) -> Void
+    @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Create something").font(.display(28)).foregroundStyle(Palette.text).padding(.top, 26)
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                tile(.reel, "Create a reel", "Film or pick a video", "video.fill", [Color(hex: 0xFF7AA2), Color(hex: 0xD9577F)])
-                tile(.post, "Post", "Share with the community", "text.bubble.fill", [Color(hex: 0xB19CFF), Color(hex: 0x7C5CF0)])
-                tile(.artwork, "Fan art", "Hang it on the wall", "paintpalette.fill", [Color(hex: 0xFFAA80), Color(hex: 0xEE6E40)])
-                tile(.track, "Track", "Share your music", "music.note", [Color(hex: 0x7CBEFF), Color(hex: 0x2F80E0)])
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Create something").font(.display(30)).foregroundStyle(Palette.text)
+                    Text("What would you like to share today?").font(.jakarta(14, .medium)).foregroundStyle(Palette.muted)
+                }
+                .padding(.top, 22)
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                    tile(0, .reel, "Reel", "Film or pick a video", "video.fill", [Color(hex: 0xFF7AA2), Color(hex: 0xD9577F)])
+                    tile(1, .artwork, "Fan art", "Hang a drawing on the wall", "paintpalette.fill", [Color(hex: 0xFFAA80), Color(hex: 0xEE6E40)])
+                    tile(2, .post, "Post", "Share with the community", "text.bubble.fill", [Color(hex: 0xB19CFF), Color(hex: 0x7C5CF0)])
+                    tile(3, .track, "Track", "Share your music", "music.note", [Color(hex: 0x7CBEFF), Color(hex: 0x2F80E0)])
+                }
             }
-            Spacer(minLength: 0)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 20)
         }
-        .padding(.horizontal, 20)
+        .scrollBounceBehavior(.basedOnSize)
         .sugarBackground()
+        .presentationDragIndicator(.visible)
+        .onAppear { shown = true }
     }
 
-    private func tile(_ kind: Composer, _ title: String, _ sub: String, _ icon: String, _ colors: [Color]) -> some View {
-        Button { onPick(kind) } label: {
+    // The four tiles pop in one after another.
+    private func tile(_ index: Int, _ kind: Composer, _ title: String, _ sub: String, _ icon: String, _ colors: [Color]) -> some View {
+        let visible = shown || reduceMotion
+        return Button { onPick(kind) } label: {
             VStack(alignment: .leading, spacing: 10) {
                 Image(systemName: icon)
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(.white)
-                    .frame(width: 48, height: 48)
+                    .frame(width: 50, height: 50)
                     .background(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .shadow(color: colors[1].opacity(0.45), radius: 10, y: 5)
-                Text(title).font(.jakarta(16, .bold)).foregroundStyle(Palette.text)
-                Text(sub).font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(2)
+                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(LinearGradient(colors: [.white.opacity(0.3), .clear], startPoint: .top, endPoint: .center)).padding(1.5))
+                    .shadow(color: colors[1].opacity(0.4), radius: 10, y: 5)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(.jakarta(16, .heavy)).foregroundStyle(Palette.text)
+                    Text(sub).font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)
+                        .lineLimit(2, reservesSpace: true)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .sugarCard(radius: 24, padding: 16)
         }
-        .buttonStyle(BouncyStyle())
+        .buttonStyle(BouncyStyle(scale: 0.95))
+        .scaleEffect(visible ? 1 : 0.92)
+        .opacity(visible ? 1 : 0)
+        .animation(reduceMotion ? nil : Motion.enter.delay(0.03 + Double(index) * Motion.staggerStep), value: shown)
+        .accessibilityLabel(title)
+        .accessibilityHint(sub)
     }
 }
-
-// MARK: - Menu behind your avatar
 
 // MARK: - Notifications (checked in the background, like chats)
 
@@ -741,6 +737,16 @@ final class NotificationsStore {
         hasOlder = docs.count >= 40
         let known = Set(items.map(\.id))
         items += docs.map(AppNotification.init).filter { !known.contains($0.id) }
+    }
+
+    // Opening a notification marks it (and the likes grouped with it) read.
+    func markRead(_ ids: [String]) {
+        let wanted = Set(ids)
+        for i in items.indices where wanted.contains(items[i].id) && !items[i].read {
+            items[i].read = true
+            let id = items[i].id
+            Task { try? await FS.update("Notification", id, ["is_read": true]) }
+        }
     }
 
     func markAllRead() {

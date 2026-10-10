@@ -200,6 +200,7 @@ struct ReelsView: View {
                                             .overlay(Color.black.opacity(0.45))
                                     }
                                     ReelPage(reel: reel, active: visible && activeId == reel.id, near: abs(i - activeIndex) <= 1, path: $path,
+                                             insets: geo.safeAreaInsets,
                                              onNext: { advance(from: reel.id) }, onHide: { hide($0) })
                                         .frame(width: column, height: geo.size.height)
                                         .clipShape(RoundedRectangle(cornerRadius: column < geo.size.width - 1 ? 28 : 0, style: .continuous))
@@ -229,13 +230,13 @@ struct ReelsView: View {
             refreshBadge
             HStack(spacing: 22) {
                 ForEach([("following", "Following"), ("foryou", "For you")], id: \.0) { id, title in
-                    Button { withAnimation(.snappy) { feed = id; activeId = shown.first?.id } } label: {
+                    Button { withMotion(Motion.standard) { feed = id; activeId = shown.first?.id } } label: {
                         VStack(spacing: 4) {
                             Text(title).font(.jakarta(17, .bold)).foregroundStyle(.white.opacity(feed == id ? 1 : 0.6))
                             Capsule().fill(.white).frame(width: feed == id ? 24 : 6, height: 3).opacity(feed == id ? 1 : 0)
                         }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SoftPressStyle())
                 }
             }
             .shadow(color: .black.opacity(0.4), radius: 6)
@@ -253,6 +254,10 @@ struct ReelsView: View {
             .padding(.top, 6)
         }
         .toolbar(.hidden, for: .navigationBar)
+        // A dark tab bar over the videos (the reel's buttons sit just above it).
+        .toolbarBackground(.visible, for: .tabBar)
+        .toolbarBackground(Color.black.opacity(0.55), for: .tabBar)
+        .toolbarColorScheme(.dark, for: .tabBar)
         .task {
             if let lastLoad, Date().timeIntervalSince(lastLoad) < 90 { return }
             lastLoad = Date()
@@ -343,8 +348,8 @@ struct ReelsView: View {
     // A brand-new For You page: fresh reels, unseen ones first.
     private func refresh() async {
         guard !refreshing else { return }
-        withAnimation(.snappy) { refreshing = true }
-        defer { withAnimation(.snappy) { refreshing = false } }
+        withMotion(Motion.standard) { refreshing = true }
+        defer { withMotion(Motion.standard) { refreshing = false } }
         async let top = Self.hot(below: nil, limit: 15)
         guard let docs = try? await FS.query("Reel", orderBy: "created_date", limit: Self.pageSize + 10) else { return }
         let newest = docs.map(Reel.init)
@@ -415,7 +420,7 @@ struct ReelsView: View {
         advance(from: id)
         Task {
             try? await Task.sleep(for: .milliseconds(450))
-            withAnimation(.snappy) { reels.removeAll { $0.id == id } }
+            withMotion(Motion.standard) { reels.removeAll { $0.id == id } }
         }
     }
 
@@ -483,6 +488,10 @@ struct ReelPage: View {
     var near = true
     @Binding var path: [Route]
     var showBack = false
+    // The screen's notch / home bar and the floating tab bar, so the
+    // buttons sit just clear of them on every iPhone and iPad.
+    var insets = EdgeInsets()
+    var bottomRoom: CGFloat = 0
     @Environment(AppModel.self) private var model
     @Environment(Player.self) private var music
     @Environment(\.dismiss) private var dismiss
@@ -526,7 +535,7 @@ struct ReelPage: View {
                 .allowsHitTesting(false)
             if paused {
                 Image(systemName: "play.fill").font(.system(size: 60)).foregroundStyle(.white.opacity(0.85)).shadow(radius: 10)
-                    .transition(.scale.combined(with: .opacity))
+                    .transition(.pop)
                     .allowsHitTesting(false)
             }
             ForEach(hearts) { HeartBurstView(burst: $0) }
@@ -534,11 +543,11 @@ struct ReelPage: View {
                 VStack {
                     HStack {
                         Spacer()
-                        Button { withAnimation(.snappy) { clearMode = false } } label: {
+                        Button { withMotion(Motion.standard) { clearMode = false } } label: {
                             Label("Show", systemImage: "eye.fill").font(.jakarta(13, .bold)).foregroundStyle(.white)
                                 .padding(.horizontal, 14).frame(height: 36).background(.black.opacity(0.4), in: Capsule())
                         }
-                        .padding(.trailing, 16).padding(.top, showBack ? 54 : 110)
+                        .padding(.trailing, 16).padding(.top, insets.top + (showBack ? 8 : 50))
                     }
                     Spacer()
                 }
@@ -672,18 +681,18 @@ struct ReelPage: View {
                     Spacer()
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 54)
+                .padding(.top, insets.top + 6)
             }
             if muted && active {
-                Button { withAnimation(.snappy) { muted = false } } label: {
+                Button { withMotion(Motion.standard) { muted = false } } label: {
                     Label("Tap for sound", systemImage: "speaker.slash.fill")
                         .font(.jakarta(14, .bold)).foregroundStyle(.white)
                         .padding(.horizontal, 16).frame(height: 38)
                         .background(Color(hex: 0x2A1620).opacity(0.55), in: Capsule())
                 }
                 .buttonStyle(BouncyStyle())
-                .padding(.top, showBack ? 10 : 108)
-                .transition(.scale.combined(with: .opacity))
+                .padding(.top, showBack ? 10 : insets.top + 50)
+                .transition(.pop)
             }
             Spacer()
             HStack(alignment: .bottom, spacing: 12) {
@@ -701,7 +710,7 @@ struct ReelPage: View {
                 }
             }
         }
-        .padding(.bottom, showBack ? 20 : 110)
+        .padding(.bottom, insets.bottom + (showBack ? 14 : bottomRoom + 2))
     }
 
     private var relation: String? {
@@ -726,7 +735,7 @@ struct ReelPage: View {
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SoftPressStyle())
             if let relation {
                 Label(relation, systemImage: "sparkles")
                     .font(.jakarta(12, .bold)).foregroundStyle(.white)
@@ -735,7 +744,7 @@ struct ReelPage: View {
                     .overlay(Capsule().strokeBorder(.white.opacity(0.25), lineWidth: 1))
             }
             if !reel.caption.isEmpty {
-                Button { withAnimation(.snappy) { captionOpen.toggle() } } label: {
+                Button { withMotion(Motion.standard) { captionOpen.toggle() } } label: {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(ReelCaption.styled(reel.caption)).font(.jakarta(15)).foregroundStyle(.white)
                             .lineLimit(captionOpen ? 12 : 2).multilineTextAlignment(.leading)
@@ -744,7 +753,7 @@ struct ReelPage: View {
                         }
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SoftPressStyle())
             }
             if !reel.musicTitle.isEmpty || reel.isVideo {
                 Button { useSound = true } label: {
@@ -767,7 +776,7 @@ struct ReelPage: View {
         VStack(spacing: 14) {
             Button { path.append(.person(reel.authorEmail)) } label: {
                 Avatar(url: author?.picture ?? reel.authorPicture, name: author?.displayName ?? reel.authorName, size: 54, nitro: author?.isNitro ?? false)
-                    .overlay(Circle().strokeBorder(.white, lineWidth: (author?.isNitro ?? false) ? 0 : 2.5))
+                    .overlay(Circle().strokeBorder(.white, lineWidth: 2.5))
                     .overlay(alignment: .bottom) {
                         if (!following || justFollowed) && reel.authorEmail != me {
                             Image(systemName: justFollowed ? "checkmark" : "plus").font(.system(size: 12, weight: .black))
@@ -778,7 +787,7 @@ struct ReelPage: View {
                                 .contentTransition(.symbolEffect(.replace))
                                 .offset(y: 11)
                                 .onTapGesture { follow() }
-                                .transition(.scale.combined(with: .opacity))
+                                .transition(.pop)
                         }
                     }
             }
@@ -874,7 +883,7 @@ struct ReelPage: View {
     }
 
     private func togglePause() {
-        withAnimation(.snappy) { paused.toggle() }
+        withMotion(Motion.standard) { paused.toggle() }
         if paused {
             video?.pause()
             sound?.pause()
@@ -937,6 +946,7 @@ struct ReelPage: View {
         guard let meProfile = model.me else { return }
         let before = reel
         let liking = !LikeBook.shared.isLiked(before, me: me)
+        TapSound.play(liking ? .like : .tap)
         reel.setLiked(liking, me: me)
         let r = reel
         Task { await ReelBrain.shared.liked(r, liking) }
@@ -1030,9 +1040,28 @@ struct SingleReelView: View {
     let reel: Reel
     @Binding var path: [Route]
     var body: some View {
-        ReelPage(reel: reel, active: true, path: $path, showBack: true)
-            .ignoresSafeArea()
-            .toolbar(.hidden, for: .navigationBar)
+        GeometryReader { geo in
+            // On iPad the reel is a phone-shaped column on a blurred copy of
+            // its cover, like in the feed.
+            let column = Swift.min(geo.size.width, geo.size.height * 0.6)
+            let wide = column < geo.size.width - 1
+            ZStack {
+                Color.black
+                if wide {
+                    RemoteImage(url: reel.coverURL.isEmpty ? (reel.pictures.first ?? "") : reel.coverURL)
+                        .blur(radius: 40)
+                        .overlay(Color.black.opacity(0.45))
+                }
+                ReelPage(reel: reel, active: true, path: $path, showBack: true, insets: geo.safeAreaInsets)
+                    .frame(width: column, height: geo.size.height)
+                    .clipShape(RoundedRectangle(cornerRadius: wide ? 28 : 0, style: .continuous))
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
+        }
+        .ignoresSafeArea()
+        .background(Color.black.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 
@@ -1117,8 +1146,8 @@ struct ReelTextLayer: View {
         let contrast: UInt32 = ReelText.isLight(color) ? 0x2A1620 : 0xFFFFFF
         let font: Font = {
             switch t.font {
-            case "bubbly": return .custom("Bubbly-Regular", size: size)
-            case "cute": return .custom("CuteHereRegular", size: size)
+            case "bubbly": return .custom("BubblegumSans-Regular", size: size)
+            case "cute": return .custom("CaveatBrush-Regular", size: size)
             case "serif": return .custom("Georgia-BoldItalic", size: size)
             case "mono": return .system(size: size, weight: .bold, design: .monospaced)
             default: return .custom("PlusJakartaSans-ExtraBold", size: size)

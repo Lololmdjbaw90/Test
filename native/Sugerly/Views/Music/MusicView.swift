@@ -318,7 +318,10 @@ struct NewTrackView: View {
     @State private var error: String?
 
     var body: some View {
-        ComposerScaffold(title: "Share a track", actionTitle: "Share", busy: busy, canPost: audio != nil && !title.trimmingCharacters(in: .whitespaces).isEmpty, onClose: { dismiss() }, onPost: { Task { await share() } }) {
+        ComposerScaffold(title: "Share a track", actionTitle: "Share", busy: busy, canPost: audio != nil && !title.trimmingCharacters(in: .whitespaces).isEmpty,
+                         hint: audio == nil ? "Choose your audio file first" : "Give your track a title",
+                         status: busy ? "Uploading your track…" : nil, error: error,
+                         onClose: { dismiss() }, onPost: { Task { await share() } }) {
             Button { picking = true } label: {
                 HStack(spacing: 14) {
                     Image(systemName: audio == nil ? "waveform.badge.plus" : "checkmark.circle.fill")
@@ -340,7 +343,6 @@ struct NewTrackView: View {
             }
             SugarField(placeholder: "About this track (optional)", text: $description, lines: 3...6)
             PhotoPickerCard(item: $coverItem, image: $cover)
-            if let error { Text(error).font(.jakarta(13, .semibold)).foregroundStyle(Palette.danger) }
         }
         .fileImporter(isPresented: $picking, allowedContentTypes: [.audio, .mp3, .mpeg4Audio, .wav]) { result in
             if case .success(let url) = result { audio = url; if title.isEmpty { title = url.deletingPathExtension().lastPathComponent } }
@@ -349,6 +351,7 @@ struct NewTrackView: View {
 
     private func share() async {
         guard let me = model.me, let audio else { return }
+        error = nil
         guard await TextGuard.clear([title, genre, mood, description], kind: .caption, model: model) else { return }
         busy = true
         defer { busy = false }
@@ -356,7 +359,7 @@ struct NewTrackView: View {
             let access = audio.startAccessingSecurityScopedResource()
             defer { if access { audio.stopAccessingSecurityScopedResource() } }
             let data = try Data(contentsOf: audio)
-            guard data.count < 20 * 1024 * 1024 else { error = "That file is over 20 MB."; return }
+            guard data.count < 20 * 1024 * 1024 else { TextGuard.forget(.caption, model: model); error = "That file is over 20 MB."; return }
             let ext = audio.pathExtension.lowercased()
             let type = ext == "m4a" ? "audio/mp4" : ext == "wav" ? "audio/wav" : "audio/mpeg"
             let musicURL = try await StorageClient.upload(data, contentType: type, fileExtension: ext.isEmpty ? "mp3" : ext)
@@ -376,7 +379,8 @@ struct NewTrackView: View {
             dismiss()
             model.showToast("Track shared · +15 XP", icon: "music.note")
         } catch {
-            self.error = error.localizedDescription
+            TextGuard.forget(.caption, model: model)
+            self.error = PostProblem.message(error)
         }
     }
 }

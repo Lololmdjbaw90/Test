@@ -15,22 +15,33 @@ final class AppModel {
     var people: [String: UserProfile] = [:]
     // The little pop-up at the top ("Saved", "Posted!", errors).
     var toast: Toast?
-    // The notifications pop-up (opened from the bell).
+    // Opens the notifications page (the bell, or a notification tap).
     var showNotifications = false
-    // The quick menu (opened from your picture in the top bar).
+    // Your account (your picture in the top left corner).
     var showMenu = false
+    // The "Create something" sheet (the + in the top right corner).
+    var showCreate = false
     // Ask the shell to switch tabs (e.g. "See all" art → Gallery tab).
     var tabRequest: AppTab?
     // "Use this sound" on a reel: opens the reel maker with that sound.
     var soundRequest: Track?
     // A brand-new account sees the welcome setup before the app.
     var needsSetup = false
+    // The soft "see you soon" screen shown over everything while logging out.
+    var goodbye = false
+    // "Setting things up for you" over everything while logging in, so the
+    // app's first pages build and load behind it instead of popping in.
+    var settingUp = false
+    // Home says when its first look has loaded (ends the setting-up screen).
+    @ObservationIgnored var shellReady = false
+    @ObservationIgnored private var leaving = false
 
     private var auth: AuthClient { AuthClient.shared }
 
     func showToast(_ text: String, icon: String = "checkmark.circle.fill", error: Bool = false) {
         let next = Toast(text: text, icon: error ? "exclamationmark.circle.fill" : icon, error: error)
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) { toast = next }
+        TapSound.play(error || icon.hasPrefix("exclamationmark") ? .error : .chime)
+        withMotion(.spring(response: 0.36, dampingFraction: 0.82)) { toast = next }
         Task {
             try? await Task.sleep(for: .seconds(2.4))
             if toast?.id == next.id { withAnimation(.easeOut(duration: 0.25)) { toast = nil } }
@@ -53,13 +64,20 @@ final class AppModel {
     func signIn(email: String, password: String) async throws {
         try await auth.signIn(email: email, password: password)
         try await loadProfile()
-        phase = entryPhase
+        await enterGently { self.phase = self.entryPhase }
+    }
+
+    // Email code, backup code or quick login: the server's one-time pass.
+    func signIn(token: String, email: String?) async throws {
+        try await auth.signIn(customToken: token, email: email)
+        try await loadProfile()
+        await enterGently { self.phase = self.entryPhase }
     }
 
     func signUp(name: String, email: String, password: String) async throws {
         try await auth.signUp(email: email, password: password, name: name)
         try await loadProfile(newName: name)
-        phase = entryPhase
+        await enterGently { self.phase = self.entryPhase }
     }
 
     // Banned accounts see the ban screen instead of the app.
@@ -110,8 +128,13 @@ final class AppModel {
         profilesSince = Date()
         let searchName = (me?.displayName ?? "").lowercased()
         Task { try? await FS.update("User", uid, ["last_seen": FS.nowISO(), "search_name": searchName]) }
-        Task { await loadPeople() }
+        // The rest waits until the first screen is up, so logging in stays smooth.
         Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            await loadPeople()
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(3))
             await Referrals.ensureCode(self)
             await Referrals.claim(self)
         }
@@ -370,10 +393,76 @@ final class AppModel {
         return (main, SiteTheme.hex(me.accentSub) ?? main)
     }
 
+    // After the welcome setup: into the app through the same calm screen.
+    func finishSetup() async {
+        await enterGently { self.needsSetup = false }
+    }
+
+    // The setting-up screen fades in, the app switches behind it, and it
+    // fades away once Home has loaded (never longer than a few seconds).
+    private func enterGently(_ change: () -> Void) async {
+        guard !settingUp else { change(); return }
+        shellReady = false
+        withAnimation(.easeInOut(duration: 0.3)) { settingUp = true }
+        try? await Task.sleep(for: .milliseconds(320))
+        var quiet = Transaction()
+        quiet.disablesAnimations = true
+        withTransaction(quiet) { change() }
+        let started = Date()
+        try? await Task.sleep(for: .milliseconds(900))
+        while !shellReady && phase == .signedIn && !needsSetup && Date().timeIntervalSince(started) < 3.5 {
+            try? await Task.sleep(for: .milliseconds(120))
+        }
+        withAnimation(.easeOut(duration: 0.45)) { settingUp = false }
+    }
+
     func signOut() {
-        auth.signOut()
+        guard !leaving else { return }
+        Task { await leaveGently { self.auth.signOut() } }
+    }
+
+    // Logging out without a jolt: pop-ups and sheets slide away as usual, a
+    // calm goodbye screen fades in, the account is cleared behind it, and it
+    // fades out onto the login page. (It used to cut straight to the login
+    // page while everything closed at once.)
+    private func leaveGently(_ finish: (() -> Void)? = nil) async {
+        leaving = true
+        defer { leaving = false }
+        // Sheets close with their own animation (a custom one made the
+        // menu's exit jump now and then).
+        showMenu = false
+        showCreate = false
+        withAnimation(.easeOut(duration: 0.25)) { showNotifications = false }
+        // Let the "Log out?" question finish closing, then slide sheets down.
+        try? await Task.sleep(for: .milliseconds(300))
+        if closeSheets(animated: true) { try? await Task.sleep(for: .milliseconds(380)) }
+        withAnimation(.easeInOut(duration: 0.35)) { goodbye = true }
+        // Calls for this account stop ringing this phone.
+        let forgetting = Task { await IncomingCalls.shared.forget() }
+        try? await Task.sleep(for: .milliseconds(420))
+        await forgetting.value
+        finish?()
         resetForNextAccount()
-        phase = .signedOut
+        var quiet = Transaction()
+        quiet.disablesAnimations = true
+        withTransaction(quiet) { phase = .signedOut }
+        try? await Task.sleep(for: .milliseconds(200))
+        withAnimation(.easeOut(duration: 0.45)) { goodbye = false }
+    }
+
+    // Closes whatever UIKit is showing on top (sheets, full-screen pages).
+    // Says whether anything was open.
+    @discardableResult
+    private func closeSheets(animated: Bool) -> Bool {
+        var any = false
+        for scene in UIApplication.shared.connectedScenes {
+            for window in (scene as? UIWindowScene)?.windows ?? [] {
+                guard let root = window.rootViewController, root.presentedViewController != nil else { continue }
+                any = true
+                root.dismiss(animated: animated)
+            }
+        }
+        return any
     }
 
     // Everything tied to the account that just left: close every page and
@@ -392,6 +481,7 @@ final class AppModel {
         toast = nil
         showNotifications = false
         showMenu = false
+        showCreate = false
         tabRequest = nil
         soundRequest = nil
         Drafts.owner = "guest"
@@ -405,12 +495,8 @@ final class AppModel {
         }
         WidgetBridge.clear()
         Alerts.shared.setBadge(0)
-        // Sheets and full-screen pages are shown by UIKit; close them all.
-        for scene in UIApplication.shared.connectedScenes {
-            for window in (scene as? UIWindowScene)?.windows ?? [] {
-                window.rootViewController?.dismiss(animated: false)
-            }
-        }
+        // Anything still open closes at once (it's behind the goodbye screen).
+        closeSheets(animated: false)
     }
 
     // Same as the website (src/lib/safety.js): checks the password (which also
@@ -443,6 +529,8 @@ final class AppModel {
         await wipe("Friendship", await rows("Friendship", [.equals("requester_email", email)]))
         await wipe("Friendship", await rows("Friendship", [.equals("receiver_email", email)]))
         await wipe("Notification", await rows("Notification", [.equals("to_email", email)]))
+        await wipe("SupportMessage", await rows("SupportMessage", [.equals("ticket_id", email.lowercased())]))
+        try? await FS.delete("SupportTicket", email.lowercased())
         for server in await rows("Community", [.contains("member_emails", email)]) {
             let id = server.str("id")
             if server.str("owner_email") == email {
@@ -452,11 +540,11 @@ final class AppModel {
             }
         }
         try? await FS.delete("PayoutInfo", me.id)
+        try? await FS.delete("PushToken", me.email)
         try? await FS.delete("User", me.id)
 
         try await auth.deleteAccount()
-        resetForNextAccount()
-        phase = .signedOut
+        await leaveGently()
     }
 }
 
@@ -483,7 +571,7 @@ extension View {
     func dropRemoved<T: Identifiable>(_ list: Binding<[T]>) -> some View where T.ID == String {
         onChange(of: Removed.shared.ids, initial: true) { _, gone in
             guard !gone.isEmpty, list.wrappedValue.contains(where: { gone.contains($0.id) }) else { return }
-            withAnimation(.snappy) { list.wrappedValue.removeAll { gone.contains($0.id) } }
+            withMotion(Motion.standard) { list.wrappedValue.removeAll { gone.contains($0.id) } }
         }
     }
 }

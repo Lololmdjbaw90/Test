@@ -1,0 +1,53 @@
+# Shows where the latest uploads are at Apple: still processing, ready in
+# TestFlight, or stuck (and why). Runs on a cheap Linux machine, reading
+# App Store Connect with the same API key as "Upload to App Store".
+name: TestFlight status
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/testflight-status.yml
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
+    steps:
+      - name: Latest builds at Apple
+        run: |
+          node - <<'JS'
+          const crypto = require('crypto');
+          const { KEY, KEY_ID, ISSUER_ID } = process.env;
+          const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+          const now = Math.floor(Date.now() / 1000);
+          const head = b64({ alg: 'ES256', kid: KEY_ID, typ: 'JWT' });
+          const body = b64({ iss: ISSUER_ID, iat: now, exp: now + 600, aud: 'appstoreconnect-v1' });
+          const sig = crypto.sign('sha256', Buffer.from(`${head}.${body}`), { key: KEY, dsaEncoding: 'ieee-p1363' }).toString('base64url');
+          const headers = { Authorization: `Bearer ${head}.${body}.${sig}` };
+          const api = 'https://api.appstoreconnect.apple.com/v1';
+          const get = async (path) => {
+            const res = await fetch(`${api}${path}`, { headers });
+            if (!res.ok) throw new Error(`${path}: ${res.status} ${await res.text()}`);
+            return res.json();
+          };
+          (async () => {
+            const apps = await get('/apps?filter[bundleId]=com.mimilocks.app');
+            const app = apps.data[0];
+            if (!app) { console.log('No app with bundle id com.mimilocks.app'); return; }
+            const builds = await get(`/builds?filter[app]=${app.id}&sort=-uploadedDate&limit=6&include=buildBetaDetail`);
+            const details = Object.fromEntries((builds.included || []).filter((i) => i.type === 'buildBetaDetails').map((i) => [i.id, i.attributes]));
+            const lines = [];
+            for (const b of builds.data) {
+              const d = details[b.relationships?.buildBetaDetail?.data?.id] || {};
+              const line = `Build ${b.attributes.version}: uploaded ${b.attributes.uploadedDate}, processing ${b.attributes.processingState}, expired ${b.attributes.expired}, TestFlight (internal) ${d.internalBuildState || '?'}, (external) ${d.externalBuildState || '?'}`;
+              console.log(line);
+              lines.push(`- ${line}`);
+            }
+            require('fs').appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
+          })().catch((e) => { console.log(String(e)); process.exit(1); });
+          JS

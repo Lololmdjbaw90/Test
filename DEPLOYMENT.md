@@ -45,6 +45,26 @@ Storage
 
 Both configs are included (`vercel.json`, `netlify.toml`) with SPA rewrites. They build with `npm run build` and read the Firebase config from `.env`. Remember to deploy Firestore rules + indexes with the Firebase CLI as shown above.
 
+## Login server (email codes, quick login, backup codes)
+
+`netlify/functions/account.mjs` gives the app more ways to log in: a code by
+email (and resetting a password with a code), quick login with a QR code,
+backup codes, and lets admins delete an account. It uses the same Firebase
+key as the payment server (`FIREBASE_SERVICE_ACCOUNT`, or
+`FIREBASE_PRIVATE_KEY` + `FIREBASE_CLIENT_EMAIL`).
+
+Emails need one email service. In Netlify → Site configuration → Environment
+variables add either:
+
+- `BREVO_API_KEY` (Brevo → SMTP & API → API keys) and `MAIL_FROM` (the sender
+  address you verified in Brevo → Senders). Free plan: 300 emails a day, no
+  domain needed.
+- or `RESEND_API_KEY` and `MAIL_FROM` (an address on a domain verified in
+  Resend).
+
+Without them quick login, backup codes and admin delete still work; "Forgot
+password?" falls back to Firebase's reset link email.
+
 ## Production build
 
 ```bash

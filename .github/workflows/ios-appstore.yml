@@ -21,6 +21,10 @@ on:
         description: "Version shown on the App Store (e.g. 1.0, 1.1)"
         required: true
         default: "1.0"
+      tests:
+        description: "Run the automatic iPhone and iPad tests first (about 15 minutes more, catches broken screens). Untick for a quick upload of a small change."
+        type: boolean
+        default: true
 
 jobs:
   upload:
@@ -63,27 +67,69 @@ jobs:
           printf '%s\n' "$KEY" > "$RUNNER_TEMP/keys/AuthKey_$KEY_ID.p8"
           echo "KEY_PATH=$RUNNER_TEMP/keys/AuthKey_$KEY_ID.p8" >> "$GITHUB_ENV"
 
-      # Every run on a fresh Mac makes a new development certificate, and Apple
-      # allows only a few. Remove the old ones first (they're only used while
-      # building here; the App Store signing certificate isn't touched).
-      - name: Clear old development certificates
+      - name: Test iPhone editor and Fanart interactions
+        if: ${{ inputs.tests }}
+        timeout-minutes: 18
+        run: bash scripts/test-native-interactions.sh
+
+      - name: Test Home scrolling on iPad
+        if: ${{ inputs.tests }}
+        timeout-minutes: 10
+        run: bash scripts/test-native-interactions.sh iPad HomeIPadTests
+
+      - name: Export interaction screenshots
+        if: ${{ always() && inputs.tests }}
+        run: |
+          if [ -d native/InteractionTests.xcresult ]; then
+            xcrun xcresulttool export attachments --path native/InteractionTests.xcresult --output-path native/test-screenshots || true
+          fi
+          if [ -d native/HomeIPadTests.xcresult ]; then
+            xcrun xcresulttool export attachments --path native/HomeIPadTests.xcresult --output-path native/test-screenshots-ipad || true
+          fi
+
+      - name: Save interaction results
+        if: ${{ always() && inputs.tests }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-interaction-results
+          path: |
+            native/InteractionTests.xcresult
+            native/HomeIPadTests.xcresult
+            native/simulator-test.log
+            native/test-screenshots
+            native/test-screenshots-ipad
+
+      # Each run's Mac makes a fresh development certificate for signing and
+      # throws its private key away when the run ends, so those certificates
+      # can never be used again. Apple allows only a few, so remove the ones
+      # earlier runs made ("Created via API") before this run makes its own.
+      # Distribution (App Store) certificates and any made by hand are never
+      # touched: only ones named "Created via API", which only these runs make.
+      - name: Remove old build certificates
+        continue-on-error: true
         run: |
           node - <<'JS'
-          const fs = require("fs"), crypto = require("crypto");
-          const key = fs.readFileSync(process.env.KEY_PATH, "utf8");
-          const b64 = (o) => Buffer.from(typeof o === "string" ? o : JSON.stringify(o)).toString("base64url");
+          const fs = require('fs'), crypto = require('crypto');
+          const { KEY_PATH, KEY_ID, ISSUER_ID } = process.env;
+          const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
           const now = Math.floor(Date.now() / 1000);
-          const head = b64({ alg: "ES256", kid: process.env.KEY_ID, typ: "JWT" });
-          const body = b64({ iss: process.env.ISSUER_ID, iat: now, exp: now + 600, aud: "appstoreconnect-v1" });
-          const sig = crypto.sign("sha256", Buffer.from(head + "." + body), { key, dsaEncoding: "ieee-p1363" }).toString("base64url");
-          const auth = { Authorization: "Bearer " + head + "." + body + "." + sig };
+          const head = b64({ alg: 'ES256', kid: KEY_ID, typ: 'JWT' });
+          const body = b64({ iss: ISSUER_ID, iat: now, exp: now + 600, aud: 'appstoreconnect-v1' });
+          const sig = crypto.sign('sha256', Buffer.from(`${head}.${body}`),
+            { key: fs.readFileSync(KEY_PATH, 'utf8'), dsaEncoding: 'ieee-p1363' }).toString('base64url');
+          const headers = { Authorization: `Bearer ${head}.${body}.${sig}` };
+          const api = 'https://api.appstoreconnect.apple.com/v1/certificates';
           (async () => {
-            const res = await fetch("https://api.appstoreconnect.apple.com/v1/certificates?limit=200&filter[certificateType]=DEVELOPMENT,IOS_DEVELOPMENT", { headers: auth });
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) { console.log("Couldn't list certificates:", res.status, JSON.stringify(json.errors || json).slice(0, 300)); return; }
-            for (const c of json.data || []) {
-              const del = await fetch("https://api.appstoreconnect.apple.com/v1/certificates/" + c.id, { method: "DELETE", headers: auth });
-              console.log("Removed old development certificate", c.attributes?.name || c.id, del.status);
+            const query = new URLSearchParams({ 'filter[certificateType]': 'DEVELOPMENT,IOS_DEVELOPMENT', limit: '200' });
+            const res = await fetch(`${api}?${query}`, { headers });
+            if (!res.ok) { console.log(`Could not list certificates (${res.status}): ${await res.text()}`); return; }
+            const all = (await res.json()).data || [];
+            const robot = all.filter((c) => /created via api/i.test(`${c.attributes.displayName || ''} ${c.attributes.name || ''}`));
+            console.log(`Development certificates: ${all.length}, made by earlier uploads: ${robot.length}`);
+            for (const c of all) console.log(`  - ${c.attributes.displayName || c.attributes.name} (expires ${c.attributes.expirationDate})`);
+            for (const c of robot) {
+              const del = await fetch(`${api}/${c.id}`, { method: 'DELETE', headers });
+              console.log(`Removed ${c.attributes.displayName || c.attributes.name}: ${del.status}`);
             }
           })();
           JS

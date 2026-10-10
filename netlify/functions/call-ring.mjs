@@ -12,6 +12,7 @@
 import crypto from "node:crypto";
 import http2 from "node:http2";
 import { Problem, body, getDoc, handle, signedInUser } from "../lib/sugerly.mjs";
+import { ringRecipients } from "../lib/call-ring-policy.mjs";
 
 const TOPIC = "com.mimilocks.app.voip";
 const HOSTS = { production: "api.push.apple.com", sandbox: "api.sandbox.push.apple.com" };
@@ -46,7 +47,15 @@ function apnsToken() {
 function send(host, device, payload, auth) {
   return new Promise((resolve) => {
     const client = http2.connect(`https://${host}`);
-    const done = (result) => { try { client.close(); } catch {} resolve(result); };
+    let finished = false;
+    const timer = setTimeout(() => done({ status: 0, reason: "timeout" }), 8000);
+    const done = (result) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      try { client.destroy(); } catch {}
+      resolve(result);
+    };
     client.on("error", (e) => done({ status: 0, reason: String(e?.message || e) }));
     const req = client.request({
       ":method": "POST",
@@ -81,7 +90,8 @@ export const handler = (event) => handle(event, async () => {
   const call = await getDoc("Call", id);
   if (!call) throw new Problem(404, "That call doesn't exist.");
   if (String(call.caller_email || "").toLowerCase() !== user.email) throw new Problem(403, "Only the caller can ring.");
-  if (call.status !== "ringing") return { sent: 0, devices: 0, failures: [] };
+  const others = ringRecipients(call, user.email);
+  if (!others.length) return { sent: 0, devices: 0, failures: [] };
   const auth = apnsToken();
   if (!auth) return { sent: 0, setup: false, devices: 0, failures: [] };
 
@@ -93,18 +103,15 @@ export const handler = (event) => handle(event, async () => {
     is_group: call.conversation_type === "group",
     group_name: call.group_name || "",
     conversation_id: call.conversation_id || "",
-    started_at: call.started_at || Date.now(),
+    started_at: call.started_at,
   };
-  const others = [...new Set((call.member_emails || []).map((e) => String(e).toLowerCase()))]
-    .filter((e) => e && e !== user.email)
-    .slice(0, 25);
   let sent = 0;
   let devices = 0;
   const failures = [];
   await Promise.all(others.map(async (email) => {
     const device = await getDoc("PushToken", email).catch(() => null);
-    const address = String(device?.voip_token || "").replace(/[^0-9a-f]/gi, "");
-    if (!address) return;
+    const address = String(device?.voip_token || "");
+    if (!/^[0-9a-f]{64}$/i.test(address)) return;
     devices += 1;
     const first = device.env === "sandbox" ? "sandbox" : "production";
     let result = await send(HOSTS[first], address, payload, auth);

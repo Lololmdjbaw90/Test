@@ -12,7 +12,6 @@ struct StoriesRow: View {
     var compose: (Composer) -> Void
     @Environment(AppModel.self) private var model
     @AppStorage("sugerly.storiesSeen") private var seenRaw = ""
-    @State private var spin = false
 
     struct Story: Identifiable {
         var email: String
@@ -62,14 +61,13 @@ struct StoriesRow: View {
                 }
                 .buttonStyle(BouncyStyle(scale: 0.9))
                 ForEach(Array(stories.enumerated()), id: \.element.id) { i, story in
-                    bubble(story).transition(.scale.combined(with: .opacity))
+                    bubble(story).transition(.pop).swipeFade()
                 }
             }
             .padding(.vertical, 6)
             .padding(.horizontal, 2)
         }
         .scrollClipDisabled()
-        .onAppear { spin = true }
     }
 
     private func bubble(_ story: Story) -> some View {
@@ -93,8 +91,6 @@ struct StoriesRow: View {
                             Circle().strokeBorder(Palette.success, lineWidth: 3)
                         } else if fresh {
                             Circle().strokeBorder(AngularGradient(colors: [Theme.main, Theme.light, Color(hex: 0xFFD166), Theme.main], center: .center), lineWidth: 3.2)
-                                .rotationEffect(.degrees(spin ? 360 : 0))
-                                .animation(.linear(duration: 4).repeatForever(autoreverses: false), value: spin)
                         } else {
                             Circle().strokeBorder(Palette.border, lineWidth: 2)
                         }
@@ -124,39 +120,59 @@ struct HomeComposerBar: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 0) {
             Button { compose(.post) } label: {
-                HStack(spacing: 10) {
-                    Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 40)
-                    Text("What are you making today?").font(.jakarta(14, .medium)).foregroundStyle(Palette.muted)
-                    Spacer(minLength: 0)
-                    Image(systemName: "sparkles").font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.main)
+                HStack(spacing: 12) {
+                    Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 42)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("What are you making today?")
+                            .font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
+                            .lineLimit(1).minimumScaleFactor(0.85)
+                        Text("Tap to share it with everyone")
+                            .font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 6)
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 38, height: 38)
+                        .background(Theme.gradient, in: Circle())
                 }
-                .padding(.horizontal, 12).frame(height: 56)
-                .background(Palette.surface2, in: Capsule())
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .contentShape(Rectangle())
             }
             .buttonStyle(BouncyStyle(scale: 0.98))
-            HStack(spacing: 8) {
-                action("Photo", "photo.fill", 0x5FD3B0) { compose(.post) }
-                action("Reel", "play.rectangle.fill", 0xFF7AA2) { compose(.reel) }
-                action("Drawing", "paintbrush.pointed.fill", 0xB19CFF) { compose(.artwork) }
-                action("Song", "music.note", 0x7CBEFF) { compose(.track) }
+            Rectangle().fill(Palette.border).frame(height: 1).padding(.horizontal, 14)
+            HStack(spacing: 0) {
+                action("Post", "text.bubble.fill") { compose(.post) }
+                action("Reel", "play.rectangle.fill") { compose(.reel) }
+                action("Drawing", "paintbrush.pointed.fill") { compose(.artwork) }
+                action("Song", "music.note") { compose(.track) }
             }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 6)
         }
-        .padding(12)
-        .sugarCard(radius: 28)
+        .sugarCard(radius: 24)
     }
 
-    private func action(_ title: String, _ icon: String, _ color: UInt32, _ run: @escaping () -> Void) -> some View {
+    private func action(_ title: String, _ icon: String, _ run: @escaping () -> Void) -> some View {
         Button(action: run) {
-            HStack(spacing: 5) {
-                Image(systemName: icon).font(.system(size: 12, weight: .bold)).foregroundStyle(Color(hex: color))
-                Text(title).font(.jakarta(12, .bold)).foregroundStyle(Palette.text2).lineLimit(1).minimumScaleFactor(0.8)
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Theme.main)
+                    .frame(width: 34, height: 34)
+                    .background(Theme.soft, in: Circle())
+                Text(title).font(.jakarta(11, .bold)).foregroundStyle(Palette.text2).lineLimit(1)
             }
-            .frame(maxWidth: .infinity).frame(height: 36)
-            .background(Color(hex: color).opacity(0.12), in: Capsule())
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
         }
         .buttonStyle(BouncyStyle(scale: 0.92))
+        .accessibilityLabel("New \(title.lowercased())")
     }
 }
 
@@ -165,6 +181,7 @@ struct HomeComposerBar: View {
 struct ArtPromptCard: View {
     var compose: (Composer) -> Void
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var float = false
     @State private var editing = false
 
@@ -218,12 +235,13 @@ struct ArtPromptCard: View {
             Spacer(minLength: 0)
             ZStack {
                 Circle().fill(.white.opacity(0.2)).frame(width: 86, height: 86)
+                // A gentle swing in place (no bobbing up and down).
                 Image(systemName: prompt.icon).font(.system(size: 38, weight: .bold)).foregroundStyle(.white)
-                    .offset(y: float ? -6 : 4)
-                    .rotationEffect(.degrees(float ? -6 : 6))
-                    .animation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true), value: float)
-                Twinkle(size: 14).offset(x: 30, y: -34)
+                    .symbolEffect(.bounce, options: .repeat(2), value: float && !reduceMotion)
             }
+            .frame(width: 86, height: 86)
+            .overlay(alignment: .topTrailing) { Twinkle(size: 12).offset(x: 10, y: -8) }
+            .padding(.trailing, 6)
         }
         .padding(18)
         .background {
@@ -235,9 +253,12 @@ struct ArtPromptCard: View {
                     Circle().fill(.white.opacity(0.1)).frame(width: 90, height: 90).offset(x: -30, y: 40)
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                // Shadow on the card shape only, so the floating icon
+                // doesn't make the whole card's shadow redraw every frame.
+                .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Theme.main).shadow(color: Theme.main.opacity(0.35), radius: 16, y: 8))
         }
-        .shadow(color: Theme.main.opacity(0.35), radius: 16, y: 8)
         .onAppear { float = true }
+        .onDisappear { float = false }
     }
 }
 
@@ -250,6 +271,7 @@ struct HappeningNow: View {
     let tracks: [Track]
     @Binding var path: [Route]
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pulse = false
 
     struct Item: Identifiable {
@@ -299,7 +321,7 @@ struct HappeningNow: View {
                     Circle().fill(Palette.success).frame(width: 10, height: 10)
                         .overlay(Circle().stroke(Palette.success.opacity(0.5), lineWidth: 2).scaleEffect(pulse ? 2.2 : 1).opacity(pulse ? 0 : 1))
                         .offset(x: 28, y: -2)
-                        .animation(.easeOut(duration: 1.3).repeatForever(autoreverses: false), value: pulse)
+                        .animation(reduceMotion ? nil : .easeOut(duration: 1.3).repeatCount(2, autoreverses: false), value: pulse)
                 }
                 VStack(spacing: 0) {
                     ForEach(Array(list.enumerated()), id: \.element.id) { i, item in
@@ -312,7 +334,7 @@ struct HappeningNow: View {
                 }
                 .sugarCard(radius: 26, padding: 6)
             }
-            .onAppear { pulse = true }
+            .onAppear { pulse = !reduceMotion }
         }
     }
 
@@ -420,7 +442,7 @@ struct SuggestedPeople: View {
                     LazyHStack(spacing: 12) {
                         ForEach(list, id: \.email) { person in
                             card(person)
-                                .transition(.scale(scale: 0.6).combined(with: .opacity))
+                                .transition(.scale(scale: 0.85).combined(with: .opacity))
                         }
                     }
                     .padding(.vertical, 6)
@@ -447,7 +469,7 @@ struct SuggestedPeople: View {
         .padding(.vertical, 14)
         .sugarCard(radius: 24, padding: 0)
         .overlay(alignment: .topTrailing) {
-            Button { withAnimation(.snappy) { _ = hidden.insert(person.email) } } label: {
+            Button { withMotion(Motion.standard) { _ = hidden.insert(person.email) } } label: {
                 Image(systemName: "xmark").font(.system(size: 10, weight: .heavy)).foregroundStyle(Palette.muted)
                     .frame(width: 26, height: 26)
             }
@@ -506,8 +528,7 @@ struct WeeklyChallengeCard: View {
                 Image(systemName: c.icon).font(.system(size: 22, weight: .bold)).foregroundStyle(.white)
                     .frame(width: 50, height: 50)
                     .background(.white.opacity(0.22), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .rotationEffect(.degrees(shine ? -6 : 6))
-                    .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: shine)
+                    .symbolEffect(.bounce, options: .repeat(2), value: shine)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 8) {
                         Text("WEEKLY CHALLENGE").font(.jakarta(11, .black)).tracking(1).foregroundStyle(.white.opacity(0.85))

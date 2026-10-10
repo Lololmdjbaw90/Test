@@ -156,13 +156,14 @@ extension Conversation {
     }
 }
 
+// Your chats, or your servers (the switch at the top). A plain iPhone list:
+// tap to open, swipe left to close a chat, swipe right to mark it read.
 struct ChatListView: View {
     @Binding var path: [Route]
     @Environment(AppModel.self) private var model
     @Environment(ChatStore.self) private var store
     @State private var search = ""
     @State private var starting = false
-    @State private var appeared = false
     @State private var showRequests = false
     @State private var showIgnored = false
     @AppStorage("sugerly.chat.section") private var section = 0
@@ -192,48 +193,30 @@ struct ChatListView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text(section == 0 ? "Messages" : "Servers").font(.display(38)).foregroundStyle(Palette.text)
-                        .contentTransition(.opacity)
-                    Spacer()
-                    if section == 0 {
-                        Button { starting = true } label: { Label("New", systemImage: "square.and.pencil") }
-                            .buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
-                    }
-                }
-                .padding(.horizontal, 4)
-                SectionSwitch(options: [("Chats", "bubble.left.and.bubble.right.fill"), ("Servers", "person.3.fill")], selection: $section)
-            }
-            .padding(.horizontal, 14)
-            .padding(.top, 10)
-            .padding(.bottom, 8)
-            .frame(maxWidth: 680)
-
+        Group {
             if section == 1 {
-                ServerHubView(path: $path)
+                ServersHome(path: $path, embedded: true)
                     .transition(.opacity)
             } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 10) {
-                        chatList
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.top, 4)
-                    .padding(.bottom, 30)
-                    .frame(maxWidth: 680)
-                    .frame(maxWidth: .infinity)
-                }
-                .scrollDismissesKeyboard(.interactively)
-                .refreshable { await store.refresh(me: model.me?.email ?? "") }
-                .transition(.opacity)
+                chats
+                    .transition(.opacity)
             }
         }
-        .animation(.snappy, value: section)
-        .sugarBackground()
-        .sugarTopBar($path)
-        .onAppear { appeared = true }
+        .animation(.easeOut(duration: 0.22), value: section)
+        .appearFade()
+        // The page colour stays put while the list fades in.
+        .background { Palette.bg.ignoresSafeArea() }
+        .navigationTitle(section == 0 ? "Chats" : "Servers")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                TitleSwitch(titles: ["Chats", "Servers"], selection: $section)
+            }
+        }
+        .plainToolbar(leading: { AccountButton() }, trailing: {
+            PinkCircleButton(icon: "square.and.pencil", label: "New message") { starting = true }
+        })
+        .bottomDock()
         .sheet(isPresented: $starting) {
             NewChatView { email in
                 starting = false
@@ -241,6 +224,7 @@ struct ChatListView: View {
                 let id = Social.dmId(me, email)
                 let existing = store.conversations.first { $0.id == id }
                 let c = existing ?? Conversation(id: id, members: [me, email.lowercased()], isGroup: false, groupName: "", last: nil, unread: 0)
+                if section != 0 { section = 0 }
                 Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(350))
                     path.append(.chat(c))
@@ -250,99 +234,134 @@ struct ChatListView: View {
         }
     }
 
-    @ViewBuilder
-    private var chatList: some View {
-                HStack(spacing: 10) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
-                    TextField("Search conversations…", text: $search).font(.jakarta(15))
-                }
-                .padding(.horizontal, 16)
-                .frame(height: 48)
-                .background(Palette.surface, in: Capsule())
-                .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
-                .padding(.bottom, 6)
+    private var chats: some View {
+        List {
+            SearchField(text: $search, placeholder: "Search chats")
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
 
-                if store.loading && store.conversations.isEmpty {
-                    ForEach(0..<6, id: \.self) { _ in SkeletonRow() }
-                } else if let error = store.error, store.conversations.isEmpty {
-                    EmptyCard(icon: "wifi.exclamationmark", title: "Couldn't load chats", text: error)
-                } else if shown.isEmpty {
+            if store.loading && store.conversations.isEmpty {
+                ForEach(0..<6, id: \.self) { _ in
+                    SkeletonRow()
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
+            } else if let error = store.error, store.conversations.isEmpty {
+                EmptyCard(icon: "wifi.exclamationmark", title: "Couldn't load chats", text: error)
+                    .emptyRow()
+            } else if shown.isEmpty && requests.isEmpty {
+                Group {
                     if search.isEmpty {
                         EmptyCard(icon: "bubble.left.and.bubble.right.fill", title: "No chats yet", text: "Say hi to someone! Your chats and group chats live here.", actionTitle: "Start a chat") { starting = true }
                     } else {
                         EmptyCard(icon: "magnifyingglass", title: "No chats found", text: "No one by that name. Try another?")
                     }
                 }
+                .emptyRow()
+            }
 
-                if search.isEmpty && !requests.isEmpty {
-                    tuckedSection(title: "Message requests", icon: "envelope.badge.fill", list: requests, open: $showRequests,
-                                  note: "People you aren't friends with yet. Open one to accept or decline.")
+            if search.isEmpty && !requests.isEmpty {
+                tucked("Message requests", note: "People you aren't friends with yet", icon: "envelope.badge.fill", list: requests, open: $showRequests)
+            }
+
+            ForEach(shown) { c in
+                row(c)
+            }
+
+            if search.isEmpty && !ignoredChats.isEmpty {
+                tucked("Ignored", note: "They can't ping you", icon: "bell.slash.fill", list: ignoredChats, open: $showIgnored)
+            }
+
+            if search.isEmpty && store.hasOlder {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small).tint(Theme.main)
+                    Text("Loading older chats").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
                 }
-                ForEach(Array(shown.enumerated()), id: \.element.id) { i, c in
-                    Button { path.append(.chat(c)) } label: { ConversationRow(conversation: c) }
-                        .buttonStyle(BouncyStyle(scale: 0.97))
-                        .stagger(appeared, i + 1)
-                        .contextMenu {
-                            if c.unread > 0 {
-                                Button { store.markRead(c.id) } label: { Label("Mark as read", systemImage: "checkmark.bubble") }
-                            }
-                            Button(role: .destructive) { withAnimation(.snappy) { store.close(c.id) } } label: {
-                                Label(c.isGroup ? "Hide chat" : "Close DM", systemImage: "xmark.circle")
-                            }
-                        }
-                        .transition(.asymmetric(insertion: .opacity, removal: .move(edge: .leading).combined(with: .opacity)))
+                .frame(maxWidth: .infinity)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .onAppear { Task { await store.loadOlder(me: model.me?.email ?? "") } }
+            }
+
+            let hidden = store.conversations.filter { store.isClosed($0) }.count
+            if search.isEmpty && hidden > 0 {
+                Label("\(hidden) closed chat\(hidden == 1 ? "" : "s") — search a name to open one again", systemImage: "eye.slash")
+                    .font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .scrollDismissesKeyboard(.interactively)
+        .frame(maxWidth: 760)
+        .frame(maxWidth: .infinity)
+        .background { Palette.bg.ignoresSafeArea() }
+        .motion(Motion.standard, value: shown.map(\.id))
+        .refreshable { await store.refresh(me: model.me?.email ?? "") }
+    }
+
+    private func row(_ c: Conversation) -> some View {
+        Button { path.append(.chat(c)) } label: {
+            ConversationRow(conversation: c, card: false)
+        }
+        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+        .listRowBackground(c.unread > 0 ? Theme.main.opacity(0.07) : Color.clear)
+        .listRowSeparatorTint(Palette.border)
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) { withMotion(Motion.standard) { store.close(c.id) } } label: {
+                Label(c.isGroup ? "Hide" : "Close", systemImage: "xmark.circle")
+            }
+        }
+        .swipeActions(edge: .leading) {
+            if c.unread > 0 {
+                Button { store.markRead(c.id) } label: { Label("Read", systemImage: "checkmark.bubble") }
+                    .tint(Theme.main)
+            }
+        }
+        .contextMenu {
+            if c.unread > 0 {
+                Button { store.markRead(c.id) } label: { Label("Mark as read", systemImage: "checkmark.bubble") }
+            }
+            Button(role: .destructive) { withMotion(Motion.standard) { store.close(c.id) } } label: {
+                Label(c.isGroup ? "Hide chat" : "Close DM", systemImage: "xmark.circle")
+            }
+        }
+    }
+
+    // A folded group of chats (requests, ignored) that opens with a tap.
+    private func tucked(_ title: String, note: String, icon: String, list: [Conversation], open: Binding<Bool>) -> some View {
+        DisclosureGroup(isExpanded: open) {
+            ForEach(list) { c in row(c) }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: icon).font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
+                    .frame(width: 40, height: 40).background(Theme.gradient, in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.jakarta(15, .heavy)).foregroundStyle(Palette.text)
+                    Text(note).font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(1)
                 }
-                if search.isEmpty && !ignoredChats.isEmpty {
-                    tuckedSection(title: "Ignored", icon: "bell.slash.fill", list: ignoredChats, open: $showIgnored,
-                                  note: "Chats with people you ignore. They can't ping you.")
-                }
-                if search.isEmpty && store.hasOlder {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small).tint(Theme.main)
-                        Text("Loading older chats").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
-                    }
-                    .frame(maxWidth: .infinity).padding(.vertical, 12)
-                    .onAppear { Task { await store.loadOlder(me: model.me?.email ?? "") } }
-                }
-                let hidden = store.conversations.filter { store.isClosed($0) }.count
-                if search.isEmpty && hidden > 0 {
-                    Label("\(hidden) closed chat\(hidden == 1 ? "" : "s") — search a name to open one again", systemImage: "eye.slash")
-                        .font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
-                        .frame(maxWidth: .infinity).padding(.top, 8)
-                }
+                Spacer(minLength: 0)
+                Text("\(list.count)").font(.jakarta(12, .heavy)).foregroundStyle(.white)
+                    .frame(minWidth: 22, minHeight: 22).background(Theme.main, in: Capsule())
+            }
+        }
+        .tint(Palette.muted)
+        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+        .listRowBackground(Color.clear)
+        .listRowSeparatorTint(Palette.border)
     }
 }
 
-extension ChatListView {
-    // A folded group of chats (requests, ignored) that opens with a tap.
-    func tuckedSection(title: String, icon: String, list: [Conversation], open: Binding<Bool>, note: String) -> some View {
-        VStack(spacing: 8) {
-            Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { open.wrappedValue.toggle() } } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: icon).font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
-                        .frame(width: 44, height: 44).background(Theme.gradient, in: Circle())
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(title).font(.jakarta(15, .heavy)).foregroundStyle(Palette.text)
-                        Text(note).font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(2)
-                    }
-                    Spacer(minLength: 0)
-                    Text("\(list.count)").font(.jakarta(12, .heavy)).foregroundStyle(.white)
-                        .frame(minWidth: 22, minHeight: 22).background(Theme.main, in: Capsule())
-                    Image(systemName: "chevron.down").font(.system(size: 12, weight: .heavy)).foregroundStyle(Palette.muted)
-                        .rotationEffect(.degrees(open.wrappedValue ? 180 : 0))
-                }
-                .sugarCard(radius: 22, padding: 10)
-            }
-            .buttonStyle(BouncyStyle(scale: 0.98))
-            if open.wrappedValue {
-                ForEach(list) { c in
-                    Button { path.append(.chat(c)) } label: { ConversationRow(conversation: c) }
-                        .buttonStyle(BouncyStyle(scale: 0.97))
-                        .padding(.leading, 14)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
-            }
-        }
+private extension View {
+    // An empty state inside a list: no card behind it, no lines.
+    func emptyRow() -> some View {
+        self
+            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
     }
 }
 
@@ -382,13 +401,15 @@ struct SectionSwitch: View {
 
 struct ConversationRow: View {
     let conversation: Conversation
+    // A card of its own, or a plain row in a list.
+    var card = true
     @Environment(AppModel.self) private var model
 
     var body: some View {
         let me = model.me?.email ?? ""
         let other = conversation.others(me).first.flatMap { model.person($0) }
         let unread = conversation.unread > 0
-        HStack(spacing: 14) {
+        let row = HStack(spacing: 14) {
             if conversation.isGroup {
                 Image(systemName: "person.3.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
                     .frame(width: 56, height: 56)
@@ -422,10 +443,15 @@ struct ConversationRow: View {
                 }
             }
         }
-        .padding(12)
-        .background(unread ? Theme.pink.opacity(0.06) : Palette.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(unread ? Theme.pink.opacity(0.25) : Palette.border, lineWidth: 1))
-        .shadow(color: unread ? Theme.main.opacity(0.12) : Palette.shadow, radius: unread ? 12 : 6, y: 3)
+        if card {
+            row
+                .padding(12)
+                .background(unread ? Theme.pink.opacity(0.06) : Palette.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(unread ? Theme.pink.opacity(0.25) : Palette.border, lineWidth: 1))
+                .shadow(color: unread ? Theme.main.opacity(0.12) : Palette.shadow, radius: unread ? 12 : 6, y: 3)
+        } else {
+            row.contentShape(Rectangle())
+        }
     }
 
     private var previewIcon: String? {

@@ -2,11 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Brand fonts, bundled with the app so they work offline and never delay the
-   first paint. Bubbly has no digits or most punctuation; Cute Here (same
-   rounded style) fills those in. Sources: /brand/*.otf */
-@font-face { font-family: "Bubbly"; src: url("./assets/fonts/Bubbly-Regular.woff2") format("woff2"); font-display: swap; }
-@font-face { font-family: "Cute Here"; src: url("./assets/fonts/CuteHere.woff2") format("woff2"); font-display: swap; }
+/* OFL brand fonts, bundled for offline use. Keep legacy CSS family aliases
+   so existing styles render with Bubblegum Sans and Caveat Brush. */
+@font-face { font-family: "Bubbly"; src: url("./assets/fonts/BubblegumSans-Regular.ttf") format("truetype"); font-display: swap; }
+@font-face { font-family: "Cute Here"; src: url("./assets/fonts/CaveatBrush-Regular.ttf") format("truetype"); font-display: swap; }
 
 /* -----------------------------------------------------------------------------
    Sugerly design tokens

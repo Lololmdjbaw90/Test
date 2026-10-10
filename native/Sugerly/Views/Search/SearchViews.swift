@@ -5,33 +5,14 @@ import SwiftUI
 struct FollowButton: View {
     let email: String
     var compact = false
+    var offTitle = "Follow"
     @Environment(AppModel.self) private var model
 
     private var following: Bool { model.me?.following.contains(email) ?? false }
 
     var body: some View {
         if email != model.me?.email {
-            Button { toggle() } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: following ? "checkmark" : "plus").font(.system(size: 11, weight: .heavy))
-                    Text(following ? "Following" : "Follow")
-                }
-                .font(.jakarta(compact ? 12 : 13, .heavy))
-                .foregroundStyle(following ? Theme.main : .white)
-                .padding(.horizontal, compact ? 12 : 16)
-                .frame(height: compact ? 30 : 34)
-                .background {
-                    if following {
-                        Capsule().fill(Theme.soft)
-                    } else {
-                        Capsule().fill(Theme.gradient).shadow(color: Theme.main.opacity(0.35), radius: 6, y: 3)
-                    }
-                }
-                .contentTransition(.symbolEffect(.replace))
-            }
-            .buttonStyle(BouncyStyle(scale: 0.9))
-            .sensoryFeedback(.impact(weight: .light), trigger: following)
-            .animation(.snappy, value: following)
+            MorphPill(on: following, offTitle: offTitle, onTitle: "Following", size: compact ? .small : .regular) { toggle() }
         }
     }
 
@@ -146,7 +127,7 @@ struct PeopleView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(filters.indices, id: \.self) { i in
-                            Chip(title: filters[i], active: filter == i) { withAnimation(.snappy) { filter = i } }
+                            Chip(title: filters[i], active: filter == i) { withMotion(Motion.standard) { filter = i } }
                         }
                     }
                     .padding(.vertical, 2)
@@ -199,10 +180,8 @@ struct PersonBubble: View {
         VStack(spacing: 10) {
             Button(action: open) {
                 VStack(spacing: 8) {
-                    Avatar(url: person.picture, name: person.displayName, size: 78, online: person.isOnline, ring: person.isOnline,
+                    Avatar(url: person.picture, name: person.displayName, size: 82, online: person.isOnline,
                            presence: person.isOnline ? person.presenceNow : nil)
-                        .padding(4)
-                        .background(Circle().fill(Theme.soft))
                     HStack(spacing: 4) {
                         Text(person.displayName).font(.jakarta(15, .heavy)).foregroundStyle(Palette.text).lineLimit(1)
                         if person.isAdmin {
@@ -287,7 +266,7 @@ struct SearchField: View {
         .background(Palette.surface, in: Capsule())
         .overlay(Capsule().strokeBorder(focused ? Theme.main.opacity(0.5) : Palette.border, lineWidth: focused ? 1.5 : 1))
         .shadow(color: focused ? Theme.main.opacity(0.15) : .clear, radius: 10, y: 4)
-        .animation(.snappy, value: focused)
+        .motion(Motion.standard, value: focused)
         .onAppear { if autofocus { focused = true } }
     }
 }

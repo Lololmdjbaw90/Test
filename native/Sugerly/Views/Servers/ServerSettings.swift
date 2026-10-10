@@ -44,7 +44,7 @@ struct ServerSettingsView: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
                                 ForEach(tabs.indices, id: \.self) { i in
-                                    Chip(title: tabs[i].0, icon: tabs[i].1, active: tab == i) { withAnimation(.snappy) { tab = i } }
+                                    Chip(title: tabs[i].0, icon: tabs[i].1, active: tab == i) { withMotion(Motion.standard) { tab = i } }
                                 }
                             }
                             .padding(.vertical, 2)
@@ -103,7 +103,7 @@ struct ServerSettingsView: View {
             PhotosPicker(selection: $bannerItem, matching: .images) {
                 ZStack {
                     if let bannerImage { Image(uiImage: bannerImage).resizable().scaledToFill() }
-                    else if !store.server.bannerURL.isEmpty { RemoteImage(url: store.server.bannerURL) }
+                    else if !store.server.bannerURL.isEmpty { RemoteImage(url: store.server.bannerURL, live: true) }
                     else { Theme.gradient }
                     Label("Change banner", systemImage: "photo").font(.jakarta(12, .bold)).foregroundStyle(.white)
                         .padding(.horizontal, 12).frame(height: 30).background(.black.opacity(0.35), in: Capsule())
@@ -258,24 +258,16 @@ struct PermissionToggle: View {
     let on: Bool
     var set: (Bool) -> Void
 
+    // The iPhone's own switch, in your colour.
     var body: some View {
-        Button { set(!on) } label: {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(perm.label).font(.jakarta(14, .bold)).foregroundStyle(Palette.text)
-                    Text(perm.detail).font(.jakarta(11)).foregroundStyle(Palette.muted).multilineTextAlignment(.leading)
-                }
-                Spacer()
-                Capsule().fill(on ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.border))
-                    .frame(width: 48, height: 28)
-                    .overlay(alignment: on ? .trailing : .leading) {
-                        Circle().fill(.white).frame(width: 22, height: 22).padding(3).shadow(color: .black.opacity(0.15), radius: 2)
-                    }
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: on)
+        Toggle(isOn: Binding(get: { on }, set: { set($0) })) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(perm.label).font(.jakarta(14, .bold)).foregroundStyle(Palette.text)
+                Text(perm.detail).font(.jakarta(11)).foregroundStyle(Palette.muted).multilineTextAlignment(.leading)
             }
-            .sugarCard(radius: 16, padding: 12)
         }
-        .buttonStyle(.plain)
+        .tint(Theme.main)
+        .sugarCard(radius: 16, padding: 12)
         .sensoryFeedback(.selection, trigger: on)
     }
 }
@@ -428,7 +420,7 @@ struct ChannelEditor: View {
                     }
                     SugarField(placeholder: type == "voice" ? "Lounge" : "new-channel", text: $name)
                     SugarField(placeholder: "Topic (optional)", text: $about)
-                    Button { withAnimation(.snappy) { isPrivate.toggle() } } label: {
+                    Button { withMotion(Motion.standard) { isPrivate.toggle() } } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Label("Private channel", systemImage: "lock.fill").font(.jakarta(14, .bold)).foregroundStyle(Palette.text)
@@ -439,7 +431,7 @@ struct ChannelEditor: View {
                         }
                         .sugarCard(radius: 16, padding: 12)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SoftPressStyle())
                     if isPrivate || !allowed.isEmpty {
                         Text(isPrivate ? "WHO CAN SEE IT" : "WHO CAN POST").font(.jakarta(11, .heavy)).tracking(1.2).foregroundStyle(Palette.muted)
                         FlowLayout(spacing: 6) {

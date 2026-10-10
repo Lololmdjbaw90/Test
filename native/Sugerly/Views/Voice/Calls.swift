@@ -1,6 +1,8 @@
 import SwiftUI
 import UIKit
 import AudioToolbox
+import AVKit
+import WebRTC
 
 // MARK: - DM and group calls
 
@@ -63,16 +65,47 @@ struct CallInfo: Identifiable, Equatable {
 @Observable
 final class CallCenter {
     static let ringMs: Double = 45_000
+    // One for the whole app (calls can be answered from iPhone's call
+    // screen while the app's pages aren't open).
+    static let shared = CallCenter()
 
     var incoming: CallInfo?
     var current: CallInfo?
     var showScreen = false
     var error: String?
+    // While your call rings: why their phone can't ring if Sugerly is
+    // closed there (nil when it could, or while that's being checked).
+    var ringNote: String?
 
     @ObservationIgnored private weak var voice: VoiceEngine?
     @ObservationIgnored private var me: UserProfile?
     @ObservationIgnored private var ringTask: Task<Void, Never>?
     @ObservationIgnored private var dismissed = Set<String>()
+    // Your own calls given up because the other person called you at the
+    // same moment (both of you end up in their call instead).
+    @ObservationIgnored private var merged = Set<String>()
+    @ObservationIgnored private var watchToken: UUID?
+
+    init() {
+        attach(voice: VoiceEngine.shared)
+        let bridge = VoiceEngine.shared.bridge
+        bridge.onAnswer = { [weak self] id in Task { await self?.answerFromSystem(id) } }
+        bridge.onDecline = { [weak self] id in Task { await self?.declineFromSystem(id) } }
+    }
+
+    // Logging out: forget everything about the last account's calls.
+    func reset() {
+        stopRinging()
+        incoming = nil
+        current = nil
+        showScreen = false
+        error = nil
+        ringNote = nil
+        me = nil
+        dismissed = []
+        merged = []
+        watchToken = nil
+    }
 
     func attach(voice: VoiceEngine) {
         self.voice = voice
@@ -87,6 +120,11 @@ final class CallCenter {
     func start(_ conversation: Conversation, model: AppModel) async {
         guard let me = model.me, let voice else { return }
         self.me = me
+        // They're already calling you from this chat: calling back answers it.
+        if let ringing = incoming, ringing.conversationId == conversation.id, ringing.ringing {
+            await accept(ringing, me: me)
+            return
+        }
         if voice.room != nil { await voice.leave() }
         let members = Array(Set(conversation.members.isEmpty ? [me.email] : conversation.members + [me.email])).sorted()
         var names: [String: String] = [:]
@@ -110,6 +148,15 @@ final class CallCenter {
             let created = try await FS.create("Call", doc)
             let call = CallInfo(created)
             current = call
+            // Rings their phone even when Sugerly is closed there (iPhone's
+            // own call screen). Without the server set up it still rings in
+            // the app, and the call screen says what's missing.
+            ringNote = nil
+            let ringing = call.id
+            Task { [weak self] in
+                let note = await Self.ringPhones(ringing)
+                if self?.current?.id == ringing { self?.ringNote = note }
+            }
             withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { showScreen = true }
             await voice.join(room(call), me: me)
             ringback(call.id)
@@ -118,7 +165,7 @@ final class CallCenter {
         }
     }
 
-    func accept(_ call: CallInfo, me: UserProfile) async {
+    func accept(_ call: CallInfo, me: UserProfile, fromSystem: Bool = false) async {
         guard let voice else { return }
         self.me = me
         stopRinging()
@@ -126,21 +173,37 @@ final class CallCenter {
         if voice.room != nil { await voice.leave() }
         let joined = Array(Set(call.joined + [me.email]))
         let fields: Doc = ["status": "active", "joined_emails": joined, "answered_at": Int(call.answeredAt ?? Date().timeIntervalSince1970 * 1000), "updated_date": FS.nowISO()]
-        try? await FS.update("Call", call.id, fields)
+        do {
+            try await FS.update("Call", call.id, fields)
+        } catch {
+            self.error = "Couldn't answer the call — \(error.localizedDescription)"
+            if fromSystem, voice.bridge.adoptAnswered() { voice.bridge.end() }
+            return
+        }
         var next = call
         next.status = "active"
         next.joined = joined
         next.answeredAt = call.answeredAt ?? Date().timeIntervalSince1970 * 1000
         current = next
         withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { showScreen = true }
-        await voice.join(room(next), me: me)
+        await voice.join(room(next), me: me, adoptSystemCall: fromSystem)
+        if voice.room == nil {
+            self.error = voice.error ?? "Couldn't connect the call."
+            await left(next.id)
+            current = nil
+            showScreen = false
+        }
     }
 
     func decline(_ call: CallInfo, me: UserProfile) {
+        decline(call, email: me.email)
+    }
+
+    private func decline(_ call: CallInfo, email: String) {
         stopRinging()
         dismissed.insert(call.id)
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { incoming = nil }
-        var fields: Doc = ["declined_by": Array(Set(call.declinedBy + [me.email])), "updated_date": FS.nowISO()]
+        var fields: Doc = ["declined_by": Array(Set(call.declinedBy + [email])), "updated_date": FS.nowISO()]
         if !call.isGroup && call.status == "ringing" {
             fields["status"] = "ended"
             fields["ended_at"] = Int(Date().timeIntervalSince1970 * 1000)
@@ -160,7 +223,10 @@ final class CallCenter {
     // Leaving: end the call when nobody else is left (always for 1:1 calls)
     // and post the summary message once.
     private func left(_ callId: String) async {
+        // A call given up for theirs: nothing to end or report here.
+        if merged.contains(callId) { return }
         ringTask?.cancel()
+        ringNote = nil
         withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) { showScreen = false }
         defer { current = nil }
         guard let me, let doc = try? await FS.get("Call", callId) else { return }
@@ -194,13 +260,59 @@ final class CallCenter {
         _ = try? await FS.create("DirectMessage", doc)
     }
 
+    // MARK: iPhone's call screen
+
+    // A call push is ringing on iPhone's call screen: the in-app banner and
+    // ringtone step aside so it doesn't ring twice.
+    func systemRinging(_ callId: String) {
+        guard incoming?.id == callId else { return }
+        stopRinging()
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { incoming = nil }
+    }
+
+    // Answered on iPhone's call screen (maybe with the app closed): load who
+    // you are and the call, then join it on that same system call.
+    func answerFromSystem(_ callId: String) async {
+        dismissed.insert(callId)
+        let profile: UserProfile?
+        if let me { profile = me } else if let uid = AuthClient.shared.uid, let doc = try? await FS.get("User", uid) { profile = UserProfile(doc) } else { profile = nil }
+        guard let profile, let doc = try? await FS.get("Call", callId) else {
+            // Couldn't load it: hang up the answered system call.
+            if voice?.bridge.adoptAnswered() == true { voice?.bridge.end() }
+            return
+        }
+        let call = CallInfo(doc)
+        guard call.status != "ended", call.ringing, call.members.contains(profile.email),
+              !call.declinedBy.contains(profile.email), !call.joined.contains(profile.email),
+              !profile.blocked.contains(call.callerEmail), !profile.ignored.contains(call.callerEmail) else {
+            if voice?.bridge.adoptAnswered() == true { voice?.bridge.end() }
+            return
+        }
+        self.me = profile
+        await accept(call, me: profile, fromSystem: true)
+        // The app's pages may not be open: keep an eye on the call anyway.
+        if watchToken == nil { Task { await watch(me: profile) } }
+    }
+
+    // Declined on iPhone's call screen.
+    func declineFromSystem(_ callId: String) async {
+        dismissed.insert(callId)
+        guard let email = AuthClient.shared.email, let doc = try? await FS.get("Call", callId) else { return }
+        decline(CallInfo(doc), email: email)
+    }
+
     // MARK: watching for calls
 
     // Checks every few seconds for calls ringing you, and keeps the call
     // you're in up to date (answered, declined, ended by the other side).
     func watch(me: UserProfile) async {
         self.me = me
-        while !Task.isCancelled {
+        // Only the newest watcher keeps going (one started after answering
+        // from iPhone's call screen hands over to the app's own).
+        let token = UUID()
+        watchToken = token
+        defer { if watchToken == token { watchToken = nil } }
+        while !Task.isCancelled && watchToken == token {
             await check(me)
             try? await Task.sleep(for: .seconds(current != nil || incoming != nil ? 2 : 3.5))
         }
@@ -222,7 +334,23 @@ final class CallCenter {
         let calls = docs.map(CallInfo.init)
         let ringingMe = calls.first { c in
             c.callerEmail != me.email && c.ringing && !c.declinedBy.contains(me.email) && !c.joined.contains(me.email)
-                && c.id != current?.id && !dismissed.contains(c.id)
+                && c.id != current?.id && !dismissed.contains(c.id) && !(voice?.bridge.isRinging(c.id) ?? false)
+        }
+        // You both called each other at the same moment: the call started
+        // first wins and both of you end up in it, connected straight away,
+        // instead of two calls ringing past each other.
+        if let theirs = ringingMe, let mine = current, mine.callerEmail == me.email, mine.status == "ringing",
+           Self.sameChat(mine, theirs) {
+            if (mine.startedAt, mine.id) < (theirs.startedAt, theirs.id) {
+                dismissed.insert(theirs.id)   // they'll join this one
+            } else {
+                merged.insert(mine.id)
+                dismissed.insert(mine.id)
+                try? await FS.update("Call", mine.id, ["status": "ended", "ended_at": Int(Date().timeIntervalSince1970 * 1000),
+                                                     "merged_into": theirs.id, "updated_date": FS.nowISO()])
+                await accept(theirs, me: me)
+            }
+            return
         }
         if let ringingMe {
             if incoming?.id != ringingMe.id {
@@ -260,6 +388,32 @@ final class CallCenter {
     }
 
     private func stopRinging() { ringTask?.cancel() }
+
+    // Asks the server to ring the others' phones. Returns a short reason
+    // when a closed Sugerly can't be rung, nil when it went through.
+    private static func ringPhones(_ callId: String) async -> String? {
+        let result: [String: Any]
+        do {
+            result = try await Payments.call("call-ring", ["call_id": callId])
+        } catch {
+            return "Their phone only rings while Sugerly is open (the call server isn't reachable yet)."
+        }
+        if (result["setup"] as? Bool) == false {
+            return "Their phone only rings while Sugerly is open (the Apple call key isn't set up on the website)."
+        }
+        let sent = (result["sent"] as? Int) ?? (result["sent"] as? Double).map(Int.init) ?? 0
+        if sent > 0 { return nil }
+        let failures = (result["failures"] as? [String]) ?? []
+        if let reason = failures.first {
+            return "Apple couldn't ring their phone (\(reason))."
+        }
+        return "Their phone only rings while Sugerly is open until they open the new Sugerly once."
+    }
+
+    private static func sameChat(_ a: CallInfo, _ b: CallInfo) -> Bool {
+        if !a.conversationId.isEmpty && a.conversationId == b.conversationId { return true }
+        return !a.isGroup && !b.isGroup && Set(a.members) == Set(b.members)
+    }
 }
 
 // MARK: - Incoming call banner
@@ -277,9 +431,9 @@ struct IncomingCallBanner: View {
                 ForEach(0..<2) { i in
                     Circle().stroke(Palette.success.opacity(0.5), lineWidth: 2)
                         .frame(width: 56, height: 56)
-                        .scaleEffect(pulse ? 1.6 : 1)
-                        .opacity(pulse ? 0 : 0.9)
-                        .animation(.easeOut(duration: 1.6).repeatForever(autoreverses: false).delay(Double(i) * 0.8), value: pulse)
+                        .scaleEffect(pulse && !Motion.reduced ? 1.6 : 1)
+                        .opacity(pulse && !Motion.reduced ? 0 : 0.9)
+                        .animation(Motion.reduced ? nil : .easeOut(duration: 1.6).repeatForever(autoreverses: false).delay(Double(i) * 0.8), value: pulse)
                 }
                 Avatar(url: call.isGroup ? call.callerPicture : call.picture(for: me), name: call.title(for: me), size: 52)
             }
@@ -303,8 +457,8 @@ struct IncomingCallBanner: View {
             } label: {
                 Image(systemName: "phone.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
                     .frame(width: 48, height: 48).background(Palette.success, in: Circle())
-                    .rotationEffect(.degrees(pulse ? -12 : 12))
-                    .animation(.easeInOut(duration: 0.18).repeatForever(autoreverses: true), value: pulse)
+                    .rotationEffect(.degrees(Motion.reduced ? 0 : (pulse ? -10 : 10)))
+                    .animation(Motion.reduced ? nil : .easeInOut(duration: 0.18).repeatForever(autoreverses: true), value: pulse)
             }
             .buttonStyle(BouncyStyle(scale: 0.85))
             .accessibilityLabel("Answer")
@@ -326,31 +480,72 @@ struct CallScreen: View {
     @Environment(CallCenter.self) private var calls
     @Environment(VoiceEngine.self) private var voice
     @State private var ringing = false
+    @State private var ending = false
+    // The big picture shows all of it by default; double-tap to fill.
+    @State private var stageFill = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var me: String { model.me?.email ?? "" }
     private var call: CallInfo? { calls.current }
     private var others: [VoiceEngine.Participant] { voice.participants.filter { !$0.isSelf } }
     private var alone: Bool { others.isEmpty }
 
+    // Someone showing their camera or screen gets the big stage (screens first).
+    private var stage: (VoiceEngine.Participant, RTCVideoTrack)? {
+        let showing = others.filter { !$0.video.isEmpty }.sorted { $0.video == "screen" && $1.video != "screen" }
+        for p in showing { if let track = voice.remoteVideo[p.id] { return (p, track) } }
+        return nil
+    }
+
     var body: some View {
         ZStack {
             background
             VStack(spacing: 0) {
                 topBar
-                Spacer(minLength: 12)
-                if alone {
-                    ringingHero.transition(.opacity.combined(with: .scale(scale: 0.95)))
-                } else if others.count == 1, let other = others.first {
-                    oneToOne(other).transition(.opacity.combined(with: .scale(scale: 0.95)))
+                if let shown = stage {
+                    // Their camera or screen sits between the top bar and the
+                    // buttons, whole and uncovered (it used to fill the screen
+                    // behind the buttons, which hid most of them).
+                    stageView(shown.0, shown.1)
+                        .padding(.horizontal, 10)
+                        .padding(.top, 8)
+                        .padding(.bottom, 12)
+                        .transition(.opacity)
                 } else {
-                    group.transition(.opacity)
+                    ScrollView {
+                        VStack(spacing: 20) {
+                            if alone {
+                                ringingHero.transition(.opacity.combined(with: .scale(scale: 0.95)))
+                            } else if others.count == 1, let other = others.first {
+                                oneToOne(other).transition(.opacity.combined(with: .scale(scale: 0.95)))
+                            } else {
+                                group.transition(.opacity)
+                            }
+                        }
+                        .padding(.vertical, 24).frame(maxWidth: .infinity)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
                 }
-                Spacer(minLength: 12)
-                controls
+                notices
+                bar
             }
-            .padding(.bottom, 24)
+            .padding(.bottom, 20)
             .animation(.spring(response: 0.45, dampingFraction: 0.85), value: alone)
             .animation(.spring(response: 0.45, dampingFraction: 0.85), value: others.count)
+            // (In a group your own tile shows your camera already.)
+            if voice.cameraOn, let mine = voice.localVideo, others.count <= 1 || stage != nil {
+                selfPreview(mine)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .padding(.top, 70).padding(.trailing, 18)
+                    .transition(.scale(scale: 0.85, anchor: .topTrailing).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: stage?.0.id)
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: voice.cameraOn)
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: voice.sharingScreen)
+        .onChange(of: voice.sharingScreen) { _, sharing in
+            // Sharing shows the rest of the app, so step out of the way.
+            if sharing { withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) { calls.showScreen = false } }
         }
         .statusBarHidden(false)
         .preferredColorScheme(.dark)
@@ -358,27 +553,35 @@ struct CallScreen: View {
 
     // A still background (moving blurred lights redrew the whole screen on
     // every frame and made the call stutter when anything else happened).
-    private var background: some View {
-        ZStack {
-            LinearGradient(colors: [Color(hex: 0x2A1320), Color(hex: 0x12080E)], startPoint: .top, endPoint: .bottom)
-            RadialGradient(colors: [Theme.main.opacity(0.35), .clear], center: .init(x: 0.5, y: 0.32), startRadius: 10, endRadius: 360)
-        }
-        .drawingGroup()
-        .ignoresSafeArea()
-    }
+    private var background: some View { CallBackdrop() }
 
     private var topBar: some View {
         HStack {
             Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) { calls.showScreen = false } } label: {
                 Image(systemName: "chevron.down").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 44, height: 44).background(.white.opacity(0.12), in: Circle())
+                    .frame(width: 44, height: 44).background(.ultraThinMaterial.opacity(0.8), in: Circle())
             }
             .buttonStyle(BouncyStyle(scale: 0.88))
             .accessibilityLabel("Minimise")
             Spacer()
-            Label("Encrypted", systemImage: "lock.fill").font(.jakarta(12, .bold)).foregroundStyle(.white.opacity(0.6))
+            VStack(spacing: 2) {
+                if stage != nil {
+                    Text(title).font(.jakarta(15, .heavy)).foregroundStyle(.white).lineLimit(1)
+                }
+                HStack(spacing: 6) {
+                    Image(systemName: "lock.fill").font(.system(size: 10, weight: .bold))
+                    if !alone, voice.joinedAt != nil { timer } else { Text("Encrypted") }
+                    quality
+                }
+                .font(.jakarta(12, .bold)).foregroundStyle(.white.opacity(0.65))
+            }
             Spacer()
-            quality.frame(width: 44, height: 44)
+            HStack(spacing: 8) {
+                if let id = call?.conversationId, !id.isEmpty {
+                    CallTopButton(icon: "bubble.left.and.bubble.right.fill", label: "Chat") { openChat() }
+                }
+                CallAudioButton()
+            }
         }
         .padding(.horizontal, 20)
         .padding(.top, 8)
@@ -390,7 +593,7 @@ struct CallScreen: View {
         if let ping = voice.ping, !alone {
             let color = ping < 180 ? Palette.success : ping < 400 ? Color(hex: 0xFFD166) : Palette.danger
             Image(systemName: "cellularbars", variableValue: ping < 180 ? 1 : ping < 400 ? 0.66 : 0.33)
-                .font(.system(size: 16, weight: .bold)).foregroundStyle(color)
+                .font(.system(size: 11, weight: .bold)).foregroundStyle(color)
                 .accessibilityLabel(ping < 180 ? "Good connection" : ping < 400 ? "OK connection" : "Poor connection")
         }
     }
@@ -404,6 +607,10 @@ struct CallScreen: View {
         return "Connecting…"
     }
 
+    private func name(_ p: VoiceEngine.Participant) -> String {
+        p.isSelf ? "You" : (model.person(p.email)?.displayName ?? p.name)
+    }
+
     // Big picture with soft rings while it rings (only then do they move).
     private var ringingHero: some View {
         VStack(spacing: 20) {
@@ -411,9 +618,9 @@ struct CallScreen: View {
                 ForEach(0..<3) { i in
                     Circle().stroke(Theme.light.opacity(0.35), lineWidth: 2)
                         .frame(width: 160, height: 160)
-                        .scaleEffect(ringing ? 1.5 + Double(i) * 0.25 : 1)
-                        .opacity(ringing ? 0 : 0.7)
-                        .animation(.easeOut(duration: 2).repeatForever(autoreverses: false).delay(Double(i) * 0.6), value: ringing)
+                        .scaleEffect(ringing && !Motion.reduced ? 1.5 + Double(i) * 0.25 : 1)
+                        .opacity(ringing && !Motion.reduced ? 0 : 0.7)
+                        .animation(Motion.reduced ? nil : .easeOut(duration: 2).repeatForever(autoreverses: false).delay(Double(i) * 0.6), value: ringing)
                 }
                 Avatar(url: call?.picture(for: me) ?? "", name: title, size: 150)
                     .overlay(Circle().strokeBorder(.white.opacity(0.25), lineWidth: 2))
@@ -426,7 +633,7 @@ struct CallScreen: View {
             }
             .padding(.horizontal, 24)
         }
-        .onAppear { ringing = true }
+        .onAppear { ringing = !reduceMotion }
         .onDisappear { ringing = false }
     }
 
@@ -434,8 +641,7 @@ struct CallScreen: View {
         Group {
             if let since = voice.joinedAt {
                 TimelineView(.periodic(from: since, by: 1)) { t in
-                    Text(Self.clock(t.date.timeIntervalSince(since)))
-                        .font(.jakarta(15, .bold)).monospacedDigit().foregroundStyle(.white.opacity(0.75))
+                    Text(Self.clock(t.date.timeIntervalSince(since))).monospacedDigit()
                 }
             }
         }
@@ -445,49 +651,55 @@ struct CallScreen: View {
     private func oneToOne(_ other: VoiceEngine.Participant) -> some View {
         VStack(spacing: 18) {
             speakingAvatar(other, size: 170)
-            VStack(spacing: 6) {
-                Text(model.person(other.email)?.displayName ?? other.name).font(.display(32)).foregroundStyle(.white).lineLimit(1)
+            VStack(spacing: 8) {
+                Text(name(other)).font(.display(32)).foregroundStyle(.white).lineLimit(1)
                 HStack(spacing: 8) {
                     if !other.connected {
                         Label("Connecting audio…", systemImage: "antenna.radiowaves.left.and.right")
                             .font(.jakarta(13, .bold)).foregroundStyle(Color(hex: 0xFFD166))
                     } else {
-                        timer
+                        tag(other.speaking ? "Talking" : "In call", icon: other.speaking ? "waveform" : "phone.fill", tint: Palette.success)
                     }
-                    if other.muted {
-                        Image(systemName: "mic.slash.fill").font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.danger)
-                    }
+                    if other.muted { tag("Muted", icon: "mic.slash.fill", tint: Palette.danger) }
                 }
             }
             .padding(.horizontal, 24)
         }
     }
 
-    // Groups: a tile for everyone.
+    private func tag(_ text: String, icon: String, tint: Color) -> some View {
+        Label(text, systemImage: icon)
+            .font(.jakarta(12, .bold)).foregroundStyle(tint)
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(tint.opacity(0.16), in: Capsule())
+            .contentTransition(.opacity)
+    }
+
+    // Groups: a tile for everyone, with their camera or screen when they
+    // show it.
     private var group: some View {
-        VStack(spacing: 14) {
+        let list = voice.participants
+        return VStack(spacing: 14) {
             Text(title).font(.display(28)).foregroundStyle(.white).lineLimit(1)
-            timer
-            let list = voice.participants
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                 ForEach(list) { p in
-                    VStack(spacing: 8) {
-                        speakingAvatar(p, size: 76)
-                        HStack(spacing: 4) {
-                            if p.muted { Image(systemName: "mic.slash.fill").font(.system(size: 10, weight: .bold)).foregroundStyle(Palette.danger) }
-                            Text(p.isSelf ? "You" : (model.person(p.email)?.displayName ?? p.name)).font(.jakarta(13, .bold)).foregroundStyle(.white).lineLimit(1)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(.white.opacity(p.speaking ? 0.12 : 0.06), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(p.speaking ? Palette.success.opacity(0.8) : .white.opacity(0.08), lineWidth: p.speaking ? 2 : 1))
-                    .transition(.scale.combined(with: .opacity))
+                    CallTile(name: name(p), picture: model.person(p.email)?.picture ?? p.picture,
+                             muted: p.muted, deafened: p.deafened, speaking: p.speaking, level: p.level,
+                             connecting: !p.isSelf && !p.connected, video: track(p),
+                             session: p.isSelf ? voice.cameraSession : nil,
+                             mirror: p.isSelf && voice.frontCamera, isScreen: p.video == "screen", avatarSize: 72)
+                        .frame(height: 190)
+                        .transition(.pop)
                 }
             }
-            .padding(.horizontal, 20)
-            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: list.map(\.id))
+            .padding(.horizontal, 16)
+            .motion(.spring(response: 0.4, dampingFraction: 0.86), value: list.map(\.id))
         }
+    }
+
+    private func track(_ p: VoiceEngine.Participant) -> RTCVideoTrack? {
+        if p.isSelf { return voice.cameraOn ? voice.localVideo : nil }
+        return p.video.isEmpty ? nil : voice.remoteVideo[p.id]
     }
 
     private func speakingAvatar(_ p: VoiceEngine.Participant, size: CGFloat) -> some View {
@@ -506,47 +718,261 @@ struct CallScreen: View {
         .animation(.spring(response: 0.22, dampingFraction: 0.7), value: p.speaking)
     }
 
-    private var controls: some View {
-        HStack(alignment: .top, spacing: 26) {
-            control(voice.speaker ? "speaker.wave.3.fill" : "speaker.fill", on: voice.speaker, label: "Speaker") { voice.toggleSpeaker() }
-            control(voice.muted ? "mic.slash.fill" : "mic.fill", on: voice.muted, label: voice.muted ? "Unmute" : "Mute") { voice.toggleMute() }
-            VStack(spacing: 8) {
-                Button { Task { await calls.hangUp() } } label: {
-                    Image(systemName: "phone.down.fill").font(.system(size: 26, weight: .bold)).foregroundStyle(.white)
-                        .frame(width: 70, height: 70).background(Palette.danger, in: Circle())
-                        .shadow(color: Palette.danger.opacity(0.5), radius: 14, y: 6)
+    // Their camera or screen, with their name at the bottom. Double-tap (or
+    // the corner button) to switch between the whole picture and filling.
+    private func stageView(_ p: VoiceEngine.Participant, _ track: RTCVideoTrack) -> some View {
+        ZStack(alignment: .bottomLeading) {
+            Color.black
+            VideoTrackView(track: track, fill: stageFill && p.video == "camera")
+            LinearGradient(colors: [.clear, .clear, .black.opacity(0.55)], startPoint: .top, endPoint: .bottom)
+                .allowsHitTesting(false)
+            HStack(spacing: 8) {
+                Avatar(url: model.person(p.email)?.picture ?? p.picture, name: p.name, size: 26)
+                Text(p.video == "screen" ? "\(name(p))'s screen" : name(p)).font(.jakarta(13, .bold)).lineLimit(1)
+                if p.muted { Image(systemName: "mic.slash.fill").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.danger) }
+                if p.speaking { Image(systemName: "waveform").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.success).symbolEffect(.variableColor.iterative) }
+            }
+            .foregroundStyle(.white)
+            .padding(.leading, 6).padding(.trailing, 12).padding(.vertical, 6)
+            .background(.ultraThinMaterial, in: Capsule())
+            .padding(12)
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if p.video == "camera" {
+                Button { withMotion(Motion.standard) { stageFill.toggle() } } label: {
+                    Image(systemName: stageFill ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
+                        .frame(width: 36, height: 36).background(.ultraThinMaterial, in: Circle())
                 }
                 .buttonStyle(BouncyStyle(scale: 0.85))
-                .accessibilityLabel("End call")
-                Text("End").font(.jakarta(12, .bold)).foregroundStyle(.white.opacity(0.75))
+                .accessibilityLabel(stageFill ? "Show the whole picture" : "Fill the screen")
+                .padding(12)
             }
         }
-        .padding(.horizontal, 26)
-        .padding(.top, 18)
-        .padding(.bottom, 14)
-        .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 36, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 36, style: .continuous).strokeBorder(.white.opacity(0.08), lineWidth: 1))
-        .padding(.horizontal, 20)
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .onTapGesture(count: 2) { if p.video == "camera" { withMotion(Motion.standard) { stageFill.toggle() } } }
     }
 
-    private func control(_ icon: String, on: Bool, label: String, action: @escaping () -> Void) -> some View {
-        VStack(spacing: 8) {
-            Button(action: action) {
-                Image(systemName: icon).font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(on ? Color(hex: 0x1A0E15) : .white)
-                    .frame(width: 62, height: 62)
-                    .background(on ? Color.white : Color.white.opacity(0.14), in: Circle())
-                    .contentTransition(.symbolEffect(.replace))
+    // One floating bar of buttons, the same whether or not a picture is
+    // showing: mute, camera, share your screen, speaker, end.
+    private var bar: some View {
+        CallBar {
+            CallButton(icon: voice.muted ? "mic.slash.fill" : "mic.fill", label: voice.muted ? "Unmute" : "Mute", on: voice.muted) { voice.toggleMute() }
+            CallButton(icon: voice.cameraOn ? "video.fill" : "video.slash.fill", label: "Camera", on: voice.cameraOn) { Task { await voice.toggleCamera() } }
+            CallButton(icon: "rectangle.on.rectangle", label: voice.sharingScreen ? "Stop share" : "Share", on: voice.sharingScreen) { voice.toggleScreenShare() }
+            CallButton(icon: voice.speaker ? "speaker.wave.3.fill" : "speaker.fill", label: "Speaker", on: voice.speaker) { voice.toggleSpeaker() }
+            CallButton(icon: "phone.down.fill", label: "End", danger: true) {
+                guard !ending else { return }
+                ending = true
+                Task { await calls.hangUp(); ending = false }
+            }
+            .disabled(ending)
+        }
+    }
+
+    // Your own camera in a small corner card; tap the arrows to flip it.
+    private func selfPreview(_ track: RTCVideoTrack) -> some View {
+        ZStack(alignment: .bottomTrailing) {
+            Group {
+                if let session = voice.cameraSession {
+                    CameraSessionView(session: session)
+                } else {
+                    VideoTrackView(track: track, fill: true, mirror: voice.frontCamera)
+                }
+            }
+                .frame(width: 104, height: 150)
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(.white.opacity(0.35), lineWidth: 1.5))
+                .shadow(color: .black.opacity(0.4), radius: 14, y: 6)
+            Button { Task { await voice.flipCamera() } } label: {
+                Image(systemName: "arrow.triangle.2.circlepath.camera.fill").font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
+                    .frame(width: 32, height: 32).background(.black.opacity(0.45), in: Circle())
             }
             .buttonStyle(BouncyStyle(scale: 0.85))
-            .accessibilityLabel(label)
-            .sensoryFeedback(.impact(weight: .light), trigger: on)
-            Text(label).font(.jakarta(12, .bold)).foregroundStyle(.white.opacity(0.75))
+            .accessibilityLabel("Flip camera")
+            .padding(6)
         }
+    }
+
+    @ViewBuilder
+    private var notices: some View {
+        VStack(spacing: 10) {
+            if voice.sharingScreen {
+                HStack(spacing: 10) {
+                    Image(systemName: "rectangle.on.rectangle").font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.light)
+                    Text("You're sharing your screen").font(.jakarta(13, .bold)).foregroundStyle(.white)
+                    Spacer(minLength: 0)
+                    Button("Stop") { voice.stopScreenShare() }
+                        .font(.jakarta(13, .heavy)).foregroundStyle(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 7)
+                        .background(Palette.danger, in: Capsule())
+                        .buttonStyle(BouncyStyle(scale: 0.9))
+                }
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            if alone, call?.status == "ringing", let note = calls.ringNote {
+                Label(note, systemImage: "bell.slash.fill")
+                    .font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.75))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .frame(maxWidth: .infinity)
+                    .background(.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .transition(.opacity)
+            }
+            if let error = voice.error ?? calls.error {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.jakarta(13, .semibold)).foregroundStyle(Color(hex: 0xFFD166))
+                    .padding(14).frame(maxWidth: .infinity)
+                    .background(.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 16))
+            }
+            if voice.muted {
+                Label("Your microphone is off", systemImage: "mic.slash.fill")
+                    .font(.jakarta(13, .bold)).foregroundStyle(Theme.light)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(.black.opacity(0.3), in: Capsule())
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 12)
+    }
+
+    // Opens this call's chat and keeps the call going in the little bar.
+    private func openChat() {
+        guard let id = call?.conversationId, !id.isEmpty else { return }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) { calls.showScreen = false }
+        Alerts.shared.destination = Alerts.Destination(kind: "dm", target: id)
     }
 
     static func clock(_ seconds: TimeInterval) -> String {
         let s = Int(max(0, seconds))
         return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60) : String(format: "%02d:%02d", s / 60, s % 60)
     }
+}
+
+// Shows a live camera or screen picture from the call.
+struct VideoTrackView: UIViewRepresentable {
+    let track: RTCVideoTrack
+    var fill = true
+    var mirror = false
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> RTCMTLVideoView {
+        let view = RTCMTLVideoView(frame: .zero)
+        view.videoContentMode = fill ? .scaleAspectFill : .scaleAspectFit
+        view.clipsToBounds = true
+        view.backgroundColor = .black
+        VideoRelay.relay(for: track).attach(view)
+        context.coordinator.track = track
+        return view
+    }
+
+    func updateUIView(_ view: RTCMTLVideoView, context: Context) {
+        view.videoContentMode = fill ? .scaleAspectFill : .scaleAspectFit
+        view.transform = mirror ? CGAffineTransform(scaleX: -1, y: 1) : .identity
+        if context.coordinator.track !== track {
+            if let old = context.coordinator.track { VideoRelay.existing(for: old)?.detach(view) }
+            VideoRelay.relay(for: track).attach(view)
+            context.coordinator.track = track
+        }
+    }
+
+    static func dismantleUIView(_ view: RTCMTLVideoView, coordinator: Coordinator) {
+        if let track = coordinator.track { VideoRelay.existing(for: track)?.detach(view) }
+    }
+
+    final class Coordinator { var track: RTCVideoTrack? }
+}
+
+// Passes a call's live picture to whichever views show it and keeps the
+// last frame. A shared screen only sends a new frame when something on it
+// changes, so a view opened later (reopening the call screen) stayed black
+// until then; now it shows the last picture straight away.
+final class VideoRelay: NSObject, RTCVideoRenderer {
+    private static let registry = NSLock()
+    private static var relays: [ObjectIdentifier: VideoRelay] = [:]
+
+    static func relay(for track: RTCVideoTrack) -> VideoRelay {
+        registry.lock()
+        defer { registry.unlock() }
+        if let known = relays[ObjectIdentifier(track)] { return known }
+        let made = VideoRelay(track)
+        relays[ObjectIdentifier(track)] = made
+        track.add(made)
+        return made
+    }
+
+    static func existing(for track: RTCVideoTrack) -> VideoRelay? {
+        registry.lock()
+        defer { registry.unlock() }
+        return relays[ObjectIdentifier(track)]
+    }
+
+    // Leaving a call: let go of every picture.
+    static func forgetAll() {
+        registry.lock()
+        let all = Array(relays.values)
+        relays = [:]
+        registry.unlock()
+        for relay in all { relay.track.remove(relay) }
+    }
+
+    // Held so its address is never reused by another track while listed.
+    private let track: RTCVideoTrack
+    private let lock = NSLock()
+    private var views: [RTCVideoRenderer] = []
+    private var lastFrame: RTCVideoFrame?
+    private var size = CGSize.zero
+
+    private init(_ track: RTCVideoTrack) {
+        self.track = track
+        super.init()
+    }
+
+    func attach(_ view: RTCVideoRenderer) {
+        lock.lock()
+        views.append(view)
+        let frame = lastFrame, known = size
+        lock.unlock()
+        if known != .zero { view.setSize(known) }
+        if let frame { view.renderFrame(frame) }
+    }
+
+    func detach(_ view: RTCVideoRenderer) {
+        lock.lock()
+        views.removeAll { $0 === view }
+        lock.unlock()
+    }
+
+    func setSize(_ size: CGSize) {
+        lock.lock()
+        self.size = size
+        let list = views
+        lock.unlock()
+        for view in list { view.setSize(size) }
+    }
+
+    func renderFrame(_ frame: RTCVideoFrame?) {
+        lock.lock()
+        if let frame { lastFrame = frame }
+        let list = views
+        lock.unlock()
+        for view in list { view.renderFrame(frame) }
+    }
+}
+
+// Apple's picker for AirPods, Bluetooth and the phone speaker.
+struct RoutePicker: UIViewRepresentable {
+    func makeUIView(context: Context) -> AVRoutePickerView {
+        let picker = AVRoutePickerView()
+        picker.tintColor = .white
+        picker.activeTintColor = UIColor(Theme.light)
+        picker.prioritizesVideoDevices = false
+        return picker
+    }
+
+    func updateUIView(_ view: AVRoutePickerView, context: Context) {}
 }

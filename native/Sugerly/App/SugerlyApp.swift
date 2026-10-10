@@ -8,15 +8,22 @@ struct SugerlyApp: App {
     init() {
         // Keep pictures around so feeds scroll without reloading them.
         URLCache.shared = URLCache(memoryCapacity: 64 * 1024 * 1024, diskCapacity: 400 * 1024 * 1024)
+        // Page titles in the iPhone's fully round letters.
         let nav = UINavigationBar.appearance()
-        if let title = UIFont(name: "PlusJakartaSans-Bold", size: 17) {
-            nav.titleTextAttributes = [.font: title]
+        nav.titleTextAttributes = [.font: UIFont.rounded(19)]
+        nav.largeTitleTextAttributes = [.font: UIFont.rounded(32)]
+        // The tab bar's labels in Sugerly's font, and its look before iOS 26.
+        if let small = UIFont(name: "PlusJakartaSans-SemiBold", size: 10) {
+            let item = UITabBarItem.appearance()
+            item.setTitleTextAttributes([.font: small], for: .normal)
+            item.setTitleTextAttributes([.font: small], for: .selected)
         }
-        if let large = UIFont(name: "Bubbly-Regular", size: 34) {
-            nav.largeTitleTextAttributes = [.font: large]
-        }
+        TabBarLook.apply()
         // Notifications + background checks have to be set up at launch.
         Alerts.shared.registerBackground()
+        // Calls ring this phone even when Sugerly is closed (iPhone's own
+        // call screen); a call push can launch the app, so this starts here.
+        IncomingCalls.shared.start()
         // Reels start at normal speed each time the app opens (a speed picked
         // last time shouldn't leave every video slow or fast).
         UserDefaults.standard.set(1.0, forKey: "sugerly.reels.speed")
@@ -24,8 +31,18 @@ struct SugerlyApp: App {
 
     var body: some Scene {
         WindowGroup {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--polish-ui-test") {
+                PolishUITestHost().environment(model)
+            } else if ProcessInfo.processInfo.arguments.contains("--shell-ui-test") {
+                ShellUITestHost().environment(model)
+            } else {
+                RootView().environment(model)
+            }
+            #else
             RootView()
                 .environment(model)
+            #endif
         }
     }
 }
@@ -33,8 +50,11 @@ struct SugerlyApp: App {
 struct RootView: View {
     @Environment(AppModel.self) private var model
     private var site = SiteTheme.shared
+    private var connection = Connection.shared
 
     @State private var colorFlash = false
+    // Tapping the no-internet card hides it until the next time it drops.
+    @State private var offlineHidden = false
 
     // Your own colours win; then the admin's site colours, unless you
     // picked one of the preset accents.
@@ -51,7 +71,11 @@ struct RootView: View {
         } else {
             custom = nil
         }
-        guard animated else {
+        AppIconSync.match(model.accent, custom: custom?.main)
+        // During a call the colours switch at once: fading every view on the
+        // screen to the new colour kept the phone busy and froze the call's
+        // picture and buttons for a moment.
+        guard animated && !VoiceEngine.live else {
             Theme.accent = model.accent
             Theme.custom = custom
             return
@@ -78,17 +102,24 @@ struct RootView: View {
                     WelcomeSetupView().transition(.opacity)
                 } else {
                     // A fresh shell per account: no pages, chats or players carry over.
-                    MainShell().id(model.me?.id ?? "").transition(.opacity.combined(with: .scale(scale: 1.03)))
+                    // Just a fade: zooming the whole app while it builds its
+                    // first screen made logging in stutter.
+                    MainShell().id(model.me?.id ?? "").transition(.opacity)
                 }
             case .banned(let message):
                 BannedView(message: message).transition(.opacity)
             case .offline(let message):
                 VStack(spacing: 16) {
-                    Image(systemName: "wifi.slash")
-                        .font(.system(size: 44, weight: .bold))
-                        .foregroundStyle(Theme.gradient)
+                    Image("MimiOffline")
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                        .frame(height: 220)
+                        .accessibilityHidden(true)
                     Text("You're offline").font(.display(30))
                     Text(message).font(.jakarta(15)).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    Text("Sugerly will open by itself once you're back online.")
+                        .font(.jakarta(13)).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
                     Button("Try again") { Task { await model.start() } }
                         .buttonStyle(GradientButtonStyle())
                 }
@@ -100,13 +131,36 @@ struct RootView: View {
                 .opacity(colorFlash ? 0.22 : 0)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
+            if connection.offline && !offlineHidden && model.phase == .signedIn {
+                VStack {
+                    OfflineNotice()
+                        .onTapGesture { withAnimation(.easeOut(duration: 0.25)) { offlineHidden = true } }
+                        .padding(.top, 6)
+                    Spacer()
+                }
+                .transition(.opacity)
+                .zIndex(10)
+            }
+            if model.settingUp {
+                SettingUpCover().transition(.opacity).zIndex(20)
+            }
+            if model.goodbye {
+                GoodbyeCover().transition(.opacity).zIndex(21)
+            }
+        }
+        .onChange(of: connection.offline) { _, offline in
+            if !offline {
+                offlineHidden = false
+                // Opened with no internet: get going as soon as it's back.
+                if case .offline(_) = model.phase { Task { await model.start() } }
+            }
         }
         .onChange(of: themeKey, initial: true) { old, _ in applyTheme(animated: old != themeKey && model.phase == .signedIn) }
         .tint(Theme.main)
         // Light / dark: the whole screen (open pages and sheets too) fades
         // over to the new colours instead of snapping.
         .onChange(of: model.colorScheme, initial: true) { old, new in
-            ThemeFade.apply(new, animated: old != new)
+            ThemeFade.apply(new, animated: old != new && !VoiceEngine.live)
         }
         .animation(.smooth(duration: 0.35), value: model.phase)
         .animation(.smooth(duration: 0.5), value: model.needsSetup)
@@ -144,19 +198,65 @@ struct BannedView: View {
     }
 }
 
-struct SplashView: View {
-    @State private var pulse = false
+// Fades in over the app while logging out, then fades away onto the login
+// page, so leaving is one calm cross-fade.
+struct GoodbyeCover: View {
     var body: some View {
         VStack(spacing: 14) {
-            BrandLogo(height: 86)
-                .scaleEffect(pulse ? 1.06 : 0.96)
-                .shadow(color: Theme.main.opacity(0.45), radius: pulse ? 28 : 10)
+            MimiBuddy(icon: "hand.wave.fill", mood: .happy, size: 130, animated: false)
+            Text("See you soon!").font(.display(30)).foregroundStyle(Palette.text)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .sugarBackground()
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// Shown while logging in: the app gets ready behind it.
+struct SettingUpCover: View {
+    @State private var dot = 0
+
+    var body: some View {
+        VStack(spacing: 14) {
+            MimiBuddy(icon: "sparkles", mood: .happy, size: 130, animated: false)
+            Text("Setting things up for you").font(.display(28)).foregroundStyle(Palette.text)
+                .multilineTextAlignment(.center)
+            HStack(spacing: 8) {
+                ForEach(0..<3, id: \.self) { i in
+                    Circle().fill(Theme.main)
+                        .frame(width: 9, height: 9)
+                        .opacity(dot == i ? 1 : 0.3)
+                        .scaleEffect(dot == i ? 1.15 : 0.9)
+                }
+            }
+            .animation(.easeInOut(duration: 0.3), value: dot)
+        }
+        .padding(.horizontal, 30)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .sugarBackground()
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Setting things up for you")
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(380))
+                dot = (dot + 1) % 3
+            }
+        }
+    }
+}
+
+// The icon stays still (Mimi never moves); only its sparkles twinkle.
+struct SplashView: View {
+    var body: some View {
+        VStack(spacing: 16) {
+            AppBadge(size: 132)
+            BrandLogo(height: 58)
             ProgressView().tint(Theme.main)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .sugarBackground()
-        .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
-        .onAppear { pulse = true }
     }
 }
 

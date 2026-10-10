@@ -279,6 +279,13 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-2.2", icon: "key.horizontal.fill", title: "New ways to log in", date: "2026-10-10T12:00:00Z", items: [
+            "Log in with a code sent to your email, no password needed. Forgot your password? Get a code and pick a new one right in the app.",
+            "Quick login: a new iPhone or iPad shows a QR code; scan it from Settings → Log in another device on a phone where you're logged in.",
+            "Backup codes in Settings → Login & security, for when you can't get your emails.",
+            "A cleaner reel timeline with an iPhone-style trim frame, and a tidier front light with colour swatches by the flash button.",
+            "Going back from the editor to the camera fades in softly instead of a black screen. Chat messages pop in from their side.",
+        ]),
         AppRelease(id: "ios-2.1", icon: "sparkles", title: "New MimiPlus & a smoother editor", date: "2026-09-29T15:00:00Z", items: [
             "MimiPlus is all new: see yourself with the perks before you get it, pick 1 or 3 months, and see how close you are.",
             "Trimming videos is smoother: drag the ends without jumps, slide the whole selection, and see the exact times.",

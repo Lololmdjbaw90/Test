@@ -69,17 +69,23 @@ struct ChannelChatView: View {
                                           nameColor: store.nameColor(message.authorEmail), roleName: store.topRole(message.authorEmail)?.name,
                                           me: me, onReact: { react(message, $0) }, onProfile: { profile = message.authorEmail })
                             .id(message.id)
+                            // Long-press lifts the message on a soft card
+                            // of its own shape.
+                            .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 16, style: .continuous))
                             .contextMenu { menu(message) }
                     }
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
+                // On iPad the channel stays a readable width.
+                .frame(maxWidth: 860)
+                .frame(maxWidth: .infinity)
             }
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: messages.last?.id) { _, id in
                 guard let id else { return }
-                withAnimation(.snappy) { proxy.scrollTo(id, anchor: .bottom) }
+                withMotion(Motion.standard) { proxy.scrollTo(id, anchor: .bottom) }
             }
         }
         .sugarBackground()
@@ -151,7 +157,7 @@ struct ChannelChatView: View {
             Button(role: .destructive) { confirmDelete = message } label: { Label("Delete message", systemImage: "trash") }
         }
         if message.authorEmail != me {
-            Button { reporting = ReportSheet.Target(id: message.id, type: "message", ownerEmail: message.authorEmail, preview: message.text, link: "/CommunityChat?id=\(server.id)") } label: { Label("Report", systemImage: "flag") }
+            Button { reporting = ReportSheet.Target(id: message.id, type: "server message", ownerEmail: message.authorEmail, preview: message.text, link: "/CommunityChat?id=\(server.id)", collection: "ChannelMessage", media: message.imageURL) } label: { Label("Report", systemImage: "flag") }
         }
     }
 
@@ -206,6 +212,8 @@ struct ChannelChatView: View {
         .padding(.horizontal, 12)
         .padding(.top, 10)
         .padding(.bottom, 8)
+        .frame(maxWidth: 860)
+        .frame(maxWidth: .infinity)
         .background {
             Palette.surface
                 .shadow(color: Palette.shadow, radius: 10, y: -4)
@@ -246,7 +254,7 @@ struct ChannelChatView: View {
         if incremental && docs.count < page {
             let known = Set(messages.map(\.id))
             let fresh = incoming.filter { !known.contains($0.id) }
-            if !fresh.isEmpty { withAnimation(.snappy) { messages = (messages + fresh).sorted { $0.created < $1.created } } }
+            if !fresh.isEmpty { withMotion(Motion.standard) { messages = (messages + fresh).sorted { $0.created < $1.created } } }
         } else {
             // Refresh the newest page (edits, reactions, pins, deletions) but
             // keep any older history you've already scrolled back to.
@@ -288,6 +296,7 @@ struct ChannelChatView: View {
         guard await TextGuard.clear([text], kind: .message, model: model, cooldown: editing == nil) else { return }
         failed = nil
         draft = ""
+        TapSound.play(.send)
         if let editing {
             self.editing = nil
             if let i = messages.firstIndex(where: { $0.id == editing.id }) { messages[i].text = text; messages[i].edited = true }
@@ -300,14 +309,14 @@ struct ChannelChatView: View {
         pending.id = "pending-\(UUID().uuidString)"
         pending.created = FS.nowISO()
         pending.pending = true
-        withAnimation(.snappy) { messages.append(pending) }
+        withMotion(Motion.standard) { messages.append(pending) }
         do {
             let doc = try await FS.create("ChannelMessage", data)
             let created = ChannelMessage(doc)
             if let i = messages.firstIndex(where: { $0.id == pending.id }) { messages[i] = created }
             mentions(text, me: meProfile)
         } catch {
-            withAnimation { messages.removeAll { $0.id == pending.id } }
+            withMotion { messages.removeAll { $0.id == pending.id } }
             draft = text
             failed = "Couldn't send — \(error.localizedDescription)"
         }
@@ -334,7 +343,7 @@ struct ChannelChatView: View {
         do {
             let url = try await StorageClient.upload(jpeg, contentType: "image/jpeg", fileExtension: "jpg")
             let doc = try await FS.create("ChannelMessage", Servers.message(channel: channel.id, server: server.id, me: meProfile, text: "", imageURL: url))
-            withAnimation(.snappy) { messages.append(ChannelMessage(doc)) }
+            withMotion(Motion.standard) { messages.append(ChannelMessage(doc)) }
         } catch {
             failed = "Couldn't send the photo — \(error.localizedDescription)"
         }
@@ -346,7 +355,7 @@ struct ChannelChatView: View {
         do {
             let doc = try await FS.create("ChannelMessage", Servers.message(channel: channel.id, server: server.id, me: meProfile, text: "", imageURL: url, reply: replyTo))
             replyTo = nil
-            withAnimation(.snappy) { messages.append(ChannelMessage(doc)) }
+            withMotion(Motion.standard) { messages.append(ChannelMessage(doc)) }
         } catch {
             failed = "Couldn't send — \(error.localizedDescription)"
         }
@@ -372,7 +381,7 @@ struct ChannelChatView: View {
     }
 
     private func delete(_ message: ChannelMessage) {
-        withAnimation { messages.removeAll { $0.id == message.id } }
+        withMotion { messages.removeAll { $0.id == message.id } }
         Task { try? await FS.delete("ChannelMessage", message.id) }
     }
 }
@@ -419,7 +428,7 @@ struct ChannelMessageRow: View {
                                     .font(.jakarta(14, .heavy))
                                     .foregroundStyle(nameColor.map { AnyShapeStyle($0) } ?? (mine ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.text)))
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(SoftPressStyle())
                             if let roleName {
                                 Text(roleName).font(.jakarta(9, .heavy)).foregroundStyle(nameColor ?? Palette.muted)
                                     .padding(.horizontal, 6).frame(height: 16)

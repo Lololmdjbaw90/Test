@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import ImageIO
 
 // MARK: - Name styles (same ids as the website's NameStylePicker)
 
@@ -96,7 +97,9 @@ struct NameText: View {
 private struct AuroraName: View {
     let text: Text
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
+        // 12 updates a second is plenty for a slow 5-second slide (many of
+        // these can be on screen at once in a feed).
+        TimelineView(.animation(minimumInterval: 1 / 12)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             let phase = CGFloat(t.truncatingRemainder(dividingBy: 5) / 5)
             text.foregroundStyle(LinearGradient(
@@ -183,6 +186,8 @@ struct ProfileEffectLayer: View {
     let effect: String
     var color = ""
     var amount = 0
+    // Stops moving (and redrawing) while something covers it, like Settings.
+    var paused = false
 
     private var icon: String { ProfileEffect.all.first { $0.id == effect }?.icon ?? "sparkle" }
     private var count: Int { amount > 0 ? min(40, amount) : 16 }
@@ -197,7 +202,7 @@ struct ProfileEffectLayer: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: paused)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             Canvas { context, size in
                 guard let symbol = context.resolveSymbol(id: 0) else { return }
@@ -266,8 +271,8 @@ struct AvatarFrameView: View {
             case "solid":
                 Circle().strokeBorder(color, lineWidth: 4)
             case "double":
-                Circle().strokeBorder(color, lineWidth: 3)
-                Circle().strokeBorder(color.opacity(0.45), lineWidth: 2).padding(-6)
+                Circle().strokeBorder(color.opacity(0.45), lineWidth: 2)
+                Circle().strokeBorder(color, lineWidth: 3).padding(5)
             case "dashed":
                 Circle().strokeBorder(color, style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [6, 5]))
             case "glow":
@@ -314,6 +319,8 @@ struct BannerPatternView: View {
 
     var body: some View {
         Canvas { ctx, size in
+            // Nothing ever draws past the banner's edges.
+            ctx.clip(to: Path(CGRect(origin: .zero, size: size)))
             let ink = GraphicsContext.Shading.color(.white.opacity(0.22))
             switch pattern {
             case "dots":
@@ -325,10 +332,13 @@ struct BannerPatternView: View {
                     y += 24; row += 1
                 }
             case "stripes":
-                var x: CGFloat = -size.height
-                while x < size.width {
+                // Each stripe runs well past the top and bottom, so their
+                // cut-off ends never show inside the banner.
+                let reach = size.height + 40
+                var x: CGFloat = -reach
+                while x < size.width + 20 {
                     var p = Path()
-                    p.move(to: CGPoint(x: x, y: size.height)); p.addLine(to: CGPoint(x: x + size.height, y: 0))
+                    p.move(to: CGPoint(x: x, y: size.height + 20)); p.addLine(to: CGPoint(x: x + reach, y: -20))
                     ctx.stroke(p, with: ink, lineWidth: 10); x += 34
                 }
             case "checks":
@@ -353,9 +363,9 @@ struct BannerPatternView: View {
                 var y: CGFloat = 14
                 while y < size.height + 20 {
                     var p = Path()
-                    p.move(to: CGPoint(x: 0, y: y))
-                    var x: CGFloat = 0
-                    while x < size.width {
+                    p.move(to: CGPoint(x: -40, y: y))
+                    var x: CGFloat = -40
+                    while x < size.width + 40 {
                         p.addQuadCurve(to: CGPoint(x: x + 20, y: y), control: CGPoint(x: x + 10, y: y - 8))
                         p.addQuadCurve(to: CGPoint(x: x + 40, y: y), control: CGPoint(x: x + 30, y: y + 8))
                         x += 40
@@ -369,8 +379,96 @@ struct BannerPatternView: View {
             Image(systemName: pattern == "stars" ? "star.fill" : "heart.fill")
                 .font(.system(size: 12, weight: .bold)).foregroundStyle(.white.opacity(0.28)).tag(0)
         }
+        // A fresh drawing for each pattern: without this the first one you
+        // picked stayed on screen and you couldn't change it.
+        .id(pattern)
+        .clipped()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+
+// Little banner tiles to pick a pattern from, each showing the pattern.
+struct BannerPatternPicker: View {
+    @Binding var selection: String
+    var tint: Color = Theme.main
+    var light: Color = Theme.light
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 10)], spacing: 10) {
+            ForEach(BannerPattern.all) { item in
+                let active = selection == item.id
+                Button { withMotion(Motion.standard) { selection = item.id } } label: {
+                    VStack(spacing: 6) {
+                        ZStack {
+                            LinearGradient(colors: [light, tint], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            if !item.id.isEmpty { BannerPatternView(pattern: item.id) }
+                        }
+                        .frame(height: 54)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(active ? Palette.text : .clear, lineWidth: 2.5).padding(-3))
+                        .overlay(alignment: .topTrailing) {
+                            if active {
+                                Image(systemName: "checkmark.circle.fill").font(.system(size: 16, weight: .bold))
+                                    .foregroundStyle(.white, Palette.text)
+                                    .padding(5)
+                                    .transition(.pop)
+                            }
+                        }
+                        Text(item.label).font(.jakarta(12, active ? .heavy : .semibold)).foregroundStyle(active ? Palette.text : Palette.text2)
+                    }
+                }
+                .buttonStyle(BouncyStyle(scale: 0.95))
+                .accessibilityLabel("\(item.label) pattern")
+                .accessibilityAddTraits(active ? .isSelected : [])
+            }
+        }
+    }
+}
+
+// Little pictures to pick a frame from, each showing the frame.
+struct AvatarFramePicker: View {
+    @Binding var selection: String
+    var picture: String
+    var name: String
+    var tint: Color = Theme.main
+    var nitro: Bool
+    var onLocked: () -> Void
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 78), spacing: 10)], spacing: 12) {
+            ForEach(AvatarFrame.all) { item in
+                let active = selection == item.id
+                let locked = item.premium && !nitro
+                Button {
+                    if locked { onLocked() } else { withMotion(Motion.standard) { selection = item.id } }
+                } label: {
+                    VStack(spacing: 6) {
+                        ZStack {
+                            Avatar(url: picture, name: name, size: 44, ring: item.id.isEmpty)
+                                .padding(3)
+                                .background(Palette.bg, in: Circle())
+                            if !item.id.isEmpty { AvatarFrameView(frame: item.id, color: tint, size: 44) }
+                        }
+                        .frame(width: 64, height: 64)
+                        .background(active ? tint.opacity(0.12) : Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(active ? tint : Palette.border, lineWidth: active ? 2 : 1))
+                        .overlay(alignment: .topTrailing) {
+                            if locked {
+                                Image(systemName: "lock.fill").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+                                    .frame(width: 18, height: 18).background(NitroStyle.gradient, in: Circle())
+                                    .offset(x: 4, y: -4)
+                            }
+                        }
+                        Text(item.label).font(.jakarta(11, active ? .heavy : .semibold)).foregroundStyle(active ? Palette.text : Palette.text2)
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                }
+                .buttonStyle(BouncyStyle(scale: 0.95))
+                .accessibilityLabel(locked ? "\(item.label) frame, MimiPlus" : "\(item.label) frame")
+                .accessibilityAddTraits(active ? .isSelected : [])
+            }
+        }
     }
 }
 
@@ -417,7 +515,7 @@ struct NitroShopView: View {
         Perk(icon: "textformat", title: "Name styles", text: "Gold, Aurora, Neon, Rainbow and Sunset", colors: [0xFFD166, 0xF0A020]),
         Perk(icon: "sparkles", title: "Profile effects", text: "12 floating effects for your banner", colors: [0xB19CFF, 0x8B5CF6]),
         Perk(icon: "heart.circle.fill", title: "Premium frames", text: "Rainbow, Hearts and Stars", colors: [0x7CBEFF, 0x2F80E0]),
-        Perk(icon: "circle.dashed.inset.filled", title: "Candy ring", text: "An animated ring around your picture", colors: [0x5EC8B8, 0x2E9E8F]),
+        Perk(icon: "rectangle.inset.filled", title: "Plus banner", text: "A dreamy colour banner when you don't add your own", colors: [0x5EC8B8, 0x2E9E8F]),
         Perk(icon: "checkmark.seal.fill", title: "MimiPlus badge", text: "Next to your name on your profile", colors: [0xF472B6, 0xC084FC]),
     ]
 
@@ -573,7 +671,7 @@ struct NitroShopView: View {
 
     private func planCard(_ p: NitroStyle.Plan) -> some View {
         let on = plan == p.id
-        return Button { withAnimation(.snappy) { plan = p.id } } label: {
+        return Button { withMotion(Motion.standard) { plan = p.id } } label: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text(p.title).font(.jakarta(15, .heavy))
@@ -912,10 +1010,51 @@ enum Cropping {
         return StickerKit.normalized(UIImage(cgImage: part), maxSide: maxSide)
     }
 
-    // Crops every frame of a GIF and builds a new GIF.
+    // Crops a GIF frame by frame at full quality: every frame and its own
+    // timing are kept, and only one frame is in memory at a time. When
+    // nothing was cut away the original file is kept untouched.
     nonisolated static func cropGIF(_ data: Data, _ unit: CGRect, maxSide: CGFloat) -> Data? {
-        guard let animated = AnimatedImages.decode(data, maxPixel: 900, maxFrames: 80), let frames = animated.images, !frames.isEmpty else { return nil }
-        let cropped = frames.map { crop($0, unit, maxSide: maxSide) }
-        return GifKit.encode(cropped, delay: animated.duration / Double(frames.count))
+        let limit = 15 * 1024 * 1024
+        guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+              CGImageSourceGetCount(source) > 0,
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let w = props[kCGImagePropertyPixelWidth] as? Int, let h = props[kCGImagePropertyPixelHeight] as? Int else { return nil }
+        let whole = unit.minX <= 0.01 && unit.minY <= 0.01 && unit.maxX >= 0.99 && unit.maxY >= 0.99
+        if whole && data.count <= limit && CGFloat(max(w, h)) <= maxSide * 1.6 { return data }
+        var side = maxSide
+        for _ in 0..<4 {
+            if let out = recode(source, unit, width: w, height: h, maxSide: side), out.count <= limit { return out }
+            side *= 0.8
+        }
+        return nil
+    }
+
+    nonisolated private static func recode(_ source: CGImageSource, _ unit: CGRect, width w: Int, height h: Int, maxSide: CGFloat) -> Data? {
+        let rect = CGRect(x: unit.minX * CGFloat(w), y: unit.minY * CGFloat(h), width: unit.width * CGFloat(w), height: unit.height * CGFloat(h)).integral
+            .intersection(CGRect(x: 0, y: 0, width: w, height: h))
+        guard !rect.isEmpty, let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        let scale = min(1, maxSide / max(rect.width, rect.height))
+        let outW = max(1, Int((rect.width * scale).rounded())), outH = max(1, Int((rect.height * scale).rounded()))
+        let count = min(CGImageSourceGetCount(source), 600)
+        let out = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(out, "com.compuserve.gif" as CFString, count, nil) else { return nil }
+        CGImageDestinationSetProperties(destination, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0]] as CFDictionary)
+        var added = 0
+        for i in 0..<count {
+            autoreleasepool {
+                guard let frame = CGImageSourceCreateImageAtIndex(source, i, [kCGImageSourceShouldCache: false] as CFDictionary),
+                      let part = frame.cropping(to: rect),
+                      let context = CGContext(data: nil, width: outW, height: outH, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                                              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+                context.interpolationQuality = .high
+                context.draw(part, in: CGRect(x: 0, y: 0, width: outW, height: outH))
+                guard let scaled = context.makeImage() else { return }
+                let delay = AnimatedImages.frameDelay(source, i)
+                CGImageDestinationAddImage(destination, scaled, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: delay, kCGImagePropertyGIFUnclampedDelayTime: delay]] as CFDictionary)
+                added += 1
+            }
+        }
+        guard added > 0, CGImageDestinationFinalize(destination) else { return nil }
+        return out as Data
     }
 }

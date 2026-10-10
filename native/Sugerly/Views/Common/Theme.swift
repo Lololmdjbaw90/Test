@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 // Sugerly's look, matching the website: warm off-white (or deep plum in dark
-// mode), soft cards, the accent gradient, and the Bubbly / Cute Here /
+// mode), soft cards, the accent gradient, and the iPhone rounded / Caveat Brush /
 // Plus Jakarta Sans fonts.
 
 extension UIColor {
@@ -107,6 +107,39 @@ enum Theme {
     static var tint: TintShift { custom.map { TintShift(from: 0xD9577F, to: $0.main) } ?? .none }
 }
 
+// The home screen icon follows your colour: one icon per accent, and custom
+// colours get the closest one. iOS shows a short "icon changed" note.
+@MainActor
+enum AppIconSync {
+    private static var pending: Task<Void, Never>?
+
+    static func match(_ accent: Accent, custom: UInt32?) {
+        let target = custom.map(nearest) ?? accent
+        let name: String? = target == .rose ? nil : "AppIcon-\(target.rawValue.capitalized)"
+        pending?.cancel()
+        pending = Task { @MainActor in
+            // Wait a moment so trying colours quickly only changes it once.
+            try? await Task.sleep(for: .milliseconds(800))
+            // Not in the middle of a call: iOS shows a pop-up for the new
+            // icon, which got in the way. It changes once the call is over.
+            while VoiceEngine.live && !Task.isCancelled { try? await Task.sleep(for: .seconds(2)) }
+            let app = UIApplication.shared
+            guard !Task.isCancelled, app.supportsAlternateIcons, app.alternateIconName != name,
+                  app.applicationState == .active else { return }
+            try? await app.setAlternateIconName(name)
+        }
+    }
+
+    static func nearest(_ hex: UInt32) -> Accent {
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(hex: hex).getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        let hue = h * 360
+        let hues: [(Accent, CGFloat)] = [(.rose, 340), (.lavender, 253), (.mint, 163), (.peach, 16), (.sky, 213)]
+        func distance(_ x: CGFloat) -> CGFloat { let d = abs(x - hue); return min(d, 360 - d) }
+        return hues.min { distance($0.1) < distance($1.1) }?.0 ?? .rose
+    }
+}
+
 // Turns the rose artwork (logo, Mimi) to any colour: rotates the hue from
 // rose to the target and matches how strong the colour is. White and the
 // dark outlines stay as they are.
@@ -134,14 +167,44 @@ extension View {
 
 // MARK: - Fonts
 
-extension Font {
-    // Bubbly: big friendly headings (like the website's font-display).
-    static func display(_ size: CGFloat, relativeTo style: Font.TextStyle = .title) -> Font {
-        .custom("Bubbly-Regular", size: size, relativeTo: style)
+extension Font.TextStyle {
+    var uiKit: UIFont.TextStyle {
+        switch self {
+        case .largeTitle: return .largeTitle
+        case .title: return .title1
+        case .title2: return .title2
+        case .title3: return .title3
+        case .headline: return .headline
+        case .subheadline: return .subheadline
+        case .callout: return .callout
+        case .footnote: return .footnote
+        case .caption: return .caption1
+        case .caption2: return .caption2
+        default: return .body
+        }
     }
-    // Cute Here: playful accents (names in the greeting, empty states).
+}
+
+extension UIFont {
+    /// The iPhone's rounded letters (the same as the titles), for the top bars.
+    static func rounded(_ size: CGFloat, _ weight: UIFont.Weight = .heavy) -> UIFont {
+        let base = UIFont.systemFont(ofSize: size, weight: weight)
+        guard let descriptor = base.fontDescriptor.withDesign(.rounded) else { return base }
+        return UIFont(descriptor: descriptor, size: size)
+    }
+}
+
+extension Font {
+    // The iPhone's own fully round letters, extra bold: big friendly
+    // headings. (A touch smaller than the size asked for: these letters are
+    // wider than the old bubbly font, so pages keep the same room.) Grows
+    // with the text size picked in iPhone Settings.
+    static func display(_ size: CGFloat, relativeTo style: Font.TextStyle = .title) -> Font {
+        .system(size: UIFontMetrics(forTextStyle: style.uiKit).scaledValue(for: size * 0.9), weight: .heavy, design: .rounded)
+    }
+    // Caveat Brush: playful accents (names in the greeting, empty states).
     static func cute(_ size: CGFloat, relativeTo style: Font.TextStyle = .title) -> Font {
-        .custom("CuteHereRegular", size: size, relativeTo: style)
+        .custom("CaveatBrush-Regular", size: size, relativeTo: style)
     }
     // Plus Jakarta Sans: everything else.
     static func jakarta(_ size: CGFloat, _ weight: Font.Weight = .regular, relativeTo style: Font.TextStyle = .body) -> Font {
@@ -173,8 +236,7 @@ struct SugarCard: ViewModifier {
             .padding(padding)
             .background {
                 shape.fill(Palette.surface)
-                    .shadow(color: Palette.shadow, radius: 2, y: 1)
-                    .shadow(color: Theme.main.opacity(scheme == .dark ? 0.0 : 0.06), radius: 18, y: 8)
+                    .shadow(color: scheme == .dark ? Palette.shadow : Theme.main.opacity(0.08), radius: 12, y: 6)
             }
             .overlay {
                 shape.strokeBorder(
@@ -219,9 +281,17 @@ private struct GradientButtonBody: View {
     @Environment(\.isEnabled) private var enabled
 
     var body: some View {
+        JellyPress(content: styled, pressed: configuration.isPressed, scale: 0.96)
+    }
+
+    private var styled: some View {
         configuration.label
             .font(.jakarta(15, .bold))
             .foregroundStyle(.white)
+            // Pill buttons stay on one line (shrinking a little if they
+            // must) instead of wrapping into a lopsided two-line blob.
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
             .padding(.horizontal, 20)
             .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: height)
             .background {
@@ -235,9 +305,7 @@ private struct GradientButtonBody: View {
             .shadow(color: Theme.main.opacity(configuration.isPressed ? 0.2 : 0.38), radius: configuration.isPressed ? 6 : 14, y: configuration.isPressed ? 3 : 7)
             .saturation(enabled ? 1 : 0.2)
             .opacity(enabled ? 1 : 0.6)
-            .scaleEffect(configuration.isPressed ? 0.95 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: configuration.isPressed)
-            .clickSound(configuration.isPressed)
+            .animation(Motion.press, value: configuration.isPressed)
     }
 }
 
@@ -245,18 +313,18 @@ struct OutlineButtonStyle: ButtonStyle {
     var height: CGFloat = 44
     var fullWidth = false
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        let styled = configuration.label
             .font(.jakarta(14, .bold))
             .foregroundStyle(Theme.pink)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
             .padding(.horizontal, 18)
             .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: height)
             .background(configuration.isPressed ? Theme.soft : Color.clear, in: Capsule())
             .background(Palette.surface, in: Capsule())
             .overlay(Capsule().strokeBorder(Theme.pink.opacity(0.3), lineWidth: 1.4))
             .shadow(color: Palette.shadow, radius: 6, y: 2)
-            .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
-            .clickSound(configuration.isPressed)
+        return JellyPress(content: styled, pressed: configuration.isPressed, scale: 0.97)
     }
 }
 
@@ -280,43 +348,42 @@ struct Chip: View {
                 if active {
                     Capsule().fill(Theme.gradient)
                         .overlay(Capsule().fill(LinearGradient(colors: [.white.opacity(0.25), .clear], startPoint: .top, endPoint: .center)).padding(1))
-                        .shadow(color: Theme.pink.opacity(0.35), radius: 8, y: 4)
+                        // Small, so it never gets cut off in a scrolling row.
+                        .shadow(color: Theme.pink.opacity(0.28), radius: 4, y: 2)
                 } else {
                     Capsule().fill(Palette.surface).overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
                 }
             }
             .contentShape(Capsule())
         }
-        .buttonStyle(BouncyStyle(scale: 0.92))
+        .buttonStyle(BouncyStyle(scale: 0.95))
         .sensoryFeedback(.selection, trigger: active)
-        .animation(.snappy(duration: 0.25), value: active)
+        .motion(Motion.standard, value: active)
     }
 }
 
-// Section title with an icon tile and an optional "See all".
+// Section title in the round font with a small accent icon, and an
+// optional "See all". Kept quiet so the content is what stands out.
 struct SectionHeader: View {
     let icon: String
     let title: String
     var action: (() -> Void)? = nil
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 34, height: 34)
-                .background(Theme.gradient, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                .shadow(color: Theme.main.opacity(0.3), radius: 6, y: 3)
-            Text(title).font(.display(22)).foregroundStyle(Palette.text)
-            Spacer()
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(Theme.main)
+            Text(title).font(.display(23)).foregroundStyle(Palette.text)
+                .lineLimit(1).minimumScaleFactor(0.8)
+            Spacer(minLength: 8)
             if let action {
                 Button(action: action) {
-                    HStack(spacing: 4) { Text("See all"); Image(systemName: "chevron.right").font(.system(size: 10, weight: .heavy)) }
-                        .font(.jakarta(12, .bold))
+                    HStack(spacing: 3) { Text("See all"); Image(systemName: "chevron.right").font(.system(size: 10, weight: .heavy)) }
+                        .font(.jakarta(13, .bold))
                         .foregroundStyle(Theme.main)
-                        .padding(.horizontal, 12)
-                        .frame(height: 30)
-                        .background(Theme.soft, in: Capsule())
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(BouncyStyle())
             }
@@ -364,6 +431,7 @@ struct LevelInfo {
 struct XPBar: View {
     let info: LevelInfo
     @State private var shown = 0.0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
         VStack(spacing: 6) {
             HStack {
@@ -381,7 +449,12 @@ struct XPBar: View {
             }
             .frame(height: 8)
         }
-        .onAppear { withAnimation(.spring(response: 1.1, dampingFraction: 0.85).delay(0.2)) { shown = info.progress } }
+        .onAppear { updateProgress() }
+        .onChange(of: info.progress) { _, _ in updateProgress() }
+    }
+
+    private func updateProgress() {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.35)) { shown = info.progress }
     }
 }
 
@@ -409,25 +482,107 @@ struct BrandLogo: View {
     }
 }
 
+// The app icon (the polka-dot S with Mimi peeking over it) in your colour,
+// with sparkles that twinkle and drift a little — the home screen icon
+// can't move, this can.
+struct AppBadge: View {
+    var size: CGFloat = 120
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var art: String {
+        let accent = Theme.custom.map { AppIconSync.nearest($0.main) } ?? Theme.accent
+        return "IconBadge-\(accent.rawValue)"
+    }
+
+    // Same spots as the home screen icon (x, y, size out of 1024).
+    private let sparkles: [(CGFloat, CGFloat, CGFloat, Double)] = [(846, 170, 124, 0), (930, 296, 52, 0.5), (130, 250, 76, 1.0)]
+
+    var body: some View {
+        let unit = size / 1024
+        ZStack(alignment: .topLeading) {
+            Image(art).resizable().interpolation(.high).scaledToFit()
+            ForEach(sparkles.indices, id: \.self) { i in
+                let s = sparkles[i]
+                FourPointStar()
+                    .fill(.white)
+                    .frame(width: s.2 * unit, height: s.2 * unit)
+                    // They twinkle and turn in place (no drifting up and down).
+                    .phaseAnimator(reduceMotion ? [1.0] : [0.55, 1.0, 0.8]) { view, phase in
+                        view
+                            .scaleEffect(phase)
+                            .rotationEffect(.degrees(phase * 90))
+                            .opacity(0.55 + phase * 0.45)
+                    } animation: { _ in .easeInOut(duration: 1.1 + Double(i) * 0.25).delay(s.3 * 0.3) }
+                    .position(x: s.0 * unit, y: s.1 * unit)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous))
+        .shadow(color: Theme.main.opacity(0.35), radius: size * 0.12, y: size * 0.05)
+        .accessibilityLabel("Sugerly")
+    }
+}
+
+// A soft four-point star, like the sparkles on the icon.
+struct FourPointStar: Shape {
+    func path(in rect: CGRect) -> Path {
+        let c = CGPoint(x: rect.midX, y: rect.midY)
+        let r = min(rect.width, rect.height) / 2
+        var p = Path()
+        for i in 0..<8 {
+            let angle = CGFloat(i) * .pi / 4 - .pi / 2
+            let radius = i.isMultiple(of: 2) ? r : r * 0.28
+            let point = CGPoint(x: c.x + radius * cos(angle), y: c.y + radius * sin(angle))
+            if i == 0 { p.move(to: point) } else { p.addLine(to: point) }
+        }
+        p.closeSubpath()
+        return p
+    }
+}
+
 // Colourful confetti for rewards.
-struct ConfettiView: View {
-    @State private var fall = false
-    private let pieces = (0..<36).map { _ in (x: Double.random(in: -160...160), delay: Double.random(in: 0...0.25), rot: Double.random(in: 0...360), color: [Color(hex: 0xFF7AA2), Color(hex: 0xB19CFF), Color(hex: 0xFFD166), Color(hex: 0x5FD3B0), Color(hex: 0x7CBEFF)].randomElement()!) }
+// A small, soft burst of sparkles for rewards: a few little stars pop out
+// above and to the sides, then fade. (It used to be confetti plus big
+// glowing stars flying everywhere, over the text and other cards.) Their
+// spots are picked once, so they never jump when the screen updates.
+struct SparkleBurst: View {
+    var radius: CGFloat = 80
+    struct Piece { var dx: CGFloat; var dy: CGFloat; var distance: CGFloat; var size: CGFloat; var delay: Double; var white: Bool }
+    @State private var pieces: [Piece] = (0..<8).map { i in
+        let angle: Double = -Double.pi * (0.12 + 0.76 * Double(i) / 7) + Double.random(in: -0.05...0.05)
+        let x: Double = cos(angle)
+        let y: Double = sin(angle)
+        return Piece(dx: CGFloat(x), dy: CGFloat(y), distance: CGFloat.random(in: 0.7...1.0),
+                     size: CGFloat.random(in: 8...14), delay: Double(i % 4) * 0.03, white: i % 2 == 0)
+    }
+    @State private var go = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         ZStack {
-            ForEach(0..<pieces.count, id: \.self) { i in
+            ForEach(pieces.indices, id: \.self) { i in
                 let p = pieces[i]
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(p.color)
-                    .frame(width: 7, height: 11)
-                    .rotationEffect(.degrees(fall ? p.rot + 540 : p.rot))
-                    .offset(x: fall ? p.x : p.x * 0.2, y: fall ? 260 : -30)
-                    .opacity(fall ? 0 : 1)
-                    .animation(.easeOut(duration: 1.6).delay(p.delay), value: fall)
+                FourPointStar()
+                    .fill(p.white ? AnyShapeStyle(Color.white) : AnyShapeStyle(Theme.main))
+                    .frame(width: p.size, height: p.size)
+                    .phaseAnimator([0, 1, 2], trigger: go) { view, phase in
+                        let reach: CGFloat = phase == 0 ? 0 : radius * p.distance
+                        return view
+                            .scaleEffect(phase == 1 ? 1 : 0.4)
+                            .opacity(phase == 1 ? 1 : 0)
+                            .offset(x: p.dx * reach, y: p.dy * reach)
+                    } animation: { phase in
+                        switch phase {
+                        case 1: return .easeOut(duration: 0.45).delay(p.delay)
+                        case 2: return .easeOut(duration: 0.3).delay(0.12)
+                        default: return .linear(duration: 0.01)
+                        }
+                    }
             }
         }
         .allowsHitTesting(false)
-        .onAppear { fall = true }
+        .accessibilityHidden(true)
+        .onAppear { if !reduceMotion { go.toggle() } }
     }
 }
 
@@ -435,7 +590,14 @@ struct ConfettiView: View {
 
 // A soft light sweeping across a placeholder, like the website's .skeleton.
 struct Shimmer: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func body(content: Content) -> some View {
+        // With Reduce Motion on, the placeholder stays still.
+        if reduceMotion { content } else { sweeping(content) }
+    }
+
+    private func sweeping(_ content: Content) -> some View {
         content.overlay {
             TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
                 let t = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.4) / 1.4
@@ -455,12 +617,13 @@ struct Shimmer: ViewModifier {
 extension View {
     func shimmer() -> some View { modifier(Shimmer()) }
 
-    // Sections float up one after another when a page opens.
+    // Sections rise a few points and fade in one after another when a page
+    // opens (quickly: the page is usable straight away).
     func stagger(_ shown: Bool, _ index: Int) -> some View {
         self
             .opacity(shown ? 1 : 0)
-            .offset(y: shown ? 0 : 22)
-            .animation(.spring(response: 0.55, dampingFraction: 0.85).delay(Double(min(index, 10)) * 0.05), value: shown)
+            .offset(y: shown || Motion.reduced ? 0 : 10)
+            .animation(Motion.staggered(Motion.enter, index), value: shown)
     }
 }
 
@@ -513,25 +676,34 @@ struct SkeletonRow: View {
     }
 }
 
-// Little sparkles that twinkle in turn (for greetings and empty states).
+// Little sparkles that enter once (for greetings and empty states).
+// All three stay inside their own little box, so they never sit on top of
+// the text next to them; they twinkle and turn in place.
 struct Twinkle: View {
     var size: CGFloat = 16
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var appeared = false
     var body: some View {
-        ZStack {
-            sparkle(size, x: 0, y: 0, delay: 0)
-            sparkle(size * 0.6, x: size * 0.9, y: size * 0.7, delay: 0.4)
-            sparkle(size * 0.45, x: -size * 0.6, y: size * 0.9, delay: 0.8)
+        ZStack(alignment: .topLeading) {
+            sparkle(size, x: size * 0.45, y: 0, delay: 0)
+            sparkle(size * 0.6, x: size * 1.45, y: size * 0.75, delay: 0.4)
+            sparkle(size * 0.45, x: 0, y: size * 1.15, delay: 0.8)
         }
+        .frame(width: size * 2.1, height: size * 1.65, alignment: .topLeading)
         .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .onAppear { appeared = true }
     }
 
     private func sparkle(_ s: CGFloat, x: CGFloat, y: CGFloat, delay: Double) -> some View {
         Image(systemName: "sparkle")
             .font(.system(size: s, weight: .bold))
             .foregroundStyle(Theme.gradient)
+            .frame(width: s, height: s)
+            .scaleEffect(appeared || reduceMotion ? 1 : 0.8)
+            .opacity(appeared || reduceMotion ? 1 : 0.7)
+            .rotationEffect(.degrees(appeared || reduceMotion ? 0 : -12))
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.3).delay(delay * 0.25), value: appeared)
             .offset(x: x, y: y)
-            .phaseAnimator([0.35, 1.0]) { view, phase in
-                view.scaleEffect(phase).opacity(phase)
-            } animation: { _ in .easeInOut(duration: 0.9).delay(delay) }
     }
 }

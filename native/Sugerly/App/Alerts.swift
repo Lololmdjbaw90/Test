@@ -176,7 +176,7 @@ final class Alerts: NSObject, UNUserNotificationCenterDelegate {
         for n in items.filter({ !$0.read && !muted.contains($0.fromEmail) }).suffix(5) {
             // Server mentions already arrive as server messages.
             if n.type == "mention" && Kind.servers.enabled { continue }
-            let kind = n.link.contains("Reels") ? "reels" : "social"
+            let kind = n.link.hasPrefix("/Support") ? "support" : n.link.contains("Reels") ? "reels" : "social"
             post(id: "n-\(n.id)", title: n.fromName.isEmpty ? "Sugerly" : n.fromName, body: n.message, thread: n.type, kind: kind, target: n.link)
         }
     }

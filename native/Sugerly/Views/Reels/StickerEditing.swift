@@ -115,7 +115,7 @@ struct StickerCanvas: View {
                         .animation(.spring(response: 0.25, dampingFraction: 0.6), value: overTrash)
                         .padding(.bottom, 16)
                 }
-                .transition(.scale.combined(with: .opacity))
+                .transition(.pop)
                 .allowsHitTesting(false)
             }
             StickerTouchLayer(
@@ -183,7 +183,7 @@ struct StickerCanvas: View {
         }
         guard let i = stickers.firstIndex(where: { $0.id == id }) else { return }
         if isOverTrash(id, t) {
-            withAnimation(.snappy) { stickers.remove(at: i) }
+            withMotion(Motion.standard) { stickers.remove(at: i) }
             selected = nil
             return
         }
@@ -461,6 +461,7 @@ struct TextStickerEditor: View {
     var onDelete: (UUID) -> Void
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focused: Bool
+    @State private var lightPreview = false
     private let colors: [UInt32] = [0xFFFFFF, 0x2A1620, 0xFFB3D1, 0xD9577F, 0xFF4F8B, 0xB19CFF, 0x7CBEFF, 0x5FD3B0, 0xFFD166, 0xFF8A5B]
     private let aligns: [(NSTextAlignment, String)] = [(.left, "text.alignleft"), (.center, "text.aligncenter"), (.right, "text.alignright")]
 
@@ -470,15 +471,15 @@ struct TextStickerEditor: View {
             let shown: TextSticker = {
                 var s = sticker
                 if s.text.trimmingCharacters(in: .whitespaces).isEmpty { s.text = "Your text" }
-                s.scale = 1.35
+                s.scale = sticker.scale
                 return s
             }()
             StickerLabel(sticker: shown, width: geo.size.width)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .opacity(sticker.text.isEmpty ? 0.5 : 1)
         }
-        .frame(height: 150)
-        .background(LinearGradient(colors: [Color(hex: 0x3A2230), Color(hex: 0x160B12)], startPoint: .top, endPoint: .bottom), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .frame(height: focused ? 110 : 180)
+        .background(LinearGradient(colors: lightPreview ? [Color(hex: 0xFFE6EF), Color(hex: 0xFFF7EC)] : [Color(hex: 0x3A2230), Color(hex: 0x160B12)], startPoint: .top, endPoint: .bottom), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
@@ -488,7 +489,7 @@ struct TextStickerEditor: View {
         sample.text = "Aa"
         sample.style = st
         sample.scale = 1
-        return Button { withAnimation(.snappy) { sticker.style = st } } label: {
+        return Button { withMotion(Motion.standard) { sticker.style = st } } label: {
             VStack(spacing: 5) {
                 StickerLabel(sticker: sample, width: 250)
                     .frame(height: 44)
@@ -506,15 +507,13 @@ struct TextStickerEditor: View {
     }
 
     var body: some View {
+        ScrollView {
         VStack(spacing: 14) {
             HStack {
-                Button("Delete") { onDelete(sticker.id); dismiss() }.foregroundStyle(Palette.danger).font(.jakarta(15, .bold))
+                Text("LIVE PREVIEW").font(.jakarta(11, .heavy)).tracking(1.5).foregroundStyle(Palette.muted)
                 Spacer()
-                Button("Done") {
-                    if !sticker.text.trimmingCharacters(in: .whitespaces).isEmpty { onSave(sticker) }
-                    dismiss()
-                }
-                .buttonStyle(GradientButtonStyle(height: 38, fullWidth: false))
+                Button { lightPreview.toggle() } label: { Label(lightPreview ? "Dark" : "Light", systemImage: "circle.lefthalf.filled") }
+                    .font(.jakarta(12, .bold)).foregroundStyle(Theme.main)
             }
             preview
             TextField("Type something cute…", text: $sticker.text, axis: .vertical)
@@ -567,11 +566,33 @@ struct TextStickerEditor: View {
                 }
                 .padding(.vertical, 4)
             }
-            Spacer(minLength: 0)
+            HStack {
+                Text("Size").font(.jakarta(13, .bold))
+                Slider(value: $sticker.scale, in: 0.3...3).tint(Theme.main).accessibilityLabel("Text size")
+            }
         }
         .padding(20)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .safeAreaInset(edge: .top) {
+            HStack {
+                Button("Delete") { onDelete(sticker.id); dismiss() }.foregroundStyle(Palette.danger).font(.jakarta(15, .bold))
+                Spacer()
+                Button("Done") {
+                    if !sticker.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { onSave(sticker) }
+                    dismiss()
+                }
+                .buttonStyle(GradientButtonStyle(height: 38, fullWidth: false))
+            }
+            .padding(.horizontal, 20).padding(.vertical, 10).background(Palette.bg)
+        }
+        .safeAreaInset(edge: .bottom) {
+            if focused {
+                Button("Hide keyboard") { focused = false }
+                    .font(.jakarta(13, .bold)).frame(maxWidth: .infinity).frame(height: 44).background(Palette.surface)
+            }
+        }
         .sugarBackground()
-        .animation(.snappy, value: sticker)
         .onAppear { focused = true }
     }
 }

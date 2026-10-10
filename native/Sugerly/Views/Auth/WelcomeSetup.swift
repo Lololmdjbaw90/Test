@@ -105,7 +105,7 @@ struct WelcomeSetupView: View {
         }
         .ignoresSafeArea()
         .animation(.easeInOut(duration: 0.6), value: accent)
-        .onAppear { withAnimation(.easeInOut(duration: 8).repeatForever(autoreverses: true)) { drift = true } }
+        .onAppear { if !Motion.reduced { withAnimation(.easeInOut(duration: 8).repeatForever(autoreverses: true)) { drift = true } } }
     }
 
     private var topBar: some View {
@@ -235,7 +235,7 @@ struct WelcomeSetupView: View {
             }
             .buttonStyle(BouncyStyle(scale: 0.95))
             .accessibilityLabel("Choose a photo")
-            .onAppear { withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { pulse = true } }
+            .onAppear { if !Motion.reduced { withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { pulse = true } } }
             .stagger(appeared, 1)
 
             Button(picture == nil ? "Choose a photo" : "Choose another") { pickingPhoto = true }
@@ -378,21 +378,11 @@ struct WelcomeSetupView: View {
                             .font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(1)
                     }
                     Spacer(minLength: 6)
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.65)) {
+                    MorphPill(on: on, offTitle: "Follow", onTitle: "Following") {
+                        withMotion(.spring(response: 0.34, dampingFraction: 0.78)) {
                             if on { follows.remove(person.email) } else { follows.insert(person.email) }
                         }
-                    } label: {
-                        Text(on ? "Following" : "Follow")
-                            .font(.jakarta(13, .bold))
-                            .foregroundStyle(on ? Theme.main : .white)
-                            .padding(.horizontal, 14).frame(height: 34)
-                            .background {
-                                if on { Capsule().fill(Theme.soft) } else { Capsule().fill(Theme.gradient) }
-                            }
                     }
-                    .buttonStyle(BouncyStyle(scale: 0.9))
-                    .sensoryFeedback(.selection, trigger: on)
                 }
                 .padding(12)
                 .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -463,8 +453,8 @@ struct WelcomeSetupView: View {
                 .clipShape(Circle())
                 .overlay(Circle().strokeBorder(Theme.gradient, lineWidth: 4))
             }
-            .overlay { ConfettiView() }
-            Text("You're all set!").font(.display(40)).foregroundStyle(Theme.gradient)
+            .overlay { SparkleBurst(radius: 100) }
+            Text("You're all set!").font(.display(40)).foregroundStyle(Theme.main)
             Text("Welcome to Sugerly, \(name). Here's a little gift to get you started.")
                 .font(.jakarta(15)).foregroundStyle(Palette.text2).multilineTextAlignment(.center).padding(.horizontal, 30)
             HStack(spacing: 10) {
@@ -478,7 +468,7 @@ struct WelcomeSetupView: View {
             .sensoryFeedback(.success, trigger: coins == 50)
             Spacer()
             Button("Start exploring") {
-                withAnimation(.smooth(duration: 0.5)) { model.needsSetup = false }
+                Task { await model.finishSetup() }
             }
             .buttonStyle(GradientButtonStyle(height: 56))
             .frame(maxWidth: 520)
@@ -488,6 +478,7 @@ struct WelcomeSetupView: View {
         .frame(maxWidth: .infinity)
         .task {
             try? await Task.sleep(for: .milliseconds(350))
+            RewardSound.play()
             for n in stride(from: 5, through: 50, by: 5) {
                 withAnimation(.snappy(duration: 0.12)) { coins = n }
                 try? await Task.sleep(for: .milliseconds(45))
@@ -560,7 +551,7 @@ struct WelcomeSetupView: View {
             }
             withAnimation(.spring(response: 0.55, dampingFraction: 0.75)) { done = true }
         } catch {
-            withAnimation { self.error = "Couldn't save that. Check your connection and try again." }
+            withMotion { self.error = "Couldn't save that. Check your connection and try again." }
         }
     }
 
@@ -570,6 +561,6 @@ struct WelcomeSetupView: View {
         try? await model.updateMe(["onboarding_completed": true])
         saving = false
         Theme.accent = model.accent
-        withAnimation(.smooth(duration: 0.5)) { model.needsSetup = false }
+        await model.finishSetup()
     }
 }

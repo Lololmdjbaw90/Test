@@ -3,11 +3,11 @@ import UIKit
 
 // MARK: - Animated pattern backgrounds
 
-// Cute moving wallpapers for Home and the menu: polka dots, clouds, candy
-// stripes, hearts and stars. They follow your accent colour and dark mode,
-// and can be turned off in Settings.
+// Cute moving wallpapers for the top of Home: polka dots, clouds, candy
+// stripes, hearts, stars, sprinkles, flowers, bubbles and gingham. They
+// follow your accent colour and dark mode, and can be turned off in Settings.
 enum AppBackground: String, CaseIterable, Identifiable {
-    case dots, clouds, stripes, hearts, stars, off
+    case dots, clouds, stripes, hearts, stars, sprinkles, flowers, bubbles, gingham, off
     var id: String { rawValue }
     static let storageKey = "sugerly.background"
 
@@ -18,6 +18,10 @@ enum AppBackground: String, CaseIterable, Identifiable {
         case .stripes: return "Stripes"
         case .hearts: return "Hearts"
         case .stars: return "Stars"
+        case .sprinkles: return "Sprinkles"
+        case .flowers: return "Flowers"
+        case .bubbles: return "Bubbles"
+        case .gingham: return "Gingham"
         case .off: return "Off"
         }
     }
@@ -29,6 +33,10 @@ enum AppBackground: String, CaseIterable, Identifiable {
         case .stripes: return "line.3.horizontal"
         case .hearts: return "heart.fill"
         case .stars: return "sparkles"
+        case .sprinkles: return "wand.and.stars"
+        case .flowers: return "camera.macro"
+        case .bubbles: return "bubbles.and.sparkles"
+        case .gingham: return "squareshape.split.2x2"
         case .off: return "circle.slash"
         }
     }
@@ -46,6 +54,7 @@ private struct PatternBackgroundModifier: ViewModifier {
     @AppStorage("sugerly.background.still") private var still = false
     @Environment(\.backgroundPaused) private var paused
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.scenePhase) private var scenePhase
 
     func body(content: Content) -> some View {
         let kind = AppBackground(rawValue: choice) ?? .dots
@@ -58,12 +67,40 @@ private struct PatternBackgroundModifier: ViewModifier {
                 } else {
                     // A new id for each look, so a freshly picked pattern (or
                     // colour, or dark mode) starts moving again straight away.
-                    PatternBackground(kind: kind, animated: !still && !paused)
+                    PatternBackground(kind: kind, animated: !still && !paused && scenePhase == .active)
                         .id("\(kind.rawValue)-\(still)-\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)")
                         .ignoresSafeArea()
                         .accessibilityHidden(true)
                 }
             }
+    }
+}
+
+// The pattern you picked, as a soft wallpaper at the top of Home that fades
+// into the plain background. (Behind the whole page it fought with the
+// cards and everything looked busy; up top it's a cute header instead.)
+struct HeaderWallpaper: View {
+    @AppStorage(AppBackground.storageKey) private var choice = AppBackground.dots.rawValue
+    @AppStorage("sugerly.background.still") private var still = false
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.scenePhase) private var scenePhase
+
+    var body: some View {
+        let kind = AppBackground(rawValue: choice) ?? .dots
+        if kind != .off {
+            PatternBackground(kind: kind, animated: !still && scenePhase == .active)
+                .id("\(kind.rawValue)-\(still)-\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)")
+                .mask {
+                    LinearGradient(stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: .black.opacity(0.8), location: 0.36),
+                        .init(color: .black.opacity(0.7), location: 0.5),
+                        .init(color: .clear, location: 1),
+                    ], startPoint: .top, endPoint: .bottom)
+                }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
     }
 }
 
@@ -79,8 +116,51 @@ extension EnvironmentValues {
     }
 }
 
-// Soft accent glows (the plain page background), drawn once.
+// Soft accent glows (the plain page background). The blurred glows are
+// drawn once into a small picture and reused by every page, so opening a
+// page doesn't have to blur them again (that made pages stutter in).
 struct GlowLayer: View {
+    @Environment(\.colorScheme) private var scheme
+    @State private var drawn: UIImage?
+
+    var body: some View {
+        let key = GlowArt.key(scheme)
+        let image = GlowArt.cache[key] ?? drawn
+        Palette.bg
+            .overlay {
+                if let image {
+                    Image(uiImage: image).resizable().scaledToFill()
+                }
+            }
+            .clipped()
+            .task(id: key) {
+                if GlowArt.cache[key] == nil { drawn = GlowArt.render(key, scheme: scheme) }
+            }
+    }
+}
+
+@MainActor
+enum GlowArt {
+    static var cache: [String: UIImage] = [:]
+
+    static func key(_ scheme: ColorScheme) -> String {
+        "\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)-\(Theme.custom?.light ?? 0)"
+    }
+
+    static func render(_ key: String, scheme: ColorScheme) -> UIImage? {
+        if let hit = cache[key] { return hit }
+        let renderer = ImageRenderer(content: GlowShapes()
+            .frame(width: 430, height: 932)
+            .environment(\.colorScheme, scheme))
+        renderer.scale = 1
+        guard let image = renderer.uiImage else { return nil }
+        if cache.count > 8 { cache.removeAll() }
+        cache[key] = image
+        return image
+    }
+}
+
+private struct GlowShapes: View {
     var body: some View {
         ZStack {
             Palette.bg
@@ -88,7 +168,6 @@ struct GlowLayer: View {
             Circle().fill(Theme.lavender.opacity(0.18)).frame(width: 320).blur(radius: 95).offset(x: -170, y: 260)
             Circle().fill(Color(hex: 0xFFD6A5).opacity(0.14)).frame(width: 240).blur(radius: 80).offset(x: 140, y: 120)
         }
-        .drawingGroup()
     }
 }
 
@@ -97,21 +176,27 @@ extension View {
     func sugarBackground() -> some View { background { GlowLayer().ignoresSafeArea() } }
 }
 
-// Each pattern is drawn once (a little bigger than the screen) and then just
-// slides — the phone's graphics chip moves it, so it costs almost nothing
-// and never slows the app down. It stops when the page isn't showing.
+// Each pattern is drawn once (a little bigger than the screen) into a
+// picture, and the phone's graphics chip slides it (Core Animation). Nothing
+// is redrawn while it moves, so scrolling, swiping back and opening sheets
+// stay smooth. It stops when the page isn't showing.
 struct PatternBackground: View {
     let kind: AppBackground
     var animated = true
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var go = false
+    @Environment(\.displayScale) private var displayScale
+    // The moving layers, drawn once into pictures.
+    @State private var art: [String: UIImage] = [:]
+    @State private var artSize: CGSize = .zero
 
     private struct Colors {
         var dark: Bool
         var main: Color
         var light: Color
     }
+
+    private var moving: Bool { animated && !reduceMotion }
 
     var body: some View {
         let colors = Colors(dark: scheme == .dark, main: Theme.main, light: Theme.light)
@@ -121,16 +206,24 @@ struct PatternBackground: View {
                 base(colors)
                 switch kind {
                 case .dots:
-                    sliding(dx: 52, dy: 0, duration: 8, size: size) { ctx, s in Self.dots(&ctx, s, colors) }
+                    sliding("dots", dx: 52, dy: 0, duration: 8, size: size, colors)
                 case .stripes:
-                    sliding(dx: 40, dy: 0, duration: 5, size: size) { ctx, s in Self.stripes(&ctx, s, colors) }
+                    sliding("stripes", dx: 40, dy: 0, duration: 5, size: size, colors)
                 case .hearts:
-                    sliding(dx: 0, dy: 86.4, duration: 9, size: size) { ctx, s in Self.hearts(&ctx, s, colors) }
+                    sliding("hearts", dx: 0, dy: 86.4, duration: 9, size: size, colors)
                 case .stars:
                     twinkle(size: size, colors)
+                case .sprinkles:
+                    sliding("sprinkles", dx: 64, dy: 64, duration: 10, size: size, colors)
+                case .flowers:
+                    sliding("flowers", dx: 90, dy: 0, duration: 14, size: size, colors)
+                case .bubbles:
+                    sliding("bubbles", dx: 0, dy: 140, duration: 12, size: size, colors)
+                case .gingham:
+                    sliding("gingham", dx: 36, dy: 36, duration: 9, size: size, colors)
                 case .clouds:
                     Canvas { ctx, s in Self.sky(&ctx, s, colors) }.frame(width: size.width, height: size.height)
-                    sliding(dx: Self.cloudSpacing(size), dy: 0, duration: 40, size: size) { ctx, s in Self.cloudLanes(&ctx, s, colors, visibleWidth: size.width) }
+                    sliding("clouds", dx: Self.cloudSpacing(size), dy: 0, duration: 40, size: size, colors)
                     Canvas { ctx, s in Self.cloudBank(&ctx, s, colors) }.frame(width: size.width, height: size.height)
                 case .off:
                     EmptyView()
@@ -138,38 +231,87 @@ struct PatternBackground: View {
             }
             .frame(width: size.width, height: size.height, alignment: .topLeading)
             .clipped()
+            .task(id: moving ? size : .zero) {
+                guard moving, size != artSize || art.isEmpty else { return }
+                draw(size, colors)
+            }
         }
         .background(Palette.bg)
-        .onAppear { start() }
-        .onDisappear { go = false }
-        .onChange(of: animated) { _, _ in go = false; start() }
-        .onChange(of: kind) { _, _ in go = false; start() }
     }
 
-    // Starts the loop on the next frame, so the first (still) frame is drawn
-    // and the move from there is animated.
-    private func start() {
-        guard animated && !reduceMotion else { return }
-        DispatchQueue.main.async { go = true }
-    }
-
-    private func sliding(dx: CGFloat, dy: CGFloat, duration: Double, size: CGSize, draw: @escaping (inout GraphicsContext, CGSize) -> Void) -> some View {
-        Canvas { ctx, s in draw(&ctx, s) }
-            .frame(width: size.width + dx, height: size.height + abs(dy))
-            .offset(x: go ? -dx : 0, y: go ? -abs(dy) : 0)
-            .animation(go ? .linear(duration: duration).repeatForever(autoreverses: false) : .easeOut(duration: 0.2), value: go)
-    }
-
-    private func twinkle(size: CGSize, _ c: Colors) -> some View {
-        ZStack {
-            Canvas { ctx, s in Self.stars(&ctx, s, c, even: true) }
-                .opacity(go ? 0.25 : 1)
-                .animation(go ? .easeInOut(duration: 1.6).repeatForever(autoreverses: true) : .default, value: go)
-            Canvas { ctx, s in Self.stars(&ctx, s, c, even: false) }
-                .opacity(go ? 1 : 0.25)
-                .animation(go ? .easeInOut(duration: 1.6).repeatForever(autoreverses: true) : .default, value: go)
+    // What each moving layer draws.
+    private static func painter(_ name: String, _ size: CGSize, _ c: Colors) -> (inout GraphicsContext, CGSize) -> Void {
+        switch name {
+        case "dots": return { ctx, s in Self.dots(&ctx, s, c) }
+        case "stripes": return { ctx, s in Self.stripes(&ctx, s, c) }
+        case "hearts": return { ctx, s in Self.hearts(&ctx, s, c) }
+        case "stars-even": return { ctx, s in Self.stars(&ctx, s, c, even: true) }
+        case "stars-odd": return { ctx, s in Self.stars(&ctx, s, c, even: false) }
+        case "sprinkles": return { ctx, s in Self.sprinkles(&ctx, s, c) }
+        case "flowers": return { ctx, s in Self.flowers(&ctx, s, c) }
+        case "bubbles": return { ctx, s in Self.bubbles(&ctx, s, c) }
+        case "gingham": return { ctx, s in Self.gingham(&ctx, s, c) }
+        default: return { ctx, s in Self.cloudLanes(&ctx, s, c, visibleWidth: size.width) }
         }
-        .frame(width: size.width, height: size.height)
+    }
+
+    // Draws the moving layers into pictures (once per screen size).
+    private func draw(_ size: CGSize, _ c: Colors) {
+        guard size.width > 1, size.height > 1 else { return }
+        let layers: [(String, CGSize)]
+        switch kind {
+        case .dots: layers = [("dots", CGSize(width: size.width + 52, height: size.height))]
+        case .stripes: layers = [("stripes", CGSize(width: size.width + 40, height: size.height))]
+        case .hearts: layers = [("hearts", CGSize(width: size.width, height: size.height + 86.4))]
+        case .clouds: layers = [("clouds", CGSize(width: size.width + Self.cloudSpacing(size), height: size.height))]
+        case .stars: layers = [("stars-even", size), ("stars-odd", size)]
+        case .sprinkles: layers = [("sprinkles", CGSize(width: size.width + 64, height: size.height + 64))]
+        case .flowers: layers = [("flowers", CGSize(width: size.width + 90, height: size.height))]
+        case .bubbles: layers = [("bubbles", CGSize(width: size.width, height: size.height + 140))]
+        case .gingham: layers = [("gingham", CGSize(width: size.width + 36, height: size.height + 36))]
+        case .off: layers = []
+        }
+        var next: [String: UIImage] = [:]
+        for (name, full) in layers {
+            let paint = Self.painter(name, size, c)
+            let renderer = ImageRenderer(content: Canvas { ctx, s in paint(&ctx, s) }.frame(width: full.width, height: full.height))
+            renderer.scale = displayScale
+            renderer.isOpaque = false
+            if let image = renderer.uiImage { next[name] = image }
+        }
+        art = next
+        artSize = size
+    }
+
+    @ViewBuilder
+    private func sliding(_ name: String, dx: CGFloat, dy: CGFloat, duration: Double, size: CGSize, _ c: Colors) -> some View {
+        if moving, let image = art[name] {
+            LayerMover(image: image, dx: dx, dy: abs(dy), duration: duration)
+                .frame(width: size.width, height: size.height)
+        } else {
+            let paint = Self.painter(name, size, c)
+            Canvas { ctx, s in paint(&ctx, s) }
+                .frame(width: size.width + dx, height: size.height + abs(dy))
+        }
+    }
+
+    @ViewBuilder
+    private func twinkle(size: CGSize, _ c: Colors) -> some View {
+        if moving, let even = art["stars-even"], let odd = art["stars-odd"] {
+            ZStack {
+                LayerMover(image: even, duration: 1.6, fade: true, startFaded: false)
+                LayerMover(image: odd, duration: 1.6, fade: true, startFaded: true)
+            }
+            .frame(width: size.width, height: size.height)
+        } else {
+            let even = Self.painter("stars-even", size, c)
+            let odd = Self.painter("stars-odd", size, c)
+            ZStack {
+                Canvas { ctx, s in even(&ctx, s) }
+                Canvas { ctx, s in odd(&ctx, s) }.opacity(0.25)
+            }
+            .frame(width: size.width, height: size.height)
+        }
     }
 
     // Soft base: blush at the bottom (like the pictures), deep plum in dark mode.
@@ -190,11 +332,15 @@ struct PatternBackground: View {
             let radius = 5.2 + depth * 1.6
             var x: CGFloat = row % 2 == 0 ? 6 : 6 + gap / 2
             var path = Path()
+            var shine = Path()
             while x < size.width + gap {
                 path.addEllipse(in: CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2))
+                // A little candy shine on each dot.
+                shine.addEllipse(in: CGRect(x: x - radius * 0.62, y: y - radius * 0.66, width: radius * 0.6, height: radius * 0.46))
                 x += gap
             }
             context.fill(path, with: .color(tint.opacity(alpha)))
+            context.fill(shine, with: .color(.white.opacity(c.dark ? 0.1 : 0.6 * depth + 0.15)))
             y += gap * 0.86
             row += 1
         }
@@ -218,16 +364,119 @@ struct PatternBackground: View {
         var row = 0
         var y: CGFloat = 20
         var path = Path()
+        var shine = Path()
         while y < size.height + gap {
             var x: CGFloat = row % 2 == 0 ? 14 : 14 + gap / 2
+            // Every other row a little smaller (the pattern still repeats
+            // every two rows, so it loops smoothly).
+            let w: CGFloat = row % 2 == 0 ? 15 : 11
             while x < size.width + gap {
-                path.addPath(heartPath(CGRect(x: x - 7, y: y - 7, width: 14, height: 12.6)))
+                path.addPath(heartPath(CGRect(x: x - w / 2, y: y - w / 2, width: w, height: w * 0.9)))
+                shine.addEllipse(in: CGRect(x: x - w * 0.36, y: y - w * 0.36, width: w * 0.2, height: w * 0.16))
                 x += gap
             }
             y += gap * 0.8
             row += 1
         }
-        context.fill(path, with: .color(tint.opacity(c.dark ? 0.16 : 0.18)))
+        context.fill(path, with: .color(tint.opacity(c.dark ? 0.2 : 0.22)))
+        context.fill(shine, with: .color(.white.opacity(c.dark ? 0.12 : 0.6)))
+    }
+
+    // Candy sprinkles in six colours, sliding gently down and to the side.
+    private static func sprinkles(_ context: inout GraphicsContext, _ size: CGSize, _ c: Colors) {
+        let tile: CGFloat = 64
+        let colors: [Color] = [c.main, c.light, Color(hex: 0xFFB38A), Color(hex: 0xB19CFF), Color(hex: 0x7FD8BE), Color(hex: 0xFFD166)]
+        let spots: [(CGFloat, CGFloat, Double)] = [(10, 12, 30), (42, 9, -40), (25, 33, 70), (53, 41, 15), (9, 52, -60), (37, 57, 45)]
+        let alpha = c.dark ? 0.42 : 0.5
+        var y: CGFloat = -tile
+        while y < size.height + tile {
+            var x: CGFloat = -tile
+            while x < size.width + tile {
+                for (i, spot) in spots.enumerated() {
+                    var piece = context
+                    piece.translateBy(x: x + spot.0, y: y + spot.1)
+                    piece.rotate(by: .degrees(spot.2))
+                    let rect = CGRect(x: -6, y: -1.9, width: 12, height: 3.8)
+                    piece.fill(Path(roundedRect: rect, cornerRadius: 1.9), with: .color(colors[i % colors.count].opacity(alpha)))
+                }
+                x += tile
+            }
+            y += tile
+        }
+    }
+
+    // Little daisies drifting sideways.
+    private static func flowers(_ context: inout GraphicsContext, _ size: CGSize, _ c: Colors) {
+        let tile: CGFloat = 90
+        let tint = c.dark ? c.light : c.main
+        let center = Color(hex: 0xFFD166).opacity(c.dark ? 0.5 : 0.75)
+        var row = 0
+        var y: CGFloat = 22
+        while y < size.height + tile {
+            var x: CGFloat = row % 2 == 0 ? 22 : 22 + tile / 2
+            let radius: CGFloat = row % 2 == 0 ? 10 : 7.5
+            while x < size.width + tile {
+                flower(&context, CGPoint(x: x, y: y), radius: radius, petals: tint.opacity(c.dark ? 0.22 : 0.24), center: center)
+                x += tile
+            }
+            y += tile * 0.62
+            row += 1
+        }
+    }
+
+    private static func flower(_ context: inout GraphicsContext, _ p: CGPoint, radius r: CGFloat, petals: Color, center: Color) {
+        var path = Path()
+        for i in 0..<5 {
+            let angle = Double(i) / 5 * 2 * Double.pi - Double.pi / 2
+            let cx = p.x + CGFloat(cos(angle)) * r * 0.85
+            let cy = p.y + CGFloat(sin(angle)) * r * 0.85
+            path.addEllipse(in: CGRect(x: cx - r * 0.6, y: cy - r * 0.6, width: r * 1.2, height: r * 1.2))
+        }
+        context.fill(path, with: .color(petals))
+        context.fill(Path(ellipseIn: CGRect(x: p.x - r * 0.42, y: p.y - r * 0.42, width: r * 0.84, height: r * 0.84)), with: .color(center))
+    }
+
+    // Soap bubbles with a shine, floating up.
+    private static func bubbles(_ context: inout GraphicsContext, _ size: CGSize, _ c: Colors) {
+        let period: CGFloat = 140
+        let tint = c.dark ? c.light : c.main
+        var y: CGFloat = -period
+        while y < size.height + period {
+            var i = 0
+            var x: CGFloat = 16
+            while x < size.width + 24 {
+                let r = 5 + CGFloat(i * 37 % 11) / 11 * 10
+                let by = y + CGFloat(i * 53 % 17) / 17 * period
+                let rect = CGRect(x: x - r, y: by - r, width: r * 2, height: r * 2)
+                context.fill(Path(ellipseIn: rect), with: .color(tint.opacity(c.dark ? 0.08 : 0.07)))
+                context.stroke(Path(ellipseIn: rect), with: .color(tint.opacity(c.dark ? 0.32 : 0.3)), lineWidth: 1.4)
+                let s = r * 0.34
+                context.fill(Path(ellipseIn: CGRect(x: x - r * 0.5, y: by - r * 0.58, width: s, height: s * 0.8)), with: .color(.white.opacity(c.dark ? 0.3 : 0.8)))
+                x += 44
+                i += 1
+            }
+            y += period
+        }
+    }
+
+    // Soft picnic gingham, sliding slowly.
+    private static func gingham(_ context: inout GraphicsContext, _ size: CGSize, _ c: Colors) {
+        let cell: CGFloat = 18
+        let tint = (c.dark ? c.light : c.main).opacity(c.dark ? 0.07 : 0.085)
+        var columns = Path()
+        var x: CGFloat = 0
+        while x < size.width + cell * 2 {
+            columns.addRect(CGRect(x: x, y: 0, width: cell, height: size.height))
+            x += cell * 2
+        }
+        var rows = Path()
+        var y: CGFloat = 0
+        while y < size.height + cell * 2 {
+            rows.addRect(CGRect(x: 0, y: y, width: size.width, height: cell))
+            y += cell * 2
+        }
+        context.fill(columns, with: .color(tint))
+        context.fill(rows, with: .color(tint))
     }
 
     static func heartPath(_ r: CGRect) -> Path {
@@ -354,6 +603,13 @@ struct PatternBackground: View {
     }
 }
 
+// Previews already drawn this session, per look (dark mode + colours), so
+// opening Settings again shows them straight away.
+@MainActor
+private enum BackgroundPreviews {
+    static var drawn: [String: [AppBackground: UIImage]] = [:]
+}
+
 // The picker in Settings: small live previews of each background.
 struct BackgroundPicker: View {
     @AppStorage(AppBackground.storageKey) private var choice = AppBackground.dots.rawValue
@@ -369,7 +625,7 @@ struct BackgroundPicker: View {
                 HStack(spacing: 10) {
                     ForEach(AppBackground.allCases) { kind in
                         let on = choice == kind.rawValue
-                        Button { withAnimation(.snappy) { choice = kind.rawValue } } label: {
+                        Button { withMotion(Motion.standard) { choice = kind.rawValue } } label: {
                             VStack(spacing: 6) {
                                 ZStack {
                                     if kind == .off {
@@ -399,18 +655,115 @@ struct BackgroundPicker: View {
             }
             .tint(Theme.main)
         }
-        .task(id: "\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)") { drawPreviews() }
+        .task(id: previewKey) { await drawPreviews() }
     }
 
-    private func drawPreviews() {
+    private var previewKey: String { "\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)" }
+
+    // Drawing all of them at once, while Settings was still sliding open,
+    // made the page stutter. Now: reuse ones already drawn, otherwise wait
+    // until the page is open and draw one per frame, each fading in.
+    private func drawPreviews() async {
+        let key = previewKey
+        if let ready = BackgroundPreviews.drawn[key] { previews = ready; return }
+        previews = [:]
+        try? await Task.sleep(for: .milliseconds(450))
         var drawn: [AppBackground: UIImage] = [:]
         for kind in AppBackground.allCases where kind != .off {
+            guard !Task.isCancelled else { return }
             let renderer = ImageRenderer(content: PatternBackground(kind: kind, animated: false)
                 .frame(width: 74, height: 104)
                 .environment(\.colorScheme, scheme))
             renderer.scale = scale
             drawn[kind] = renderer.uiImage
+            withAnimation(.easeOut(duration: 0.2)) { previews = drawn }
+            try? await Task.sleep(for: .milliseconds(16))
         }
-        previews = drawn
+        BackgroundPreviews.drawn[key] = drawn
+    }
+}
+
+// A picture moved (or faded) by Core Animation on the graphics chip, so a
+// moving background costs nothing on the main thread.
+private struct LayerMover: UIViewRepresentable {
+    let image: UIImage
+    var dx: CGFloat = 0
+    var dy: CGFloat = 0
+    var duration: Double
+    var fade = false
+    var startFaded = false
+
+    func makeUIView(context: Context) -> MoverView { MoverView() }
+
+    func updateUIView(_ view: MoverView, context: Context) {
+        view.update(image: image, dx: dx, dy: dy, duration: duration, fade: fade, startFaded: startFaded)
+    }
+
+    final class MoverView: UIView {
+        private let content = CALayer()
+        private var image: UIImage?
+        private var dx: CGFloat = 0
+        private var dy: CGFloat = 0
+        private var duration: Double = 1
+        private var fade = false
+        private var startFaded = false
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            isUserInteractionEnabled = false
+            clipsToBounds = true
+            layer.addSublayer(content)
+        }
+
+        required init?(coder: NSCoder) { nil }
+
+        func update(image: UIImage, dx: CGFloat, dy: CGFloat, duration: Double, fade: Bool, startFaded: Bool) {
+            let changed = image !== self.image || dx != self.dx || dy != self.dy || duration != self.duration || fade != self.fade || startFaded != self.startFaded
+            guard changed else { return }
+            self.image = image
+            self.dx = dx
+            self.dy = dy
+            self.duration = duration
+            self.fade = fade
+            self.startFaded = startFaded
+            content.contents = image.cgImage
+            content.contentsScale = image.scale
+            setNeedsLayout()
+            restart()
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            content.frame = CGRect(x: 0, y: 0, width: bounds.width + dx, height: bounds.height + dy)
+            CATransaction.commit()
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            restart()
+        }
+
+        private func restart() {
+            content.removeAnimation(forKey: "move")
+            guard window != nil, image != nil else { return }
+            let animation: CABasicAnimation
+            if fade {
+                animation = CABasicAnimation(keyPath: "opacity")
+                animation.fromValue = startFaded ? 0.25 : 1.0
+                animation.toValue = startFaded ? 1.0 : 0.25
+                animation.autoreverses = true
+                animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            } else {
+                animation = CABasicAnimation(keyPath: "transform.translation")
+                animation.fromValue = NSValue(cgSize: .zero)
+                animation.toValue = NSValue(cgSize: CGSize(width: -dx, height: -dy))
+            }
+            animation.duration = duration
+            animation.repeatCount = .infinity
+            animation.isRemovedOnCompletion = false
+            content.add(animation, forKey: "move")
+        }
     }
 }

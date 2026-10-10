@@ -137,6 +137,33 @@ final class AuthClient {
         } catch let error as APIError { throw Self.friendly(error) }
     }
 
+    // A one-time pass from Sugerly's login server (email code, backup code,
+    // quick login), traded for a normal session.
+    func signIn(customToken: String, email: String?) async throws {
+        let body: [String: Any] = ["token": customToken, "returnSecureToken": true]
+        do {
+            let json = try await HTTP.json(Self.endpoint("signInWithCustomToken"), method: "POST", body: body) as? [String: Any] ?? [:]
+            guard let token = json["idToken"] as? String, let refresh = json["refreshToken"] as? String else {
+                throw APIError(message: "Couldn't sign in. Try again.")
+            }
+            let claims = Self.claims(token)
+            guard let uid = claims["user_id"] as? String ?? claims["sub"] as? String else { throw APIError(message: "Couldn't sign in. Try again.") }
+            store(idToken: token, refreshToken: refresh, expiresIn: json["expiresIn"] as? String, uid: uid,
+                  email: claims["email"] as? String ?? email)
+        } catch let error as APIError { throw Self.friendly(error) }
+    }
+
+    // What's written inside an ID token (who it's for).
+    static func claims(_ jwt: String) -> [String: Any] {
+        let parts = jwt.split(separator: ".")
+        guard parts.count > 1 else { return [:] }
+        var text = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        while text.count % 4 != 0 { text += "=" }
+        guard let data = Data(base64Encoded: text),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
+        return object
+    }
+
     func sendPasswordReset(email: String) async throws {
         let body: [String: Any] = ["requestType": "PASSWORD_RESET", "email": email.trimmingCharacters(in: .whitespaces).lowercased()]
         do { _ = try await HTTP.json(Self.endpoint("sendOobCode"), method: "POST", body: body) } catch let error as APIError { throw Self.friendly(error) }
