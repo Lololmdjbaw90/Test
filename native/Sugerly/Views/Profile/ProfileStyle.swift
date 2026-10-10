@@ -443,26 +443,37 @@ struct AvatarFramePicker: View {
                 Button {
                     if locked { onLocked() } else { withMotion(Motion.standard) { selection = item.id } }
                 } label: {
-                    VStack(spacing: 6) {
+                    VStack(spacing: 7) {
                         ZStack {
-                            Avatar(url: picture, name: name, size: 44, ring: item.id.isEmpty)
-                                .padding(3)
-                                .background(Palette.bg, in: Circle())
-                            if !item.id.isEmpty { AvatarFrameView(frame: item.id, color: tint, size: 44) }
+                            Circle()
+                                .fill(active ? tint.opacity(0.18) : Palette.surface)
+                                .overlay(Circle().strokeBorder(active ? tint.opacity(0.5) : Palette.border, lineWidth: active ? 1.5 : 1))
+                                .frame(width: 70, height: 70)
+                                .scaleEffect(active ? 1 : 0.94)
+                            Avatar(url: picture, name: name, size: 42, ring: item.id.isEmpty)
+                            if !item.id.isEmpty { AvatarFrameView(frame: item.id, color: tint, size: 42) }
                         }
-                        .frame(width: 64, height: 64)
-                        .background(active ? tint.opacity(0.12) : Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(active ? tint : Palette.border, lineWidth: active ? 2 : 1))
+                        .frame(width: 72, height: 72)
+                        .overlay(alignment: .bottomTrailing) {
+                            if active {
+                                Image(systemName: "checkmark").font(.system(size: 10, weight: .black)).foregroundStyle(.white)
+                                    .frame(width: 22, height: 22)
+                                    .background(tint, in: Circle())
+                                    .overlay(Circle().strokeBorder(Palette.bg, lineWidth: 2.5))
+                                    .transition(.pop)
+                            }
+                        }
                         .overlay(alignment: .topTrailing) {
                             if locked {
                                 Image(systemName: "lock.fill").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
-                                    .frame(width: 18, height: 18).background(NitroStyle.gradient, in: Circle())
-                                    .offset(x: 4, y: -4)
+                                    .frame(width: 22, height: 22).background(NitroStyle.gradient, in: Circle())
+                                    .overlay(Circle().strokeBorder(Palette.bg, lineWidth: 2.5))
                             }
                         }
-                        Text(item.label).font(.jakarta(11, active ? .heavy : .semibold)).foregroundStyle(active ? Palette.text : Palette.text2)
+                        Text(item.label).font(.jakarta(11, active ? .heavy : .semibold)).foregroundStyle(active ? tint : Palette.text2)
                             .lineLimit(1).minimumScaleFactor(0.8)
                     }
+                    .motion(Motion.playful, value: active)
                 }
                 .buttonStyle(BouncyStyle(scale: 0.95))
                 .accessibilityLabel(locked ? "\(item.label) frame, MimiPlus" : "\(item.label) frame")

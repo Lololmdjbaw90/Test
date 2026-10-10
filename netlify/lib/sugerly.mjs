@@ -372,6 +372,9 @@ export async function sendMail({ to, subject, html, text }) {
   let res;
   if (brevo) {
     if (!from) throw new Problem(503, "Email setup: add MAIL_FROM on Netlify (the sender email you verified in Brevo).");
+    if (brevo.startsWith("xsmtpsib-")) {
+      throw new Problem(503, "Email setup: BREVO_API_KEY on Netlify is Brevo's SMTP key. In Brevo → SMTP & API → API keys, make an API key (it starts with xkeysib-) and paste that instead.");
+    }
     res = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       headers: { "api-key": brevo, "Content-Type": "application/json", Accept: "application/json" },
@@ -388,8 +391,14 @@ export async function sendMail({ to, subject, html, text }) {
   }
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    if (res.status === 401) throw new Problem(503, "Email setup: the email service didn't accept the API key on Netlify.");
-    throw new Problem(502, `The email didn't send (${String(data.message || data.code || res.status).slice(0, 120)}).`);
+    const detail = String(data.message || data.code || "");
+    if (res.status === 401 || res.status === 403) {
+      if (/\bIP\b|ip address/i.test(detail)) {
+        throw new Problem(503, "Email setup: Brevo is blocking Netlify's address. In Brevo → Settings → Security → Authorised IPs, turn off blocking of unknown IP addresses.");
+      }
+      throw new Problem(503, `Email setup: the email service didn't accept the API key on Netlify${brevo ? " (it should start with xkeysib-)" : ""}. ${detail.slice(0, 80)}`.trim());
+    }
+    throw new Problem(502, `The email didn't send (${(detail || String(res.status)).slice(0, 120)}).`);
   }
 }
 

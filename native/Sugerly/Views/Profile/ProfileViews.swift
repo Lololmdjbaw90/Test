@@ -301,29 +301,30 @@ struct ProfileContent: View {
     }
 
     private var stats: some View {
-        HStack(spacing: 0) {
-            stat(posts.count, "POSTS")
-            divider
-            stat(totalLikes, "LIKES")
-            divider
-            stat(followers, "FOLLOWERS")
-            divider
-            stat(person.following.count, "FOLLOWING")
+        HStack(spacing: 8) {
+            stat(posts.count, "Posts", icon: "square.grid.2x2.fill")
+            stat(totalLikes, "Likes", icon: "heart.fill")
+            stat(followers, "Followers", icon: "person.2.fill")
+            stat(person.following.count, "Following", icon: "person.crop.circle.badge.checkmark")
         }
-        .padding(.vertical, 14)
-        .sugarCard(radius: 24)
     }
 
-    private var divider: some View { Rectangle().fill(Palette.border).frame(width: 1, height: 34) }
-
-    private func stat(_ n: Int, _ label: String) -> some View {
-        VStack(spacing: 3) {
-            Text("\(n)").font(.display(26)).foregroundStyle(Palette.text).monospacedDigit()
-            Text(label).font(.jakarta(10, .bold)).tracking(0.4).foregroundStyle(Palette.muted)
+    private func stat(_ n: Int, _ label: String, icon: String) -> some View {
+        VStack(spacing: 4) {
+            Image(systemName: icon).font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.main.opacity(0.8))
+            Text("\(n)").font(.display(24)).foregroundStyle(Palette.text).monospacedDigit()
+                .contentTransition(.numericText())
                 .lineLimit(1).minimumScaleFactor(0.6)
+            Text(label).font(.jakarta(11, .semibold)).foregroundStyle(Palette.muted)
+                .lineLimit(1).minimumScaleFactor(0.75)
         }
+        .padding(.vertical, 12)
         .padding(.horizontal, 4)
         .frame(maxWidth: .infinity)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+        .motion(Motion.standard, value: n)
+        .accessibilityElement(children: .combine)
     }
 
     private var tabs: some View {
