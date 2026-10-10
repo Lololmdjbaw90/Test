@@ -107,6 +107,10 @@ final class EditorPlayer {
     @ObservationIgnored let live = LiveLook()
     @ObservationIgnored private let seeker = PreviewSeeker()
     @ObservationIgnored private var observer: Any?
+    @ObservationIgnored private var endObserver: NSObjectProtocol?
+    // Jumping back to the start of the trim: one jump at a time (asking again
+    // 30 times a second while it was still on its way froze the picture).
+    @ObservationIgnored private var looping = false
     @ObservationIgnored private var music: AVPlayer?
     @ObservationIgnored private var slideTask: Task<Void, Never>?
     @ObservationIgnored private var resumeAfterScrub = false
@@ -143,6 +147,12 @@ final class EditorPlayer {
         item.videoComposition = composition
         av.replaceCurrentItem(with: item)
         av.defaultRate = Float(rate)
+        // At the very end the player keeps going and we loop it ourselves,
+        // instead of it stopping on the last frame.
+        av.actionAtItemEnd = .none
+        endObserver = NotificationCenter.default.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: item, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.loopToStart() }
+        }
         watch()
         seek(0, precise: true)
     }
@@ -161,6 +171,11 @@ final class EditorPlayer {
             av.removeTimeObserver(observer)
             self.observer = nil
         }
+        if let endObserver {
+            NotificationCenter.default.removeObserver(endObserver)
+            self.endObserver = nil
+        }
+        looping = false
         av.replaceCurrentItem(with: nil)
         isVideo = false
         scrubbing = false
@@ -336,6 +351,20 @@ final class EditorPlayer {
 
     // MARK: video clock
 
+    private func loopToStart() {
+        guard isVideo, !looping, !scrubbing, av.currentItem != nil else { return }
+        looping = true
+        time = 0
+        music?.seek(to: .zero, completionHandler: { _ in })
+        av.seek(to: CMTime(seconds: trimStart, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.looping = false
+                if self.playing { self.av.playImmediately(atRate: Float(self.rate)) }
+            }
+        }
+    }
+
     private var musicTime: Double { time / max(0.01, rate) }
 
     private func watch() {
@@ -346,14 +375,12 @@ final class EditorPlayer {
     }
 
     private func tick(_ seconds: Double) {
-        guard isVideo, !scrubbing, seconds.isFinite else { return }
+        guard isVideo, !scrubbing, !looping, seconds.isFinite else { return }
         let moving = av.rate != 0
         if moving != playing { playing = moving }
         // Loop back to the start of the trim.
-        if moving && (seconds >= trimEnd - 0.03 || seconds < trimStart - 0.25) {
-            av.seek(to: CMTime(seconds: trimStart, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
-            music?.seek(to: .zero)
-            time = 0
+        if moving && (seconds >= trimEnd - 0.05 || seconds < trimStart - 0.25) {
+            loopToStart()
             return
         }
         let t = min(max(0, seconds - trimStart), max(0, trimEnd - trimStart))
