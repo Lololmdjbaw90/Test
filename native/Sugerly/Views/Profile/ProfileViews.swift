@@ -1222,25 +1222,24 @@ struct SettingsView: View {
             .padding(.vertical, 4)
             VStack(alignment: .leading, spacing: 12) {
                 IconRow(title: "Colour", detail: "The logo and Mimi change colour to match.", icon: "drop.fill", colors: [0xF27BA3, 0xE8457C])
-                HStack(spacing: 0) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 6) {
                     ForEach(Accent.allCases) { accent in
                         let picked = model.accent == accent && model.myColors == nil
                         Button {
                             ownColours = false
                             Task { try? await model.updateMe(["accent": accent.rawValue, "accent_main": "", "accent_sub": ""]) }
                         } label: {
-                            swatch(accent.gradient, picked: picked, ring: accent.main)
+                            AccentCard(accent: accent, picked: picked, height: 84)
                         }
-                        .buttonStyle(BouncyStyle(scale: 0.86))
-                        .frame(maxWidth: .infinity)
+                        .buttonStyle(BouncyStyle(scale: 0.94))
+                        .sensoryFeedback(.selection, trigger: picked)
                         .accessibilityLabel(accent.label)
+                        .accessibilityAddTraits(picked ? .isSelected : [])
                     }
                     Button { withMotion(Motion.standard) { ownColours.toggle() } } label: {
-                        swatch(AngularGradient(colors: [Color(hex: 0xFF7AA2), Color(hex: 0xFFD166), Color(hex: 0x5FD3B0), Color(hex: 0x7CBEFF), Color(hex: 0xB19CFF), Color(hex: 0xFF7AA2)], center: .center),
-                               picked: model.myColors != nil, ring: Theme.main, icon: model.myColors == nil ? "plus" : nil)
+                        ownColourCard
                     }
-                    .buttonStyle(BouncyStyle(scale: 0.86))
-                    .frame(maxWidth: .infinity)
+                    .buttonStyle(BouncyStyle(scale: 0.94))
                     .accessibilityLabel("Your own colours")
                 }
                 if ownColours {
@@ -1363,19 +1362,21 @@ struct SettingsView: View {
         .onChange(of: isOn.wrappedValue) { _, on in TapSound.play(on ? .toggle : .toggleOff) }
     }
 
-    private func swatch<S: ShapeStyle>(_ fill: S, picked: Bool, ring: Color, icon: String? = nil) -> some View {
-        Circle().fill(fill)
-            .frame(width: 40, height: 40)
-            .overlay(Circle().strokeBorder(.white, lineWidth: picked ? 3 : 0))
-            .overlay {
-                if picked {
-                    Image(systemName: "checkmark").font(.system(size: 15, weight: .black)).foregroundStyle(.white)
-                } else if let icon {
-                    Image(systemName: icon).font(.system(size: 15, weight: .black)).foregroundStyle(.white)
-                }
+    // The last colour card: Mimi in your own colours once you've made them,
+    // a little paint palette before that.
+    private var ownColourCard: some View {
+        let own = model.myColors != nil
+        return AccentCard(title: "Your own", main: own ? Theme.main : Color(hex: 0xB19CFF),
+                          light: own ? Theme.light : Color(hex: 0xFFB3CB), picked: own, height: 84) {
+            if own {
+                AccentMimi(name: "MimiRose", picked: true).tintShift(Theme.tint)
+            } else {
+                Image(systemName: "paintpalette.fill")
+                    .font(.system(size: 30, weight: .bold))
+                    .foregroundStyle(AngularGradient(colors: [Color(hex: 0xFF7AA2), Color(hex: 0xFFD166), Color(hex: 0x5FD3B0), Color(hex: 0x7CBEFF), Color(hex: 0xB19CFF), Color(hex: 0xFF7AA2)], center: .center))
+                    .frame(maxHeight: .infinity)
             }
-            .overlay(Circle().strokeBorder(ring.opacity(picked ? 0.9 : 0), lineWidth: 2).padding(-4))
-            .padding(4)
+        }
     }
 
     private var statusLine: String {

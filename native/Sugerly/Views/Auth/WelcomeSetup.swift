@@ -301,26 +301,18 @@ struct WelcomeSetupView: View {
             .stagger(appeared, 1)
             VStack(alignment: .leading, spacing: 8) {
                 Text("Colour").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
-                HStack(spacing: 12) {
+                HStack(spacing: 8) {
                     ForEach(Accent.allCases) { a in
                         let on = accent == a
                         Button { pick(a) } label: {
-                            VStack(spacing: 6) {
-                                ZStack {
-                                    Circle().fill(a.gradient).frame(width: 48, height: 48)
-                                    if on { Image(systemName: "checkmark").font(.system(size: 17, weight: .heavy)).foregroundStyle(.white) }
-                                }
-                                .overlay(Circle().strokeBorder(on ? a.main : .clear, lineWidth: 2.5).padding(-5))
-                                .scaleEffect(on ? 1.08 : 1)
-                                Text(a.label).font(.jakarta(11, .bold)).foregroundStyle(on ? a.main : Palette.muted)
-                            }
-                            .frame(maxWidth: .infinity)
+                            AccentCard(accent: a, picked: on, height: 80)
                         }
-                        .buttonStyle(BouncyStyle(scale: 0.88))
+                        .buttonStyle(BouncyStyle(scale: 0.94))
                         .sensoryFeedback(.selection, trigger: on)
+                        .accessibilityLabel(a.label)
+                        .accessibilityAddTraits(on ? .isSelected : [])
                     }
                 }
-                .animation(.spring(response: 0.35, dampingFraction: 0.6), value: accent)
             }
             .stagger(appeared, 2)
             // A little preview card in the chosen look.
@@ -409,7 +401,9 @@ struct WelcomeSetupView: View {
                     .transition(.move(edge: .leading).combined(with: .opacity))
                 }
                 Button {
-                    if step == .friends { Task { await finish() } } else { go(1) }
+                    if step == .friends { Task { await finish() } }
+                    else if step == .you { Task { await nextFromYou() } }
+                    else { go(1) }
                 } label: {
                     HStack(spacing: 8) {
                         if saving { ProgressView().tint(.white) }
@@ -522,15 +516,51 @@ struct WelcomeSetupView: View {
         }
     }
 
+    // The name and bio are checked before moving on, so a blocked name
+    // shows up here and not as a dead Finish button at the end.
+    private func nextFromYou() async {
+        saving = true
+        defer { saving = false }
+        if await checkYou() { go(1) }
+    }
+
+    private func checkYou() async -> Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        let about = bio.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !Moderation.hasLink(about) else {
+            withMotion { error = "Links aren't allowed in your bio." }
+            return false
+        }
+        guard await TextGuard.clear([trimmed], kind: .name, model: model, cooldown: false),
+              await TextGuard.clear([about], kind: .profile, model: model, cooldown: false) else {
+            let reason = guardReason()
+            withMotion { error = reason }
+            return false
+        }
+        return true
+    }
+
+    // The word filter explains itself in a toast, but toasts sit behind this
+    // screen, so the reason is shown above the buttons instead.
+    private func guardReason() -> String {
+        let reason = model.toast.flatMap { $0.error ? $0.text : nil }
+        model.toast = nil
+        return reason ?? "That name or bio can't be used. Try something else."
+    }
+
     private func finish() async {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { error = "Pick a display name."; return }
         let about = bio.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !Moderation.hasLink(about) else { error = "Links aren't allowed in your bio."; return }
         saving = true
         defer { saving = false }
-        guard await TextGuard.clear([trimmed], kind: .name, model: model, cooldown: false),
-              await TextGuard.clear([about], kind: .profile, model: model, cooldown: false) else { return }
+        guard await checkYou() else {
+            // Back to the name page so it can be changed there.
+            let reason = error
+            go(Step.you.rawValue - step.rawValue)
+            error = reason
+            return
+        }
         do {
             var fields: Doc = [
                 "display_name": trimmed, "full_name": trimmed, "search_name": trimmed.lowercased(),
