@@ -1,19 +1,21 @@
 import SwiftUI
 
-// Dress up your avatar: skin colours per body part, then the shirts, pants,
-// faces, hats and back things you own. Drag the avatar to turn it around.
+// Dress up your avatar: a skin colour for each body part, then the shirts
+// and pants you own. Drag the avatar to turn it around.
 struct AvatarEditorView: View {
     var onSave: ((AvatarLook) -> Void)? = nil
     // In a sheet of its own, or a page pushed in the app (no extra top bar).
     var standalone = true
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.verticalSizeClass) private var verticalSize
     @State private var look = AvatarLook.starter
     @State private var tab: Tab = .body
     @State private var group: PartGroup = .all
-    @State private var made: [CatalogItem] = []
+    @State private var owned: [CatalogItem] = []
     @State private var saving = false
     @State private var shopping = false
+    @State private var making: CatalogItem.Kind?
     @State private var custom = Color(hex: 0xF6D2B8)
     @State private var error: String?
 
@@ -23,16 +25,13 @@ struct AvatarEditorView: View {
     }
 
     enum Tab: String, CaseIterable, Identifiable {
-        case body = "Body", shirt = "Shirts", pants = "Pants", face = "Faces", hat = "Hats", back = "Back"
+        case body = "Body", shirt = "Shirts", pants = "Pants"
         var id: String { rawValue }
         var kind: CatalogItem.Kind? {
             switch self {
             case .body: return nil
             case .shirt: return .shirt
             case .pants: return .pants
-            case .face: return .face
-            case .hat: return .hat
-            case .back: return .back
             }
         }
         var icon: String {
@@ -40,19 +39,9 @@ struct AvatarEditorView: View {
             case .body: return "figure.stand"
             case .shirt: return "tshirt.fill"
             case .pants: return "figure.walk"
-            case .face: return "face.smiling.inverse"
-            case .hat: return "crown.fill"
-            case .back: return "bag.fill"
             }
         }
-        var framing: AvatarStage.Framing {
-            switch self {
-            case .body, .pants: return .full
-            case .shirt: return .upper
-            case .face, .hat: return .head
-            case .back: return .back
-            }
-        }
+        var framing: AvatarStage.Framing { self == .shirt ? .upper : .full }
     }
 
     enum PartGroup: String, CaseIterable, Identifiable {
@@ -79,17 +68,28 @@ struct AvatarEditorView: View {
     }
 
     private var editor: some View {
-        VStack(spacing: 0) {
-            stage
-            tabBar
-            ScrollView {
-                Group {
-                    if let kind = tab.kind { itemsGrid(kind) } else { bodyColours }
+        Group {
+            // Sideways (in the game): the avatar on the left, choices on the right.
+            if verticalSize == .compact {
+                HStack(spacing: 0) {
+                    stage
+                        .frame(maxHeight: .infinity)
+                        .frame(width: 280)
+                        .padding(.vertical, 8)
+                    VStack(spacing: 0) {
+                        tabBar
+                        choices
+                    }
                 }
-                .padding(16)
-                .padding(.bottom, 20)
+            } else {
+                VStack(spacing: 0) {
+                    stage
+                        .frame(height: 290)
+                        .padding(.top, 6)
+                    tabBar
+                    choices
+                }
             }
-            .scrollIndicators(.hidden)
         }
         .background { Palette.bg.ignoresSafeArea() }
         .roundTitle("Avatar")
@@ -107,14 +107,26 @@ struct AvatarEditorView: View {
             }
         }
         .task { await load() }
-        .onChange(of: model.me?.avatarItems ?? []) { _, _ in Task { await loadMade() } }
+        .onChange(of: model.me?.avatarItems ?? []) { _, _ in Task { await loadOwned() } }
         .sheet(isPresented: $shopping) {
             NavigationStack { CatalogView() }
                 .presentationCornerRadius(30)
         }
+        .fullScreenCover(item: $making) { kind in ClothingStudioView(kind: kind) }
     }
 
     // MARK: pieces
+
+    private var choices: some View {
+        ScrollView {
+            Group {
+                if let kind = tab.kind { itemsGrid(kind) } else { bodyColours }
+            }
+            .padding(16)
+            .padding(.bottom, 20)
+        }
+        .scrollIndicators(.hidden)
+    }
 
     private var stage: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -130,35 +142,30 @@ struct AvatarEditorView: View {
             .accessibilityLabel("Undo changes")
             .padding(12)
         }
-        .frame(height: 290)
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
         .padding(.horizontal, 16)
-        .padding(.top, 6)
     }
 
     private var tabBar: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                ForEach(Tab.allCases) { t in
-                    let on = tab == t
-                    Button { withMotion(.spring(response: 0.3, dampingFraction: 0.8)) { tab = t } } label: {
-                        Label(t.rawValue, systemImage: t.icon)
-                            .font(.jakarta(14, .bold))
-                            .foregroundStyle(on ? .white : Palette.text2)
-                            .padding(.horizontal, 14).frame(height: 38)
-                            .background {
-                                if on { Capsule().fill(Theme.gradient) } else { Capsule().fill(Palette.surface) }
-                            }
-                            .overlay(Capsule().strokeBorder(on ? .clear : Palette.border, lineWidth: 1))
-                    }
-                    .buttonStyle(BouncyStyle(scale: 0.92))
-                    .sensoryFeedback(.selection, trigger: on)
+        HStack(spacing: 8) {
+            ForEach(Tab.allCases) { t in
+                let on = tab == t
+                Button { withMotion(.spring(response: 0.3, dampingFraction: 0.8)) { tab = t } } label: {
+                    Label(t.rawValue, systemImage: t.icon)
+                        .font(.jakarta(14, .bold))
+                        .foregroundStyle(on ? .white : Palette.text2)
+                        .frame(maxWidth: .infinity).frame(height: 40)
+                        .background {
+                            if on { Capsule().fill(Theme.gradient) } else { Capsule().fill(Palette.surface) }
+                        }
+                        .overlay(Capsule().strokeBorder(on ? .clear : Palette.border, lineWidth: 1))
                 }
+                .buttonStyle(BouncyStyle(scale: 0.94))
+                .sensoryFeedback(.selection, trigger: on)
             }
-            .padding(.horizontal, 16)
         }
-        .scrollIndicators(.hidden)
+        .padding(.horizontal, 16)
         .padding(.vertical, 12)
     }
 
@@ -190,7 +197,7 @@ struct AvatarEditorView: View {
                             .overlay {
                                 if on {
                                     Image(systemName: "checkmark").font(.system(size: 15, weight: .black))
-                                        .foregroundStyle(hex == 0xFFFFFF || hex > 0xE0E0E0 ? Palette.text : .white)
+                                        .foregroundStyle(hex > 0xE0E0E0 ? Palette.text : .white)
                                 }
                             }
                             .overlay(Circle().strokeBorder(on ? Theme.main : .clear, lineWidth: 2.5).padding(-4))
@@ -211,23 +218,14 @@ struct AvatarEditorView: View {
     }
 
     private func itemsGrid(_ kind: CatalogItem.Kind) -> some View {
-        let list = items(kind)
+        let list = owned.filter { $0.kind == kind }
+        let none = kind == .shirt ? look.shirt.isEmpty : look.pants.isEmpty
         return VStack(alignment: .leading, spacing: 12) {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                if kind != .face {
-                    let none = isNone(kind)
-                    Button { takeOff(kind) } label: {
-                        VStack(spacing: 6) {
-                            Image(systemName: "circle.slash").font(.system(size: 26, weight: .semibold))
-                                .foregroundStyle(Palette.muted)
-                                .frame(maxWidth: .infinity).aspectRatio(1, contentMode: .fit)
-                                .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(none ? Theme.main : Palette.border, lineWidth: none ? 2.5 : 1))
-                            Text("None").font(.jakarta(12, .bold)).foregroundStyle(Palette.text2)
-                        }
-                    }
-                    .buttonStyle(BouncyStyle(scale: 0.93))
+                Button { takeOff(kind) } label: {
+                    tileShape(icon: "circle.slash", title: "None", on: none, tint: false)
                 }
+                .buttonStyle(BouncyStyle(scale: 0.93))
                 ForEach(list) { item in
                     let on = CatalogShop.wearing(item, look)
                     Button { withMotion(.spring(response: 0.3, dampingFraction: 0.75)) { look = AvatarSnapshot.look(trying: item, on: look) } } label: {
@@ -236,16 +234,17 @@ struct AvatarEditorView: View {
                     .buttonStyle(BouncyStyle(scale: 0.93))
                 }
                 Button { shopping = true } label: {
-                    VStack(spacing: 6) {
-                        Image(systemName: "bag.fill.badge.plus").font(.system(size: 26, weight: .semibold))
-                            .foregroundStyle(Theme.gradient)
-                            .frame(maxWidth: .infinity).aspectRatio(1, contentMode: .fit)
-                            .background(Theme.soft, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.main.opacity(0.35), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])))
-                        Text("Get more").font(.jakarta(12, .bold)).foregroundStyle(Theme.main)
-                    }
+                    tileShape(icon: "bag.fill", title: "Shop", on: false, tint: true)
                 }
                 .buttonStyle(BouncyStyle(scale: 0.93))
+                Button { making = kind } label: {
+                    tileShape(icon: "square.and.arrow.up.fill", title: "Upload", on: false, tint: true)
+                }
+                .buttonStyle(BouncyStyle(scale: 0.93))
+            }
+            if list.isEmpty {
+                Text("You don't have any \(kind == .shirt ? "shirts" : "pants") yet. Find some in the shop, or upload your own from a template.")
+                    .font(.jakarta(13)).foregroundStyle(Palette.muted)
             }
             if let error {
                 Text(error).font(.jakarta(13, .semibold)).foregroundStyle(Palette.danger)
@@ -253,33 +252,25 @@ struct AvatarEditorView: View {
         }
     }
 
-    // MARK: actions
-
-    private func items(_ kind: CatalogItem.Kind) -> [CatalogItem] {
-        guard let me = model.me else { return [] }
-        let own = CatalogItem.builtIns.filter { $0.kind == kind && CatalogShop.owns($0, me) }
-        return own + made.filter { $0.kind == kind }
-    }
-
-    private func isNone(_ kind: CatalogItem.Kind) -> Bool {
-        switch kind {
-        case .shirt: return look.shirt.isEmpty
-        case .pants: return look.pants.isEmpty
-        case .hat: return look.hat.isEmpty
-        case .back: return look.extra.isEmpty
-        case .face: return false
+    private func tileShape(icon: String, title: String, on: Bool, tint: Bool) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon).font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(tint ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.muted))
+                .frame(maxWidth: .infinity).aspectRatio(1, contentMode: .fit)
+                .background(tint ? Theme.soft : Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(on ? Theme.main : (tint ? Theme.main.opacity(0.35) : Palette.border),
+                                  style: StrokeStyle(lineWidth: on ? 2.5 : 1.5, dash: tint ? [5, 4] : [])))
+            Text(title).font(.jakarta(12, .bold)).foregroundStyle(tint ? Theme.main : Palette.text2)
         }
+        .padding(.top, 5)
     }
+
+    // MARK: actions
 
     private func takeOff(_ kind: CatalogItem.Kind) {
         withMotion(.spring(response: 0.3, dampingFraction: 0.75)) {
-            switch kind {
-            case .shirt: look.shirt = ""; look.shirtURL = ""
-            case .pants: look.pants = ""; look.pantsURL = ""
-            case .hat: look.hat = ""
-            case .back: look.extra = ""
-            case .face: break
-            }
+            if kind == .shirt { look.shirt = ""; look.shirtURL = "" } else { look.pants = ""; look.pantsURL = "" }
         }
     }
 
@@ -298,12 +289,12 @@ struct AvatarEditorView: View {
 
     private func load() async {
         look = model.me?.avatar ?? .starter
-        await loadMade()
+        await loadOwned()
     }
 
-    private func loadMade() async {
+    private func loadOwned() async {
         guard let me = model.me else { return }
-        made = await CatalogShop.ownedMade(me)
+        owned = await CatalogShop.owned(me)
     }
 
     private func save() async {

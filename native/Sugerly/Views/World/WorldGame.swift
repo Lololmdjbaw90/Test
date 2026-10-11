@@ -19,6 +19,7 @@ final class WorldGame: NSObject {
     var onBounce: (() -> Void)?
     var onTapPlayer: ((String) -> Void)?
     var onChatLine: ((String, String) -> Void)?
+    var onJoined: ((WorldNet.Player) -> Void)?
 
     // Feel: speeds and gravity in body units per second.
     private let walkSpeed: Float = 16
@@ -82,6 +83,11 @@ final class WorldGame: NSObject {
         net.onPose = { [weak self] id, pose in self?.gotPose(id, pose) }
         net.onLook = { [weak self] id, look in self?.remote(id).avatar.apply(look) }
         net.onLeave = { [weak self] id in self?.removeRemote(id) }
+        net.onEmote = { [weak self] id, name in
+            guard let self, let emote = Avatar3D.Emote(rawValue: name) else { return }
+            self.remote(id).avatar.play(emote)
+        }
+        net.onJoin = { [weak self] player in self?.onJoined?(player) }
         net.onChat = { [weak self] id, text in
             self?.say(text, from: id)
             self?.onChatLine?(id, text)
@@ -108,6 +114,12 @@ final class WorldGame: NSObject {
     }
 
     func jump() { jumpAt = CACurrentMediaTime() }
+
+    // Wave, dance, cheer or sit (everyone sees it); walking stops it.
+    func emote(_ e: Avatar3D.Emote) {
+        me.play(e)
+        net.emote(e.rawValue)
+    }
 
     func turnCamera(dx: Float, dy: Float) {
         camYaw -= dx * 0.008
@@ -372,9 +384,10 @@ final class WorldGame: NSObject {
         view.rendersContinuously = true
         view.isMultipleTouchEnabled = true
         view.backgroundColor = UIColor(hex: 0xFFE3F0)
+        view.hideGraphicsHUD()
 
         let camera = SCNCamera()
-        camera.fieldOfView = 62
+        camera.fieldOfView = 60
         camera.zNear = 0.3
         camera.zFar = 600
         cameraNode.camera = camera

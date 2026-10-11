@@ -280,11 +280,11 @@ struct AppRelease: Identifiable {
 enum AppReleases {
     static let native: [AppRelease] = [
         AppRelease(id: "ios-2.3", icon: "gamecontroller.fill", title: "Sugar World", date: "2026-10-11T12:00:00Z", items: [
-            "Sugar World: a 3D candy plaza to play in with other people, live. Walk with the stick, jump, chat with bubbles over your heads.",
-            "Bounce on trampolines up to the cloud island, knock over balls and blocks, and climb the candy tower for a daily star (+15 coins).",
-            "Your own 3D avatar: pick skin colours for every body part, a face, hats and back things.",
-            "The Catalog: shirts, pants and accessories to buy with coins.",
-            "Make your own clothes: paint a shirt or pants on the template (brushes, fill, your own pictures), see it on your avatar, and sell it. You get 70% of every sale.",
+            "Sugar World: a 3D candy plaza to play in with other people, live. It turns sideways like a real game.",
+            "Touch the left side to walk, tap the big button to jump, wave, dance, cheer or sit, and chat with bubbles over your heads.",
+            "Friends playing: see who you follow is in Sugar World right now and tap Join to land in their room.",
+            "Your own 3D avatar with a skin colour for every body part.",
+            "Clothes made by people: download the shirt or pants template, draw it in any app, upload it and sell it for coins. Makers get 70% of every sale.",
         ]),
         AppRelease(id: "ios-2.2", icon: "key.horizontal.fill", title: "New ways to log in", date: "2026-10-10T12:00:00Z", items: [
             "Log in with a code sent to your email, no password needed. Forgot your password? Get a code and pick a new one right in the app.",

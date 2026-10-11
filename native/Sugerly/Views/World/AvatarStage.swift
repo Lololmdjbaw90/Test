@@ -1,15 +1,24 @@
 import SwiftUI
 import SceneKit
 import Metal
+import QuartzCore
+
+extension SCNView {
+    // iPhone's developer "Graphics HUD" (the black box with FPS and memory)
+    // stays off over Sugerly's 3D views.
+    func hideGraphicsHUD() {
+        (layer as? CAMetalLayer)?.developerHUDProperties = ["mode": "disabled", "logging": "disabled"]
+    }
+}
 
 // A little 3D stage with an avatar on a turntable: drag sideways to turn it.
 struct AvatarStage: UIViewRepresentable {
-    enum Framing { case full, upper, head, back }
+    enum Framing { case full, upper }
 
     var look: AvatarLook
     var spin = false
     var framing: Framing = .full
-    // The clothes studio shows what you're painting before it's saved.
+    // The clothes upload shows a picture before it's saved.
     var shirtImage: UIImage? = nil
     var pantsImage: UIImage? = nil
 
@@ -24,6 +33,7 @@ struct AvatarStage: UIViewRepresentable {
         view.antialiasingMode = .multisampling4X
         view.isPlaying = true
         view.rendersContinuously = false
+        view.hideGraphicsHUD()
         let pan = UIPanGestureRecognizer(target: c, action: #selector(Coordinator.panned(_:)))
         view.addGestureRecognizer(pan)
         c.update(look, shirt: shirtImage, pants: pantsImage)
@@ -62,10 +72,11 @@ struct AvatarStage: UIViewRepresentable {
             scene.rootNode.addChildNode(camera)
             avatar.rest()
             turntable.addChildNode(avatar.root)
+            turntable.eulerAngles.y = -0.35
             scene.rootNode.addChildNode(turntable)
             let floor = SCNNode(geometry: SCNCylinder(radius: 2.2, height: 0.12))
             let m = SCNMaterial()
-            m.diffuse.contents = UIColor(hex: 0xFFFFFF).withAlphaComponent(0.65)
+            m.diffuse.contents = UIColor.white.withAlphaComponent(0.65)
             m.lightingModel = .constant
             floor.geometry?.materials = [m]
             floor.position = SCNVector3(0, -0.06, 0)
@@ -82,9 +93,12 @@ struct AvatarStage: UIViewRepresentable {
 
         func frame(_ f: Framing) {
             guard f != framing else { return }
+            let first = framing == nil
             framing = f
+            SCNTransaction.begin()
+            SCNTransaction.animationDuration = first ? 0 : 0.45
             AvatarSnapshot.aim(camera, f)
-            if f == .back { turntable.eulerAngles.y = .pi } else if !spinning { turntable.eulerAngles.y = -0.35 }
+            SCNTransaction.commit()
         }
 
         func setSpin(_ on: Bool) {
@@ -114,14 +128,6 @@ enum AvatarSnapshot {
     private static let turntable = SCNNode()
     private static var avatar: Avatar3D?
 
-    static let mannequin: AvatarLook = {
-        var look = AvatarLook()
-        look.shirt = ""
-        look.pants = ""
-        look.face = "cute"
-        return look
-    }()
-
     static func light(_ scene: SCNScene) {
         let ambient = SCNNode()
         ambient.light = SCNLight()
@@ -145,36 +151,22 @@ enum AvatarSnapshot {
 
     static func aim(_ camera: SCNNode, _ f: AvatarStage.Framing) {
         switch f {
-        case .full, .back:
+        case .full:
             camera.position = SCNVector3(0, 2.75, 13.5)
             camera.look(at: SCNVector3(0, 2.6, 0))
         case .upper:
             camera.position = SCNVector3(0, 3.4, 9)
             camera.look(at: SCNVector3(0, 3.25, 0))
-        case .head:
-            camera.position = SCNVector3(0, 4.95, 5.6)
-            camera.look(at: SCNVector3(0, 4.7, 0))
         }
     }
 
-    // How an item is shown: on a plain body, from the side that shows it best.
-    static func framing(for kind: CatalogItem.Kind) -> AvatarStage.Framing {
-        switch kind {
-        case .shirt: return .upper
-        case .pants: return .full
-        case .hat, .face: return .head
-        case .back: return .back
-        }
-    }
+    static func framing(for kind: CatalogItem.Kind) -> AvatarStage.Framing { kind == .shirt ? .upper : .full }
 
     static func look(trying item: CatalogItem, on base: AvatarLook) -> AvatarLook {
         var look = base
         switch item.kind {
         case .shirt: look.shirt = item.id; look.shirtURL = item.imageURL
         case .pants: look.pants = item.id; look.pantsURL = item.imageURL
-        case .face: look.face = item.lookValue
-        case .hat: look.hat = item.id
-        case .back: look.extra = item.id
         }
         return look
     }
@@ -184,11 +176,10 @@ enum AvatarSnapshot {
     // A square picture of the item on a plain body.
     static func image(for item: CatalogItem, side: CGFloat = 300) async -> UIImage? {
         if let hit = cache[item.id] { return hit }
-        let dressed = Self.look(trying: item, on: mannequin)
-        let shirt = await ClothStore.image(id: dressed.shirt, url: dressed.shirtURL)
-        let pants = await ClothStore.image(id: dressed.pants, url: dressed.pantsURL)
-        if item.kind.paintable && (item.kind == .shirt ? shirt : pants) == nil { return nil }
-        let image = render(dressed, shirt: shirt, pants: pants, framing: Self.framing(for: item.kind), side: side)
+        guard let picture = await ClothStore.image(url: item.imageURL) else { return nil }
+        let dressed = Self.look(trying: item, on: .starter)
+        let image = render(dressed, shirt: item.kind == .shirt ? picture : nil, pants: item.kind == .pants ? picture : nil,
+                           framing: Self.framing(for: item.kind), side: side)
         cache[item.id] = image
         return image
     }
@@ -208,10 +199,10 @@ enum AvatarSnapshot {
             renderer.scene = scene
             renderer.pointOfView = camera
         }
-        // Clothes go on right away (no download): both pictures are given.
-        avatar?.apply(look, shirtImage: shirt ?? UIImage(), pantsImage: pants ?? UIImage())
+        // Clothes go on right away (no download).
+        avatar?.apply(look, shirtImage: shirt, pantsImage: pants, wait: true)
         aim(camera, framing)
-        turntable.eulerAngles.y = framing == .back ? .pi * 0.85 : -0.3
+        turntable.eulerAngles.y = -0.3
         return renderer.snapshot(atTime: 0, with: CGSize(width: side, height: side), antialiasingMode: .multisampling4X)
     }
 }
@@ -222,19 +213,12 @@ enum CatalogShop {
     static let creatorShare = 0.7
 
     static func owns(_ item: CatalogItem, _ me: UserProfile) -> Bool {
-        if item.builtIn && item.price == 0 { return true }
         if me.avatarItems.contains(item.id) { return true }
         return !item.creatorEmail.isEmpty && item.creatorEmail == me.email
     }
 
     static func wearing(_ item: CatalogItem, _ look: AvatarLook) -> Bool {
-        switch item.kind {
-        case .shirt: return look.shirt == item.id
-        case .pants: return look.pants == item.id
-        case .face: return look.face == item.lookValue
-        case .hat: return look.hat == item.id
-        case .back: return look.extra == item.id
-        }
+        item.kind == .shirt ? look.shirt == item.id : look.pants == item.id
     }
 
     // Pays and adds it to what you own; the maker's share waits for them.
@@ -247,7 +231,6 @@ enum CatalogShop {
         var fields: Doc = ["avatar_items": me.avatarItems + [item.id]]
         if item.price > 0 { fields["coins"] = me.coins - item.price }
         try await model.updateMe(fields)
-        guard !item.builtIn else { return }
         try? await FS.change("CatalogItem", item.id, [.increment("sales", 1)])
         if item.price > 0, !item.creatorEmail.isEmpty, item.creatorEmail != me.email {
             let payout = Int((Double(item.price) * creatorShare).rounded(.down))
@@ -285,12 +268,13 @@ enum CatalogShop {
         return total
     }
 
-    // The people-made things you own (their pictures live on their records).
-    static func ownedMade(_ me: UserProfile) async -> [CatalogItem] {
+    // The clothes you own (their pictures live on their records).
+    static func owned(_ me: UserProfile) async -> [CatalogItem] {
         let ids = me.avatarItems.filter { !$0.contains(":") }
         guard !ids.isEmpty else { return [] }
         var out: [CatalogItem] = []
-        for chunk in stride(from: 0, to: ids.count, by: 100).map({ Array(ids[$0..<min($0 + 100, ids.count)]) }) {
+        for start in stride(from: 0, to: ids.count, by: 100) {
+            let chunk = Array(ids[start..<min(start + 100, ids.count)])
             let docs = (try? await FS.getMany("CatalogItem", chunk)) ?? [:]
             out += chunk.compactMap { id in docs[id].flatMap { CatalogItem($0) } }
         }

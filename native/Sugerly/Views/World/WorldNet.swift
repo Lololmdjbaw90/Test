@@ -39,6 +39,8 @@ final class WorldNet: NSObject {
     @ObservationIgnored var onChat: ((String, String) -> Void)?
     @ObservationIgnored var onLook: ((String, AvatarLook) -> Void)?
     @ObservationIgnored var onLeave: ((String) -> Void)?
+    @ObservationIgnored var onJoin: ((Player) -> Void)?
+    @ObservationIgnored var onEmote: ((String, String) -> Void)?
 
     @ObservationIgnored private var selfId = ""
     @ObservationIgnored private var email = ""
@@ -78,7 +80,8 @@ final class WorldNet: NSObject {
 
     // MARK: join / leave
 
-    func join(me: UserProfile, look: AvatarLook) async {
+    // `prefer`: a friend's room to join, if it still has space.
+    func join(me: UserProfile, look: AvatarLook, prefer: String? = nil) async {
         guard room.isEmpty else { return }
         selfId = "w_" + UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(10).lowercased()
         email = me.email
@@ -92,7 +95,7 @@ final class WorldNet: NSObject {
             factory = RTCPeerConnectionFactory()
         }
         await loadRelays()
-        room = await pickRoom()
+        room = await pickRoom(prefer: prefer)
         do {
             let doc = try await FS.create("WorldPresence", presenceDoc())
             presenceId = doc.str("id")
@@ -120,13 +123,16 @@ final class WorldNet: NSObject {
     }
 
     // The first room with space; a new one when they're all full.
-    private func pickRoom() async -> String {
+    private func pickRoom(prefer: String?) async -> String {
         let now = Date().timeIntervalSince1970 * 1000
         let docs = (try? await FS.query("WorldPresence", [.equals("world", Self.world)], limit: 400)) ?? []
         var counts: [Int: Int] = [:]
         for d in docs where now - (ReelText.num(d["last_active"]) ?? 0) < 35_000 {
             let number = Int(d.str("room").split(separator: "-").last ?? "") ?? 1
             counts[number, default: 0] += 1
+        }
+        if let prefer, let number = Int(prefer.split(separator: "-").last ?? ""), (counts[number] ?? 0) < Self.roomSize {
+            return "\(Self.world)-\(number)"
         }
         var n = 1
         while (counts[n] ?? 0) >= Self.roomSize { n += 1 }
@@ -168,6 +174,10 @@ final class WorldNet: NSObject {
 
     func chat(_ text: String) {
         broadcast(["t": "chat", "m": String(text.prefix(140))], fast: false)
+    }
+
+    func emote(_ name: String) {
+        broadcast(["t": "emote", "e": name], fast: false)
     }
 
     private func broadcast(_ msg: [String: Any], fast: Bool) {
@@ -222,6 +232,7 @@ final class WorldNet: NSObject {
             // Someone you blocked (or the same account on another phone) isn't shown.
             guard !blocked.contains(who), who != email else { continue }
             seen.insert(peer)
+            let isNew = players[peer] == nil
             var player = players[peer] ?? Player(id: peer, email: who, name: d.str("name"), picture: d.str("picture"), look: AvatarLook(json: d.str("look")))
             let newLook = AvatarLook(json: d.str("look"))
             if player.look != newLook {
@@ -231,6 +242,7 @@ final class WorldNet: NSObject {
             player.name = d.str("name")
             player.picture = d.str("picture")
             players[peer] = player
+            if isNew { onJoin?(player) }
             let link = links[peer] ?? Link(id: peer, email: who)
             links[peer] = link
             // The lower id starts the connection.
@@ -432,6 +444,8 @@ final class WorldNet: NSObject {
         case "chat":
             let text = (msg["m"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if !text.isEmpty { onChat?(id, String(text.prefix(140))) }
+        case "emote":
+            if let name = msg["e"] as? String { onEmote?(id, name) }
         case "look", "hi":
             if let json = msg["l"] as? String {
                 let next = AvatarLook(json: json)

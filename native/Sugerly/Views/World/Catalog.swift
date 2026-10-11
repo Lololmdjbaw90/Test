@@ -1,8 +1,7 @@
 import SwiftUI
 
-// The avatar shop: Sugerly's own clothes and accessories, plus shirts and
-// pants people paint themselves. Everything costs in-app coins; makers get
-// 70% of each sale.
+// The avatar shop: shirts and pants people make from the template and
+// upload. Everything costs in-app coins; makers get 70% of each sale.
 struct CatalogView: View {
     @Environment(AppModel.self) private var model
     @State private var filter: Filter = .all
@@ -14,15 +13,12 @@ struct CatalogView: View {
     @State private var search = ""
 
     enum Filter: String, CaseIterable, Identifiable {
-        case all = "All", shirt = "Shirts", pants = "Pants", hat = "Hats", back = "Back", face = "Faces", mine = "Made by me"
+        case all = "All", shirt = "Shirts", pants = "Pants", mine = "Made by me"
         var id: String { rawValue }
         var kind: CatalogItem.Kind? {
             switch self {
             case .shirt: return .shirt
             case .pants: return .pants
-            case .hat: return .hat
-            case .back: return .back
-            case .face: return .face
             default: return nil
             }
         }
@@ -33,16 +29,12 @@ struct CatalogView: View {
         var id: String { rawValue }
     }
 
-    private var showsMade: Bool { filter == .all || filter == .shirt || filter == .pants || filter == .mine }
-    private var showsOwn: Bool { filter != .mine }
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 header
                 chips
-                if showsMade { madeSection }
-                if showsOwn { ownSection }
+                madeSection
             }
             .padding(.horizontal, 16)
             .padding(.top, 6)
@@ -84,10 +76,10 @@ struct CatalogView: View {
             .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
             Spacer(minLength: 0)
             Menu {
-                Button { creating = .shirt } label: { Label("Make a shirt", systemImage: "tshirt.fill") }
-                Button { creating = .pants } label: { Label("Make pants", systemImage: "figure.walk") }
+                Button { creating = .shirt } label: { Label("Upload a shirt", systemImage: "tshirt.fill") }
+                Button { creating = .pants } label: { Label("Upload pants", systemImage: "figure.walk") }
             } label: {
-                Label("Create", systemImage: "paintbrush.pointed.fill")
+                Label("Upload", systemImage: "square.and.arrow.up.fill")
                     .font(.jakarta(15, .heavy))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 16).frame(height: 42)
@@ -121,7 +113,7 @@ struct CatalogView: View {
         let list = madeShown
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(filter == .mine ? "Your creations" : "Made by artists").font(.display(24)).foregroundStyle(Palette.text)
+                Text(filter == .mine ? "Your uploads" : "Made by artists").font(.display(24)).foregroundStyle(Palette.text)
                 Spacer()
                 if filter != .mine {
                     Picker("Sort", selection: $sort) {
@@ -135,22 +127,12 @@ struct CatalogView: View {
                 HStack { Spacer(); SugarLoader(size: 12); Spacer() }.padding(.vertical, 30)
             } else if list.isEmpty {
                 EmptyCard(icon: "tshirt.fill",
-                          title: filter == .mine ? "Nothing made yet" : "No clothes yet",
-                          text: "Paint a shirt or pants on the template and sell it for coins.",
-                          actionTitle: "Make a shirt", action: { creating = .shirt }, compact: true)
+                          title: filter == .mine ? "Nothing uploaded yet" : "No clothes yet",
+                          text: "Download the template, draw your shirt or pants in any app, then upload it and sell it for coins.",
+                          actionTitle: "Upload clothes", action: { creating = filter == .pants ? CatalogItem.Kind.pants : CatalogItem.Kind.shirt }, compact: true)
             } else {
                 grid(list)
             }
-        }
-    }
-
-    private var ownSection: some View {
-        let list = CatalogItem.builtIns.filter { item in
-            (filter.kind == nil || item.kind == filter.kind) && matches(item)
-        }
-        return VStack(alignment: .leading, spacing: 12) {
-            Text("From Sugerly").font(.display(24)).foregroundStyle(Palette.text)
-            grid(list)
         }
     }
 
@@ -177,12 +159,12 @@ struct CatalogView: View {
     }
 
     private func load() async {
-        guard showsMade, let me = model.me else { return }
+        guard let me = model.me else { return }
         loading = true
         defer { loading = false }
         var filters: [FS.Filter] = []
         if filter == .mine { filters.append(.equals("creator_email", me.email)) }
-        if let kind = filter.kind, kind.paintable { filters.append(.equals("kind", kind.rawValue)) }
+        if let kind = filter.kind { filters.append(.equals("kind", kind.rawValue)) }
         let order = sort == .popular && filter != .mine ? "sales" : "created_date"
         let docs = (try? await FS.query("CatalogItem", filters, orderBy: order, limit: 80)) ?? []
         var list = docs.compactMap { CatalogItem($0) }
@@ -221,7 +203,7 @@ struct CatalogCard: View {
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.name).font(.jakarta(14, .heavy)).foregroundStyle(Palette.text).lineLimit(1)
-                Text(item.creatorName.isEmpty ? "Sugerly" : "by \(item.creatorName)")
+                Text("by \(item.creatorName.isEmpty ? "an artist" : item.creatorName)")
                     .font(.jakarta(12, .medium)).foregroundStyle(Palette.muted).lineLimit(1)
                 HStack(spacing: 5) {
                     if item.price == 0 {
@@ -272,8 +254,7 @@ struct CatalogItemSheet: View {
             VStack(spacing: 16) {
                 ZStack {
                     LinearGradient(colors: [Theme.light.opacity(0.4), Palette.surface], startPoint: .top, endPoint: .bottom)
-                    AvatarStage(look: AvatarSnapshot.look(trying: item, on: me?.avatar ?? .starter),
-                                framing: AvatarSnapshot.framing(for: item.kind) == .back ? .back : .full)
+                    AvatarStage(look: AvatarSnapshot.look(trying: item, on: me?.avatar ?? .starter), framing: .full)
                     ConfettiBurst(trigger: burst).allowsHitTesting(false)
                 }
                 .frame(height: 340)
@@ -287,7 +268,7 @@ struct CatalogItemSheet: View {
 
                 VStack(spacing: 6) {
                     Text(item.name).font(.display(30)).foregroundStyle(Palette.text).multilineTextAlignment(.center)
-                    Text(item.creatorName.isEmpty ? "by Sugerly" : "by \(item.creatorName)")
+                    Text("by \(item.creatorName.isEmpty ? "an artist" : item.creatorName)")
                         .font(.jakarta(14, .semibold)).foregroundStyle(Palette.muted)
                     if item.sales > 0 {
                         Text("\(item.sales) sold").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
@@ -330,20 +311,18 @@ struct CatalogItemSheet: View {
                     }
                 }
 
-                if !item.builtIn {
-                    HStack(spacing: 10) {
-                        if !mine {
-                            Button {
-                                reporting = ReportSheet.Target(id: item.id, type: "catalog item", ownerEmail: item.creatorEmail,
-                                                               preview: item.name, link: "/Catalog?item=\(item.id)",
-                                                               collection: "CatalogItem", media: item.imageURL)
-                            } label: { Label("Report", systemImage: "flag.fill") }
-                                .buttonStyle(OutlineButtonStyle(height: 44, fullWidth: true))
-                        }
-                        if mine || me?.isAdmin == true {
-                            Button(role: .destructive) { removing = true } label: { Label(mine ? "Stop selling" : "Remove", systemImage: "trash") }
-                                .buttonStyle(OutlineButtonStyle(height: 44, fullWidth: true))
-                        }
+                HStack(spacing: 10) {
+                    if !mine {
+                        Button {
+                            reporting = ReportSheet.Target(id: item.id, type: "catalog item", ownerEmail: item.creatorEmail,
+                                                           preview: item.name, link: "/Catalog?item=\(item.id)",
+                                                           collection: "CatalogItem", media: item.imageURL)
+                        } label: { Label("Report", systemImage: "flag.fill") }
+                            .buttonStyle(OutlineButtonStyle(height: 44, fullWidth: true))
+                    }
+                    if mine || me?.isAdmin == true {
+                        Button(role: .destructive) { removing = true } label: { Label(mine ? "Stop selling" : "Remove", systemImage: "trash") }
+                            .buttonStyle(OutlineButtonStyle(height: 44, fullWidth: true))
                     }
                 }
             }
