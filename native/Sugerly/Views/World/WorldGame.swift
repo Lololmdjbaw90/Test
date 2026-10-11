@@ -36,10 +36,17 @@ final class WorldGame: NSObject {
     private var jumpAt: CFTimeInterval = 0
     private let spawn = SIMD3<Float>(0, 0.05, 16)
 
+    // A camera like the one in big block games: it sits behind you, swings
+    // round behind you as you walk (unless you just turned it yourself),
+    // turns when you drag on the right, and comes closer instead of going
+    // through walls.
     private var camYaw: Float = 0
-    private var camPitch: Float = 0.38
-    private var camDistance: Float = 20
-    private var camFocus = SIMD3<Float>(0, 4, 16)
+    private var camPitch: Float = 0.3
+    private var camDistance: Float = 14
+    private var shownDistance: Float = 14
+    private var camFocus = SIMD3<Float>(0, 4.5, 16)
+    private var dragging = false
+    private var lastCamTouch: CFTimeInterval = 0
     private let cameraNode = SCNNode()
     private let sun = SCNNode()
 
@@ -122,12 +129,14 @@ final class WorldGame: NSObject {
     }
 
     func turnCamera(dx: Float, dy: Float) {
-        camYaw -= dx * 0.008
-        camPitch = min(1.25, max(0.05, camPitch + dy * 0.006))
+        camYaw -= dx * 0.0065
+        camPitch = min(1.3, max(-0.3, camPitch + dy * 0.005))
+        lastCamTouch = CACurrentMediaTime()
     }
 
     func zoom(_ scale: Float) {
-        camDistance = min(42, max(8, camDistance / max(scale, 0.01)))
+        camDistance = min(40, max(6, camDistance / max(scale, 0.01)))
+        lastCamTouch = CACurrentMediaTime()
     }
 
     func wear(_ look: AvatarLook) {
@@ -205,13 +214,59 @@ final class WorldGame: NSObject {
     }
 
     private func moveCamera(_ dt: Float) {
-        let target = pos + SIMD3<Float>(0, 4.2, 0)
-        camFocus += (target - camFocus) * min(1, dt * 10)
+        // Follow: swing round behind you while you walk, faster the more you
+        // walk sideways; never while you walk towards the camera, and not
+        // right after you turned it yourself.
+        let travel = SIMD2<Float>(vel.x, vel.z)
+        let speed = simd_length(travel)
+        if !dragging && CACurrentMediaTime() - lastCamTouch > 0.8 && speed > 2 {
+            let along = simd_dot(travel / speed, SIMD2<Float>(-sin(camYaw), -cos(camYaw)))
+            if along > -0.4 {
+                let behind = atan2(vel.x, vel.z) + .pi
+                let rate: Float = 2.2 * min(1, speed / walkSpeed) * (1 - max(0, along) * 0.6)
+                camYaw = Self.turn(camYaw, toward: behind, by: min(1, dt * rate))
+            }
+        }
+
+        let target = pos + SIMD3<Float>(0, 4.5, 0)
+        camFocus += (target - camFocus) * min(1, dt * 18)
         let flat = cos(camPitch) * camDistance
-        var eye = camFocus + SIMD3<Float>(sin(camYaw) * flat, sin(camPitch) * camDistance, cos(camYaw) * flat)
+        let offset = SIMD3<Float>(sin(camYaw) * flat, sin(camPitch) * camDistance, cos(camYaw) * flat)
+        let length = max(0.001, simd_length(offset))
+        let direction = offset / length
+
+        // Something in the way: come in front of it (and ease back out).
+        var room = camDistance
+        for s in solids {
+            if let t = Self.rayHit(camFocus, direction, s, limit: room) { room = t }
+        }
+        let wanted = max(1.6, room - 0.4)
+        shownDistance = wanted < shownDistance ? wanted : shownDistance + (wanted - shownDistance) * min(1, dt * 5)
+        var eye = camFocus + direction * shownDistance
         eye.y = max(eye.y, 0.8)
         cameraNode.position = SCNVector3(eye.x, eye.y, eye.z)
         cameraNode.look(at: SCNVector3(camFocus.x, camFocus.y, camFocus.z))
+    }
+
+    // Where a ray first enters a box (nil if it misses it before `limit`).
+    private static func rayHit(_ origin: SIMD3<Float>, _ dir: SIMD3<Float>, _ s: Solid, limit: Float) -> Float? {
+        var near: Float = 0
+        var far = limit
+        for i in 0..<3 {
+            let o = origin[i], d = dir[i]
+            if abs(d) < 0.000001 {
+                if o < s.lo[i] || o > s.hi[i] { return nil }
+                continue
+            }
+            var t1 = (s.lo[i] - o) / d
+            var t2 = (s.hi[i] - o) / d
+            if t1 > t2 { swap(&t1, &t2) }
+            near = max(near, t1)
+            far = min(far, t2)
+            if near > far { return nil }
+        }
+        // Starting inside the box (your head in a doorway) doesn't count.
+        return near > 0.05 ? near : nil
     }
 
     // Others are drawn a little in the past, smoothly between their updates.
@@ -402,6 +457,11 @@ final class WorldGame: NSObject {
     }
 
     @objc private func panned(_ g: UIPanGestureRecognizer) {
+        switch g.state {
+        case .began: dragging = true
+        case .ended, .cancelled, .failed: dragging = false
+        default: break
+        }
         let t = g.translation(in: view)
         turnCamera(dx: Float(t.x), dy: Float(t.y))
         g.setTranslation(.zero, in: view)

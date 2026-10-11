@@ -25,6 +25,7 @@ final class WorldNet: NSObject {
         var picture: String
         var look: AvatarLook
         var connected = false
+        var trouble = false     // tried a few times and still can't reach them
     }
 
     static let world = "plaza"
@@ -62,6 +63,13 @@ final class WorldNet: NSObject {
         var initiator = false
         var pendingIce: [RTCIceCandidate] = []
         var restartedAt = Date.distantPast
+        // Each try at connecting has its own id, so a late answer or a
+        // fresh start from the other phone (after it slept) is never mixed
+        // up with the current connection.
+        var session = ""
+        var offeredAt = Date.distantPast
+        var connected = false
+        var tries = 0
         init(id: String, email: String) { self.id = id; self.email = email }
     }
     @ObservationIgnored private var links: [String: Link] = [:]
@@ -203,10 +211,23 @@ final class WorldNet: NSObject {
             // Quick checks while someone is connecting, slower once settled.
             let busy = Date() < busyUntil
             if busy || tick % 3 == 0 { await pollSignals() }
-            if tick % 4 == 0 { await pollPresence() }
+            if tick % (busy ? 2 : 4) == 0 { await pollPresence() }
+            if tick % 5 == 4 { retryStuck() }
             if tick % 12 == 0 { heartbeat() }
             tick += 1
             try? await Task.sleep(for: .milliseconds(busy ? 800 : 1200))
+        }
+    }
+
+    // A connection that hasn't come up after a while starts over (new try).
+    private func retryStuck() {
+        for link in links.values where link.initiator && !link.connected && link.pc != nil {
+            guard Date().timeIntervalSince(link.offeredAt) > 12 else { continue }
+            link.tries += 1
+            if link.tries >= 2 { players[link.id]?.trouble = true }
+            close(link)
+            connect(link)
+            busyUntil = Date().addingTimeInterval(20)
         }
     }
 
@@ -229,8 +250,9 @@ final class WorldNet: NSObject {
                 if now - (ReelText.num(d["last_active"]) ?? 0) > 90_000 { Task { try? await FS.delete("WorldPresence", d.str("id")) } }
                 continue
             }
-            // Someone you blocked (or the same account on another phone) isn't shown.
-            guard !blocked.contains(who), who != email else { continue }
+            // Someone you blocked isn't shown (your own account on another
+            // phone or iPad is, which also makes testing easy).
+            guard !blocked.contains(who) else { continue }
             seen.insert(peer)
             let isNew = players[peer] == nil
             var player = players[peer] ?? Player(id: peer, email: who, name: d.str("name"), picture: d.str("picture"), look: AvatarLook(json: d.str("look")))
@@ -291,19 +313,30 @@ final class WorldNet: NSObject {
             busyUntil = Date().addingTimeInterval(20)
             guard let data = d.str("payload").data(using: .utf8),
                   let payload = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { continue }
-            if link.pc == nil { connect(link) }
-            guard let pc = link.pc else { continue }
+            let session = payload["session"] as? String ?? ""
             if d.str("kind") == "description" {
                 let type = RTCSessionDescription.type(for: payload["type"] as? String ?? "")
-                if type == .offer && pc.signalingState != .stable && link.initiator { continue }
+                if type == .offer {
+                    // The lower id starts; an offer the other way round is stale.
+                    if selfId < from { continue }
+                    link.initiator = false
+                    // A new try from them (e.g. their phone slept): start fresh.
+                    if link.pc != nil && link.session != session { close(link) }
+                    link.session = session
+                    if link.pc == nil { connect(link) }
+                } else if session != link.session {
+                    continue  // an answer to an older try
+                }
+                guard let pc = link.pc else { continue }
                 await setRemote(pc, RTCSessionDescription(type: type, sdp: payload["sdp"] as? String ?? ""))
                 for c in link.pendingIce { await addIce(pc, c) }
                 link.pendingIce = []
                 if type == .offer, let answer = await makeAnswer(pc) {
                     await setLocal(pc, answer)
-                    signal(link, "description", ["type": "answer", "sdp": answer.sdp])
+                    signal(link, "description", ["type": "answer", "sdp": answer.sdp, "session": link.session])
                 }
             } else if d.str("kind") == "ice" {
+                guard session == link.session, let pc = link.pc else { continue }
                 let candidate = RTCIceCandidate(sdp: payload["candidate"] as? String ?? "",
                                                 sdpMLineIndex: Int32((payload["sdpMLineIndex"] as? Int) ?? 0),
                                                 sdpMid: payload["sdpMid"] as? String)
@@ -368,7 +401,13 @@ final class WorldNet: NSObject {
             channel.delegate = self
             byChannel[ObjectIdentifier(channel)] = link.id
         }
-        if link.initiator { Task { await self.offer(link) } }
+        link.connected = false
+        link.pendingIce = []
+        if link.initiator {
+            link.session = String(UUID().uuidString.prefix(8))
+            link.offeredAt = Date()
+            Task { await self.offer(link) }
+        }
     }
 
     private func offer(_ link: Link, restart: Bool = false) async {
@@ -379,7 +418,7 @@ final class WorldNet: NSObject {
         }
         guard let sdp else { return }
         await setLocal(pc, sdp)
-        signal(link, "description", ["type": "offer", "sdp": sdp.sdp])
+        signal(link, "description", ["type": "offer", "sdp": sdp.sdp, "session": link.session])
     }
 
     private func makeAnswer(_ pc: RTCPeerConnection) async -> RTCSessionDescription? {
@@ -403,13 +442,19 @@ final class WorldNet: NSObject {
 
     fileprivate func candidate(_ pcId: ObjectIdentifier, _ c: RTCIceCandidate) {
         guard let id = byConnection[pcId], let link = links[id] else { return }
-        signal(link, "ice", ["candidate": c.sdp, "sdpMid": c.sdpMid ?? "0", "sdpMLineIndex": Int(c.sdpMLineIndex)])
+        signal(link, "ice", ["candidate": c.sdp, "sdpMid": c.sdpMid ?? "0", "sdpMLineIndex": Int(c.sdpMLineIndex), "session": link.session])
     }
 
     fileprivate func iceChanged(_ pcId: ObjectIdentifier) {
         guard let id = byConnection[pcId], let link = links[id], let pc = link.pc else { return }
         let state = pc.iceConnectionState
-        players[id]?.connected = state == .connected || state == .completed
+        let up = state == .connected || state == .completed
+        link.connected = up
+        players[id]?.connected = up
+        if up {
+            link.tries = 0
+            players[id]?.trouble = false
+        }
         // The line dropped (e.g. Wi-Fi to mobile data): the side that started
         // tries again.
         guard link.initiator, state == .failed || state == .disconnected,
@@ -425,13 +470,21 @@ final class WorldNet: NSObject {
     fileprivate func channelOpened(_ chId: ObjectIdentifier) {
         guard let id = byChannel[chId], let link = links[id], let sure = link.sure, ObjectIdentifier(sure) == chId,
               sure.readyState == .open else { return }
+        link.connected = true
         players[id]?.connected = true
         hello(link)
     }
 
     fileprivate func received(_ chId: ObjectIdentifier, _ data: Data) {
-        guard let id = byChannel[chId], players[id] != nil,
+        guard let id = byChannel[chId], let link = links[id],
               let msg = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
+        // Heard from them before their room entry showed up: add them now.
+        if players[id] == nil, msg["t"] as? String == "hi" {
+            let player = Player(id: id, email: link.email, name: msg["n"] as? String ?? "Player", picture: "",
+                                look: AvatarLook(json: msg["l"] as? String ?? ""), connected: true)
+            players[id] = player
+            onJoin?(player)
+        }
         if let p = msg["p"] as? [Double], p.count == 3 {
             let pose = Pose(pos: SIMD3(Float(p[0]), Float(p[1]), Float(p[2])),
                             yaw: Float(msg["r"] as? Double ?? 0),

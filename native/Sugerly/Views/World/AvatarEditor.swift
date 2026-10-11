@@ -220,12 +220,14 @@ struct AvatarEditorView: View {
     private func itemsGrid(_ kind: CatalogItem.Kind) -> some View {
         let list = owned.filter { $0.kind == kind }
         let none = kind == .shirt ? look.shirt.isEmpty : look.pants.isEmpty
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                actionPill("Shop", icon: "bag.fill") { shopping = true }
+                actionPill("Upload", icon: "square.and.arrow.up") { making = kind }
+            }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                Button { takeOff(kind) } label: {
-                    tileShape(icon: "circle.slash", title: "None", on: none, tint: false)
-                }
-                .buttonStyle(BouncyStyle(scale: 0.93))
+                Button { takeOff(kind) } label: { NoneTile(kind: kind, selected: none) }
+                    .buttonStyle(BouncyStyle(scale: 0.93))
                 ForEach(list) { item in
                     let on = CatalogShop.wearing(item, look)
                     Button { withMotion(.spring(response: 0.3, dampingFraction: 0.75)) { look = AvatarSnapshot.look(trying: item, on: look) } } label: {
@@ -233,17 +235,9 @@ struct AvatarEditorView: View {
                     }
                     .buttonStyle(BouncyStyle(scale: 0.93))
                 }
-                Button { shopping = true } label: {
-                    tileShape(icon: "bag.fill", title: "Shop", on: false, tint: true)
-                }
-                .buttonStyle(BouncyStyle(scale: 0.93))
-                Button { making = kind } label: {
-                    tileShape(icon: "square.and.arrow.up.fill", title: "Upload", on: false, tint: true)
-                }
-                .buttonStyle(BouncyStyle(scale: 0.93))
             }
             if list.isEmpty {
-                Text("You don't have any \(kind == .shirt ? "shirts" : "pants") yet. Find some in the shop, or upload your own from a template.")
+                Text("No \(kind == .shirt ? "shirts" : "pants") yet. Get some in the shop or upload your own.")
                     .font(.jakarta(13)).foregroundStyle(Palette.muted)
             }
             if let error {
@@ -252,18 +246,16 @@ struct AvatarEditorView: View {
         }
     }
 
-    private func tileShape(icon: String, title: String, on: Bool, tint: Bool) -> some View {
-        VStack(spacing: 6) {
-            Image(systemName: icon).font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(tint ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.muted))
-                .frame(maxWidth: .infinity).aspectRatio(1, contentMode: .fit)
-                .background(tint ? Theme.soft : Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(on ? Theme.main : (tint ? Theme.main.opacity(0.35) : Palette.border),
-                                  style: StrokeStyle(lineWidth: on ? 2.5 : 1.5, dash: tint ? [5, 4] : [])))
-            Text(title).font(.jakarta(12, .bold)).foregroundStyle(tint ? Theme.main : Palette.text2)
+    private func actionPill(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.jakarta(14, .bold))
+                .foregroundStyle(Theme.main)
+                .frame(maxWidth: .infinity).frame(height: 42)
+                .background(Theme.soft, in: Capsule())
+                .overlay(Capsule().strokeBorder(Theme.main.opacity(0.18), lineWidth: 1))
         }
-        .padding(.top, 5)
+        .buttonStyle(BouncyStyle(scale: 0.95))
     }
 
     // MARK: actions
@@ -351,5 +343,40 @@ struct ItemTile: View {
             let made = await AvatarSnapshot.image(for: item)
             withAnimation(.easeOut(duration: 0.25)) { image = made }
         }
+    }
+}
+
+// "None": the plain body, in the same style as the clothes next to it.
+struct NoneTile: View {
+    let kind: CatalogItem.Kind
+    var selected = false
+    @State private var image: UIImage?
+
+    var body: some View {
+        VStack(spacing: 6) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(LinearGradient(colors: [Palette.surface2.opacity(0.8), Palette.surface], startPoint: .top, endPoint: .bottom))
+                if let image {
+                    Image(uiImage: image).resizable().scaledToFit().padding(4).opacity(0.85)
+                }
+            }
+            .aspectRatio(1, contentMode: .fit)
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(selected ? Theme.main : Palette.border, lineWidth: selected ? 2.5 : 1))
+            .overlay(alignment: .topTrailing) {
+                if selected {
+                    Image(systemName: "checkmark").font(.system(size: 10, weight: .black)).foregroundStyle(.white)
+                        .frame(width: 22, height: 22)
+                        .background(Theme.main, in: Circle())
+                        .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2.5))
+                        .offset(x: 5, y: -5)
+                        .transition(.scale(scale: 0.4).combined(with: .opacity))
+                }
+            }
+            Text("None").font(.jakarta(12, .bold)).foregroundStyle(selected ? Theme.main : Palette.text2)
+        }
+        .padding(.top, 5)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selected)
+        .task(id: kind) { image = AvatarSnapshot.bare(kind) }
     }
 }

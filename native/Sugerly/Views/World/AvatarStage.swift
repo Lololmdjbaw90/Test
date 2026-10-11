@@ -173,6 +173,15 @@ enum AvatarSnapshot {
 
     static func cached(_ item: CatalogItem) -> UIImage? { cache[item.id] }
 
+    // The plain body (for "None").
+    static func bare(_ kind: CatalogItem.Kind) -> UIImage {
+        let key = "none-" + kind.rawValue
+        if let hit = cache[key] { return hit }
+        let image = render(.starter, shirt: nil, pants: nil, framing: framing(for: kind), side: 300)
+        cache[key] = image
+        return image
+    }
+
     // A square picture of the item on a plain body.
     static func image(for item: CatalogItem, side: CGFloat = 300) async -> UIImage? {
         if let hit = cache[item.id] { return hit }

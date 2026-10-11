@@ -447,7 +447,7 @@ struct WorldPlayView: View {
                         }
                         ForEach(sortedPlayers) { p in
                             Button { withMotion { picked = p } } label: {
-                                playerRow(name: p.name, picture: p.picture, note: isFriend(p.email) ? "Friend" : nil,
+                                playerRow(name: p.name, picture: p.picture, note: status(p),
                                           connected: p.connected, friend: isFriend(p.email))
                             }
                             .buttonStyle(BouncyStyle(scale: 0.97))
@@ -473,6 +473,12 @@ struct WorldPlayView: View {
 
     private func isFriend(_ email: String) -> Bool { model.me?.following.contains(email) == true }
 
+    private func status(_ p: WorldNet.Player) -> String? {
+        if p.trouble { return "Can't connect yet, still trying…" }
+        if !p.connected { return "Connecting…" }
+        return isFriend(p.email) ? "Friend" : nil
+    }
+
     // Friends first, then by name.
     private var sortedPlayers: [WorldNet.Player] {
         net.players.values.sorted { (a: WorldNet.Player, b: WorldNet.Player) -> Bool in
@@ -489,7 +495,7 @@ struct WorldPlayView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(name).font(.jakarta(14, .bold)).foregroundStyle(Palette.text).lineLimit(1)
                 if let note {
-                    Text(note).font(.jakarta(11.5, .semibold)).foregroundStyle(friend ? Theme.main : Palette.muted)
+                    Text(note).font(.jakarta(11.5, .semibold)).foregroundStyle(connected && friend ? Theme.main : Palette.muted)
                 }
             }
             Spacer(minLength: 0)
