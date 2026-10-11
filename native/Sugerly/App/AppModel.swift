@@ -384,6 +384,7 @@ final class AppModel {
             "effect_color": u.effectColor, "effect_amount": u.effectAmount, "name_color": u.nameColor,
             "avatar_frame": u.avatarFrame, "banner_pattern": u.bannerPattern,
             "accent_main": u.accentMain, "accent_sub": u.accentSub, "onboarding_completed": u.setupDone,
+            "avatar_look": u.avatarLook, "avatar_items": u.avatarItems,
         ]
     }
 

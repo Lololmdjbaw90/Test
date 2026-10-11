@@ -22,6 +22,9 @@ enum Route: Hashable {
     case support
     case supportTicket(String)
     case notifications
+    case world
+    case catalog
+    case avatar
 }
 
 enum AppTab: Hashable {
@@ -99,6 +102,9 @@ struct RouteView: View {
         case .support: SupportView()
         case .supportTicket(let email): SupportTicketView(email: email)
         case .notifications: NotificationsPage(path: $path)
+        case .world: WorldHubView(path: $path)
+        case .catalog: CatalogView()
+        case .avatar: AvatarEditorView(standalone: false)
         }
     }
 }

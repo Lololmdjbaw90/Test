@@ -106,6 +106,9 @@ struct UserProfile: Identifiable, Hashable {
     var invitesJoined = 0
     // Finished the welcome setup (accounts from before it existed count as done).
     var setupDone = true
+    // Sugar World: your 3D avatar (JSON) and the catalog things you own.
+    var avatarLook = ""
+    var avatarItems: [String] = []
 
     init(_ d: Doc) {
         id = d.str("id")
@@ -160,6 +163,8 @@ struct UserProfile: Identifiable, Hashable {
         inviteCode = d.str("invite_code")
         invitesJoined = d.int("invites_joined")
         setupDone = (d["onboarding_completed"] as? Bool) ?? true
+        avatarLook = d.str("avatar_look")
+        avatarItems = d.strs("avatar_items")
     }
 
     var isBanned: Bool {

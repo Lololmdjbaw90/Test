@@ -33,6 +33,9 @@ struct AccountView: View {
             Place(title: "Top artists", icon: "crown.fill", colors: [0xFFD166, 0xE9A100]) { go(.topArtists) },
             Place(title: "MimiPlus", icon: "sparkles", colors: [0xC084FC, 0x8B5CF6]) { shop = true },
             Place(title: "Commissions", icon: "storefront.fill", colors: [0x5FD3B0, 0x16A37F]) { go(.commissions) },
+            Place(title: "Sugar World", icon: "gamecontroller.fill", colors: [0x7CBEFF, 0xF27BA3]) { go(.world) },
+            Place(title: "Avatar", icon: "figure.stand", colors: [0xF7A1C4, 0xE0508A]) { go(.avatar) },
+            Place(title: "Catalog", icon: "bag.fill", colors: [0xB19CFF, 0x7C5CF0]) { go(.catalog) },
         ]
     }
 

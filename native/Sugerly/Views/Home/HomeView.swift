@@ -391,6 +391,7 @@ struct HomeView: View {
             ("Servers", "person.3.fill", [0xB19CFF, 0x7C5CF0], .servers),
             ("People", "person.crop.circle.badge.plus", [0xFFAA80, 0xEE6E40], .people),
             ("Top artists", "crown.fill", [0xFFD166, 0xF0A020], .topArtists),
+            ("Play", "gamecontroller.fill", [0x7CBEFF, 0xF27BA3], .world),
         ]
         return HStack(spacing: 6) {
             ForEach(items, id: \.0) { item in
