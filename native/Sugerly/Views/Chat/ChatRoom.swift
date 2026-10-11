@@ -58,13 +58,13 @@ struct ChatView: View {
                         .onAppear { Task { await loadOlder(proxy) } }
                     }
                     if loaded && messages.isEmpty { emptyState }
-                    ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
+                    ForEach(Array(messages.enumerated()), id: \.element.key) { index, message in
                         let previous = index > 0 ? messages[index - 1] : nil
                         if previous == nil || !sameDay(previous!, message) {
                             DayPill(date: Dates.parse(message.created) ?? Date()).padding(.vertical, 8)
                         }
                         row(message, previous: previous)
-                            .id(message.id)
+                            .id(message.key)
                             .transition(Self.arrival(mine: message.authorEmail == me))
                     }
                 }
@@ -76,9 +76,12 @@ struct ChatView: View {
             }
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
-            .onChange(of: messages.last?.id) { _, id in
-                guard let id else { return }
-                withMotion(Motion.standard) { proxy.scrollTo(id, anchor: .bottom) }
+            .onChange(of: messages.last?.key) { _, key in
+                guard let key else { return }
+                // After the new bubble is laid out, so the scroll lands once.
+                DispatchQueue.main.async {
+                    withMotion(Motion.standard) { proxy.scrollTo(key, anchor: .bottom) }
+                }
             }
         }
         .background(ChatWallpaper().ignoresSafeArea())
@@ -494,7 +497,13 @@ struct ChatView: View {
             // A lot happened while you were away: start from the newest page
             // (older ones load as you scroll up).
             let pending = messages.filter(\.pending)
-            messages = (incoming + pending).sorted { $0.created < $1.created }
+            let keys = Dictionary(messages.filter { !$0.localKey.isEmpty }.map { ($0.id, $0.localKey) }, uniquingKeysWith: { a, _ in a })
+            let kept = incoming.map { m -> Message in
+                var m = m
+                if let key = keys[m.id] { m.localKey = key }
+                return m
+            }
+            messages = (kept + pending).sorted { $0.created < $1.created }
             hasOlder = true
             ChatCache.save(conversation.id, messages)
         } else if !fresh.isEmpty || !loaded {
@@ -529,7 +538,7 @@ struct ChatView: View {
         var still = Transaction()
         still.disablesAnimations = true
         withTransaction(still) { messages = (page + messages).sorted { $0.created < $1.created } }
-        DispatchQueue.main.async { proxy.scrollTo(oldest.id, anchor: .top) }
+        DispatchQueue.main.async { proxy.scrollTo(oldest.key, anchor: .top) }
     }
 
     private func markRead(_ list: [Message]) {
@@ -573,8 +582,19 @@ struct ChatView: View {
         withAnimation(Self.arrive) { messages.append(pending); replyTo = nil }
         do {
             let doc = try await FS.create("DirectMessage", data)
-            let created = Message(doc)
-            if let i = messages.firstIndex(where: { $0.id == pending.id }) { messages[i] = created }
+            var created = Message(doc)
+            created.localKey = pending.id
+            // Swap in the saved copy quietly: same bubble, no second pop-in.
+            var quiet = Transaction()
+            quiet.disablesAnimations = true
+            withTransaction(quiet) {
+                if messages.contains(where: { $0.id == created.id }) {
+                    // A refresh already brought it in: drop the sending copy.
+                    messages.removeAll { $0.id == pending.id }
+                } else if let i = messages.firstIndex(where: { $0.id == pending.id }) {
+                    messages[i] = created
+                }
+            }
             chats.upsert(created, me: me)
         } catch {
             withMotion { messages.removeAll { $0.id == pending.id } }

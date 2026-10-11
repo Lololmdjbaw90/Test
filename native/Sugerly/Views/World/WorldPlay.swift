@@ -24,6 +24,7 @@ struct WorldPlayView: View {
     @State private var starBurst = false
     @State private var reporting: ReportSheet.Target?
     @State private var notices: [Notice] = []
+    @State private var fadeTick = 0
     @FocusState private var typing: Bool
 
     struct Line: Identifiable, Equatable {
@@ -31,6 +32,7 @@ struct WorldPlayView: View {
         var name: String
         var text: String
         var system = false
+        var at = Date()
     }
 
     struct Notice: Identifiable, Equatable {
@@ -54,7 +56,11 @@ struct WorldPlayView: View {
                         .frame(width: geo.size.width * 0.45, height: geo.size.height * 0.72)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 }
-                hud.transition(.opacity)
+                .ignoresSafeArea(.keyboard)
+                hud
+                    .ignoresSafeArea(.keyboard)
+                    .transition(.opacity)
+                if chatOpen { chatInput.transition(.move(edge: .bottom).combined(with: .opacity)) }
             }
             if playersOpen { playersPanel.transition(.move(edge: .trailing).combined(with: .opacity)) }
             if let picked { playerCard(picked).transition(.scale(scale: 0.92).combined(with: .opacity)) }
@@ -116,10 +122,13 @@ struct WorldPlayView: View {
     }
 
     private func add(_ line: Line) {
-        withMotion(.spring(response: 0.35, dampingFraction: 0.85)) {
-            lines.append(line)
-            if lines.count > 30 { lines.removeFirst(lines.count - 30) }
-            if !chatOpen && !line.system { unread += 1 }
+        lines.append(line)
+        if lines.count > 50 { lines.removeFirst(lines.count - 50) }
+        if !chatOpen && !line.system { unread += 1 }
+        // Closed chat: lines fade away after a while.
+        Task {
+            try? await Task.sleep(for: .seconds(12.2))
+            withAnimation(.easeOut(duration: 0.4)) { fadeTick += 1 }
         }
     }
 
@@ -158,10 +167,11 @@ struct WorldPlayView: View {
             add(Line(name: "", text: reason, system: true))
             return
         }
+        draft = ""
         net.chat(text)
         game?.say(text, from: nil)
         add(Line(name: model.me?.displayName ?? "You", text: text))
-        draft = ""
+        typing = true
     }
 
     private func toggleChat() {
@@ -245,53 +255,85 @@ struct WorldPlayView: View {
         .overlay(Capsule().strokeBorder(.white.opacity(0.65), lineWidth: 1))
     }
 
+    // The chat history, top left. Closed: the last few lines, fading away.
+    // Open: everything so far, scrollable, always resting on the newest line.
     @ViewBuilder
     private var chatPanel: some View {
-        let shown = chatOpen ? Array(lines.suffix(8)) : Array(lines.suffix(4))
-        if chatOpen || !shown.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 5) {
-                            ForEach(shown) { line in
-                                lineView(line).id(line.id)
-                            }
+        if chatOpen {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 5) {
+                        ForEach(lines) { line in
+                            lineView(line).id(line.id)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .scrollIndicators(.hidden)
-                    .frame(maxHeight: chatOpen ? 140 : 96)
-                    .onChange(of: lines.count) { _, _ in
-                        if let last = shown.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                }
+                .scrollIndicators(.hidden)
+                .defaultScrollAnchor(.bottom)
+                .frame(width: 330, height: 118)
+                .onAppear { if let last = lines.last { proxy.scrollTo(last.id, anchor: .bottom) } }
+                .onChange(of: lines.last?.id) { _, id in
+                    guard let id else { return }
+                    DispatchQueue.main.async {
+                        withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .bottom) }
                     }
                 }
-                if chatOpen {
-                    HStack(spacing: 6) {
-                        TextField("Say something nice…", text: $draft)
-                            .font(.jakarta(15))
-                            .focused($typing)
-                            .submitLabel(.send)
-                            .onSubmit { Task { await send() } }
-                            .padding(.horizontal, 14).frame(height: 40)
-                            .background(.white, in: Capsule())
-                            .onChange(of: draft) { _, v in if v.count > 140 { draft = String(v.prefix(140)) } }
-                        Button { Task { await send() } } label: {
-                            Image(systemName: "arrow.up").font(.system(size: 15, weight: .heavy)).foregroundStyle(.white)
-                                .frame(width: 40, height: 40)
-                                .background(Theme.gradient, in: Circle())
-                        }
-                        .buttonStyle(BouncyStyle(scale: 0.9))
-                        .accessibilityLabel("Send")
-                    }
+            }
+            .background(Color.black.opacity(0.38), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(0.18), lineWidth: 1))
+            .transition(.opacity)
+        } else if !recent.isEmpty {
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(recent) { line in
+                    lineView(line).transition(.opacity)
                 }
             }
             .padding(10)
             .frame(width: 330, alignment: .leading)
-            .background(Color.black.opacity(chatOpen ? 0.38 : 0.22), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(0.18), lineWidth: 1))
-            .allowsHitTesting(chatOpen)
-            .transition(.move(edge: .leading).combined(with: .opacity))
+            .background(Color.black.opacity(0.22), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .allowsHitTesting(false)
+            .transition(.opacity)
         }
+    }
+
+    // Lines still fresh enough to show while the chat is closed.
+    private var recent: [Line] {
+        _ = fadeTick   // redraws when a line gets old enough to fade
+        return Array(lines.filter { Date().timeIntervalSince($0.at) < 12 }.suffix(4))
+    }
+
+    // Typing sits just above the keyboard (the history stays at the top).
+    private var chatInput: some View {
+        HStack(spacing: 8) {
+            TextField("Say something nice…", text: $draft)
+                .font(.jakarta(15))
+                .focused($typing)
+                .submitLabel(.send)
+                .onSubmit { Task { await send() } }
+                .padding(.horizontal, 16).frame(height: 44)
+                .background(.white, in: Capsule())
+                .onChange(of: draft) { _, v in if v.count > 140 { draft = String(v.prefix(140)) } }
+            Button { Task { await send() } } label: {
+                Image(systemName: "arrow.up").font(.system(size: 16, weight: .heavy)).foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Theme.gradient, in: Circle())
+            }
+            .buttonStyle(BouncyStyle(scale: 0.9))
+            .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
+            .accessibilityLabel("Send")
+            Button { toggleChat() } label: {
+                Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(ink)
+                    .frame(width: 40, height: 40)
+                    .background(.ultraThinMaterial, in: Circle())
+            }
+            .accessibilityLabel("Close chat")
+        }
+        .frame(maxWidth: 520)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 
     private func lineView(_ line: Line) -> some View {

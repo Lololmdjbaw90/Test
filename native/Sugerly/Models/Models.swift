@@ -315,6 +315,10 @@ struct Message: Identifiable, Hashable {
     var edited: Bool
     var reactions: [String: [String]] = [:]
     var pending = false
+    // The id it had while sending, kept so the bubble stays the same one on
+    // screen when the saved copy (with its real id) replaces it.
+    var localKey = ""
+    var key: String { localKey.isEmpty ? id : localKey }
     // Extras (same fields as the website): calls, shared reels, replies, voice notes.
     var kind = ""
     var callOutcome = ""
