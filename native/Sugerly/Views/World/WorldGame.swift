@@ -8,7 +8,10 @@ import simd
 // the button and drag anywhere else to turn the camera.
 @MainActor
 final class WorldGame: NSObject, UIGestureRecognizerDelegate {
-    let view = SCNView(frame: .zero)
+    // Select the GPU API explicitly instead of relying on SceneKit's default.
+    let view = SCNView(frame: .zero, options: [
+        .preferredRenderingAPI: NSNumber(value: SCNRenderingAPI.metal.rawValue)
+    ])
     let scene = SCNScene()
     let net: WorldNet
     let me = Avatar3D()
@@ -426,6 +429,7 @@ final class WorldGame: NSObject, UIGestureRecognizerDelegate {
     }
 
     private func setUpView() {
+        assert(view.renderingAPI == .metal, "Sugar World requires Metal rendering.")
         view.scene = scene
         view.antialiasingMode = .multisampling2X
         view.preferredFramesPerSecond = 60
