@@ -10,7 +10,7 @@ import simd
 final class WorldGame: NSObject, UIGestureRecognizerDelegate {
     // Select the GPU API explicitly instead of relying on SceneKit's default.
     let view = SCNView(frame: .zero, options: [
-        .preferredRenderingAPI: NSNumber(value: SCNRenderingAPI.metal.rawValue)
+        SCNView.Option.preferredRenderingAPI.rawValue: NSNumber(value: SCNRenderingAPI.metal.rawValue)
     ])
     let scene = SCNScene()
     let net: WorldNet

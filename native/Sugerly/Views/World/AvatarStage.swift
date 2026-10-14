@@ -28,7 +28,7 @@ struct AvatarStage: UIViewRepresentable {
         let c = context.coordinator
         // Keep avatar previews on the same GPU API as the game and thumbnails.
         let view = SCNView(frame: .zero, options: [
-            .preferredRenderingAPI: NSNumber(value: SCNRenderingAPI.metal.rawValue)
+            SCNView.Option.preferredRenderingAPI.rawValue: NSNumber(value: SCNRenderingAPI.metal.rawValue)
         ])
         assert(view.renderingAPI == .metal, "Avatar previews require Metal rendering.")
         view.scene = c.scene
