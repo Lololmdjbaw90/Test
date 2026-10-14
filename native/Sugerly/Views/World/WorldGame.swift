@@ -7,8 +7,11 @@ import simd
 // spiral tower to climb for a daily star. You walk with the stick, jump with
 // the button and drag anywhere else to turn the camera.
 @MainActor
-final class WorldGame: NSObject {
-    let view = SCNView(frame: .zero)
+final class WorldGame: NSObject, UIGestureRecognizerDelegate {
+    // Select the GPU API explicitly instead of relying on SceneKit's default.
+    let view = SCNView(frame: .zero, options: [
+        SCNView.Option.preferredRenderingAPI.rawValue: NSNumber(value: SCNRenderingAPI.metal.rawValue)
+    ])
     let scene = SCNScene()
     let net: WorldNet
     let me = Avatar3D()
@@ -36,17 +39,15 @@ final class WorldGame: NSObject {
     private var jumpAt: CFTimeInterval = 0
     private let spawn = SIMD3<Float>(0, 0.05, 16)
 
-    // A camera like the one in big block games: it sits behind you, swings
-    // round behind you as you walk (unless you just turned it yourself),
-    // turns when you drag on the right, and comes closer instead of going
-    // through walls.
+    // Follow position, but keep the heading chosen by the player's drag.
+    // Movement is camera-relative, so steering the camera towards velocity
+    // would keep turning both the camera and the player during a strafe.
     private var camYaw: Float = 0
     private var camPitch: Float = 0.3
     private var camDistance: Float = 14
     private var shownDistance: Float = 14
     private var camFocus = SIMD3<Float>(0, 4.5, 16)
-    private var dragging = false
-    private var lastCamTouch: CFTimeInterval = 0
+    private var panTouchCount = 0
     private let cameraNode = SCNNode()
     private let sun = SCNNode()
 
@@ -85,6 +86,7 @@ final class WorldGame: NSObject {
         me.root.eulerAngles.y = yaw
         me.root.physicsBody = Self.bodyShape(kinematic: true)
         scene.rootNode.addChildNode(me.root)
+        snapCameraToPlayer()
         starTaken = WorldRewards.claimedToday
         star?.isHidden = starTaken
         net.onPose = { [weak self] id, pose in self?.gotPose(id, pose) }
@@ -131,12 +133,10 @@ final class WorldGame: NSObject {
     func turnCamera(dx: Float, dy: Float) {
         camYaw -= dx * 0.0065
         camPitch = min(1.3, max(-0.3, camPitch + dy * 0.005))
-        lastCamTouch = CACurrentMediaTime()
     }
 
     func zoom(_ scale: Float) {
         camDistance = min(40, max(6, camDistance / max(scale, 0.01)))
-        lastCamTouch = CACurrentMediaTime()
     }
 
     func wear(_ look: AvatarLook) {
@@ -147,6 +147,7 @@ final class WorldGame: NSObject {
     func respawn() {
         pos = spawn
         vel = .zero
+        snapCameraToPlayer()
     }
 
     // Who's under a tap, if anyone.
@@ -213,21 +214,13 @@ final class WorldGame: NSObject {
         sun.position = SCNVector3(pos.x, pos.y, pos.z)
     }
 
-    private func moveCamera(_ dt: Float) {
-        // Follow: swing round behind you while you walk, faster the more you
-        // walk sideways; never while you walk towards the camera, and not
-        // right after you turned it yourself.
-        let travel = SIMD2<Float>(vel.x, vel.z)
-        let speed = simd_length(travel)
-        if !dragging && CACurrentMediaTime() - lastCamTouch > 0.8 && speed > 2 {
-            let along = simd_dot(travel / speed, SIMD2<Float>(-sin(camYaw), -cos(camYaw)))
-            if along > -0.4 {
-                let behind = atan2(vel.x, vel.z) + .pi
-                let rate: Float = 2.2 * min(1, speed / walkSpeed) * (1 - max(0, along) * 0.6)
-                camYaw = Self.turn(camYaw, toward: behind, by: min(1, dt * rate))
-            }
-        }
+    private func snapCameraToPlayer() {
+        camFocus = pos + SIMD3<Float>(0, 4.5, 0)
+        shownDistance = camDistance
+        moveCamera(0)
+    }
 
+    private func moveCamera(_ dt: Float) {
         let target = pos + SIMD3<Float>(0, 4.5, 0)
         camFocus += (target - camFocus) * min(1, dt * 18)
         let flat = cos(camPitch) * camDistance
@@ -236,11 +229,14 @@ final class WorldGame: NSObject {
         let direction = offset / length
 
         // Something in the way: come in front of it (and ease back out).
-        var room = camDistance
+        var wanted = camDistance
         for s in solids {
-            if let t = Self.rayHit(camFocus, direction, s, limit: room) { room = t }
+            if let t = Self.rayHit(camFocus, direction, s, limit: camDistance) {
+                // The zoom limit must not push the eye back through a wall
+                // when the player is standing close to it.
+                wanted = min(wanted, max(0.05, t - 0.4))
+            }
         }
-        let wanted = max(1.6, room - 0.4)
         shownDistance = wanted < shownDistance ? wanted : shownDistance + (wanted - shownDistance) * min(1, dt * 5)
         var eye = camFocus + direction * shownDistance
         eye.y = max(eye.y, 0.8)
@@ -433,11 +429,13 @@ final class WorldGame: NSObject {
     }
 
     private func setUpView() {
+        assert(view.renderingAPI == .metal, "Sugar World requires Metal rendering.")
         view.scene = scene
         view.antialiasingMode = .multisampling2X
         view.preferredFramesPerSecond = 60
         view.rendersContinuously = true
         view.isMultipleTouchEnabled = true
+        view.allowsCameraControl = false
         view.backgroundColor = UIColor(hex: 0xFFE3F0)
         view.hideGraphicsHUD()
 
@@ -450,24 +448,49 @@ final class WorldGame: NSObject {
         view.pointOfView = cameraNode
 
         let pan = UIPanGestureRecognizer(target: self, action: #selector(panned(_:)))
-        pan.maximumNumberOfTouches = 1
+        // Keep the pan alive through a pinch so the remaining finger can
+        // resume looking without having to lift and touch the screen again.
+        pan.maximumNumberOfTouches = 2
+        pan.delegate = self
+        let pinch = UIPinchGestureRecognizer(target: self, action: #selector(pinched(_:)))
+        pinch.delegate = self
+        let tap = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
+        tap.require(toFail: pan)
+        tap.require(toFail: pinch)
         view.addGestureRecognizer(pan)
-        view.addGestureRecognizer(UIPinchGestureRecognizer(target: self, action: #selector(pinched(_:))))
-        view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped(_:))))
+        view.addGestureRecognizer(pinch)
+        view.addGestureRecognizer(tap)
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard gestureRecognizer.view === view, otherGestureRecognizer.view === view else { return false }
+        return (gestureRecognizer is UIPanGestureRecognizer && otherGestureRecognizer is UIPinchGestureRecognizer)
+            || (gestureRecognizer is UIPinchGestureRecognizer && otherGestureRecognizer is UIPanGestureRecognizer)
     }
 
     @objc private func panned(_ g: UIPanGestureRecognizer) {
+        let touches = g.numberOfTouches
+        let translation = g.translation(in: view)
+        defer { g.setTranslation(.zero, in: view) }
         switch g.state {
-        case .began: dragging = true
-        case .ended, .cancelled, .failed: dragging = false
+        case .began:
+            panTouchCount = touches
+        case .changed:
+            // Adding/removing a finger moves the gesture's centre. Discard
+            // that sample, and never turn while two fingers are zooming.
+            if touches == 1 && panTouchCount == 1 {
+                turnCamera(dx: Float(translation.x), dy: Float(translation.y))
+            }
+            panTouchCount = touches
+        case .ended, .cancelled, .failed:
+            panTouchCount = 0
         default: break
         }
-        let t = g.translation(in: view)
-        turnCamera(dx: Float(t.x), dy: Float(t.y))
-        g.setTranslation(.zero, in: view)
     }
 
     @objc private func pinched(_ g: UIPinchGestureRecognizer) {
+        guard g.state == .began || g.state == .changed else { return }
         zoom(Float(g.scale))
         g.scale = 1
     }
