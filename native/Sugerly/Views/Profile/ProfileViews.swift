@@ -1283,6 +1283,8 @@ struct SettingsView: View {
             toggle(Alerts.Kind.servers.title, icon: Alerts.Kind.servers.icon, colors: [0xB19CFF, 0x7C5CF0], isOn: $alertServers)
             toggle(Alerts.Kind.social.title, icon: Alerts.Kind.social.icon, colors: [0xF27BA3, 0xE8457C], isOn: $alertSocial)
             toggle(Alerts.Kind.reels.title, icon: Alerts.Kind.reels.icon, colors: [0xFFAA80, 0xEE6E40], isOn: $alertReels)
+            CallReadinessRow()
+                .buttonStyle(.borderless)
         } header: { ListHeader(title: "NOTIFICATIONS") }
         .task { await alerts.requestPermission() }
     }

@@ -396,7 +396,9 @@ final class CallCenter {
         do {
             result = try await Payments.call("call-ring", ["call_id": callId])
         } catch {
-            return "Their phone only rings while Sugerly is open (the call server isn't reachable yet)."
+            // Say what the call server answered, so it's clear what to fix.
+            let why = (error as? APIError)?.message ?? error.localizedDescription
+            return "Their phone only rings while Sugerly is open (the call server said: \(why))."
         }
         if (result["setup"] as? Bool) == false {
             return "Their phone only rings while Sugerly is open (the Apple call key isn't set up on the website)."

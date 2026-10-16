@@ -19,6 +19,18 @@ final class IncomingCalls: NSObject, PKPushRegistryDelegate {
     private(set) var token: String?
     private var watchers: [String: Task<Void, Never>] = [:]
     private var uploaded = ""
+    // Why saving this phone's call address last failed (shown in Settings).
+    private(set) var lastProblem: String?
+
+    // For Settings: can this phone be rung while Sugerly is closed?
+    enum Readiness: Equatable { case ready, saving, noAddress, problem(String) }
+    var readiness: Readiness {
+        guard let token else { return .noAddress }
+        let email = AuthClient.shared.email ?? ""
+        if !email.isEmpty, uploaded == "\(email)|\(token)" { return .ready }
+        if let lastProblem { return .problem(lastProblem) }
+        return .saving
+    }
 
     #if DEBUG
     private static let environment = "sandbox"
@@ -43,9 +55,27 @@ final class IncomingCalls: NSObject, PKPushRegistryDelegate {
         do {
             try await FS.update("PushToken", email, fields)
             uploaded = key
+            lastProblem = nil
         } catch {
-            if (try? await FS.create("PushToken", fields, id: email)) != nil { uploaded = key }
+            do {
+                try await FS.create("PushToken", fields, id: email)
+                uploaded = key
+                lastProblem = nil
+            } catch {
+                lastProblem = (error as? APIError)?.message ?? error.localizedDescription
+            }
         }
+    }
+
+    // Settings → "Check": asks Apple again and saves the address again.
+    func recheck() async {
+        if token == nil {
+            registry.desiredPushTypes = []
+            registry.desiredPushTypes = [.voIP]
+            try? await Task.sleep(for: .seconds(2))
+        }
+        uploaded = ""
+        await upload()
     }
 
     // Logging out: calls for that account stop coming to this phone.
@@ -134,6 +164,42 @@ final class IncomingCalls: NSObject, PKPushRegistryDelegate {
                 }
             }
             self?.watchers[callId] = nil
+        }
+    }
+}
+
+// Settings: can this phone ring while Sugerly is closed? With a Check button
+// that asks Apple for the call address again and saves it again.
+struct CallReadinessRow: View {
+    @State private var state: IncomingCalls.Readiness = .saving
+    @State private var checking = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            IconRow(title: "Calls with Sugerly closed", detail: detail, icon: state == .ready ? "checkmark.circle.fill" : "phone.fill",
+                    colors: state == .ready ? [0x5FD3B0, 0x16A37F] : [0xFFAA80, 0xEE6E40])
+            Button {
+                Task {
+                    checking = true
+                    await IncomingCalls.shared.recheck()
+                    withMotion(Motion.standard) { state = IncomingCalls.shared.readiness }
+                    checking = false
+                }
+            } label: {
+                if checking { ProgressView().controlSize(.small) } else { Text("Check") }
+            }
+            .buttonStyle(OutlineButtonStyle(height: 34))
+            .disabled(checking)
+        }
+        .task { state = IncomingCalls.shared.readiness }
+    }
+
+    private var detail: String {
+        switch state {
+        case .ready: return "Ready: this phone rings even when Sugerly is closed."
+        case .saving: return "Saving this phone's call address… tap Check."
+        case .noAddress: return "Apple hasn't given this phone a call address yet. Check your internet, then tap Check."
+        case .problem(let why): return "Couldn't save this phone's call address: \(why)"
         }
     }
 }
