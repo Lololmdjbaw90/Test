@@ -351,7 +351,7 @@ struct CommunityView: View {
         .refreshable { await store.load() }
         .sheet(item: $reporting) { target in ReportSheet(target: target) }
         .sheet(isPresented: $searching) {
-            SearchView { route in path.append(route) }.presentationCornerRadius(34)
+            SearchView { route in path.append(route) }.presentationCornerRadius(24)
         }
         .task { if store.posts.isEmpty { await store.load() } }
         // Saved: bring in saved posts that aren't among the loaded pages yet.
@@ -657,7 +657,7 @@ struct PostCard: View {
                 try await ReelLinks.sendPost(post, to: targets, note: note, me: me)
             }
             .presentationDetents([.height(340)])
-            .presentationCornerRadius(30)
+            .presentationCornerRadius(24)
         }
     }
 

@@ -26,7 +26,6 @@ struct WelcomeSetupView: View {
     @State private var done = false
     @State private var coins = 0
     @State private var appeared = false
-    @State private var drift = false
 
     static let topics: [(String, String)] = [
         ("Painting", "paintpalette.fill"), ("Digital art", "paintbrush.pointed.fill"), ("Drawing", "pencil.and.scribble"),
@@ -92,20 +91,9 @@ struct WelcomeSetupView: View {
 
     // MARK: pieces
 
-    // Soft colour clouds drifting slowly behind everything.
+    // A plain background: the steps are the focus.
     private var background: some View {
-        ZStack {
-            Palette.bg
-            Circle().fill(accent.light.opacity(0.45)).frame(width: 320).blur(radius: 70)
-                .offset(x: drift ? -120 : -40, y: drift ? -260 : -180)
-            Circle().fill(accent.main.opacity(0.28)).frame(width: 280).blur(radius: 80)
-                .offset(x: drift ? 140 : 60, y: drift ? 220 : 300)
-            Circle().fill(Color(hex: 0xFFD166).opacity(0.18)).frame(width: 200).blur(radius: 60)
-                .offset(x: drift ? 90 : 150, y: drift ? -60 : -140)
-        }
-        .ignoresSafeArea()
-        .animation(.easeInOut(duration: 0.6), value: accent)
-        .onAppear { if !Motion.reduced { withAnimation(.easeInOut(duration: 8).repeatForever(autoreverses: true)) { drift = true } } }
+        Palette.bg.ignoresSafeArea()
     }
 
     private var topBar: some View {
@@ -233,9 +221,8 @@ struct WelcomeSetupView: View {
                         .offset(x: -8, y: -8)
                 }
             }
-            .buttonStyle(BouncyStyle(scale: 0.95))
+            .buttonStyle(SoftPressStyle())
             .accessibilityLabel("Choose a photo")
-            .onAppear { if !Motion.reduced { withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { pulse = true } } }
             .stagger(appeared, 1)
 
             Button(picture == nil ? "Choose a photo" : "Choose another") { pickingPhoto = true }

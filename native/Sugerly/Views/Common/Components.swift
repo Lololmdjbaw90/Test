@@ -95,19 +95,17 @@ struct ToastView: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: toast.icon)
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 30, height: 30)
-                .background(toast.error ? AnyShapeStyle(Palette.danger) : AnyShapeStyle(Theme.gradient), in: Circle())
-                .symbolEffect(.bounce, value: toast.id)
-            Text(toast.text).font(.jakarta(14, .bold)).foregroundStyle(Palette.text).lineLimit(2)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(toast.error ? Palette.danger : Palette.text2)
+                .frame(width: 26, height: 26)
+            Text(toast.text).font(.jakarta(14, .medium)).foregroundStyle(Palette.text).lineLimit(2)
         }
         .padding(.leading, 8)
         .padding(.trailing, 18)
         .padding(.vertical, 8)
         .background(Palette.surface, in: Capsule())
         .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
-        .shadow(color: Theme.main.opacity(0.18), radius: 18, y: 8)
+        .shadow(color: .black.opacity(0.1), radius: 12, y: 4)
         .padding(.horizontal, 20)
         .sensoryFeedback(toast.error ? .error : .success, trigger: toast.id)
     }

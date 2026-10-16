@@ -1,50 +1,29 @@
 import SwiftUI
 
 // The menu: opens from your picture in the top left corner of every main
-// page. You at the top (profile, level, status, coins), the places that
-// aren't tabs as big colourful buttons, then Settings and help, and dark
-// mode and Log out at the bottom. Swipe down or tap Done to close it.
+// page. You at the top (profile, level, status), then your coins and
+// MimiPlus explained in one place, the places that aren't tabs, Settings and
+// help, and dark mode and Log out at the bottom. Swipe down or tap Done to
+// close it.
 struct AccountView: View {
     // Closes the menu and opens a page on the tab you're on.
     var go: (Route) -> Void
     @Environment(AppModel.self) private var model
     @Environment(NotificationsStore.self) private var notes
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shop = false
     @State private var status = false
     @State private var confirmLogout = false
-    @State private var shown = false
-
-    private struct Place: Identifiable {
-        let title: String
-        let icon: String
-        let colors: [UInt32]
-        let action: () -> Void
-        var id: String { title }
-    }
-
-    // The places that aren't tabs.
-    private var places: [Place] {
-        [
-            Place(title: "Music", icon: "music.note", colors: [0xFF7AA2, 0xD9577F]) { go(.music) },
-            Place(title: "Servers", icon: "person.3.fill", colors: [0x7CBEFF, 0x2F80E0]) { go(.servers) },
-            Place(title: "People", icon: "person.crop.circle.badge.plus", colors: [0xFFB86B, 0xF0802A]) { go(.people) },
-            Place(title: "Top artists", icon: "crown.fill", colors: [0xFFD166, 0xE9A100]) { go(.topArtists) },
-            Place(title: "MimiPlus", icon: "sparkles", colors: [0xC084FC, 0x8B5CF6]) { shop = true },
-            Place(title: "Commissions", icon: "storefront.fill", colors: [0x5FD3B0, 0x16A37F]) { go(.commissions) },
-            Place(title: "Sugar World", icon: "gamecontroller.fill", colors: [0x7CBEFF, 0xF27BA3]) { go(.world) },
-            Place(title: "Avatar", icon: "figure.stand", colors: [0xF7A1C4, 0xE0508A]) { go(.avatar) },
-            Place(title: "Catalog", icon: "bag.fill", colors: [0xB19CFF, 0x7C5CF0]) { go(.catalog) },
-        ]
-    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    if let me = model.me { profileCard(me) }
-                    placesGrid
+                VStack(alignment: .leading, spacing: 22) {
+                    if let me = model.me {
+                        profileCard(me)
+                        walletCard(me)
+                    }
+                    exploreCard
                     youCard
                     endCard
                     footer
@@ -61,18 +40,177 @@ struct AccountView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
-                        .font(.jakarta(16, .bold))
+                        .font(.jakarta(16, .semibold))
                 }
             }
         }
         .tint(Theme.main)
         .presentationDragIndicator(.visible)
         .sheet(isPresented: $shop) { NitroShopView() }
-        .sheet(isPresented: $status) { StatusSheet().presentationCornerRadius(30) }
+        .sheet(isPresented: $status) { StatusSheet().presentationCornerRadius(24) }
         .confirmationDialog("Log out of Sugerly?", isPresented: $confirmLogout, titleVisibility: .visible) {
             Button("Log out", role: .destructive) { model.signOut() }
         }
-        .onAppear { shown = true }
+    }
+
+    // MARK: you
+
+    // Your picture, name and level (opens your profile), how far you are to
+    // the next level, your status, and your streak / following.
+    private func profileCard(_ me: UserProfile) -> some View {
+        let info = LevelInfo(xp: me.xp)
+        let presence = Presence(rawValue: me.presence) ?? .online
+        return VStack(spacing: 14) {
+            profileButton(me, info, presence)
+            XPBar(info: info)
+            statusButton(me, presence)
+            HStack(spacing: 0) {
+                stat("\(me.dailyStreak)", "Day streak")
+                Divider().frame(height: 28)
+                stat("\(me.following.count)", "Following")
+                Divider().frame(height: 28)
+                stat("\(info.level)", "Level")
+            }
+            .padding(.vertical, 8)
+            .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .sugarCard(radius: 16, padding: 16)
+    }
+
+    private func profileButton(_ me: UserProfile, _ info: LevelInfo, _ presence: Presence) -> some View {
+        Button { go(.person(me.email)) } label: {
+            HStack(spacing: 14) {
+                Avatar(url: me.picture, name: me.displayName, size: 56, nitro: me.isNitro, presence: presence)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(me.displayName)
+                        .font(.jakarta(20, .semibold)).foregroundStyle(Palette.text)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                    Text("Level \(info.level) · \(info.title)")
+                        .font(.jakarta(13)).foregroundStyle(Palette.muted)
+                }
+                Spacer(minLength: 6)
+                HStack(spacing: 3) {
+                    Text("Profile").font(.jakarta(13, .medium))
+                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundStyle(Palette.muted)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SoftPressStyle(scale: 0.99))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(me.displayName), level \(info.level) \(info.title)")
+        .accessibilityHint("Opens your profile")
+        .accessibilityAddTraits(.isButton)
+    }
+
+    private func statusButton(_ me: UserProfile, _ presence: Presence) -> some View {
+        let text = me.activeStatus.isEmpty ? "\(presence.label) · set a status" : me.activeStatus
+        return Button { status = true } label: {
+            HStack(spacing: 10) {
+                PresenceDot(presence: presence, size: 10)
+                Text(text)
+                    .font(.jakarta(14)).foregroundStyle(Palette.text2).lineLimit(1)
+                Spacer(minLength: 0)
+                Image(systemName: "pencil").font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.muted)
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 42)
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SoftPressStyle())
+        .accessibilityLabel("Status")
+        .accessibilityValue(me.activeStatus.isEmpty ? presence.label : me.activeStatus)
+    }
+
+    private func stat(_ value: String, _ label: String) -> some View {
+        VStack(spacing: 1) {
+            Text(value).font(.jakarta(16, .semibold)).foregroundStyle(Palette.text).lineLimit(1).minimumScaleFactor(0.7)
+            Text(label).font(.jakarta(11)).foregroundStyle(Palette.muted).lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: coins & MimiPlus
+
+    // What you have and what it's for, in plain words. Both rows open the
+    // same page, which explains how to earn coins and what MimiPlus gives you.
+    private func walletCard(_ me: UserProfile) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            card("COINS & MIMIPLUS") {
+                Button { shop = true } label: {
+                    HStack(spacing: 12) {
+                        CoinIcon(size: 30)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Coins").font(.jakarta(16, .medium)).foregroundStyle(Palette.text)
+                            Text("Earned in the app, spent on MimiPlus").font(.jakarta(12)).foregroundStyle(Palette.muted)
+                        }
+                        Spacer(minLength: 6)
+                        Text(me.coins.formatted()).font(.jakarta(16, .semibold)).foregroundStyle(Palette.text)
+                            .contentTransition(.numericText())
+                        chevron
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 11)
+                }
+                .buttonStyle(RowPressStyle())
+                .accessibilityLabel("Coins, \(me.coins)")
+                .accessibilityHint("Shows how to earn and spend coins")
+                divider
+                Button { shop = true } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(NitroStyle.tint)
+                            .frame(width: 30, height: 30)
+                            .background(NitroStyle.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("MimiPlus").font(.jakarta(16, .medium)).foregroundStyle(Palette.text)
+                            Text(nitroDetail(me)).font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(2)
+                        }
+                        Spacer(minLength: 6)
+                        Text(me.isNitro ? "Active" : "\(NitroStyle.cost) coins")
+                            .font(.jakarta(13, .medium))
+                            .foregroundStyle(me.isNitro ? Palette.success : Palette.muted)
+                        chevron
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 11)
+                }
+                .buttonStyle(RowPressStyle())
+                .accessibilityLabel(me.isNitro ? "MimiPlus, active" : "MimiPlus")
+            }
+            Text("Coins can't be bought with money. You get them from the daily reward, posting and inviting friends.")
+                .font(.jakarta(12)).foregroundStyle(Palette.muted)
+                .padding(.horizontal, 6)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func nitroDetail(_ me: UserProfile) -> String {
+        guard me.isNitro else { return "Extra profile looks, paid with coins" }
+        if let until = Dates.parse(me.nitroUntil) {
+            return "Until \(until.formatted(date: .abbreviated, time: .omitted)), then it simply ends"
+        }
+        return "Your extra profile looks are on"
+    }
+
+    // MARK: places
+
+    // The places that aren't tabs.
+    private var exploreCard: some View {
+        card("EXPLORE") {
+            row("Music", "Songs from the community", "music.note") { go(.music) }
+            divider
+            row("Servers", "Group chats with voice rooms", "person.3") { go(.servers) }
+            divider
+            row("People", "Find people to follow", "person.crop.circle.badge.plus") { go(.people) }
+            divider
+            row("Top artists", "This month's most liked", "crown") { go(.topArtists) }
+            divider
+            row("Commissions", "Order art from artists", "storefront") { go(.commissions) }
+        }
     }
 
     // Notifications, Settings, what's new and help.
@@ -83,30 +221,30 @@ struct AccountView: View {
             NavigationLink {
                 SettingsView()
             } label: {
-                rowLabel("Settings", "Account, privacy and colours", "gearshape.fill", [0x8FA3B8, 0x5B6B80])
+                rowLabel("Settings", "Account, privacy and colours", "gearshape")
             }
             .buttonStyle(RowPressStyle())
             divider
-            row("What's new", "The latest updates", "gift.fill", [0xFF9EC4, 0xE0508A]) { go(.updates) }
+            row("What's new", "The latest updates", "gift") { go(.updates) }
             divider
-            row("Help & support", "Chat with the Sugerly team", "questionmark.bubble.fill", [0x5FD3B0, 0x16A37F]) { go(.support) }
+            row("Help & support", "Chat with the Sugerly team", "questionmark.bubble") { go(.support) }
             if model.me?.isAdmin == true {
                 divider
-                row("Admin", "Manage Sugerly", "shield.lefthalf.filled", [0xFFD166, 0xF0A020]) { go(.admin) }
+                row("Admin", "Manage Sugerly", "shield.lefthalf.filled") { go(.admin) }
             }
         }
     }
 
-    // With a pink count of the new ones.
+    // With a count of the new ones.
     private var notificationsRow: some View {
         Button { go(.notifications) } label: {
             HStack(spacing: 8) {
-                IconRow(title: "Notifications", detail: "Likes, follows and mentions", icon: "bell.fill", colors: [0xB19CFF, 0x7C5CF0])
+                IconRow(title: "Notifications", detail: "Likes, follows and mentions", icon: "bell")
                 if notes.unread > 0 {
                     Text("\(notes.unread)")
-                        .font(.jakarta(12, .heavy)).foregroundStyle(.white)
-                        .padding(.horizontal, 8).frame(minWidth: 24, minHeight: 22)
-                        .background(Theme.main, in: Capsule())
+                        .font(.jakarta(12, .semibold)).foregroundStyle(.white)
+                        .padding(.horizontal, 7).frame(minWidth: 22, minHeight: 20)
+                        .background(Palette.danger, in: Capsule())
                 }
                 chevron
             }
@@ -120,13 +258,13 @@ struct AccountView: View {
     private var endCard: some View {
         card(nil) {
             Toggle(isOn: darkMode) {
-                IconRow(title: "Dark mode", icon: "moon.fill", colors: [0x9D8CFF, 0x5B47D6])
+                IconRow(title: "Dark mode", icon: "moon")
             }
             .tint(Theme.main)
             .padding(.horizontal, 14).padding(.vertical, 9)
             divider
             Button { confirmLogout = true } label: {
-                IconRow(title: "Log out", icon: "rectangle.portrait.and.arrow.right", colors: [0xF07A8E, 0xD9455F], danger: true)
+                IconRow(title: "Log out", icon: "rectangle.portrait.and.arrow.right", danger: true)
                     .padding(.horizontal, 14).padding(.vertical, 9)
             }
             .buttonStyle(RowPressStyle())
@@ -140,148 +278,26 @@ struct AccountView: View {
         })
     }
 
-    // MARK: you
-
-    // Your picture, name and level (opens your profile), how far you are to
-    // the next level, your status, and your coins / streak / following.
-    private func profileCard(_ me: UserProfile) -> some View {
-        let info = LevelInfo(xp: me.xp)
-        let presence = Presence(rawValue: me.presence) ?? .online
-        return VStack(spacing: 14) {
-            profileButton(me, info, presence)
-            XPBar(info: info)
-            statusButton(me, presence)
-            HStack(spacing: 8) {
-                stat("\(me.coins)", "Coins", "circle.hexagongrid.fill", Color(hex: 0xF0A020))
-                stat("\(me.dailyStreak)", "Day streak", "flame.fill", Color(hex: 0xF08A20))
-                stat("\(me.following.count)", "Following", "heart.fill", Theme.main)
-            }
-        }
-        .sugarCard(radius: 26, padding: 16)
-        .opacity(shown || reduceMotion ? 1 : 0)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: shown)
-    }
-
-    private func profileButton(_ me: UserProfile, _ info: LevelInfo, _ presence: Presence) -> some View {
-        Button { go(.person(me.email)) } label: {
-            HStack(spacing: 14) {
-                Avatar(url: me.picture, name: me.displayName, size: 64, nitro: me.isNitro, presence: presence)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(me.displayName)
-                        .font(.display(26)).foregroundStyle(Palette.text)
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                    Text("Lv. \(info.level) · \(info.title)")
-                        .font(.jakarta(12, .heavy)).foregroundStyle(info.color)
-                        .padding(.horizontal, 9).padding(.vertical, 4)
-                        .background(info.color.opacity(0.14), in: Capsule())
-                }
-                Spacer(minLength: 6)
-                HStack(spacing: 3) {
-                    Text("Profile").font(.jakarta(13, .bold))
-                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .heavy))
-                }
-                .foregroundStyle(Theme.main)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(BouncyStyle(scale: 0.98))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(me.displayName), level \(info.level) \(info.title)")
-        .accessibilityHint("Opens your profile")
-        .accessibilityAddTraits(.isButton)
-    }
-
-    private func statusButton(_ me: UserProfile, _ presence: Presence) -> some View {
-        let text = me.activeStatus.isEmpty ? "\(presence.label) · tap to set a status" : me.activeStatus
-        return Button { status = true } label: {
-            HStack(spacing: 10) {
-                PresenceDot(presence: presence, size: 12)
-                Text(text)
-                    .font(.jakarta(14, .semibold)).foregroundStyle(Palette.text2).lineLimit(1)
-                Spacer(minLength: 0)
-                Image(systemName: "pencil").font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.muted)
-            }
-            .padding(.horizontal, 14)
-            .frame(height: 44)
-            .background(Palette.surface2, in: Capsule())
-            .contentShape(Capsule())
-        }
-        .buttonStyle(BouncyStyle(scale: 0.97))
-        .accessibilityLabel("Status")
-        .accessibilityValue(me.activeStatus.isEmpty ? presence.label : me.activeStatus)
-    }
-
-    private func stat(_ value: String, _ label: String, _ icon: String, _ color: Color) -> some View {
-        VStack(spacing: 3) {
-            HStack(spacing: 4) {
-                Image(systemName: icon).font(.system(size: 11, weight: .bold)).foregroundStyle(color)
-                Text(value).font(.jakarta(16, .heavy)).foregroundStyle(Palette.text).lineLimit(1).minimumScaleFactor(0.7)
-            }
-            Text(label).font(.jakarta(11, .semibold)).foregroundStyle(Palette.muted).lineLimit(1)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .accessibilityElement(children: .combine)
-    }
-
-    // MARK: places
-
-    // Big colourful buttons, three in a row: easy to spot and to hit.
-    private var placesGrid: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ListHeader(title: "EXPLORE").padding(.leading, 6)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                ForEach(Array(places.enumerated()), id: \.element.id) { i, place in
-                    Button(action: place.action) {
-                        VStack(spacing: 9) {
-                            Image(systemName: place.icon)
-                                .font(.system(size: 20, weight: .bold))
-                                .foregroundStyle(.white)
-                                .frame(width: 48, height: 48)
-                                .background(LinearGradient(colors: place.colors.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing),
-                                            in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-                            Text(place.title)
-                                .font(.jakarta(13, .bold)).foregroundStyle(Palette.text)
-                                .lineLimit(1).minimumScaleFactor(0.75)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .padding(.horizontal, 6)
-                        .sugarCard(radius: 22)
-                        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    }
-                    .buttonStyle(BouncyStyle(scale: 0.94))
-                    .accessibilityLabel(place.title)
-                    // They pop in one after another.
-                    .scaleEffect(shown || reduceMotion ? 1 : 0.88)
-                    .opacity(shown || reduceMotion ? 1 : 0)
-                    .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.74).delay(0.04 + Double(i) * 0.035), value: shown)
-                }
-            }
-        }
-    }
-
     // MARK: lists
 
     private func card<Content: View>(_ title: String?, @ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             if let title { ListHeader(title: title).padding(.leading, 6) }
             VStack(spacing: 0) { content() }
                 // Rows light up when pressed; keep that inside the round corners.
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .sugarCard(radius: 22)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .sugarCard(radius: 16)
         }
     }
 
-    private func row(_ title: String, _ detail: String, _ icon: String, _ colors: [UInt32], action: @escaping () -> Void) -> some View {
-        Button(action: action) { rowLabel(title, detail, icon, colors) }
+    private func row(_ title: String, _ detail: String, _ icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) { rowLabel(title, detail, icon) }
             .buttonStyle(RowPressStyle())
     }
 
-    private func rowLabel(_ title: String, _ detail: String, _ icon: String, _ colors: [UInt32]) -> some View {
+    private func rowLabel(_ title: String, _ detail: String, _ icon: String) -> some View {
         HStack(spacing: 8) {
-            IconRow(title: title, detail: detail, icon: icon, colors: colors)
+            IconRow(title: title, detail: detail, icon: icon)
             chevron
         }
         .padding(.horizontal, 14).padding(.vertical, 9)
@@ -294,7 +310,7 @@ struct AccountView: View {
     }
 
     private var divider: some View {
-        Divider().padding(.leading, 58)
+        Divider().padding(.leading, 56)
     }
 
     // Which version of the app this is (handy when checking TestFlight).
@@ -303,7 +319,7 @@ struct AccountView: View {
         let version = info?["CFBundleShortVersionString"] as? String ?? "1.0"
         let build = info?["CFBundleVersion"] as? String ?? ""
         return Text(build.isEmpty ? "Sugerly \(version)" : "Sugerly \(version) · build \(build)")
-            .font(.jakarta(12, .semibold))
+            .font(.jakarta(12))
             .foregroundStyle(Palette.muted)
             .frame(maxWidth: .infinity)
             .padding(.top, 2)

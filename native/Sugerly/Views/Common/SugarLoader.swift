@@ -1,8 +1,7 @@
 import SwiftUI
 
-// Sugerly's loading sign: three little hearts in your colour that hop one
-// after another (instead of the grey iPhone spinner). With Reduce Motion
-// they only glow softly in turn.
+// Sugerly's loading sign: three small dots that brighten one after another.
+// Nothing jumps; with Reduce Motion they brighten more slowly.
 struct SugarLoader: View {
     var size: CGFloat = 12
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -16,29 +15,20 @@ struct SugarLoader: View {
     }
 
     private func hearts(at t: Double) -> some View {
-        HStack(spacing: size * 0.55) {
+        HStack(spacing: size * 0.5) {
             ForEach(0..<3, id: \.self) { i in
-                heart(hop: Self.hop(t, i))
+                Circle()
+                    .fill(Palette.text2)
+                    .frame(width: size * 0.62, height: size * 0.62)
+                    .opacity(0.25 + 0.65 * Self.hop(t * (reduceMotion ? 0.5 : 1), i))
             }
         }
-        .padding(.top, size * 0.7)
-    }
-
-    private func heart(hop: Double) -> some View {
-        let lift: CGFloat = reduceMotion ? 0 : -size * 0.7 * CGFloat(hop)
-        let grow: CGFloat = reduceMotion ? 1 : 1 + 0.15 * CGFloat(hop)
-        let fade: Double = reduceMotion ? 0.45 + 0.55 * hop : 1
-        return Image(systemName: "heart.fill")
-            .font(.system(size: size, weight: .bold))
-            .foregroundStyle(Theme.gradient)
-            .offset(y: lift)
-            .scaleEffect(grow)
-            .opacity(fade)
+        .frame(height: size)
     }
 
     // 0…1…0 for the first half of each beat, resting for the second half.
     private static func hop(_ t: Double, _ i: Int) -> Double {
-        let raw: Double = t * 2.2 - Double(i) * 0.18
+        let raw: Double = t * 1.6 - Double(i) * 0.2
         let phase: Double = raw - raw.rounded(.down)
         return phase < 0.5 ? sin(phase * 2 * Double.pi) : 0
     }

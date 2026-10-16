@@ -100,7 +100,7 @@ struct MusicView: View {
             if !query.isEmpty { try? await Task.sleep(for: .milliseconds(350)) }
             await loadCharts()
         }
-        .sheet(item: $fullFor) { t in FullSongSheet(track: t).presentationDetents([.height(AppleMusic.shared.canPlayFull ? 440 : 360)]).presentationCornerRadius(32) }
+        .sheet(item: $fullFor) { t in FullSongSheet(track: t).presentationDetents([.height(AppleMusic.shared.canPlayFull ? 440 : 360)]).presentationCornerRadius(24) }
         .fullScreenCover(isPresented: $uploading) { NewTrackView() }
     }
 

@@ -212,7 +212,7 @@ struct EmailCodeSheet: View {
         .scrollDismissesKeyboard(.interactively)
         .sugarBackground()
         .presentationDetents([.large])
-        .presentationCornerRadius(30)
+        .presentationCornerRadius(24)
         .sensoryFeedback(.error, trigger: error)
         .motion(Motion.standard, value: sent)
         .motion(Motion.standard, value: error)
@@ -378,7 +378,7 @@ struct BackupLoginSheet: View {
         .scrollDismissesKeyboard(.interactively)
         .sugarBackground()
         .presentationDetents([.large])
-        .presentationCornerRadius(30)
+        .presentationCornerRadius(24)
         .sensoryFeedback(.error, trigger: error)
         .motion(Motion.standard, value: error)
     }
@@ -435,7 +435,7 @@ struct QuickLoginSheet: View {
         }
         .sugarBackground()
         .presentationDetents([.large])
-        .presentationCornerRadius(30)
+        .presentationCornerRadius(24)
         .motion(Motion.standard, value: status)
         .sensoryFeedback(.success, trigger: status) { _, new in new == "approved" }
         .task(id: round) { await run() }
@@ -614,7 +614,7 @@ struct QuickApproveSheet: View {
         .scrollDismissesKeyboard(.interactively)
         .sugarBackground()
         .presentationDetents([.large])
-        .presentationCornerRadius(30)
+        .presentationCornerRadius(24)
         .motion(Motion.standard, value: device)
         .motion(Motion.standard, value: done)
         .motion(Motion.standard, value: error)
@@ -874,7 +874,7 @@ struct BackupCodesSheet: View {
             }
             .task { await load() }
         }
-        .presentationCornerRadius(30)
+        .presentationCornerRadius(24)
     }
 
     private var status: some View {

@@ -316,7 +316,7 @@ struct CommissionsView: View {
                 Task { @MainActor in try? await Task.sleep(for: .milliseconds(300)); editing = c }
             }, changed: { Task { await load() } })
             .presentationDetents([.large])
-            .presentationCornerRadius(32)
+            .presentationCornerRadius(24)
         }
     }
 
@@ -948,7 +948,7 @@ struct CommissionDetail: View {
                     dismiss()
                     open(.commissionOrder(orderId))
                 }
-                .presentationCornerRadius(30)
+                .presentationCornerRadius(24)
             }
         }
         .confirmationDialog("Delete this listing?", isPresented: $confirmDelete, titleVisibility: .visible) {

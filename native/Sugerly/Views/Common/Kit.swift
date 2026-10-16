@@ -3,7 +3,7 @@ import UIKit
 
 // The frame every page sits in: iPhone's own tab bar and top bars (so the
 // back button, the swipe back, the keyboard and the safe areas all behave
-// exactly like other iPhone apps), in Sugerly's pink.
+// exactly like other iPhone apps), in Sugerly's calm neutrals.
 
 // MARK: - Main pages (the first page of each tab)
 
@@ -45,7 +45,7 @@ private struct RootBar: ViewModifier {
                 } label: {
                     BarIcon(icon: "magnifyingglass")
                 }
-                .buttonStyle(BouncyStyle(scale: 0.88, sound: false))
+                .buttonStyle(SoftPressStyle(scale: 0.94))
                 .accessibilityLabel("Search")
             }
             Button {
@@ -53,10 +53,9 @@ private struct RootBar: ViewModifier {
                 bellTaps += 1
                 model.showNotifications = true
             } label: {
-                // The bell gives a little wiggle when tapped.
                 BarIcon(icon: notes.unread > 0 ? "bell.badge.fill" : "bell", alert: notes.unread > 0, bounce: bellTaps)
             }
-            .buttonStyle(BouncyStyle(scale: 0.88, sound: false))
+            .buttonStyle(SoftPressStyle(scale: 0.94))
             .accessibilityLabel("Notifications")
             .accessibilityValue(notes.unread > 0 ? "\(notes.unread) new" : "")
             if create {
@@ -108,7 +107,6 @@ private struct BarIcon: View {
             .symbolRenderingMode(alert ? .multicolor : .monochrome)
             .foregroundStyle(Palette.text2)
             .contentTransition(.symbolEffect(.replace))
-            .symbolEffect(.bounce, value: bounce)
             .frame(width: 34, height: 34)
             .background(Palette.surface, in: Circle())
             .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
@@ -137,66 +135,57 @@ private struct CompactTabBar: ViewModifier {
 }
 
 enum TabBarLook {
-    // Before iOS 26 (which draws its own floating glass bar): a soft blush
-    // frosted bar, quiet icons, the pink one for the tab you're on, and
-    // pink badges, in Sugerly's font.
+    // Before iOS 26 (which draws its own floating glass bar): a plain
+    // frosted bar matching the page, quiet grey icons, the accent for the
+    // tab you're on, and red badges, in the iPhone's own font.
     static func apply() {
         guard #unavailable(iOS 26.0) else { return }
-        let small = UIFont(name: "PlusJakartaSans-SemiBold", size: 10) ?? .systemFont(ofSize: 10, weight: .semibold)
-        let bold = UIFont(name: "PlusJakartaSans-Bold", size: 10) ?? .systemFont(ofSize: 10, weight: .bold)
-        let muted = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x86707C) : UIColor(hex: 0x9C8A93) }
+        let small = UIFont.systemFont(ofSize: 10, weight: .medium)
+        let bold = UIFont.systemFont(ofSize: 10, weight: .semibold)
+        let muted = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x85817B) : UIColor(hex: 0x8A867F) }
         let bar = UITabBarAppearance()
         bar.configureWithDefaultBackground()
         bar.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterial)
-        bar.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x140A11, alpha: 0.72) : UIColor(hex: 0xFFF3F7, alpha: 0.8) }
-        bar.shadowColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x351F2C) : UIColor(hex: 0xF8D9E4) }
+        bar.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x111111, alpha: 0.78) : UIColor(hex: 0xF6F5F2, alpha: 0.82) }
+        bar.shadowColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x2C2C2C) : UIColor(hex: 0xE5E3DE) }
         for layout in [bar.stackedLayoutAppearance, bar.inlineLayoutAppearance, bar.compactInlineLayoutAppearance] {
             layout.normal.iconColor = muted
             layout.normal.titleTextAttributes = [.foregroundColor: muted, .font: small]
             layout.selected.titleTextAttributes = [.font: bold]
-            layout.normal.badgeBackgroundColor = UIColor(hex: 0xE8457C)
-            layout.selected.badgeBackgroundColor = UIColor(hex: 0xE8457C)
+            layout.normal.badgeBackgroundColor = UIColor(hex: 0xD64545)
+            layout.selected.badgeBackgroundColor = UIColor(hex: 0xD64545)
         }
         UITabBar.appearance().standardAppearance = bar
         UITabBar.appearance().scrollEdgeAppearance = bar
     }
 }
 
-// The + (and other "make something" buttons): a bright pink circle that
-// gives a little bounce when the page opens, so it's easy to spot.
+// The + (and other "make something" buttons): a solid accent circle, the
+// one spot of colour in the top bar so it's easy to find. Still.
 struct PinkCircleButton: View {
     let icon: String
     let label: String
     var action: () -> Void
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var bounce = 0
 
     var body: some View {
         Button {
             TapSound.play(.tap)
-            bounce += 1
             action()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .heavy))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.white)
-                .symbolEffect(.bounce, value: bounce)
                 .frame(width: 34, height: 34)
-                .background(Theme.gradient, in: Circle())
+                .background(Theme.main, in: Circle())
                 .contentShape(Circle())
         }
-        .buttonStyle(BouncyStyle(scale: 0.86, sound: false))
+        .buttonStyle(SoftPressStyle(scale: 0.94))
         .accessibilityLabel(label)
-        .task {
-            guard !reduceMotion else { return }
-            try? await Task.sleep(for: .seconds(0.9))
-            bounce += 1
-        }
     }
 }
 
-// The menu button in the top left corner: a little pill with the pink
-// menu lines and your picture, so it's clear it opens something.
+// The menu button in the top left corner: a little pill with the menu
+// lines and your picture, so it's clear it opens something.
 struct AccountButton: View {
     @Environment(AppModel.self) private var model
 
@@ -206,8 +195,8 @@ struct AccountButton: View {
         } label: {
             HStack(spacing: 7) {
                 Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 15, weight: .heavy))
-                    .foregroundStyle(Theme.main)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Palette.text2)
                 Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 28)
             }
             .padding(.leading, 11)
@@ -218,13 +207,13 @@ struct AccountButton: View {
             .contentShape(Capsule())
         }
         // (No click: the menu opening makes its own sound.)
-        .buttonStyle(BouncyStyle(scale: 0.9, sound: false))
+        .buttonStyle(SoftPressStyle(scale: 0.95))
         .accessibilityLabel("Menu")
         .accessibilityHint("Your profile, music, servers, settings and more")
     }
 }
 
-// The first-time hint for the menu: a small pink-edged bubble just under
+// The first-time hint for the menu: a small bubble just under
 // the menu button, once, a moment after the app opens. It goes away by
 // itself after 5 seconds, when tapped, or when the menu opens. (Drawn on
 // the page, not as a pop-up from the bar, so there's no glass and no lag.)
@@ -254,26 +243,26 @@ private struct MenuHintBubble: View {
                 .padding(.leading, 26)
             HStack(spacing: 10) {
                 Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 13, weight: .heavy))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Palette.text)
                     .frame(width: 30, height: 30)
-                    .background(Theme.gradient, in: Circle())
+                    .background(Palette.surface2, in: Circle())
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Your menu").font(.display(17)).foregroundStyle(Palette.text)
+                    Text("Your menu").font(.jakarta(15, .semibold)).foregroundStyle(Palette.text)
                     Text("Profile, music, servers & settings").font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)
                 }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.main.opacity(0.25), lineWidth: 1))
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
         }
-        .shadow(color: Theme.main.opacity(0.16), radius: 12, y: 6)
+        .shadow(color: .black.opacity(0.1), radius: 10, y: 4)
         .padding(.leading, 12)
         .padding(.top, 2)
         .contentShape(Rectangle())
         .onTapGesture { hide() }
-        .transition(.scale(scale: 0.85, anchor: .topLeading).combined(with: .opacity))
+        .transition(.opacity.combined(with: .offset(y: -4)))
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
     }
@@ -285,7 +274,7 @@ private struct MenuHintBubble: View {
         try? await Task.sleep(for: .seconds(1.2))
         guard !Task.isCancelled, !seen else { return }
         seen = true
-        withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.4, dampingFraction: 0.72)) { shown = true }
+        withAnimation(.easeOut(duration: reduceMotion ? 0.2 : 0.25)) { shown = true }
         try? await Task.sleep(for: .seconds(5))
         hide()
     }
@@ -375,18 +364,16 @@ private struct ScrollFade: ViewModifier {
         } else {
             let vertical = axis == .vertical
             content.scrollTransition(.interactive.threshold(.visible(vertical ? 0.3 : 0.45)), axis: axis) { view, phase in
-                view
-                    .opacity(phase.isIdentity ? 1 : 0.55)
-                    .scaleEffect(phase.isIdentity ? 1 : (vertical ? 0.97 : 0.94))
+                view.opacity(phase.isIdentity ? 1 : 0.8)
             }
         }
     }
 }
 
-// MARK: - Titles in the round font
+// MARK: - Page titles
 
 extension View {
-    /// The page's name in the round font, in the middle of the top bar.
+    /// The page's name in the middle of the top bar.
     func roundTitle(_ title: String) -> some View {
         self
             .navigationTitle(title)
@@ -394,7 +381,7 @@ extension View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text(title)
-                        .font(.display(24))
+                        .font(.jakarta(17, .semibold))
                         .foregroundStyle(Palette.text)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -404,8 +391,8 @@ extension View {
     }
 }
 
-// Two titles in the round font with a pink pill behind the one you're on
-// (sits in the middle of the top bar, so it takes no extra room).
+// Two titles as a small segmented switch: the one you're on sits on a
+// white tab (in the middle of the top bar, so it takes no extra room).
 struct TitleSwitch: View {
     let titles: [String]
     @Binding var selection: Int
@@ -419,13 +406,14 @@ struct TitleSwitch: View {
                     withMotion(Motion.standard) { selection = i }
                 } label: {
                     Text(title)
-                        .font(.display(19))
-                        .foregroundStyle(selection == i ? Color.white : Palette.text2)
+                        .font(.jakarta(15, .semibold))
+                        .foregroundStyle(selection == i ? Palette.text : Palette.muted)
                         .padding(.horizontal, 14)
-                        .frame(height: 32)
+                        .frame(height: 30)
                         .background {
                             if selection == i {
-                                Capsule().fill(Theme.gradient)
+                                Capsule().fill(Palette.surface)
+                                    .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
                                     .matchedGeometryEffect(id: "pill", in: pill)
                             }
                         }
@@ -444,7 +432,7 @@ struct TitleSwitch: View {
 // MARK: - Lists in Sugerly's colours
 
 extension View {
-    /// A native grouped list on the blush background with white cards.
+    /// A native grouped list on the page background with white cards.
     func sugarList() -> some View {
         self
             .scrollContentBackground(.hidden)
@@ -452,7 +440,9 @@ extension View {
     }
 }
 
-// A row title with a little gradient icon tile (lists, account, settings).
+// A row title with a small grey icon tile (lists, account, settings). The
+// colours the pages pass in aren't used any more: rows of rainbow tiles
+// made every list look the same and busy.
 struct IconRow: View {
     let title: String
     var detail: String? = nil
@@ -465,20 +455,19 @@ struct IconRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 32, height: 32)
-                .background(LinearGradient(colors: colors.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing),
-                            in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(danger ? Palette.danger : Palette.text2)
+                .frame(width: 30, height: 30)
+                .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.jakarta(15, .semibold)).foregroundStyle(danger ? Palette.danger : Palette.text)
+                Text(title).font(.jakarta(16, .medium)).foregroundStyle(danger ? Palette.danger : Palette.text)
                 if let detail, !detail.isEmpty {
                     Text(detail).font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(2)
                 }
             }
             Spacer(minLength: 6)
             if let value {
-                Text(value).font(.jakarta(14, .semibold)).foregroundStyle(Palette.muted)
+                Text(value).font(.jakarta(15)).foregroundStyle(Palette.muted)
             }
             if chevron {
                 Image(systemName: "chevron.right")
@@ -495,7 +484,7 @@ struct IconRow: View {
 struct ListHeader: View {
     let title: String
     var body: some View {
-        Text(title).font(.jakarta(12, .heavy)).tracking(0.8).foregroundStyle(Palette.muted)
+        Text(title).font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
     }
 }
 

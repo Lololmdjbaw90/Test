@@ -3,22 +3,20 @@ import UIKit
 
 @main
 struct SugerlyApp: App {
-    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = AppModel()
 
     init() {
         // Keep pictures around so feeds scroll without reloading them.
         URLCache.shared = URLCache(memoryCapacity: 64 * 1024 * 1024, diskCapacity: 400 * 1024 * 1024)
-        // Page titles in the iPhone's fully round letters.
+        // Page titles in the iPhone's own font, like other apps.
         let nav = UINavigationBar.appearance()
-        nav.titleTextAttributes = [.font: UIFont.rounded(19)]
-        nav.largeTitleTextAttributes = [.font: UIFont.rounded(32)]
-        // The tab bar's labels in Sugerly's font, and its look before iOS 26.
-        if let small = UIFont(name: "PlusJakartaSans-SemiBold", size: 10) {
-            let item = UITabBarItem.appearance()
-            item.setTitleTextAttributes([.font: small], for: .normal)
-            item.setTitleTextAttributes([.font: small], for: .selected)
-        }
+        nav.titleTextAttributes = [.font: UIFont.systemFont(ofSize: 17, weight: .semibold)]
+        nav.largeTitleTextAttributes = [.font: UIFont.systemFont(ofSize: 32, weight: .bold)]
+        // The tab bar's labels, and its look before iOS 26.
+        let small = UIFont.systemFont(ofSize: 10, weight: .medium)
+        let item = UITabBarItem.appearance()
+        item.setTitleTextAttributes([.font: small], for: .normal)
+        item.setTitleTextAttributes([.font: small], for: .selected)
         TabBarLook.apply()
         // Notifications + background checks have to be set up at launch.
         Alerts.shared.registerBackground()
@@ -53,7 +51,6 @@ struct RootView: View {
     private var site = SiteTheme.shared
     private var connection = Connection.shared
 
-    @State private var colorFlash = false
     // Tapping the no-internet card hides it until the next time it drops.
     @State private var offlineHidden = false
 
@@ -81,13 +78,11 @@ struct RootView: View {
             Theme.custom = custom
             return
         }
-        // A soft wash of the new colour sweeps over while everything fades to it.
-        withAnimation(.easeInOut(duration: 0.5)) {
+        // Everything fades over to the new colour.
+        withAnimation(.easeInOut(duration: 0.4)) {
             Theme.accent = model.accent
             Theme.custom = custom
-            colorFlash = true
         }
-        withAnimation(.easeOut(duration: 0.6).delay(0.25)) { colorFlash = false }
     }
 
     var body: some View {
@@ -128,10 +123,6 @@ struct RootView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .sugarBackground()
             }
-            Theme.gradient
-                .opacity(colorFlash ? 0.22 : 0)
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
             if connection.offline && !offlineHidden && model.phase == .signedIn {
                 VStack {
                     OfflineNotice()
@@ -221,14 +212,13 @@ struct SettingUpCover: View {
     var body: some View {
         VStack(spacing: 14) {
             MimiBuddy(icon: "sparkles", mood: .happy, size: 130, animated: false)
-            Text("Setting things up for you").font(.display(28)).foregroundStyle(Palette.text)
+            Text("Setting things up for you").font(.display(26)).foregroundStyle(Palette.text)
                 .multilineTextAlignment(.center)
             HStack(spacing: 8) {
                 ForEach(0..<3, id: \.self) { i in
-                    Circle().fill(Theme.main)
-                        .frame(width: 9, height: 9)
-                        .opacity(dot == i ? 1 : 0.3)
-                        .scaleEffect(dot == i ? 1.15 : 0.9)
+                    Circle().fill(Palette.text)
+                        .frame(width: 7, height: 7)
+                        .opacity(dot == i ? 0.9 : 0.2)
                 }
             }
             .animation(.easeInOut(duration: 0.3), value: dot)
@@ -248,13 +238,14 @@ struct SettingUpCover: View {
     }
 }
 
-// The icon stays still (Mimi never moves); only its sparkles twinkle.
+// The app icon and name while Sugerly opens. Nothing moves but the loader.
 struct SplashView: View {
     var body: some View {
-        VStack(spacing: 16) {
-            AppBadge(size: 132)
-            BrandLogo(height: 58)
-            SugarLoader(size: 13)
+        VStack(spacing: 18) {
+            AppBadge(size: 96)
+            BrandLogo(height: 40)
+            SugarLoader(size: 11)
+                .padding(.top, 6)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .sugarBackground()

@@ -23,28 +23,30 @@ enum DailyReward {
     }
 
     static let failed = "Couldn't collect it right now. Check your connection and try again."
+
+    // "1-day", "4-day" (the old text said "1 days").
+    static func days(_ n: Int) -> String { "\(n)-day" }
 }
 
+// The daily reward row inside the Home card. Before you collect it, it's a
+// solid row in your colour that says how many coins you'll get; afterwards
+// it turns into a quiet grey line until tomorrow.
 struct DailyRewardButton: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var confetti = false
-    @State private var wiggle = false
     @State private var claiming = false
 
     var body: some View {
         let status = DailyReward.status(model.me)
+        let next = DailyReward.amount(status.streak + 1)
         Button {
             guard !status.claimed, !claiming else { return }
             claiming = true
             Task {
                 defer { claiming = false }
                 do {
-                    if try await DailyReward.claim(model) != nil {
+                    if let got = try await DailyReward.claim(model) {
                         RewardSound.play()
-                        confetti = true
-                        try? await Task.sleep(for: .seconds(2))
-                        confetti = false
+                        model.showToast("+\(got) coins collected", icon: "checkmark.circle")
                     }
                 } catch {
                     model.showToast(DailyReward.failed, error: true)
@@ -52,44 +54,36 @@ struct DailyRewardButton: View {
             }
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: "gift.fill")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(status.claimed ? AnyShapeStyle(Theme.pink) : AnyShapeStyle(Color.white))
-                    .frame(width: 42, height: 42)
-                    .background(status.claimed ? Theme.pink.opacity(0.12) : Color.white.opacity(0.22), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-                    // A light bounce the system draws (it used to wiggle
-                    // non-stop, which kept Home redrawing all the time).
-                    .symbolEffect(.bounce, options: .repeat(2), value: !status.claimed && wiggle && !reduceMotion)
+                Image(systemName: status.claimed ? "checkmark" : "gift")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(status.claimed ? Palette.text2 : Color.white)
+                    .frame(width: 38, height: 38)
+                    .background(status.claimed ? Palette.surface : Color.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(status.claimed ? "Daily reward claimed" : "Claim daily reward").font(.jakarta(15, .bold))
-                    HStack(spacing: 4) {
-                        Image(systemName: "flame.fill").font(.system(size: 11))
-                        Text(status.streak > 0 ? "\(status.streak)-day streak" : "Start a streak today").font(.jakarta(12, .medium))
-                    }
-                    .opacity(0.85)
+                    Text(status.claimed ? "Today's coins collected" : "Collect today's coins").font(.jakarta(15, .semibold))
+                    Text(status.claimed
+                         ? (status.streak > 0 ? "\(DailyReward.days(status.streak)) streak · back tomorrow" : "Come back tomorrow")
+                         : "+\(next) coins and 10 XP" + (status.streak > 0 ? " · \(DailyReward.days(status.streak)) streak" : ""))
+                        .font(.jakarta(13))
+                        .opacity(status.claimed ? 1 : 0.85)
                 }
-                .foregroundStyle(status.claimed ? Palette.text : .white)
+                .foregroundStyle(status.claimed ? Palette.text2 : .white)
                 Spacer(minLength: 0)
-                if claiming { ProgressView().tint(.white) }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background {
-                if status.claimed {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Palette.surface)
-                        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
-                } else {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.gradient)
-                        .shadow(color: Theme.pink.opacity(0.45), radius: 16, y: 8)
+                if claiming {
+                    ProgressView().tint(status.claimed ? Palette.text2 : .white)
+                } else if !status.claimed {
+                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.8))
                 }
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(status.claimed ? Palette.surface2 : Theme.main, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .animation(Motion.fade, value: status.claimed)
         }
-        .buttonStyle(BouncyStyle(scale: 0.96))
-        .overlay {
-            if confetti { SparkleBurst(radius: 70) }
-        }
+        .buttonStyle(SoftPressStyle())
+        .disabled(status.claimed)
         .sensoryFeedback(.success, trigger: status.claimed)
-        .onAppear { wiggle = true }
+        .accessibilityHint(status.claimed ? "" : "Adds \(next) coins to your balance")
     }
 }
 
@@ -97,68 +91,71 @@ struct DailyRewardButton: View {
 struct DailyRewardSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var reward: Int?
-    @State private var bounce = false
     @State private var claiming = false
     @State private var failed = false
 
     var body: some View {
         let status = DailyReward.status(model.me)
-        VStack(spacing: 18) {
-            ZStack {
-                Circle().fill(Theme.gradient).frame(width: 130, height: 130).blur(radius: 30).opacity(0.6)
-                Image(systemName: reward == nil ? "gift.fill" : "sparkles")
-                    .font(.system(size: 64, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 118, height: 118)
-                    .background(Theme.gradient, in: RoundedRectangle(cornerRadius: 36, style: .continuous))
-                    .shadow(color: Theme.pink.opacity(0.5), radius: 20, y: 10)
-                    .scaleEffect(bounce || reduceMotion ? 1 : 0.92)
-                    .animation(reduceMotion ? nil : .spring(response: 0.45, dampingFraction: 0.75), value: bounce)
-                    .contentTransition(.symbolEffect(.replace))
-            }
-            .padding(.top, 34)
-            .overlay {
-                if reward != nil { SparkleBurst(radius: 95) }
-            }
+        let done = reward != nil || status.claimed
+        VStack(spacing: 16) {
+            Image(systemName: done ? "checkmark" : "gift")
+                .font(.system(size: 30, weight: .medium))
+                .foregroundStyle(Theme.main)
+                .frame(width: 72, height: 72)
+                .background(Theme.soft, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .contentTransition(.symbolEffect(.replace))
+                .padding(.top, 36)
 
-            Text(reward == nil ? "Daily reward!" : "+\(reward ?? 0) coins").font(.display(38)).foregroundStyle(Theme.main)
-            Text(reward == nil ? "Log in every day to grow your streak and earn more coins." : "See you tomorrow — your streak is \(max(1, DailyReward.status(model.me).streak)) days!")
+            Text(reward.map { "+\($0) coins" } ?? (status.claimed ? "Already collected" : "Daily reward"))
+                .font(.display(30)).foregroundStyle(Palette.text)
+                .contentTransition(.numericText())
+            Text(done
+                 ? "Come back tomorrow to keep your \(DailyReward.days(max(1, status.streak))) streak going."
+                 : "Open Sugerly every day to collect coins. The longer your streak, the more you get.")
                 .font(.jakarta(15)).foregroundStyle(Palette.text2).multilineTextAlignment(.center).padding(.horizontal, 30)
 
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 ForEach(1...7, id: \.self) { day in
-                    let done = day <= status.streak
+                    let got = day <= status.streak
                     VStack(spacing: 4) {
-                        Text("\(20 + day * 5)").font(.jakarta(11, .bold))
-                        Image(systemName: done ? "checkmark.circle.fill" : "circle.dotted").font(.system(size: 18))
-                        Text("D\(day)").font(.jakarta(10, .semibold))
+                        Text("Day \(day)").font(.jakarta(10, .medium)).foregroundStyle(Palette.muted)
+                        Image(systemName: got ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 17))
+                            .foregroundStyle(got ? Theme.main : Palette.borderStrong)
+                        Text("\(DailyReward.amount(day))").font(.jakarta(12, .semibold))
+                            .foregroundStyle(got ? Palette.text : Palette.text2)
                     }
-                    .foregroundStyle(done ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.muted))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
-                    .background(done ? Theme.pink.opacity(0.1) : Palette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background(got ? Theme.soft : Palette.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(got ? Color.clear : Palette.border, lineWidth: 1))
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Day \(day), \(DailyReward.amount(day)) coins\(got ? ", collected" : "")")
                 }
             }
             .padding(.horizontal, 20)
 
+            Text("Coins can't be bought. Spend them on MimiPlus and boosts in the menu.")
+                .font(.jakarta(12)).foregroundStyle(Palette.muted)
+                .multilineTextAlignment(.center).padding(.horizontal, 30)
+
             if failed {
                 Label(DailyReward.failed, systemImage: "wifi.exclamationmark")
-                    .font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
+                    .font(.jakarta(13, .medium)).foregroundStyle(Palette.muted)
                     .multilineTextAlignment(.center).padding(.horizontal, 28)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .transition(.opacity)
             }
 
             Button {
-                if reward != nil || status.claimed { dismiss(); return }
+                if done { dismiss(); return }
                 guard !claiming else { return }
                 claiming = true
                 Task {
                     defer { claiming = false }
                     do {
                         let got = try await DailyReward.claim(model)
-                        withAnimation(.spring(response: 0.45, dampingFraction: 0.7)) {
+                        withMotion(Motion.standard) {
                             failed = false
                             if let got { reward = got }
                         }
@@ -171,23 +168,22 @@ struct DailyRewardSheet: View {
                 if claiming {
                     ProgressView().tint(.white)
                 } else {
-                    Text(reward != nil || status.claimed ? "Yay!" : failed ? "Try again" : "Claim reward")
+                    Text(done ? "Done" : failed ? "Try again" : "Collect \(DailyReward.amount(status.streak + 1)) coins")
                 }
             }
-            .buttonStyle(GradientButtonStyle(height: 54))
+            .buttonStyle(GradientButtonStyle(height: 52))
             .padding(.horizontal, 24)
             .sensoryFeedback(.success, trigger: reward)
             Spacer(minLength: 0)
         }
         .sugarBackground()
-        .onAppear { bounce = true }
     }
 }
 
 // MARK: - Home
 
-// Home: a hello with your level and daily reward, then what's new around
-// Sugerly, one tidy section after another. The top bar is iPhone's own:
+// Home: a plain hello card (your level, coins, friends and today's reward),
+// then what's new around Sugerly, one tidy section after another. The top bar is iPhone's own:
 // your account on the left, the logo in the middle, search, the bell and
 // the + on the right.
 struct HomeView: View {
@@ -208,6 +204,7 @@ struct HomeView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var lastLoad = Date.distantPast
     @State private var tagSearch: String?
+    @State private var shop = false
     @AppStorage("sugerly.dismissedAnnouncement") private var dismissedAnnouncement = ""
 
     private var greeting: String {
@@ -237,13 +234,6 @@ struct HomeView: View {
             .padding(.top, 8)
             .padding(.bottom, 32)
             .sideRails(760)
-            // Your background pattern only at the top, fading out, so the
-            // cards below sit on a calm page.
-            .background(alignment: .top) {
-                HeaderWallpaper()
-                    .frame(height: 480)
-                    .offset(y: -170)
-            }
         }
         .scrollIndicators(.hidden)
         .appearFade()
@@ -278,15 +268,16 @@ struct HomeView: View {
         .dropRemoved($reels)
         .sheet(isPresented: $searching) {
             SearchView { route in path.append(route) }
-                .presentationCornerRadius(34)
+                .presentationCornerRadius(24)
         }
         .sheet(item: Binding(get: { tagSearch.map { TagQuery(id: $0) } }, set: { tagSearch = $0?.id })) { tag in
             SearchView(go: { route in
                 tagSearch = nil
                 path.append(route)
             }, initial: tag.id)
-            .presentationCornerRadius(34)
+            .presentationCornerRadius(24)
         }
+        .sheet(isPresented: $shop) { NitroShopView() }
     }
 
     struct TagQuery: Identifiable { var id: String }
@@ -321,17 +312,16 @@ struct HomeView: View {
         let site = SiteTheme.shared
         if site.announcementActive && !site.announcement.isEmpty && dismissedAnnouncement != site.announcement {
             HStack(spacing: 10) {
-                Image(systemName: "megaphone.fill").font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
-                Text(site.announcement).font(.jakarta(14, .bold)).foregroundStyle(.white).frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "megaphone").font(.system(size: 15, weight: .medium)).foregroundStyle(.white)
+                Text(site.announcement).font(.jakarta(14, .medium)).foregroundStyle(.white).frame(maxWidth: .infinity, alignment: .leading)
                 Button { withMotion(Motion.standard) { dismissedAnnouncement = site.announcement } } label: {
-                    Image(systemName: "xmark").font(.system(size: 12, weight: .heavy)).foregroundStyle(.white.opacity(0.85)).frame(width: 30, height: 30)
+                    Image(systemName: "xmark").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.85)).frame(width: 30, height: 30)
                 }
                 .accessibilityLabel("Close announcement")
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
-            .background(Color(hex: site.announcementColor), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .shadow(color: Color(hex: site.announcementColor).opacity(0.35), radius: 12, y: 5)
-            .transition(.move(edge: .top).combined(with: .opacity))
+            .background(Color(hex: site.announcementColor), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .transition(.opacity)
         }
     }
 
@@ -344,76 +334,84 @@ struct HomeView: View {
         let friends = mutualFriends
         let online = friends.filter { model.person($0)?.isOnline == true }.count
         return VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(Date().formatted(.dateTime.weekday(.wide).month(.wide).day()).uppercased())
-                    .font(.jakarta(11, .bold)).tracking(1.2)
-                    .foregroundStyle(Theme.main)
-                Text("\(greeting),").font(.display(24)).foregroundStyle(Palette.text)
-                HStack(alignment: .top, spacing: 4) {
-                    Text(name.isEmpty ? "friend" : name)
-                        .font(.display(34)).foregroundStyle(Theme.gradient)
-                        .lineLimit(1).minimumScaleFactor(0.55)
-                    Twinkle(size: 10).padding(.top, 4)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(Date().formatted(.dateTime.weekday(.wide).month(.wide).day()))
+                    .font(.jakarta(13, .medium))
+                    .foregroundStyle(Palette.muted)
+                Text(name.isEmpty ? greeting : "\(greeting), \(name)")
+                    .font(.display(26)).foregroundStyle(Palette.text)
+                    .lineLimit(2).minimumScaleFactor(0.7)
+            }
+            .accessibilityElement(children: .combine)
+            HStack(spacing: 0) {
+                stat("\(info.level)", "Level", info.title)
+                Divider().frame(height: 34)
+                Button { shop = true } label: {
+                    stat(Self.compact(me?.coins ?? 0), "Coins", "Earn & spend", chevron: true)
                 }
+                .buttonStyle(SoftPressStyle())
+                .accessibilityHint("Shows how coins work and what you can get with them")
+                Divider().frame(height: 34)
+                stat("\(friends.count)", "Friends", "\(online) online")
             }
-            HStack(spacing: 8) {
-                stat("\(info.level)", "LEVEL", info.title, info.color)
-                stat(Self.compact(me?.coins ?? 0), "COINS", "MimiCoins", Palette.text)
-                stat("\(friends.count)", "FRIENDS", "\(online) online", Palette.text)
-            }
+            .padding(.vertical, 10)
+            .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             XPBar(info: info)
             DailyRewardButton()
         }
-        .padding(18)
-        .sugarCard(radius: 28)
+        .padding(16)
+        .sugarCard(radius: 16)
     }
 
-    private func stat(_ value: String, _ label: String, _ sub: String, _ color: Color) -> some View {
+    private func stat(_ value: String, _ label: String, _ sub: String, chevron: Bool = false) -> some View {
         VStack(spacing: 1) {
-            Text(value).font(.display(24)).foregroundStyle(color)
+            Text(value).font(.jakarta(20, .semibold)).foregroundStyle(Palette.text)
                 .lineLimit(1).minimumScaleFactor(0.6)
                 .contentTransition(.numericText())
-            Text(label).font(.jakarta(9, .heavy)).tracking(0.8).foregroundStyle(Palette.muted)
-            Text(sub).font(.jakarta(11, .medium)).foregroundStyle(Palette.text2).lineLimit(1).minimumScaleFactor(0.8)
+            HStack(spacing: 2) {
+                Text(label).font(.jakarta(12, .medium)).foregroundStyle(Palette.text2)
+                if chevron {
+                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Palette.muted)
+                }
+            }
+            Text(sub).font(.jakarta(11)).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
         .padding(.horizontal, 4)
-        .background(Palette.surface2.opacity(0.7), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: shortcuts to the places that aren't tabs
 
     private var shortcuts: some View {
-        let items: [(String, String, [UInt32], Route)] = [
-            ("Music", "music.note", [0xFF7AA2, 0xD9577F], .music),
-            ("Servers", "person.3.fill", [0xB19CFF, 0x7C5CF0], .servers),
-            ("People", "person.crop.circle.badge.plus", [0xFFAA80, 0xEE6E40], .people),
-            ("Top artists", "crown.fill", [0xFFD166, 0xF0A020], .topArtists),
-            ("Play", "gamecontroller.fill", [0x7CBEFF, 0xF27BA3], .world),
+        let items: [(String, String, Route)] = [
+            ("Music", "music.note", .music),
+            ("Servers", "person.3", .servers),
+            ("People", "person.crop.circle.badge.plus", .people),
+            ("Top artists", "crown", .topArtists),
         ]
         return HStack(spacing: 6) {
             ForEach(items, id: \.0) { item in
-                Button { path.append(item.3) } label: {
-                    VStack(spacing: 8) {
+                Button { path.append(item.2) } label: {
+                    VStack(spacing: 7) {
                         Image(systemName: item.1)
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(Theme.main)
-                            .frame(width: 48, height: 48)
-                            .background(Theme.soft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        Text(item.0).font(.jakarta(12, .bold)).foregroundStyle(Palette.text2)
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundStyle(Palette.text)
+                            .frame(width: 46, height: 46)
+                            .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        Text(item.0).font(.jakarta(12, .medium)).foregroundStyle(Palette.text2)
                             .lineLimit(1).minimumScaleFactor(0.8)
                     }
                     .frame(maxWidth: .infinity)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(BouncyStyle(scale: 0.9))
+                .buttonStyle(SoftPressStyle())
             }
         }
         .padding(.vertical, 14)
         .padding(.horizontal, 6)
-        .sugarCard(radius: 26)
+        .sugarCard(radius: 16)
     }
 
     // MARK: community
@@ -433,13 +431,13 @@ struct HomeView: View {
                 if loaded {
                     EmptyCard(icon: "photo.on.rectangle.angled", title: "Nothing new yet", text: "Be the first to share something today.", actionTitle: "Share a post", action: { compose(.post) }, compact: true)
                 } else {
-                    SkeletonBlock(height: 160, radius: 24)
+                    SkeletonBlock(height: 160, radius: 14)
                 }
             }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: sizeClass == .regular ? 3 : 2), spacing: 12) {
                 ForEach(communityPicks) { post in
                     Button { path.append(.post(post)) } label: { pickCard(post) }
-                        .buttonStyle(BouncyStyle(scale: 0.96))
+                        .buttonStyle(SoftPressStyle())
                         .scrollFade()
                 }
             }
@@ -448,12 +446,12 @@ struct HomeView: View {
 
     private func pickCard(_ post: Post) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Rectangle().fill(post.imageURL.isEmpty ? AnyShapeStyle(LinearGradient(colors: [Theme.light.opacity(0.35), Palette.surface2], startPoint: .topLeading, endPoint: .bottomTrailing)) : AnyShapeStyle(Palette.surface2))
+            Rectangle().fill(Palette.surface2)
                 .aspectRatio(0.85, contentMode: .fit)
                 .overlay {
                     if post.imageURL.isEmpty {
                         Text("“\(String(post.text.prefix(90)))”")
-                            .font(.display(18)).foregroundStyle(Palette.text2)
+                            .font(.jakarta(15, .medium)).foregroundStyle(Palette.text)
                             .padding(14)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                     } else {
@@ -465,13 +463,13 @@ struct HomeView: View {
                 Avatar(url: model.person(post.authorEmail)?.picture ?? post.authorPicture, name: model.name(post.authorEmail, post.authorName), size: 24)
                 Text(model.name(post.authorEmail, post.authorName)).font(.jakarta(12, .semibold)).foregroundStyle(Palette.text).lineLimit(1)
                 Spacer(minLength: 0)
-                Image(systemName: "heart.fill").font(.system(size: 10)).foregroundStyle(Theme.main)
-                Text("\(post.likeTotal)").font(.jakarta(12, .bold)).foregroundStyle(Theme.main)
+                Image(systemName: "heart").font(.system(size: 11)).foregroundStyle(Palette.muted)
+                Text("\(post.likeTotal)").font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)
             }
             .padding(10)
         }
-        .sugarCard(radius: 22)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .sugarCard(radius: 14)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     // MARK: reels strip
@@ -490,14 +488,14 @@ struct HomeView: View {
                                     Image(systemName: "play.fill")
                                     Text("\(reel.views)")
                                 }
-                                .font(.jakarta(12, .heavy)).foregroundStyle(.white)
+                                .font(.jakarta(12, .semibold)).foregroundStyle(.white)
                                 .padding(10)
                             }
                             .frame(width: 120, height: 200)
-                            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                            .shadow(color: Palette.shadow, radius: 8, y: 4)
+                            .background(Palette.surface2)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
-                        .buttonStyle(BouncyStyle(scale: 0.95))
+                        .buttonStyle(SoftPressStyle())
                         .swipeFade()
                     }
                 }
@@ -520,7 +518,7 @@ struct HomeView: View {
                 LazyHStack(spacing: 14) {
                     if !loaded && list.isEmpty {
                         ForEach(0..<4, id: \.self) { _ in
-                            SkeletonBlock(height: 260, radius: 26).frame(width: 200)
+                            SkeletonBlock(height: 260, radius: 14).frame(width: 200)
                         }
                     }
                     ForEach(Array(list)) { art in
@@ -529,21 +527,21 @@ struct HomeView: View {
                                 RemoteImage(url: art.imageURL).frame(width: 200, height: 260)
                                 LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .center, endPoint: .bottom)
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(art.title).font(.display(20)).foregroundStyle(.white).lineLimit(1)
+                                    Text(art.title).font(.jakarta(16, .semibold)).foregroundStyle(.white).lineLimit(1)
                                     HStack(spacing: 6) {
                                         Image(systemName: "heart.fill")
                                         Text("\(art.likeTotal)")
                                         if !art.medium.isEmpty { Text("· \(art.medium.capitalized)").lineLimit(1) }
                                     }
-                                    .font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.9))
+                                    .font(.jakarta(12, .medium)).foregroundStyle(.white.opacity(0.85))
                                 }
                                 .padding(14)
                             }
                             .frame(width: 200, height: 260)
-                            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-                            .shadow(color: Palette.shadow, radius: 10, y: 5)
+                            .background(Palette.surface2)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
-                        .buttonStyle(BouncyStyle(scale: 0.96))
+                        .buttonStyle(SoftPressStyle())
                         .swipeFade()
                     }
                 }
@@ -567,7 +565,7 @@ struct HomeView: View {
                         .frame(maxWidth: .infinity).padding(20)
                 }
             }
-            .sugarCard(radius: 26, padding: 8)
+            .sugarCard(radius: 16, padding: 8)
         }
     }
 
@@ -595,7 +593,7 @@ struct HomeView: View {
                                 }
                                 .frame(width: 72)
                             }
-                            .buttonStyle(BouncyStyle())
+                            .buttonStyle(SoftPressStyle())
                             .swipeFade()
                         }
                     }
@@ -620,14 +618,14 @@ struct HomeView: View {
                             HStack(spacing: 10) {
                                 ServerIcon(server: server, size: 42)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(server.name).font(.jakarta(14, .bold)).foregroundStyle(Palette.text).lineLimit(1)
+                                    Text(server.name).font(.jakarta(14, .semibold)).foregroundStyle(Palette.text).lineLimit(1)
                                     Text("\(server.members.count) members").font(.jakarta(11)).foregroundStyle(Palette.muted)
                                 }
                                 Spacer(minLength: 0)
                             }
-                            .sugarCard(radius: 20, padding: 10)
+                            .sugarCard(radius: 14, padding: 10)
                         }
-                        .buttonStyle(BouncyStyle(scale: 0.96))
+                        .buttonStyle(SoftPressStyle())
                         .scrollFade()
                     }
                 }
@@ -672,37 +670,36 @@ struct TrackRow: View {
         let current = player.isCurrent(track)
         HStack(spacing: 12) {
             if let rank {
-                Text("\(rank)").font(.jakarta(13, .bold)).foregroundStyle(rank <= 3 ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.muted)).frame(width: 22)
+                Text("\(rank)").font(.jakarta(13, rank <= 3 ? .semibold : .regular)).foregroundStyle(rank <= 3 ? Palette.text : Palette.muted).frame(width: 22)
             }
             Button { player.play(track, in: list) } label: {
                 ZStack {
                     RemoteImage(url: track.coverURL)
-                    if track.coverURL.isEmpty { Theme.gradient }
+                    if track.coverURL.isEmpty { Palette.borderStrong }
                     Color.black.opacity(0.25)
                     Image(systemName: player.isPlaying(track) ? "pause.fill" : "play.fill")
                         .font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
                         .contentTransition(.symbolEffect(.replace))
                 }
                 .frame(width: 52, height: 52)
-                .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-                .shadow(color: current ? Theme.pink.opacity(0.4) : .clear, radius: 8, y: 4)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
-            .buttonStyle(BouncyStyle())
+            .buttonStyle(SoftPressStyle())
             VStack(alignment: .leading, spacing: 2) {
-                Text(track.title).font(.jakarta(15, .bold)).foregroundStyle(current ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.text)).lineLimit(1)
+                Text(track.title).font(.jakarta(15, .semibold)).foregroundStyle(current ? Theme.main : Palette.text).lineLimit(1)
                 Text([track.artist, track.genre].filter { !$0.isEmpty }.joined(separator: " · ")).font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(1)
             }
             Spacer(minLength: 4)
             if player.isPlaying(track) {
-                Image(systemName: "waveform").foregroundStyle(Theme.pink).symbolEffect(.variableColor.iterative, isActive: true)
+                Image(systemName: "waveform").foregroundStyle(Theme.main).symbolEffect(.variableColor.iterative, isActive: true)
             }
             if let onFull {
                 Button(action: onFull) {
-                    Text("Full").font(.jakarta(12, .bold)).foregroundStyle(Theme.pink)
+                    Text("Full").font(.jakarta(12, .semibold)).foregroundStyle(Palette.text)
                         .padding(.horizontal, 12).frame(height: 30)
-                        .background(Theme.pink.opacity(0.12), in: Capsule())
+                        .background(Palette.surface2, in: Capsule())
                 }
-                .buttonStyle(BouncyStyle())
+                .buttonStyle(SoftPressStyle())
             }
             if reportable {
                 Menu {
@@ -710,7 +707,7 @@ struct TrackRow: View {
                         reporting = ReportSheet.Target(id: track.id, type: "music", ownerEmail: track.authorEmail, preview: track.title, link: "/Music", collection: "MusicReview")
                     } label: { Label("Report", systemImage: "flag") }
                 } label: {
-                    Image(systemName: "ellipsis").font(.system(size: 15, weight: .bold)).foregroundStyle(Palette.muted)
+                    Image(systemName: "ellipsis").font(.system(size: 15, weight: .medium)).foregroundStyle(Palette.muted)
                         .frame(width: 32, height: 40).contentShape(Rectangle())
                 }
                 .accessibilityLabel("More: report")
@@ -718,7 +715,7 @@ struct TrackRow: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(current ? Theme.pink.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(current ? Palette.surface2 : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .sheet(item: $reporting) { target in ReportSheet(target: target) }
     }
 }
@@ -741,7 +738,7 @@ private struct HomeSectionEntrance: ViewModifier {
         let visible = shown || reduceMotion
         content
             .opacity(visible ? 1 : 0)
-            .offset(y: visible ? 0 : 10)
+            .offset(y: visible ? 0 : 6)
             .animation(reduceMotion ? nil : Motion.enter.delay(Double(min(index, 7)) * Motion.staggerStep), value: shown)
     }
 }

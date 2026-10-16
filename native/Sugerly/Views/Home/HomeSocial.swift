@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 // The social bits of Home: stories, a "what are you making" bar, today's art
-// prompt, what friends are up to, trending tags and people to follow.
+// prompt, trending tags and people to follow.
 
 // MARK: - Stories (people with a new reel, then friends who are online)
 
@@ -50,18 +50,19 @@ struct StoriesRow: View {
                         Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 62)
                             .padding(4)
                             .overlay(alignment: .bottomTrailing) {
-                                Image(systemName: "plus").font(.system(size: 12, weight: .black)).foregroundStyle(.white)
-                                    .frame(width: 24, height: 24)
-                                    .background(Theme.gradient, in: Circle())
-                                    .overlay(Circle().strokeBorder(Palette.bg, lineWidth: 2.5))
+                                Image(systemName: "plus").font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                                    .frame(width: 22, height: 22)
+                                    .background(Theme.main, in: Circle())
+                                    .overlay(Circle().strokeBorder(Palette.bg, lineWidth: 2))
                             }
-                        Text("Your reel").font(.jakarta(11, .bold)).foregroundStyle(Palette.text2)
+                        Text("Your reel").font(.jakarta(11, .medium)).foregroundStyle(Palette.text2)
                     }
                     .frame(width: 76)
                 }
-                .buttonStyle(BouncyStyle(scale: 0.9))
-                ForEach(Array(stories.enumerated()), id: \.element.id) { i, story in
-                    bubble(story).transition(.pop).swipeFade()
+                .buttonStyle(SoftPressStyle())
+                .accessibilityLabel("New reel")
+                ForEach(stories) { story in
+                    bubble(story).transition(.opacity).swipeFade()
                 }
             }
             .padding(.vertical, 6)
@@ -73,6 +74,7 @@ struct StoriesRow: View {
     private func bubble(_ story: Story) -> some View {
         let person = model.person(story.email)
         let fresh = story.reel.map { !seen.contains($0.id) } ?? false
+        let name = person?.displayName ?? story.reel?.authorName ?? ""
         return Button {
             if let reel = story.reel {
                 var ids = seen
@@ -84,32 +86,26 @@ struct StoriesRow: View {
             }
         } label: {
             VStack(spacing: 6) {
-                Avatar(url: person?.picture ?? story.reel?.authorPicture ?? "", name: person?.displayName ?? story.reel?.authorName ?? "", size: 62)
+                Avatar(url: person?.picture ?? story.reel?.authorPicture ?? "", name: name, size: 62)
                     .padding(4)
                     .background {
+                        // A ring in your colour for a reel you haven't watched,
+                        // green for a friend who's online, grey otherwise.
                         if story.reel == nil {
-                            Circle().strokeBorder(Palette.success, lineWidth: 3)
+                            Circle().strokeBorder(Palette.success, lineWidth: 2)
                         } else if fresh {
-                            Circle().strokeBorder(AngularGradient(colors: [Theme.main, Theme.light, Color(hex: 0xFFD166), Theme.main], center: .center), lineWidth: 3.2)
+                            Circle().strokeBorder(Theme.main, lineWidth: 2.5)
                         } else {
-                            Circle().strokeBorder(Palette.border, lineWidth: 2)
+                            Circle().strokeBorder(Palette.border, lineWidth: 1.5)
                         }
                     }
-                    .overlay(alignment: .bottom) {
-                        if story.reel == nil {
-                            Text("LIVE").font(.jakarta(8, .black)).foregroundStyle(.white)
-                                .padding(.horizontal, 6).frame(height: 16)
-                                .background(Palette.success, in: Capsule())
-                                .overlay(Capsule().strokeBorder(Palette.bg, lineWidth: 2))
-                                .offset(y: 6)
-                        }
-                    }
-                Text(person?.displayName ?? story.reel?.authorName ?? "").font(.jakarta(11, fresh ? .heavy : .semibold))
+                Text(name).font(.jakarta(11, fresh ? .semibold : .regular))
                     .foregroundStyle(fresh ? Palette.text : Palette.text2).lineLimit(1)
             }
             .frame(width: 76)
         }
-        .buttonStyle(BouncyStyle(scale: 0.9))
+        .buttonStyle(SoftPressStyle())
+        .accessibilityLabel(story.reel == nil ? "\(name), online" : fresh ? "\(name), new reel" : "\(name), reel")
     }
 }
 
@@ -123,55 +119,47 @@ struct HomeComposerBar: View {
         VStack(spacing: 0) {
             Button { compose(.post) } label: {
                 HStack(spacing: 12) {
-                    Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 42)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("What are you making today?")
-                            .font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
-                            .lineLimit(1).minimumScaleFactor(0.85)
-                        Text("Tap to share it with everyone")
-                            .font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 6)
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 38, height: 38)
-                        .background(Theme.gradient, in: Circle())
+                    Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 40)
+                    Text("What are you making today?")
+                        .font(.jakarta(15)).foregroundStyle(Palette.muted)
+                        .lineLimit(1).minimumScaleFactor(0.85)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 14)
+                        .frame(height: 40)
+                        .background(Palette.surface2, in: Capsule())
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(BouncyStyle(scale: 0.98))
-            Rectangle().fill(Palette.border).frame(height: 1).padding(.horizontal, 14)
+            .buttonStyle(SoftPressStyle(scale: 0.99))
+            .accessibilityLabel("Write a post")
+            Rectangle().fill(Palette.border).frame(height: 1)
             HStack(spacing: 0) {
-                action("Post", "text.bubble.fill") { compose(.post) }
-                action("Reel", "play.rectangle.fill") { compose(.reel) }
-                action("Drawing", "paintbrush.pointed.fill") { compose(.artwork) }
+                action("Post", "text.bubble") { compose(.post) }
+                action("Reel", "video") { compose(.reel) }
+                action("Drawing", "paintbrush.pointed") { compose(.artwork) }
                 action("Song", "music.note") { compose(.track) }
             }
             .padding(.horizontal, 6)
-            .padding(.vertical, 6)
+            .padding(.vertical, 4)
         }
-        .sugarCard(radius: 24)
+        .sugarCard(radius: 16)
     }
 
     private func action(_ title: String, _ icon: String, _ run: @escaping () -> Void) -> some View {
         Button(action: run) {
-            VStack(spacing: 4) {
+            HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(Theme.main)
-                    .frame(width: 34, height: 34)
-                    .background(Theme.soft, in: Circle())
-                Text(title).font(.jakarta(11, .bold)).foregroundStyle(Palette.text2).lineLimit(1)
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(Palette.text2)
+                Text(title).font(.jakarta(13, .medium)).foregroundStyle(Palette.text2).lineLimit(1).minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 4)
+            .frame(height: 40)
             .contentShape(Rectangle())
         }
-        .buttonStyle(BouncyStyle(scale: 0.92))
+        .buttonStyle(SoftPressStyle())
         .accessibilityLabel("New \(title.lowercased())")
     }
 }
@@ -181,8 +169,6 @@ struct HomeComposerBar: View {
 struct ArtPromptCard: View {
     var compose: (Composer) -> Void
     @Environment(AppModel.self) private var model
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var float = false
     @State private var editing = false
 
     private var hoursLeft: Int {
@@ -193,176 +179,53 @@ struct ArtPromptCard: View {
     var body: some View {
         if let prompt = DailyContent.prompt {
             card(prompt)
-                .sheet(isPresented: $editing) { DailyContentEditor(kind: .prompts).presentationCornerRadius(30) }
+                .sheet(isPresented: $editing) { DailyContentEditor(kind: .prompts).presentationCornerRadius(24) }
         } else if model.me?.isAdmin == true {
             Button { editing = true } label: {
-                Label("Add daily art prompts", systemImage: "plus.circle.fill").font(.jakarta(14, .bold)).foregroundStyle(Theme.main)
-                    .frame(maxWidth: .infinity).frame(height: 50)
-                    .background(Theme.soft, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                Label("Add daily art prompts", systemImage: "plus").font(.jakarta(14, .semibold)).foregroundStyle(Palette.text2)
+                    .frame(maxWidth: .infinity).frame(height: 48)
+                    .background(Palette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Palette.border, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
             }
-            .buttonStyle(BouncyStyle(scale: 0.97))
-            .sheet(isPresented: $editing) { DailyContentEditor(kind: .prompts).presentationCornerRadius(30) }
+            .buttonStyle(SoftPressStyle())
+            .sheet(isPresented: $editing) { DailyContentEditor(kind: .prompts).presentationCornerRadius(24) }
         }
     }
 
     private func card(_ prompt: ArtPrompt) -> some View {
-        HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Label("TODAY'S PROMPT", systemImage: "paintpalette.fill").font(.jakarta(11, .black)).tracking(1)
-                        .foregroundStyle(.white.opacity(0.9))
-                    if model.me?.isAdmin == true { AdminEditChip { editing = true } }
-                }
-                Text(prompt.text).font(.display(24)).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
-                Text(DailyContent.promptPinned ? "Picked by the Sugerly team" : "New prompt in \(hoursLeft)h").font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.8))
-                HStack(spacing: 8) {
-                    Button { compose(.artwork) } label: {
-                        Label("Draw it", systemImage: "paintbrush.pointed.fill").font(.jakarta(13, .heavy))
-                            .foregroundStyle(Theme.main)
-                            .padding(.horizontal, 14).frame(height: 36)
-                            .background(.white, in: Capsule())
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: prompt.icon)
+                    .font(.system(size: 20, weight: .regular))
+                    .foregroundStyle(Theme.main)
+                    .frame(width: 44, height: 44)
+                    .background(Theme.soft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 8) {
+                        Text("Today's prompt").font(.jakarta(13, .medium)).foregroundStyle(Palette.muted)
+                        if model.me?.isAdmin == true { AdminEditChip { editing = true } }
                     }
-                    Button { compose(.post) } label: {
-                        Label("Share", systemImage: "photo.fill").font(.jakarta(13, .bold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 14).frame(height: 36)
-                            .background(.white.opacity(0.22), in: Capsule())
-                    }
+                    Text(prompt.text).font(.jakarta(19, .semibold)).foregroundStyle(Palette.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(DailyContent.promptPinned ? "Picked by the Sugerly team" : "New prompt in \(hoursLeft)h")
+                        .font(.jakarta(12)).foregroundStyle(Palette.muted)
                 }
-                .buttonStyle(BouncyStyle(scale: 0.93))
-                .padding(.top, 2)
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
-            ZStack {
-                Circle().fill(.white.opacity(0.2)).frame(width: 86, height: 86)
-                // A gentle swing in place (no bobbing up and down).
-                Image(systemName: prompt.icon).font(.system(size: 38, weight: .bold)).foregroundStyle(.white)
-                    .symbolEffect(.bounce, options: .repeat(2), value: float && !reduceMotion)
-            }
-            .frame(width: 86, height: 86)
-            .overlay(alignment: .topTrailing) { Twinkle(size: 12).offset(x: 10, y: -8) }
-            .padding(.trailing, 6)
-        }
-        .padding(18)
-        .background {
-            RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Theme.gradient)
-                .overlay(alignment: .topTrailing) {
-                    Circle().fill(.white.opacity(0.12)).frame(width: 150, height: 150).offset(x: 50, y: -60)
+            HStack(spacing: 8) {
+                Button { compose(.artwork) } label: {
+                    Label("Draw it", systemImage: "paintbrush.pointed")
                 }
-                .overlay(alignment: .bottomLeading) {
-                    Circle().fill(.white.opacity(0.1)).frame(width: 90, height: 90).offset(x: -30, y: 40)
+                .buttonStyle(GradientButtonStyle(height: 40))
+                Button { compose(.post) } label: {
+                    Label("Share", systemImage: "photo")
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-                // Shadow on the card shape only, so the floating icon
-                // doesn't make the whole card's shadow redraw every frame.
-                .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Theme.main).shadow(color: Theme.main.opacity(0.35), radius: 16, y: 8))
-        }
-        .onAppear { float = true }
-        .onDisappear { float = false }
-    }
-}
-
-// MARK: - What friends are up to
-
-struct HappeningNow: View {
-    let posts: [Post]
-    let artworks: [Artwork]
-    let reels: [Reel]
-    let tracks: [Track]
-    @Binding var path: [Route]
-    @Environment(AppModel.self) private var model
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var pulse = false
-
-    struct Item: Identifiable {
-        var id: String
-        var email: String
-        var name: String
-        var verb: String
-        var icon: String
-        var tint: UInt32
-        var thumb: String
-        var created: String
-        var route: Route?
-    }
-
-    private var items: [Item] {
-        let me = model.me?.email ?? ""
-        let following = Set(model.me?.following ?? [])
-        let blocked = Set(model.me?.blocked ?? [])
-        var all: [Item] = []
-        for p in posts.prefix(40) {
-            all.append(Item(id: "p" + p.id, email: p.authorEmail, name: p.authorName, verb: p.imageURL.isEmpty ? "shared a thought" : "posted a new picture", icon: "bubble.left.fill", tint: 0xFF7AA2, thumb: p.imageURL, created: p.created, route: .post(p)))
-        }
-        for a in artworks.prefix(30) {
-            all.append(Item(id: "a" + a.id, email: a.authorEmail, name: a.authorName, verb: a.title.isEmpty ? "finished a drawing" : "drew “\(a.title)”", icon: "paintbrush.pointed.fill", tint: 0xB19CFF, thumb: a.imageURL, created: a.created, route: .artwork(a)))
-        }
-        for r in reels.prefix(20) {
-            all.append(Item(id: "r" + r.id, email: r.authorEmail, name: r.authorName, verb: "posted a reel", icon: "play.rectangle.fill", tint: 0xF08A20, thumb: r.coverURL.isEmpty ? (r.pictures.first ?? "") : r.coverURL, created: r.created, route: .reel(r)))
-        }
-        for t in tracks.prefix(10) {
-            let name = model.person(t.authorEmail)?.displayName ?? t.artist
-            all.append(Item(id: "t" + t.id, email: t.authorEmail, name: name, verb: "shared “\(t.title)”", icon: "music.note", tint: 0x7CBEFF, thumb: t.coverURL, created: t.created, route: nil))
-        }
-        let visible = all.filter { $0.email != me && !blocked.contains($0.email) }
-        let friends = visible.filter { following.contains($0.email) }
-        let pool = friends.count >= 3 ? friends : visible
-        return Array(pool.sorted { $0.created > $1.created }.prefix(6))
-    }
-
-    var body: some View {
-        let list = items
-        if !list.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 10) {
-                    SectionHeader(icon: "dot.radiowaves.left.and.right", title: "Happening now")
-                }
-                .overlay(alignment: .topLeading) {
-                    Circle().fill(Palette.success).frame(width: 10, height: 10)
-                        .overlay(Circle().stroke(Palette.success.opacity(0.5), lineWidth: 2).scaleEffect(pulse ? 2.2 : 1).opacity(pulse ? 0 : 1))
-                        .offset(x: 28, y: -2)
-                        .animation(reduceMotion ? nil : .easeOut(duration: 1.3).repeatCount(2, autoreverses: false), value: pulse)
-                }
-                VStack(spacing: 0) {
-                    ForEach(Array(list.enumerated()), id: \.element.id) { i, item in
-                        Button {
-                            if let route = item.route { path.append(route) } else { path.append(.music) }
-                        } label: { row(item) }
-                            .buttonStyle(BouncyStyle(scale: 0.98))
-                        if i < list.count - 1 { Divider().overlay(Palette.border).padding(.leading, 64) }
-                    }
-                }
-                .sugarCard(radius: 26, padding: 6)
-            }
-            .onAppear { pulse = !reduceMotion }
-        }
-    }
-
-    private func row(_ item: Item) -> some View {
-        let person = model.person(item.email)
-        return HStack(spacing: 12) {
-            Avatar(url: person?.picture ?? "", name: person?.displayName ?? item.name, size: 42, online: person?.isOnline ?? false)
-                .overlay(alignment: .bottomTrailing) {
-                    Image(systemName: item.icon).font(.system(size: 8, weight: .black)).foregroundStyle(.white)
-                        .frame(width: 18, height: 18)
-                        .background(Color(hex: item.tint), in: Circle())
-                        .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
-                        .offset(x: 4, y: 4)
-                }
-            VStack(alignment: .leading, spacing: 2) {
-                (Text(person?.displayName ?? item.name).font(.jakarta(14, .heavy)) + Text(" " + item.verb).font(.jakarta(14, .medium)))
-                    .foregroundStyle(Palette.text).lineLimit(2).multilineTextAlignment(.leading)
-                Text(Dates.ago(item.created)).font(.jakarta(11, .semibold)).foregroundStyle(Palette.muted)
-            }
-            Spacer(minLength: 0)
-            if !item.thumb.isEmpty {
-                RemoteImage(url: item.thumb)
-                    .frame(width: 46, height: 46)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .buttonStyle(OutlineButtonStyle(height: 40, fullWidth: true))
             }
         }
-        .padding(.horizontal, 10).padding(.vertical, 9)
-        .contentShape(Rectangle())
+        .padding(16)
+        .sugarCard(radius: 16)
     }
 }
 
@@ -390,16 +253,16 @@ struct TrendingTags: View {
                 FlowLayout(spacing: 8) {
                     ForEach(Array(list.enumerated()), id: \.element.0) { i, tag in
                         Button { open(tag.0) } label: {
-                            HStack(spacing: 5) {
-                                if i < 3 { Image(systemName: "flame.fill").font(.system(size: 11, weight: .bold)).foregroundStyle(Color(hex: 0xF08A20)) }
-                                Text(tag.0).font(.jakarta(13, .bold)).foregroundStyle(i < 3 ? Theme.main : Palette.text2)
-                                Text("\(tag.1)").font(.jakarta(11, .heavy)).foregroundStyle(Palette.muted)
+                            HStack(spacing: 6) {
+                                Text(tag.0).font(.jakarta(13, .medium)).foregroundStyle(i < 3 ? Palette.text : Palette.text2)
+                                Text("\(tag.1)").font(.jakarta(12)).foregroundStyle(Palette.muted)
                             }
-                            .padding(.horizontal, 12).frame(height: 34)
-                            .background(i < 3 ? Theme.soft : Palette.surface, in: Capsule())
-                            .overlay(Capsule().strokeBorder(i < 3 ? Theme.main.opacity(0.25) : Palette.border, lineWidth: 1))
+                            .padding(.horizontal, 12).frame(height: 32)
+                            .background(Palette.surface, in: Capsule())
+                            .overlay(Capsule().strokeBorder(i < 3 ? Palette.borderStrong : Palette.border, lineWidth: 1))
                         }
-                        .buttonStyle(BouncyStyle(scale: 0.92))
+                        .buttonStyle(SoftPressStyle())
+                        .accessibilityLabel("\(tag.0), \(tag.1) posts")
                     }
                 }
             }
@@ -426,9 +289,10 @@ struct SuggestedPeople: View {
         return model.people.values
             .filter { $0.email != me.email && !following.contains($0.email) && !blocked.contains($0.email) && !hidden.contains($0.email) }
             .sorted {
-                let a = (mutual[$0.email] ?? 0) * 10 + ($0.isOnline ? 5 : 0) + min($0.xp / 100, 20)
-                let b = (mutual[$1.email] ?? 0) * 10 + ($1.isOnline ? 5 : 0) + min($1.xp / 100, 20)
-                return a > b
+                let a = (mutual[$0.email.lowercased()] ?? 0) * 10 + ($0.isOnline ? 5 : 0) + min($0.xp / 100, 20)
+                let b = (mutual[$1.email.lowercased()] ?? 0) * 10 + ($1.isOnline ? 5 : 0) + min($1.xp / 100, 20)
+                // Same score: by name, so the row doesn't reshuffle on every refresh.
+                return a != b ? a > b : $0.displayName.lowercased() < $1.displayName.lowercased()
             }
             .prefix(10).map { $0 }
     }
@@ -442,11 +306,11 @@ struct SuggestedPeople: View {
                     LazyHStack(spacing: 12) {
                         ForEach(list, id: \.email) { person in
                             card(person)
-                                .transition(.scale(scale: 0.85).combined(with: .opacity))
+                                .transition(.opacity)
                         }
                     }
                     .padding(.vertical, 6)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: list.map(\.email))
+                    .animation(Motion.standard, value: list.map(\.email))
                 }
                 .scrollClipDisabled()
             }
@@ -456,25 +320,28 @@ struct SuggestedPeople: View {
     private func card(_ person: UserProfile) -> some View {
         VStack(spacing: 8) {
             Button { path.append(.person(person.email)) } label: {
-                VStack(spacing: 6) {
-                    Avatar(url: person.picture, name: person.displayName, size: 64, online: person.isOnline, nitro: person.isNitro)
-                    Text(person.displayName).font(.jakarta(14, .heavy)).foregroundStyle(Palette.text).lineLimit(1)
-                    Text(subtitle(person)).font(.jakarta(11, .semibold)).foregroundStyle(Palette.muted).lineLimit(1)
+                VStack(spacing: 4) {
+                    Avatar(url: person.picture, name: person.displayName, size: 60, online: person.isOnline, nitro: person.isNitro)
+                        .padding(.bottom, 2)
+                    Text(person.displayName).font(.jakarta(14, .semibold)).foregroundStyle(Palette.text).lineLimit(1)
+                    Text(subtitle(person)).font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(1)
                 }
+                .padding(.horizontal, 8)
             }
-            .buttonStyle(BouncyStyle(scale: 0.95))
+            .buttonStyle(SoftPressStyle())
             FollowButton(email: person.email, compact: true)
         }
         .frame(width: 138)
         .padding(.vertical, 14)
-        .sugarCard(radius: 24, padding: 0)
+        .sugarCard(radius: 16, padding: 0)
         .overlay(alignment: .topTrailing) {
             Button { withMotion(Motion.standard) { _ = hidden.insert(person.email) } } label: {
-                Image(systemName: "xmark").font(.system(size: 10, weight: .heavy)).foregroundStyle(Palette.muted)
-                    .frame(width: 26, height: 26)
+                Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)).foregroundStyle(Palette.muted)
+                    .frame(width: 30, height: 30)
+                    .contentShape(Rectangle())
             }
-            .padding(4)
-            .accessibilityLabel("Hide")
+            .padding(2)
+            .accessibilityLabel("Hide \(person.displayName)")
         }
     }
 
@@ -484,112 +351,4 @@ struct SuggestedPeople: View {
         if mutual > 0 { return "\(mutual) mutual\(mutual == 1 ? "" : "s")" }
         return person.isOnline ? "Online now" : "New to you"
     }
-}
-
-// MARK: - Weekly challenge (Community)
-
-struct WeeklyChallengeCard: View {
-    let posts: [Post]
-    var active: Bool
-    var compose: () -> Void
-    var showEntries: (String) -> Void
-    @Environment(AppModel.self) private var model
-    @State private var shine = false
-    @State private var editing = false
-
-    private var daysLeft: Int {
-        let cal = Calendar.current
-        guard let end = cal.dateInterval(of: .weekOfYear, for: Date())?.end else { return 1 }
-        return max(1, Int(ceil(end.timeIntervalSinceNow / 86_400)))
-    }
-
-    var body: some View {
-        Group {
-            if let c = DailyContent.challenge {
-                card(c)
-            } else if model.me?.isAdmin == true {
-                Button { editing = true } label: {
-                    Label("Add weekly challenges", systemImage: "plus.circle.fill").font(.jakarta(14, .bold)).foregroundStyle(Theme.main)
-                        .frame(maxWidth: .infinity).frame(height: 50)
-                        .background(Theme.soft, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                }
-                .buttonStyle(BouncyStyle(scale: 0.97))
-            }
-        }
-        .sheet(isPresented: $editing) { DailyContentEditor(kind: .challenges).presentationCornerRadius(30) }
-    }
-
-    @ViewBuilder
-    private func card(_ c: Challenge) -> some View {
-        let entries = posts.filter { Hashtags.find($0.title + " " + $0.text).contains(c.tag) }
-        let people = Array(uniqued(entries.map(\.authorEmail)).prefix(4))
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Image(systemName: c.icon).font(.system(size: 22, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 50, height: 50)
-                    .background(.white.opacity(0.22), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .symbolEffect(.bounce, options: .repeat(2), value: shine)
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 8) {
-                        Text("WEEKLY CHALLENGE").font(.jakarta(11, .black)).tracking(1).foregroundStyle(.white.opacity(0.85))
-                        if model.me?.isAdmin == true { AdminEditChip { editing = true } }
-                    }
-                    Text(c.title).font(.display(26)).foregroundStyle(.white)
-                }
-                Spacer(minLength: 0)
-                VStack(spacing: 0) {
-                    Text("\(daysLeft)").font(.display(24)).foregroundStyle(.white)
-                    Text(daysLeft == 1 ? "day left" : "days left").font(.jakarta(10, .bold)).foregroundStyle(.white.opacity(0.85))
-                }
-            }
-            HStack(spacing: 8) {
-                if !people.isEmpty {
-                    HStack(spacing: -10) {
-                        ForEach(people, id: \.self) { email in
-                            let p = model.person(email)
-                            Avatar(url: p?.picture ?? "", name: p?.displayName ?? "", size: 28)
-                                .overlay(Circle().strokeBorder(.white, lineWidth: 2))
-                        }
-                    }
-                }
-                Text(entries.isEmpty ? "Be the first to join with #\(c.tag)" : "\(entries.count) entr\(entries.count == 1 ? "y" : "ies") · #\(c.tag)")
-                    .font(.jakarta(12, .bold)).foregroundStyle(.white.opacity(0.92)).lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            HStack(spacing: 8) {
-                Button {
-                    UIPasteboard.general.string = "#\(c.tag) "
-                    model.showToast("#\(c.tag) copied — paste it in your post", icon: "number")
-                    compose()
-                } label: {
-                    Label("Join", systemImage: "plus").font(.jakarta(14, .heavy)).foregroundStyle(Theme.main)
-                        .frame(maxWidth: .infinity).frame(height: 40)
-                        .background(.white, in: Capsule())
-                }
-                Button { showEntries(c.tag) } label: {
-                    Label(active ? "Showing entries" : "See entries", systemImage: active ? "checkmark" : "square.grid.2x2.fill")
-                        .font(.jakarta(14, .bold)).foregroundStyle(.white)
-                        .frame(maxWidth: .infinity).frame(height: 40)
-                        .background(.white.opacity(active ? 0.35 : 0.22), in: Capsule())
-                }
-            }
-            .buttonStyle(BouncyStyle(scale: 0.94))
-        }
-        .padding(16)
-        .background {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(LinearGradient(colors: [Color(hex: 0xB19CFF), Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing))
-                .overlay(alignment: .topTrailing) { Circle().fill(.white.opacity(0.12)).frame(width: 140, height: 140).offset(x: 40, y: -60) }
-                .overlay { Glint(pause: 3, strength: 0.5) }
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        }
-        .shadow(color: Theme.main.opacity(0.3), radius: 14, y: 7)
-        .onAppear { shine = true }
-    }
-}
-
-// Keeps the first of each value, in order.
-private func uniqued(_ items: [String]) -> [String] {
-    var seen = Set<String>()
-    return items.filter { seen.insert($0).inserted }
 }

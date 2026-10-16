@@ -27,26 +27,22 @@ struct LoginView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 22) {
-                AppBadge(size: 104)
-                    .padding(.top, 40)
-                BrandLogo(height: 64)
-                    .shadow(color: Theme.main.opacity(0.4), radius: 22)
-                    .padding(.top, -8)
-                    .accessibilityLabel("Sugerly")
+                AppBadge(size: 72)
+                    .padding(.top, 48)
 
                 VStack(spacing: 6) {
                     Text(register ? "Join Sugerly" : "Welcome back")
-                        .font(.display(38, relativeTo: .largeTitle))
-                        .foregroundStyle(Theme.gradient)
+                        .font(.display(32, relativeTo: .largeTitle))
+                        .foregroundStyle(Palette.text)
                         .contentTransition(.opacity)
                     Text(register ? "A cozy home for artists." : "Log in to pick up where you left off.")
-                        .font(.jakarta(15, .medium))
-                        .foregroundStyle(.secondary)
+                        .font(.jakarta(15))
+                        .foregroundStyle(Palette.muted)
                 }
 
                 HStack(spacing: 10) {
-                    Chip(title: "Log in", icon: "heart.fill", active: !register) { withMotion(Motion.standard) { register = false } }
-                    Chip(title: "Sign up", icon: "sparkles", active: register) { withMotion(Motion.standard) { register = true } }
+                    Chip(title: "Log in", icon: "person", active: !register) { withMotion(Motion.standard) { register = false } }
+                    Chip(title: "Sign up", icon: "person.badge.plus", active: register) { withMotion(Motion.standard) { register = true } }
                 }
 
                 VStack(spacing: 12) {
@@ -168,37 +164,36 @@ struct LoginView: View {
         Button(action: action) {
             VStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 42, height: 42)
-                    .background(Theme.gradient, in: Circle())
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Palette.text2)
+                    .frame(width: 38, height: 38)
+                    .background(Palette.surface2, in: Circle())
                 Text(title)
-                    .font(.jakarta(12, .heavy))
+                    .font(.jakarta(12, .medium))
                     .foregroundStyle(Palette.text)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.main.opacity(0.18), lineWidth: 1.5))
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
         }
-        .buttonStyle(BouncyStyle(scale: 0.94))
+        .buttonStyle(SoftPressStyle())
         .opacity(showWays ? 1 : 0)
-        .offset(y: showWays || Motion.reduced ? 0 : 14)
+        .offset(y: showWays || Motion.reduced ? 0 : 6)
         .animation(Motion.staggered(Motion.enter, index).delay(0.15), value: showWays)
     }
 
     private func field<Content: View>(icon: String, content: Content) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon).foregroundStyle(Theme.main).frame(width: 20)
-            content.font(.jakarta(16, .medium))
+            Image(systemName: icon).foregroundStyle(Palette.muted).frame(width: 20)
+            content.font(.jakarta(16))
         }
         .padding(.horizontal, 16)
-        .frame(minHeight: 54)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.main.opacity(0.25), lineWidth: 1.5))
-        .shadow(color: Theme.main.opacity(0.12), radius: 12, y: 4)
+        .frame(minHeight: 52)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Palette.borderStrong, lineWidth: 1))
     }
 
     private func submit() async {

@@ -22,9 +22,6 @@ enum Route: Hashable {
     case support
     case supportTicket(String)
     case notifications
-    case world
-    case catalog
-    case avatar
 }
 
 enum AppTab: Hashable {
@@ -102,9 +99,6 @@ struct RouteView: View {
         case .support: SupportView()
         case .supportTicket(let email): SupportTicketView(email: email)
         case .notifications: NotificationsPage(path: $path)
-        case .world: WorldHubView(path: $path)
-        case .catalog: CatalogView()
-        case .avatar: AvatarEditorView(standalone: false)
         }
     }
 }
@@ -115,9 +109,8 @@ extension View {
     }
 }
 
-// Icon buttons: a squish the moment your finger lands (with a soft click),
-// a springy return with a tiny overshoot when you let go, and the icon
-// inside gives a little hop.
+// Icon buttons: a small press the moment your finger lands (a soft click
+// if app sounds are on) and a quick settle when you let go.
 struct BouncyStyle: ButtonStyle {
     var scale: CGFloat = 0.94
     var sound = true
@@ -126,8 +119,7 @@ struct BouncyStyle: ButtonStyle {
     }
 }
 
-// Links and text buttons: the same, gentler and quiet (they're everywhere),
-// with no hop.
+// Links and text buttons: the same, gentler and quiet (they're everywhere).
 struct SoftPressStyle: ButtonStyle {
     var scale: CGFloat = 0.97
     func makeBody(configuration: Configuration) -> some View {
@@ -135,8 +127,7 @@ struct SoftPressStyle: ButtonStyle {
     }
 }
 
-// List rows inside a card: a soft pink highlight, a tiny squish, and the
-// row's icon hops when you let go.
+// List rows inside a card: a soft grey highlight while pressed.
 struct RowPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         JellyPress(content: configuration.label.contentShape(Rectangle()).background(configuration.isPressed ? Palette.surface2 : Color.clear),
@@ -145,9 +136,9 @@ struct RowPressStyle: ButtonStyle {
 }
 
 // The press itself. Down answers straight away (fast ease-out, plus the
-// click on the same frame). Up is a spring, so a quick second tap carries
-// on from wherever the button is instead of restarting. With Reduce Motion
-// it only dims a touch.
+// click on the same frame if sounds are on); up settles back. The squish is
+// half what the caller asks for, so nothing wobbles, and icons don't hop.
+// With Reduce Motion it only dims a touch. (`hop` stays so callers compile.)
 struct JellyPress<Content: View>: View {
     let content: Content
     let pressed: Bool
@@ -156,21 +147,16 @@ struct JellyPress<Content: View>: View {
     var fade = false
     var hop = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var pops = 0
+
+    private var pressedScale: CGFloat { 1 - (1 - scale) * 0.5 }
 
     var body: some View {
         content
-            .symbolEffect(.bounce, value: pops)
-            .scaleEffect(pressed && !reduceMotion ? scale : 1)
-            .brightness(pressed ? -0.04 : 0)
-            .opacity(fade && pressed ? 0.85 : 1)
-            .animation(pressed ? Motion.press : (reduceMotion ? Motion.fade : Motion.release), value: pressed)
+            .scaleEffect(pressed && !reduceMotion ? pressedScale : 1)
+            .opacity(pressed ? (fade ? 0.7 : 0.88) : 1)
+            .animation(pressed ? Motion.press : Motion.fade, value: pressed)
             .onChange(of: pressed) { _, down in
-                if down {
-                    if sound { TapSound.play(.tap) }
-                } else if hop && !reduceMotion {
-                    pops += 1
-                }
+                if down && sound { TapSound.play(.tap) }
             }
     }
 }
@@ -442,7 +428,7 @@ struct MainShell: View {
             }) {
                 CreateSheet { choice in pendingComposer = choice; model.showCreate = false }
                     .presentationDetents([.height(460), .large])
-                    .presentationCornerRadius(34)
+                    .presentationCornerRadius(24)
             }
             .fullScreenCover(item: composerShown) { kind in
                 switch kind {
@@ -456,7 +442,7 @@ struct MainShell: View {
                 CallScreen().environment(calls).environment(voice).environment(model)
             }
             .sheet(isPresented: $dailyShown) {
-                DailyRewardSheet().presentationDetents([.height(520)]).presentationCornerRadius(34)
+                DailyRewardSheet().presentationDetents([.height(520)]).presentationCornerRadius(24)
             }
     }
 
@@ -650,23 +636,25 @@ extension MainShell {
 
 struct CreateSheet: View {
     var onPick: (Composer) -> Void
-    @State private var shown = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Create something").font(.display(30)).foregroundStyle(Palette.text)
-                    Text("What would you like to share today?").font(.jakarta(14, .medium)).foregroundStyle(Palette.muted)
+                    Text("Create").font(.display(28)).foregroundStyle(Palette.text)
+                    Text("Pick what you'd like to share.").font(.jakarta(15)).foregroundStyle(Palette.text2)
                 }
-                .padding(.top, 22)
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                    tile(0, .reel, "Reel", "Film or pick a video", "video.fill", [Color(hex: 0xFF7AA2), Color(hex: 0xD9577F)])
-                    tile(1, .artwork, "Fan art", "Hang a drawing on the wall", "paintpalette.fill", [Color(hex: 0xFFAA80), Color(hex: 0xEE6E40)])
-                    tile(2, .post, "Post", "Share with the community", "text.bubble.fill", [Color(hex: 0xB19CFF), Color(hex: 0x7C5CF0)])
-                    tile(3, .track, "Track", "Share your music", "music.note", [Color(hex: 0x7CBEFF), Color(hex: 0x2F80E0)])
+                .padding(.top, 24)
+                VStack(spacing: 0) {
+                    row(.reel, "Reel", "Film or pick a short video", "video", 0xC94C73)
+                    Divider().padding(.leading, 66)
+                    row(.artwork, "Fan art", "Upload a drawing to the gallery", "paintpalette", 0xD7643A)
+                    Divider().padding(.leading, 66)
+                    row(.post, "Post", "Write something for the community", "text.bubble", 0x6A55D6)
+                    Divider().padding(.leading, 66)
+                    row(.track, "Track", "Share a song you made", "music.note", 0x2A6FCC)
                 }
+                .sugarCard(radius: 16)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
@@ -674,35 +662,33 @@ struct CreateSheet: View {
         .scrollBounceBehavior(.basedOnSize)
         .sugarBackground()
         .presentationDragIndicator(.visible)
-        .onAppear { shown = true }
     }
 
-    // The four tiles pop in one after another.
-    private func tile(_ index: Int, _ kind: Composer, _ title: String, _ sub: String, _ icon: String, _ colors: [Color]) -> some View {
-        let visible = shown || reduceMotion
-        return Button { onPick(kind) } label: {
-            VStack(alignment: .leading, spacing: 10) {
+    // One kind of thing to make: a tinted icon, what it is, and an arrow.
+    private func row(_ kind: Composer, _ title: String, _ sub: String, _ icon: String, _ tint: UInt32) -> some View {
+        Button { onPick(kind) } label: {
+            HStack(spacing: 14) {
                 Image(systemName: icon)
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 50, height: 50)
-                    .background(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(LinearGradient(colors: [.white.opacity(0.3), .clear], startPoint: .top, endPoint: .center)).padding(1.5))
-                    .shadow(color: colors[1].opacity(0.4), radius: 10, y: 5)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.jakarta(16, .heavy)).foregroundStyle(Palette.text)
-                    Text(sub).font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)
-                        .lineLimit(2, reservesSpace: true)
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(Color(hex: tint))
+                    .frame(width: 38, height: 38)
+                    .background(Color(hex: tint).opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.jakarta(16, .semibold)).foregroundStyle(Palette.text)
+                    Text(sub).font(.jakarta(13)).foregroundStyle(Palette.muted)
+                        .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Palette.muted)
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .sugarCard(radius: 24, padding: 16)
         }
-        .buttonStyle(BouncyStyle(scale: 0.95))
-        .scaleEffect(visible ? 1 : 0.92)
-        .opacity(visible ? 1 : 0)
-        .animation(reduceMotion ? nil : Motion.enter.delay(0.03 + Double(index) * Motion.staggerStep), value: shown)
+        .buttonStyle(RowPressStyle())
         .accessibilityLabel(title)
         .accessibilityHint(sub)
     }

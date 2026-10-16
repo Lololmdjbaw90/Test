@@ -139,7 +139,7 @@ struct ProfileContent: View {
         .sheet(isPresented: $editing) { EditProfileView() }
         .sheet(isPresented: $settings) { NavigationStack { SettingsView(closable: true) } }
         .sheet(isPresented: $shop) { NitroShopView() }
-        .sheet(isPresented: $statusSheet) { StatusSheet().presentationCornerRadius(30) }
+        .sheet(isPresented: $statusSheet) { StatusSheet().presentationCornerRadius(24) }
     }
 
     private var banner: some View {
@@ -1072,7 +1072,7 @@ struct SettingsView: View {
     @State private var deleting = false
     @State private var error: String?
     @AppStorage("sugerly.haptics") private var haptics = true
-    @AppStorage(TapSound.settingKey) private var clickSounds = true
+    @AppStorage(TapSound.settingKey) private var clickSounds = false
     @AppStorage(Alerts.Kind.dms.key) private var alertDMs = true
     @AppStorage(Alerts.Kind.servers.key) private var alertServers = true
     @AppStorage(Alerts.Kind.social.key) private var alertSocial = true
@@ -1125,10 +1125,10 @@ struct SettingsView: View {
             }
         }
         .tint(Theme.main)
-        .sheet(isPresented: $statusSheet) { StatusSheet().presentationCornerRadius(30) }
-        .sheet(item: $peopleList) { kind in PeopleListSheet(kind: kind).presentationCornerRadius(30) }
+        .sheet(isPresented: $statusSheet) { StatusSheet().presentationCornerRadius(24) }
+        .sheet(item: $peopleList) { kind in PeopleListSheet(kind: kind).presentationCornerRadius(24) }
         .sheet(item: $legal) { doc in LegalView(doc: doc) }
-        .sheet(isPresented: $contacting) { NavigationStack { SupportView() }.presentationCornerRadius(30) }
+        .sheet(isPresented: $contacting) { NavigationStack { SupportView() }.presentationCornerRadius(24) }
         .sheet(isPresented: $editing) { EditProfileView() }
         .sheet(isPresented: $backupCodes) { BackupCodesSheet() }
         .sheet(isPresented: $approvingLogin) { QuickApproveSheet() }
@@ -1249,12 +1249,6 @@ struct SettingsView: View {
             }
             .padding(.vertical, 4)
             .buttonStyle(.borderless)
-            VStack(alignment: .leading, spacing: 12) {
-                IconRow(title: "Background", detail: "Shown at the top of Home.", icon: "sparkles", colors: [0xFFD166, 0xF0A020])
-                BackgroundPicker()
-            }
-            .padding(.vertical, 4)
-            .buttonStyle(.borderless)
         } header: { ListHeader(title: "APPEARANCE") }
     }
 
@@ -1302,7 +1296,7 @@ struct SettingsView: View {
     private var soundsGroup: some View {
         Section {
             toggle("Haptics", detail: "Little taps when you like, send and switch tabs", icon: "iphone.radiowaves.left.and.right", colors: [0x7CBEFF, 0x2F80E0], isOn: $haptics)
-            toggle("App sounds", detail: "Soft pops, likes, sends and little chimes (quiet on silent)", icon: "speaker.wave.2.fill", colors: [0xFFAA80, 0xEE6E40], isOn: $clickSounds)
+            toggle("App sounds", detail: "Soft clicks, sends and chimes. Off unless you turn them on (quiet on silent).", icon: "speaker.wave.2.fill", colors: [0xFFAA80, 0xEE6E40], isOn: $clickSounds)
         } header: { ListHeader(title: "SOUNDS & HAPTICS") }
     }
 

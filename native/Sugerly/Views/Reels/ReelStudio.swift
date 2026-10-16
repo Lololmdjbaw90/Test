@@ -459,7 +459,7 @@ struct ReelStudioView: View {
             .padding(.top, 26)
             .frame(maxHeight: .infinity, alignment: .top)
             .presentationDetents([.height(220)])
-            .presentationCornerRadius(30)
+            .presentationCornerRadius(24)
             .presentationBackground(Color(hex: 0x1A0F15))
             .preferredColorScheme(.dark)
     }

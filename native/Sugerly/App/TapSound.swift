@@ -6,7 +6,7 @@ import Foundation
 // "done" and "oops". They're made in code (short sine "pops" and bells),
 // saved once as tiny WAV files and played as system sounds: instant, quiet,
 // they mix with your music and they follow the phone's silent switch. Turn
-// them off in Settings.
+// them on in Settings (they start off).
 enum TapSound {
     enum Kind: String, CaseIterable {
         case tap, select, toggle, toggleOff, like, send, receive, open, close, chime, error
@@ -19,7 +19,7 @@ enum TapSound {
     private static var last = Date.distantPast
 
     static var enabled: Bool {
-        UserDefaults.standard.object(forKey: settingKey) as? Bool ?? true
+        UserDefaults.standard.object(forKey: settingKey) as? Bool ?? false
     }
 
     static func play(_ kind: Kind = .tap) {
