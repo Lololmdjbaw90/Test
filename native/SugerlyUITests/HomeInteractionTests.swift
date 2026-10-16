@@ -10,7 +10,8 @@ final class HomeInteractionTests: XCTestCase {
         let composer = app.staticTexts["What are you making today?"]
         XCTAssertTrue(composer.waitForExistence(timeout: 5))
         XCTAssertTrue(composer.isHittable, "Creating a post should be reachable without scrolling")
-        XCTAssertTrue(app.staticTexts["LEVEL"].waitForExistence(timeout: 3), "Your level shows at the top of Home")
+        let coins = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "coins")).firstMatch
+        XCTAssertTrue(coins.waitForExistence(timeout: 3), "Your coins show at the top of Home")
         XCTAssertTrue(composer.isHittable)
         let feed = app.scrollViews["home-feed"]
         XCTAssertTrue(feed.exists)

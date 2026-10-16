@@ -107,7 +107,7 @@ struct ToastView: View {
         .padding(.vertical, 8)
         .background(Palette.surface, in: Capsule())
         .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
-        .shadow(color: Theme.main.opacity(0.18), radius: 18, y: 8)
+        .shadow(color: Palette.shadow, radius: 12, y: 8)
         .padding(.horizontal, 20)
         .sensoryFeedback(toast.error ? .error : .success, trigger: toast.id)
     }

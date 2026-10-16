@@ -22,9 +22,6 @@ enum Route: Hashable {
     case support
     case supportTicket(String)
     case notifications
-    case world
-    case catalog
-    case avatar
 }
 
 enum AppTab: Hashable {
@@ -102,9 +99,6 @@ struct RouteView: View {
         case .support: SupportView()
         case .supportTicket(let email): SupportTicketView(email: email)
         case .notifications: NotificationsPage(path: $path)
-        case .world: WorldHubView(path: $path)
-        case .catalog: CatalogView()
-        case .avatar: AvatarEditorView(standalone: false)
         }
     }
 }
@@ -156,22 +150,14 @@ struct JellyPress<Content: View>: View {
     var fade = false
     var hop = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var pops = 0
 
+    // Down: a quick squish. Up: a soft spring back with a tiny overshoot
+    // (the "hop"), so buttons feel alive without anything flashing.
     var body: some View {
         content
-            .symbolEffect(.bounce, value: pops)
-            .scaleEffect(pressed && !reduceMotion ? scale : 1)
-            .brightness(pressed ? -0.04 : 0)
-            .opacity(fade && pressed ? 0.85 : 1)
-            .animation(pressed ? Motion.press : (reduceMotion ? Motion.fade : Motion.release), value: pressed)
-            .onChange(of: pressed) { _, down in
-                if down {
-                    if sound { TapSound.play(.tap) }
-                } else if hop && !reduceMotion {
-                    pops += 1
-                }
-            }
+            .scaleEffect(pressed && !reduceMotion ? max(scale, 0.92) : 1)
+            .opacity(pressed ? (fade ? 0.6 : 0.88) : 1)
+            .animation(pressed ? Motion.press : (hop && !reduceMotion ? Motion.release : Motion.standard), value: pressed)
     }
 }
 

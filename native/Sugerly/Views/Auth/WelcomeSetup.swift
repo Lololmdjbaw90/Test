@@ -92,20 +92,13 @@ struct WelcomeSetupView: View {
 
     // MARK: pieces
 
-    // Soft colour clouds drifting slowly behind everything.
+    // A calm, plain page behind everything.
     private var background: some View {
         ZStack {
             Palette.bg
-            Circle().fill(accent.light.opacity(0.45)).frame(width: 320).blur(radius: 70)
-                .offset(x: drift ? -120 : -40, y: drift ? -260 : -180)
-            Circle().fill(accent.main.opacity(0.28)).frame(width: 280).blur(radius: 80)
-                .offset(x: drift ? 140 : 60, y: drift ? 220 : 300)
-            Circle().fill(Color(hex: 0xFFD166).opacity(0.18)).frame(width: 200).blur(radius: 60)
-                .offset(x: drift ? 90 : 150, y: drift ? -60 : -140)
         }
         .ignoresSafeArea()
         .animation(.easeInOut(duration: 0.6), value: accent)
-        .onAppear { if !Motion.reduced { withAnimation(.easeInOut(duration: 8).repeatForever(autoreverses: true)) { drift = true } } }
     }
 
     private var topBar: some View {
@@ -435,7 +428,6 @@ struct WelcomeSetupView: View {
         VStack(spacing: 18) {
             Spacer()
             ZStack {
-                Circle().fill(Theme.gradient).frame(width: 150, height: 150).blur(radius: 40).opacity(0.55)
                 Group {
                     if let picture {
                         Image(uiImage: picture).resizable().scaledToFill()

@@ -3,7 +3,6 @@ import UIKit
 
 @main
 struct SugerlyApp: App {
-    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = AppModel()
 
     init() {

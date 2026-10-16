@@ -1,9 +1,9 @@
 import SwiftUI
 
 // The menu: opens from your picture in the top left corner of every main
-// page. You at the top (profile, level, status, coins), the places that
-// aren't tabs as big colourful buttons, then Settings and help, and dark
-// mode and Log out at the bottom. Swipe down or tap Done to close it.
+// page. You at the top (profile, level, status, coins), your wallet and
+// MimiPlus, the places that aren't tabs as a tidy list, then Settings and
+// help, and dark mode and Log out at the bottom. Swipe down or tap Done to close it.
 struct AccountView: View {
     // Closes the menu and opens a page on the tab you're on.
     var go: (Route) -> Void
@@ -12,12 +12,14 @@ struct AccountView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shop = false
+    @State private var wallet = false
     @State private var status = false
     @State private var confirmLogout = false
     @State private var shown = false
 
     private struct Place: Identifiable {
         let title: String
+        let detail: String
         let icon: String
         let colors: [UInt32]
         let action: () -> Void
@@ -27,15 +29,11 @@ struct AccountView: View {
     // The places that aren't tabs.
     private var places: [Place] {
         [
-            Place(title: "Music", icon: "music.note", colors: [0xFF7AA2, 0xD9577F]) { go(.music) },
-            Place(title: "Servers", icon: "person.3.fill", colors: [0x7CBEFF, 0x2F80E0]) { go(.servers) },
-            Place(title: "People", icon: "person.crop.circle.badge.plus", colors: [0xFFB86B, 0xF0802A]) { go(.people) },
-            Place(title: "Top artists", icon: "crown.fill", colors: [0xFFD166, 0xE9A100]) { go(.topArtists) },
-            Place(title: "MimiPlus", icon: "sparkles", colors: [0xC084FC, 0x8B5CF6]) { shop = true },
-            Place(title: "Commissions", icon: "storefront.fill", colors: [0x5FD3B0, 0x16A37F]) { go(.commissions) },
-            Place(title: "Sugar World", icon: "gamecontroller.fill", colors: [0x7CBEFF, 0xF27BA3]) { go(.world) },
-            Place(title: "Avatar", icon: "figure.stand", colors: [0xF7A1C4, 0xE0508A]) { go(.avatar) },
-            Place(title: "Catalog", icon: "bag.fill", colors: [0xB19CFF, 0x7C5CF0]) { go(.catalog) },
+            Place(title: "Music", detail: "Songs from the community", icon: "music.note", colors: [0xFF7AA2, 0xD9577F]) { go(.music) },
+            Place(title: "Servers", detail: "Group chats with channels and voice", icon: "person.3.fill", colors: [0x7CBEFF, 0x2F80E0]) { go(.servers) },
+            Place(title: "People", detail: "Find friends and artists", icon: "person.crop.circle.badge.plus", colors: [0xFFB86B, 0xF0802A]) { go(.people) },
+            Place(title: "Top artists", detail: "This week's most loved", icon: "crown.fill", colors: [0xFFD166, 0xE9A100]) { go(.topArtists) },
+            Place(title: "Commissions", detail: "Order art or sell yours", icon: "storefront.fill", colors: [0x5FD3B0, 0x16A37F]) { go(.commissions) },
         ]
     }
 
@@ -44,6 +42,7 @@ struct AccountView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     if let me = model.me { profileCard(me) }
+                    walletCard
                     placesGrid
                     youCard
                     endCard
@@ -68,6 +67,7 @@ struct AccountView: View {
         .tint(Theme.main)
         .presentationDragIndicator(.visible)
         .sheet(isPresented: $shop) { NitroShopView() }
+        .sheet(isPresented: $wallet) { WalletView() }
         .sheet(isPresented: $status) { StatusSheet().presentationCornerRadius(30) }
         .confirmationDialog("Log out of Sugerly?", isPresented: $confirmLogout, titleVisibility: .visible) {
             Button("Log out", role: .destructive) { model.signOut() }
@@ -152,7 +152,10 @@ struct AccountView: View {
             XPBar(info: info)
             statusButton(me, presence)
             HStack(spacing: 8) {
-                stat("\(me.coins)", "Coins", "circle.hexagongrid.fill", Color(hex: 0xF0A020))
+                Button { wallet = true } label: {
+                    stat("\(me.coins)", "Coins", "circle.hexagongrid.fill", Color(hex: 0xE09A1A))
+                }
+                .buttonStyle(SoftPressStyle())
                 stat("\(me.dailyStreak)", "Day streak", "flame.fill", Color(hex: 0xF08A20))
                 stat("\(me.following.count)", "Following", "heart.fill", Theme.main)
             }
@@ -227,39 +230,37 @@ struct AccountView: View {
 
     // MARK: places
 
-    // Big colourful buttons, three in a row: easy to spot and to hit.
+    // The places that aren't tabs, as a tidy list.
     private var placesGrid: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ListHeader(title: "EXPLORE").padding(.leading, 6)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                ForEach(Array(places.enumerated()), id: \.element.id) { i, place in
-                    Button(action: place.action) {
-                        VStack(spacing: 9) {
-                            Image(systemName: place.icon)
-                                .font(.system(size: 20, weight: .bold))
-                                .foregroundStyle(.white)
-                                .frame(width: 48, height: 48)
-                                .background(LinearGradient(colors: place.colors.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing),
-                                            in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-                            Text(place.title)
-                                .font(.jakarta(13, .bold)).foregroundStyle(Palette.text)
-                                .lineLimit(1).minimumScaleFactor(0.75)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .padding(.horizontal, 6)
-                        .sugarCard(radius: 22)
-                        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        card("EXPLORE") {
+            ForEach(Array(places.enumerated()), id: \.element.id) { i, place in
+                if i > 0 { divider }
+                Button(action: place.action) {
+                    HStack(spacing: 8) {
+                        IconRow(title: place.title, detail: place.detail, icon: place.icon, colors: place.colors)
+                        chevron
                     }
-                    .buttonStyle(BouncyStyle(scale: 0.94))
-                    .accessibilityLabel(place.title)
-                    // They pop in one after another.
-                    .scaleEffect(shown || reduceMotion ? 1 : 0.88)
-                    .opacity(shown || reduceMotion ? 1 : 0)
-                    .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.74).delay(0.04 + Double(i) * 0.035), value: shown)
+                    .padding(.horizontal, 14).padding(.vertical, 9)
                 }
+                .buttonStyle(RowPressStyle())
+                .accessibilityLabel(place.title)
             }
         }
+        .opacity(shown || reduceMotion ? 1 : 0)
+        .offset(y: shown || reduceMotion ? 0 : 12)
+        .animation(reduceMotion ? nil : Motion.enter.delay(0.06), value: shown)
+    }
+
+    // Coins and MimiPlus together, with what they are in plain words.
+    private var walletCard: some View {
+        card("COINS & MIMIPLUS") {
+            row("Wallet", "\(model.me?.coins ?? 0) coins · how to earn more", "circle.hexagongrid.fill", [0xFFD166, 0xE09A1A]) { wallet = true }
+            divider
+            row("MimiPlus", model.me?.isNitro == true ? "Active · extra looks for your profile" : "Extra looks for your profile, paid with coins", "sparkles", [0xC084FC, 0x8B5CF6]) { shop = true }
+        }
+        .opacity(shown || reduceMotion ? 1 : 0)
+        .offset(y: shown || reduceMotion ? 0 : 12)
+        .animation(reduceMotion ? nil : Motion.enter.delay(0.1), value: shown)
     }
 
     // MARK: lists

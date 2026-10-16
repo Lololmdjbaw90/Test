@@ -18,12 +18,14 @@ enum TapSound {
     private static var ready = false
     private static var last = Date.distantPast
 
+    // Off unless turned on in Settings, and never for ordinary taps: a
+    // calm app doesn't click at you.
     static var enabled: Bool {
-        UserDefaults.standard.object(forKey: settingKey) as? Bool ?? true
+        UserDefaults.standard.object(forKey: settingKey) as? Bool ?? false
     }
 
     static func play(_ kind: Kind = .tap) {
-        guard enabled else { return }
+        guard enabled, kind != .tap, kind != .select, kind != .open, kind != .close else { return }
         // Never machine-gun: at most one sound every 45 ms.
         let now = Date()
         guard now.timeIntervalSince(last) > 0.045 else { return }

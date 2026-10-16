@@ -158,7 +158,7 @@ struct MusicView: View {
             }
             .clipShape(shape)
             .overlay(shape.strokeBorder(.white.opacity(0.25), lineWidth: 1))
-            .shadow(color: Theme.pink.opacity(0.35), radius: 16, y: 8)
+            .shadow(color: Palette.shadow, radius: 12, y: 8)
         }
         .motion(Motion.playful, value: playing)
     }

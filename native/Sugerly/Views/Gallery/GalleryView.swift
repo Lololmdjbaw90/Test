@@ -152,7 +152,7 @@ struct GalleryView: View {
                 Image(systemName: "plus").font(.system(size: 19, weight: .bold)).foregroundStyle(.white)
                     .frame(width: 48, height: 48)
                     .background(Theme.gradient, in: Circle())
-                    .shadow(color: Theme.main.opacity(0.3), radius: 8, y: 4)
+                    .shadow(color: Palette.shadow, radius: 8, y: 4)
             }
             .buttonStyle(BouncyStyle(scale: 0.88)).accessibilityLabel("Share fan art")
         }
@@ -214,7 +214,7 @@ struct GalleryView: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .frame(height: 400)
-            .shadow(color: Theme.main.opacity(0.22), radius: 18, y: 10)
+            .shadow(color: Palette.shadow, radius: 12, y: 10)
             // Page dots: the current one stretches.
             HStack(spacing: 6) {
                 ForEach(list.indices, id: \.self) { i in
@@ -442,7 +442,7 @@ struct GalleryCard: View {
                     ZStack {
                         HeartPop(size: 14, spread: 46).id(pop)
                         Image(systemName: "heart.fill").font(.system(size: 54)).foregroundStyle(Theme.gradient)
-                            .shadow(color: Theme.main.opacity(0.5), radius: 12)
+                            .shadow(color: Palette.shadow, radius: 12)
                     }
                     .transition(.scale(scale: 0.8).combined(with: .opacity))
                     .allowsHitTesting(false)
@@ -519,7 +519,7 @@ struct ArtworkDetailView: View {
                     .shadow(color: Palette.shadow, radius: 16, y: 8)
                     .overlay {
                         Image(systemName: "heart.fill").font(.system(size: 100)).foregroundStyle(Theme.gradient)
-                            .shadow(color: Theme.pink.opacity(0.6), radius: 20)
+                            .shadow(color: Palette.shadow, radius: 12)
                             .scaleEffect(heart ? 1 : 0.3).opacity(heart ? 1 : 0)
                     }
                     .onTapGesture(count: 2) { doubleTap() }

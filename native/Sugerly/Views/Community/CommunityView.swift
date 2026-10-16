@@ -871,7 +871,7 @@ struct PostCard: View {
                     Image(systemName: "heart.fill")
                         .font(.system(size: 96))
                         .foregroundStyle(Theme.gradient)
-                        .shadow(color: Theme.pink.opacity(0.6), radius: 20)
+                        .shadow(color: Palette.shadow, radius: 12)
                         .scaleEffect(heart ? 1 : 0.3)
                         .opacity(heart ? 1 : 0)
                 }
@@ -1736,7 +1736,7 @@ struct PhotoPickerCard: View {
                         Label("Edit", systemImage: "wand.and.stars").font(.jakarta(13, .heavy)).foregroundStyle(.white)
                             .padding(.horizontal, 14).frame(height: 36)
                             .background(Theme.gradient, in: Capsule())
-                            .shadow(color: Theme.main.opacity(0.4), radius: 8, y: 3)
+                            .shadow(color: Palette.shadow, radius: 8, y: 3)
                     }
                     .buttonStyle(BouncyStyle())
                 }

@@ -45,7 +45,7 @@ struct ChannelChatView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Image(systemName: "number").font(.system(size: 28, weight: .heavy)).foregroundStyle(.white)
                                 .frame(width: 64, height: 64).background(Theme.gradient, in: Circle())
-                                .shadow(color: Theme.main.opacity(0.35), radius: 12, y: 6)
+                                .shadow(color: Palette.shadow, radius: 12, y: 6)
                             Text("Welcome to #\(channel.name)!").font(.display(28)).foregroundStyle(Palette.text)
                             Text(channel.description.isEmpty ? "This is the start of the #\(channel.name) channel." : channel.description)
                                 .font(.jakarta(14)).foregroundStyle(Palette.muted)

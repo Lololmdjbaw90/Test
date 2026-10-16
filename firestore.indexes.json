@@ -245,48 +245,6 @@
           "order": "DESCENDING"
         }
       ]
-    },
-    {
-      "collectionGroup": "CatalogItem",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "kind",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "created_date",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "CatalogItem",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "kind",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "sales",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "CatalogItem",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "creator_email",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "created_date",
-          "order": "DESCENDING"
-        }
-      ]
     }
   ],
   "fieldOverrides": []

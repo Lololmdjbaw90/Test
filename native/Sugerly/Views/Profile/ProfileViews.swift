@@ -147,8 +147,6 @@ struct ProfileContent: View {
             ZStack {
                 if person.banner.isEmpty {
                     bannerGradient
-                    Circle().fill(.white.opacity(0.25)).frame(width: 180).blur(radius: 40).offset(x: 120, y: -40)
-                    Circle().fill(Theme.lavender.opacity(0.5)).frame(width: 160).blur(radius: 50).offset(x: -120, y: 40)
                 } else {
                     RemoteImage(url: person.banner, live: true)
                 }
@@ -1246,12 +1244,6 @@ struct SettingsView: View {
                     MyColorsPicker()
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
-            }
-            .padding(.vertical, 4)
-            .buttonStyle(.borderless)
-            VStack(alignment: .leading, spacing: 12) {
-                IconRow(title: "Background", detail: "Shown at the top of Home.", icon: "sparkles", colors: [0xFFD166, 0xF0A020])
-                BackgroundPicker()
             }
             .padding(.vertical, 4)
             .buttonStyle(.borderless)

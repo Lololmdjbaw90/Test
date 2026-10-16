@@ -255,7 +255,7 @@ struct ArtPromptCard: View {
                 .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
                 // Shadow on the card shape only, so the floating icon
                 // doesn't make the whole card's shadow redraw every frame.
-                .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Theme.main).shadow(color: Theme.main.opacity(0.35), radius: 16, y: 8))
+                .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Theme.main).shadow(color: Palette.shadow, radius: 12, y: 8))
         }
         .onAppear { float = true }
         .onDisappear { float = false }
@@ -583,7 +583,7 @@ struct WeeklyChallengeCard: View {
                 .overlay { Glint(pause: 3, strength: 0.5) }
                 .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         }
-        .shadow(color: Theme.main.opacity(0.3), radius: 14, y: 7)
+        .shadow(color: Palette.shadow, radius: 12, y: 7)
         .onAppear { shine = true }
     }
 }

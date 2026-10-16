@@ -84,7 +84,7 @@ struct ChatView: View {
                 }
             }
         }
-        .background(ChatWallpaper().ignoresSafeArea())
+        .background(Palette.bg.ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -176,7 +176,7 @@ struct ChatView: View {
     private var emptyState: some View {
         VStack(spacing: 12) {
             Avatar(url: conversation.picture(model), name: conversation.title(model), size: 88)
-                .shadow(color: Theme.pink.opacity(0.3), radius: 14, y: 6)
+                .shadow(color: Palette.shadow, radius: 12, y: 6)
             Text(conversation.title(model)).font(.display(28)).foregroundStyle(Palette.text)
             Label("Messages here are just between you\(conversation.isGroup ? " all" : " two")", systemImage: "lock.fill")
                 .font(.jakarta(12, .semibold)).foregroundStyle(Palette.text2)
@@ -371,7 +371,7 @@ struct ChatView: View {
                             .font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
                             .frame(width: 48, height: 48)
                             .background(Theme.gradient, in: Circle())
-                            .shadow(color: Theme.main.opacity(0.35), radius: 8, y: 3)
+                            .shadow(color: Palette.shadow, radius: 8, y: 3)
                             .contentTransition(.symbolEffect(.replace))
                     }
                     .buttonStyle(BouncyStyle(scale: 0.88))

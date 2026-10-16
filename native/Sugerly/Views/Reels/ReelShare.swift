@@ -456,7 +456,7 @@ struct HeartBurstView: View {
         Image(systemName: "heart.fill")
             .font(.system(size: 96))
             .foregroundStyle(Theme.gradient)
-            .shadow(color: Theme.pink.opacity(0.6), radius: 18)
+            .shadow(color: Palette.shadow, radius: 12)
             .rotationEffect(.degrees(burst.angle))
             .scaleEffect(phase == 0 ? 0.6 : phase == 1 ? 1.1 : 1.3)
             .opacity(phase == 0 ? 0 : phase == 2 ? 0 : 1)

@@ -26,12 +26,7 @@ struct MimiBuddy: View {
 
     // She stands still and just fades in.
     var body: some View {
-        let s = size / 110
         ZStack {
-            // soft shadow on the "floor"
-            Ellipse().fill(Theme.main.opacity(0.14))
-                .frame(width: 52 * s, height: 8 * s)
-                .offset(y: size * 0.5 - 3 * s)
             Image(Self.imageName)
                 .resizable()
                 .interpolation(.high)
@@ -87,36 +82,27 @@ struct EmptyCard: View {
 
     var body: some View {
         VStack(spacing: compact ? 6 : 8) {
-            MimiBuddy(icon: icon, mood: face, size: compact ? 96 : 124, animated: animated)
-                .padding(.bottom, 2)
-            Text(title).font(.display(compact ? 21 : 25)).foregroundStyle(Palette.text).multilineTextAlignment(.center)
-            Doodles.squiggle
-                .stroke(Theme.main.opacity(0.55), style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
-                .frame(width: compact ? 54 : 70, height: 7)
+            MimiBuddy(icon: icon, mood: face, size: compact ? 72 : 92, animated: animated)
+                .padding(.bottom, 4)
+            Text(title).font(.display(compact ? 20 : 23)).foregroundStyle(Palette.text).multilineTextAlignment(.center)
             Text(text).font(.jakarta(14)).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 2)
             if let actionTitle, let action {
                 Button(action: action) {
-                    Text(actionTitle).font(.jakarta(14, .heavy)).foregroundStyle(Theme.main)
+                    Text(actionTitle).font(.jakarta(14, .bold)).foregroundStyle(.white)
                         .padding(.horizontal, 18).frame(height: 38)
-                        .background(Theme.soft, in: Capsule())
-                        .overlay(Capsule().strokeBorder(Theme.main.opacity(0.35), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])))
+                        .background(Theme.main, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
-                .buttonStyle(BouncyStyle(scale: 0.93))
-                .padding(.top, 6)
+                .buttonStyle(SoftPressStyle())
+                .padding(.top, 8)
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 22)
-        .padding(.vertical, compact ? 18 : 24)
-        .background {
-            RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Palette.surface)
-                .overlay { SketchDots().clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous)) }
-        }
+        .padding(.vertical, compact ? 18 : 26)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .strokeBorder(Theme.light.opacity(0.9), style: StrokeStyle(lineWidth: 1.6, dash: [7, 6]))
+            RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Palette.border, lineWidth: 1)
         }
     }
 }

@@ -86,7 +86,8 @@ struct HeaderWallpaper: View {
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        let kind = AppBackground(rawValue: choice) ?? .dots
+        // The calm design keeps the top of Home plain.
+        let kind = AppBackground.off
         if kind != .off {
             PatternBackground(kind: kind, animated: !still && scenePhase == .active)
                 .id("\(kind.rawValue)-\(still)-\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)")
@@ -164,16 +165,13 @@ private struct GlowShapes: View {
     var body: some View {
         ZStack {
             Palette.bg
-            Circle().fill(Theme.light.opacity(0.32)).frame(width: 360).blur(radius: 95).offset(x: 150, y: -300)
-            Circle().fill(Theme.lavender.opacity(0.18)).frame(width: 320).blur(radius: 95).offset(x: -170, y: 260)
-            Circle().fill(Color(hex: 0xFFD6A5).opacity(0.14)).frame(width: 240).blur(radius: 80).offset(x: 140, y: 120)
         }
     }
 }
 
 extension View {
     // Page background: warm off-white with soft accent glows.
-    func sugarBackground() -> some View { background { GlowLayer().ignoresSafeArea() } }
+    func sugarBackground() -> some View { background { Palette.bg.ignoresSafeArea() } }
 }
 
 // Each pattern is drawn once (a little bigger than the screen) into a

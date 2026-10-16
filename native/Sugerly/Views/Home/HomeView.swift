@@ -27,69 +27,84 @@ enum DailyReward {
 
 struct DailyRewardButton: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var confetti = false
-    @State private var wiggle = false
     @State private var claiming = false
+    @State private var ripple = 0
+    @State private var got: Int?
 
     var body: some View {
         let status = DailyReward.status(model.me)
-        Button {
-            guard !status.claimed, !claiming else { return }
-            claiming = true
-            Task {
-                defer { claiming = false }
-                do {
-                    if try await DailyReward.claim(model) != nil {
-                        RewardSound.play()
-                        confetti = true
-                        try? await Task.sleep(for: .seconds(2))
-                        confetti = false
-                    }
-                } catch {
-                    model.showToast(DailyReward.failed, error: true)
+        let next = DailyReward.amount(min(7, status.streak + 1))
+        HStack(spacing: 12) {
+            Image(systemName: status.claimed ? "checkmark" : "gift.fill")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(status.claimed ? Palette.success : Theme.main)
+                .frame(width: 40, height: 40)
+                .background((status.claimed ? Palette.success : Theme.main).opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .contentTransition(.symbolEffect(.replace))
+                .symbolEffect(.bounce, value: ripple)
+                .overlay { if ripple > 0 { SparkleBurst(radius: 44).id(ripple) } }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(titleText(status.claimed))
+                    .font(.jakarta(15, .semibold)).foregroundStyle(Palette.text)
+                    .contentTransition(.numericText())
+                HStack(spacing: 4) {
+                    Image(systemName: "flame.fill").font(.system(size: 11)).foregroundStyle(Palette.warning)
+                    Text(streakText(status))
+                        .font(.jakarta(12)).foregroundStyle(Palette.muted)
                 }
             }
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "gift.fill")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(status.claimed ? AnyShapeStyle(Theme.pink) : AnyShapeStyle(Color.white))
-                    .frame(width: 42, height: 42)
-                    .background(status.claimed ? Theme.pink.opacity(0.12) : Color.white.opacity(0.22), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-                    // A light bounce the system draws (it used to wiggle
-                    // non-stop, which kept Home redrawing all the time).
-                    .symbolEffect(.bounce, options: .repeat(2), value: !status.claimed && wiggle && !reduceMotion)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(status.claimed ? "Daily reward claimed" : "Claim daily reward").font(.jakarta(15, .bold))
-                    HStack(spacing: 4) {
-                        Image(systemName: "flame.fill").font(.system(size: 11))
-                        Text(status.streak > 0 ? "\(status.streak)-day streak" : "Start a streak today").font(.jakarta(12, .medium))
+            Spacer(minLength: 8)
+            if !status.claimed {
+                Button { claim() } label: {
+                    HStack(spacing: 5) {
+                        if claiming { ProgressView().tint(.white).controlSize(.small) } else {
+                            Text("+\(next)")
+                            CoinIcon(size: 15)
+                        }
                     }
-                    .opacity(0.85)
+                    .font(.jakarta(14, .bold)).foregroundStyle(.white)
+                    .padding(.horizontal, 14).frame(height: 36)
+                    .background(Theme.main, in: Capsule())
                 }
-                .foregroundStyle(status.claimed ? Palette.text : .white)
-                Spacer(minLength: 0)
-                if claiming { ProgressView().tint(.white) }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background {
-                if status.claimed {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Palette.surface)
-                        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
-                } else {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.gradient)
-                        .shadow(color: Theme.pink.opacity(0.45), radius: 16, y: 8)
-                }
+                .buttonStyle(BouncyStyle(scale: 0.92))
+                .disabled(claiming)
+                .transition(.pop)
+                .accessibilityLabel("Collect \(next) coins")
             }
         }
-        .buttonStyle(BouncyStyle(scale: 0.96))
-        .overlay {
-            if confetti { SparkleBurst(radius: 70) }
+        .padding(12)
+        .sugarCard(radius: 18)
+        .motion(Motion.playful, value: status.claimed)
+    }
+
+    private func titleText(_ claimed: Bool) -> String {
+        guard claimed else { return "Daily reward" }
+        if let got { return "+\(got) coins collected" }
+        return "Daily reward collected"
+    }
+
+    private func streakText(_ status: (claimed: Bool, streak: Int)) -> String {
+        guard status.streak > 0 else { return "Start a streak today" }
+        let base = "\(status.streak)-day streak"
+        return status.claimed ? base + " · come back tomorrow" : base
+    }
+
+    private func claim() {
+        guard !claiming else { return }
+        claiming = true
+        Task {
+            defer { claiming = false }
+            do {
+                let amount = try await DailyReward.claim(model)
+                if let amount {
+                    RewardSound.play()
+                    got = amount
+                    ripple += 1
+                }
+            } catch {
+                model.showToast(DailyReward.failed, error: true)
+            }
         }
-        .sensoryFeedback(.success, trigger: status.claimed)
-        .onAppear { wiggle = true }
     }
 }
 
@@ -107,23 +122,23 @@ struct DailyRewardSheet: View {
         let status = DailyReward.status(model.me)
         VStack(spacing: 18) {
             ZStack {
-                Circle().fill(Theme.gradient).frame(width: 130, height: 130).blur(radius: 30).opacity(0.6)
-                Image(systemName: reward == nil ? "gift.fill" : "sparkles")
-                    .font(.system(size: 64, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 118, height: 118)
-                    .background(Theme.gradient, in: RoundedRectangle(cornerRadius: 36, style: .continuous))
-                    .shadow(color: Theme.pink.opacity(0.5), radius: 20, y: 10)
-                    .scaleEffect(bounce || reduceMotion ? 1 : 0.92)
+                Image(systemName: reward == nil ? "gift.fill" : "checkmark")
+                    .font(.system(size: 46, weight: .semibold))
+                    .foregroundStyle(Theme.main)
+                    .frame(width: 104, height: 104)
+                    .background(Theme.soft, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+                    .symbolEffect(.bounce, value: reward)
+                    .scaleEffect(bounce || reduceMotion ? 1 : 0.86)
                     .animation(reduceMotion ? nil : .spring(response: 0.45, dampingFraction: 0.75), value: bounce)
                     .contentTransition(.symbolEffect(.replace))
             }
             .padding(.top, 34)
             .overlay {
-                if reward != nil { SparkleBurst(radius: 95) }
+                if reward != nil { SparkleBurst(radius: 100) }
             }
 
-            Text(reward == nil ? "Daily reward!" : "+\(reward ?? 0) coins").font(.display(38)).foregroundStyle(Theme.main)
+            Text(reward == nil ? "Daily reward" : "+\(reward ?? 0) coins").font(.display(34)).foregroundStyle(Palette.text)
+                .contentTransition(.numericText())
             Text(reward == nil ? "Log in every day to grow your streak and earn more coins." : "See you tomorrow — your streak is \(max(1, DailyReward.status(model.me).streak)) days!")
                 .font(.jakarta(15)).foregroundStyle(Palette.text2).multilineTextAlignment(.center).padding(.horizontal, 30)
 
@@ -131,14 +146,18 @@ struct DailyRewardSheet: View {
                 ForEach(1...7, id: \.self) { day in
                     let done = day <= status.streak
                     VStack(spacing: 4) {
-                        Text("\(20 + day * 5)").font(.jakarta(11, .bold))
+                        Text("\(DailyReward.amount(day))").font(.jakarta(11, .bold))
                         Image(systemName: done ? "checkmark.circle.fill" : "circle.dotted").font(.system(size: 18))
                         Text("D\(day)").font(.jakarta(10, .semibold))
                     }
-                    .foregroundStyle(done ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.muted))
+                    .foregroundStyle(done ? Theme.main : Palette.muted)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
-                    .background(done ? Theme.pink.opacity(0.1) : Palette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background(done ? Theme.soft : Palette.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(done ? Theme.main.opacity(0.4) : Palette.border, lineWidth: 1))
+                    .scaleEffect(bounce || reduceMotion ? 1 : 0.8)
+                    .opacity(bounce || reduceMotion ? 1 : 0)
+                    .animation(reduceMotion ? nil : Motion.playful.delay(0.15 + Double(day) * 0.04), value: bounce)
                 }
             }
             .padding(.horizontal, 20)
@@ -171,7 +190,7 @@ struct DailyRewardSheet: View {
                 if claiming {
                     ProgressView().tint(.white)
                 } else {
-                    Text(reward != nil || status.claimed ? "Yay!" : failed ? "Try again" : "Claim reward")
+                    Text(reward != nil || status.claimed ? "Done" : failed ? "Try again" : "Collect")
                 }
             }
             .buttonStyle(GradientButtonStyle(height: 54))
@@ -208,6 +227,7 @@ struct HomeView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var lastLoad = Date.distantPast
     @State private var tagSearch: String?
+    @State private var wallet = false
     @AppStorage("sugerly.dismissedAnnouncement") private var dismissedAnnouncement = ""
 
     private var greeting: String {
@@ -217,33 +237,26 @@ struct HomeView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 26) {
+            LazyVStack(alignment: .leading, spacing: 28) {
                 announcementBanner
-                hero.scrollFade().homeSection(appeared, 0)
-                HomeComposerBar(compose: compose).scrollFade().homeSection(appeared, 1)
-                StoriesRow(reels: reels, path: $path, compose: compose).homeSection(appeared, 2)
-                shortcuts.scrollFade().homeSection(appeared, 3)
+                hero.homeSection(appeared, 0)
+                shortcuts.homeSection(appeared, 1)
+                HomeComposerBar(compose: compose).homeSection(appeared, 2)
+                StoriesRow(reels: reels, path: $path, compose: compose).homeSection(appeared, 3)
                 community.homeSection(appeared, 4)
                 if !reels.isEmpty { reelStrip.homeSection(appeared, 5) }
                 featured.homeSection(appeared, 6)
-                ArtPromptCard(compose: compose).scrollFade().homeSection(appeared, 7)
+                ArtPromptCard(compose: compose).scrollFade()
+                friendsRow.scrollFade()
                 SuggestedPeople(path: $path)
+                freshTracks.scrollFade()
                 TrendingTags(posts: posts.posts, reels: reels) { tagSearch = $0 }
-                freshTracks
-                friendsRow
-                yourServers
+                yourServers.scrollFade()
             }
             .padding(.horizontal, sizeClass == .regular ? 24 : 16)
             .padding(.top, 8)
             .padding(.bottom, 32)
             .sideRails(760)
-            // Your background pattern only at the top, fading out, so the
-            // cards below sit on a calm page.
-            .background(alignment: .top) {
-                HeaderWallpaper()
-                    .frame(height: 480)
-                    .offset(y: -170)
-            }
         }
         .scrollIndicators(.hidden)
         .appearFade()
@@ -276,6 +289,7 @@ struct HomeView: View {
         }
         .dropRemoved($artworks)
         .dropRemoved($reels)
+        .sheet(isPresented: $wallet) { WalletView() }
         .sheet(isPresented: $searching) {
             SearchView { route in path.append(route) }
                 .presentationCornerRadius(34)
@@ -343,77 +357,76 @@ struct HomeView: View {
         let info = LevelInfo(xp: me?.xp ?? 0)
         let friends = mutualFriends
         let online = friends.filter { model.person($0)?.isOnline == true }.count
-        return VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(Date().formatted(.dateTime.weekday(.wide).month(.wide).day()).uppercased())
-                    .font(.jakarta(11, .bold)).tracking(1.2)
-                    .foregroundStyle(Theme.main)
-                Text("\(greeting),").font(.display(24)).foregroundStyle(Palette.text)
-                HStack(alignment: .top, spacing: 4) {
-                    Text(name.isEmpty ? "friend" : name)
-                        .font(.display(34)).foregroundStyle(Theme.gradient)
-                        .lineLimit(1).minimumScaleFactor(0.55)
-                    Twinkle(size: 10).padding(.top, 4)
-                }
+        return VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(greeting).font(.jakarta(15, .medium)).foregroundStyle(Palette.muted)
+                Text(name.isEmpty ? "Hi there" : name)
+                    .font(.display(32)).foregroundStyle(Palette.text)
+                    .lineLimit(1).minimumScaleFactor(0.6)
             }
             HStack(spacing: 8) {
-                stat("\(info.level)", "LEVEL", info.title, info.color)
-                stat(Self.compact(me?.coins ?? 0), "COINS", "MimiCoins", Palette.text)
-                stat("\(friends.count)", "FRIENDS", "\(online) online", Palette.text)
+                chip(value: Self.compact(me?.coins ?? 0), label: "coins", coin: true) { wallet = true }
+                chip(value: "Lv \(info.level)", label: info.title, dot: info.color) {
+                    if let email = me?.email { path.append(.person(email)) }
+                }
+                chip(value: "\(online)", label: online == 1 ? "friend online" : "friends online", dot: online > 0 ? Palette.success : nil) {
+                    path.append(.people)
+                }
             }
             XPBar(info: info)
             DailyRewardButton()
         }
-        .padding(18)
-        .sugarCard(radius: 28)
     }
 
-    private func stat(_ value: String, _ label: String, _ sub: String, _ color: Color) -> some View {
-        VStack(spacing: 1) {
-            Text(value).font(.display(24)).foregroundStyle(color)
-                .lineLimit(1).minimumScaleFactor(0.6)
-                .contentTransition(.numericText())
-            Text(label).font(.jakarta(9, .heavy)).tracking(0.8).foregroundStyle(Palette.muted)
-            Text(sub).font(.jakarta(11, .medium)).foregroundStyle(Palette.text2).lineLimit(1).minimumScaleFactor(0.8)
+    // A small tappable fact: coins, level, friends online.
+    private func chip(value: String, label: String, coin: Bool = false, dot: Color? = nil, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if coin { CoinIcon(size: 16) }
+                if let dot { Circle().fill(dot).frame(width: 7, height: 7) }
+                Text(value).font(.jakarta(14, .bold)).foregroundStyle(Palette.text).monospacedDigit()
+                    .contentTransition(.numericText())
+                Text(label).font(.jakarta(13)).foregroundStyle(Palette.muted).lineLimit(1)
+            }
+            .padding(.horizontal, 12).frame(height: 36)
+            .background(Palette.surface, in: Capsule())
+            .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
+            .minimumScaleFactor(0.8)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .padding(.horizontal, 4)
-        .background(Palette.surface2.opacity(0.7), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+        .buttonStyle(BouncyStyle(scale: 0.94))
     }
 
     // MARK: shortcuts to the places that aren't tabs
 
     private var shortcuts: some View {
-        let items: [(String, String, [UInt32], Route)] = [
-            ("Music", "music.note", [0xFF7AA2, 0xD9577F], .music),
-            ("Servers", "person.3.fill", [0xB19CFF, 0x7C5CF0], .servers),
-            ("People", "person.crop.circle.badge.plus", [0xFFAA80, 0xEE6E40], .people),
-            ("Top artists", "crown.fill", [0xFFD166, 0xF0A020], .topArtists),
-            ("Play", "gamecontroller.fill", [0x7CBEFF, 0xF27BA3], .world),
+        let items: [(String, String, Route)] = [
+            ("Music", "music.note", .music),
+            ("Servers", "person.3.fill", .servers),
+            ("People", "person.crop.circle.badge.plus", .people),
+            ("Top artists", "crown.fill", .topArtists),
+            ("Commissions", "storefront.fill", .commissions),
         ]
-        return HStack(spacing: 6) {
-            ForEach(items, id: \.0) { item in
-                Button { path.append(item.3) } label: {
-                    VStack(spacing: 8) {
-                        Image(systemName: item.1)
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(Theme.main)
-                            .frame(width: 48, height: 48)
-                            .background(Theme.soft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        Text(item.0).font(.jakarta(12, .bold)).foregroundStyle(Palette.text2)
-                            .lineLimit(1).minimumScaleFactor(0.8)
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(items, id: \.0) { item in
+                    Button { path.append(item.2) } label: {
+                        HStack(spacing: 7) {
+                            Image(systemName: item.1)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(Theme.main)
+                            Text(item.0).font(.jakarta(14, .semibold)).foregroundStyle(Palette.text)
+                        }
+                        .padding(.horizontal, 14).frame(height: 40)
+                        .background(Palette.surface, in: Capsule())
+                        .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
                     }
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
+                    .buttonStyle(BouncyStyle(scale: 0.94))
+                    .swipeFade()
                 }
-                .buttonStyle(BouncyStyle(scale: 0.9))
             }
+            .padding(.vertical, 2)
         }
-        .padding(.vertical, 14)
-        .padding(.horizontal, 6)
-        .sugarCard(radius: 26)
+        .scrollClipDisabled()
     }
 
     // MARK: community

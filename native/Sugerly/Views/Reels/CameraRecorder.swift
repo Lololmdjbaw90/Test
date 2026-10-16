@@ -914,7 +914,7 @@ struct RecorderView: View {
                             .foregroundStyle(.white)
                             .frame(width: 54, height: 54)
                             .background(Theme.gradient, in: Circle())
-                            .shadow(color: Theme.main.opacity(0.5), radius: 10, y: 4)
+                            .shadow(color: Palette.shadow, radius: 10, y: 4)
                         }
                         .buttonStyle(BouncyStyle(scale: 0.85))
                         .disabled(merging)

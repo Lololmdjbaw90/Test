@@ -528,7 +528,7 @@ struct ServerCard: View {
                         } else {
                             Text("Join").font(.jakarta(12, .heavy)).foregroundStyle(.white)
                                 .padding(.horizontal, 14).frame(height: 30).background(Theme.gradient, in: Capsule())
-                                .shadow(color: Theme.main.opacity(0.3), radius: 6, y: 3)
+                                .shadow(color: Palette.shadow, radius: 6, y: 3)
                                 .transition(.blurSwap)
                         }
                     }
@@ -634,7 +634,6 @@ struct ServerPanel: View {
                 if store.server.bannerURL.isEmpty {
                     ZStack {
                         LinearGradient(colors: [Theme.light, Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing)
-                        Circle().fill(.white.opacity(0.25)).frame(width: 120).blur(radius: 30).offset(x: 90, y: -30)
                     }
                 } else {
                     RemoteImage(url: store.server.bannerURL, live: true)
@@ -645,7 +644,7 @@ struct ServerPanel: View {
             .overlay(alignment: .bottomLeading) {
                 ServerIcon(server: store.server, size: 60)
                     .overlay(RoundedRectangle(cornerRadius: 19, style: .continuous).strokeBorder(Palette.bg, lineWidth: 4))
-                    .shadow(color: Theme.main.opacity(0.3), radius: 10, y: 4)
+                    .shadow(color: Palette.shadow, radius: 10, y: 4)
                     .offset(x: 12, y: 30)
             }
             HStack(alignment: .top) {

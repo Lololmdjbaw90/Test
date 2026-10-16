@@ -383,7 +383,7 @@ struct SectionSwitch: View {
                         .background {
                             if selection == i {
                                 Capsule().fill(Theme.gradient)
-                                    .shadow(color: Theme.main.opacity(0.35), radius: 8, y: 3)
+                                    .shadow(color: Palette.shadow, radius: 8, y: 3)
                                     .matchedGeometryEffect(id: "pill", in: pill)
                             }
                         }
@@ -438,7 +438,7 @@ struct ConversationRow: View {
                             .font(.jakarta(11, .heavy)).foregroundStyle(.white)
                             .padding(.horizontal, 8).frame(minHeight: 22)
                             .background(Theme.gradient, in: Capsule())
-                            .shadow(color: Theme.pink.opacity(0.4), radius: 6, y: 3)
+                            .shadow(color: Palette.shadow, radius: 6, y: 3)
                     }
                 }
             }

@@ -30,7 +30,7 @@ struct LoginView: View {
                 AppBadge(size: 104)
                     .padding(.top, 40)
                 BrandLogo(height: 64)
-                    .shadow(color: Theme.main.opacity(0.4), radius: 22)
+                    .shadow(color: Palette.shadow, radius: 12)
                     .padding(.top, -8)
                     .accessibilityLabel("Sugerly")
 
@@ -198,7 +198,7 @@ struct LoginView: View {
         .frame(minHeight: 54)
         .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.main.opacity(0.25), lineWidth: 1.5))
-        .shadow(color: Theme.main.opacity(0.12), radius: 12, y: 4)
+        .shadow(color: Palette.shadow, radius: 12, y: 4)
     }
 
     private func submit() async {

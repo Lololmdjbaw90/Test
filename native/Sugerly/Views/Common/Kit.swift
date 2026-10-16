@@ -108,7 +108,6 @@ private struct BarIcon: View {
             .symbolRenderingMode(alert ? .multicolor : .monochrome)
             .foregroundStyle(Palette.text2)
             .contentTransition(.symbolEffect(.replace))
-            .symbolEffect(.bounce, value: bounce)
             .frame(width: 34, height: 34)
             .background(Palette.surface, in: Circle())
             .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
@@ -142,20 +141,20 @@ enum TabBarLook {
     // pink badges, in Sugerly's font.
     static func apply() {
         guard #unavailable(iOS 26.0) else { return }
-        let small = UIFont(name: "PlusJakartaSans-SemiBold", size: 10) ?? .systemFont(ofSize: 10, weight: .semibold)
-        let bold = UIFont(name: "PlusJakartaSans-Bold", size: 10) ?? .systemFont(ofSize: 10, weight: .bold)
-        let muted = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x86707C) : UIColor(hex: 0x9C8A93) }
+        let small = UIFont.systemFont(ofSize: 10, weight: .medium)
+        let bold = UIFont.systemFont(ofSize: 10, weight: .semibold)
+        let muted = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x7E7B85) : UIColor(hex: 0x8E8A94) }
         let bar = UITabBarAppearance()
         bar.configureWithDefaultBackground()
-        bar.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterial)
-        bar.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x140A11, alpha: 0.72) : UIColor(hex: 0xFFF3F7, alpha: 0.8) }
-        bar.shadowColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x351F2C) : UIColor(hex: 0xF8D9E4) }
+        bar.backgroundEffect = UIBlurEffect(style: .systemThinMaterial)
+        bar.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x0F0F11, alpha: 0.8) : UIColor(hex: 0xFFFFFF, alpha: 0.85) }
+        bar.shadowColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x2B2B30) : UIColor(hex: 0xE9E7EA) }
         for layout in [bar.stackedLayoutAppearance, bar.inlineLayoutAppearance, bar.compactInlineLayoutAppearance] {
             layout.normal.iconColor = muted
             layout.normal.titleTextAttributes = [.foregroundColor: muted, .font: small]
             layout.selected.titleTextAttributes = [.font: bold]
-            layout.normal.badgeBackgroundColor = UIColor(hex: 0xE8457C)
-            layout.selected.badgeBackgroundColor = UIColor(hex: 0xE8457C)
+            layout.normal.badgeBackgroundColor = UIColor(hex: 0xE5484D)
+            layout.selected.badgeBackgroundColor = UIColor(hex: 0xE5484D)
         }
         UITabBar.appearance().standardAppearance = bar
         UITabBar.appearance().scrollEdgeAppearance = bar
@@ -172,26 +171,16 @@ struct PinkCircleButton: View {
     @State private var bounce = 0
 
     var body: some View {
-        Button {
-            TapSound.play(.tap)
-            bounce += 1
-            action()
-        } label: {
+        Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .heavy))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.white)
-                .symbolEffect(.bounce, value: bounce)
                 .frame(width: 34, height: 34)
-                .background(Theme.gradient, in: Circle())
+                .background(Theme.main, in: Circle())
                 .contentShape(Circle())
         }
-        .buttonStyle(BouncyStyle(scale: 0.86, sound: false))
+        .buttonStyle(SoftPressStyle())
         .accessibilityLabel(label)
-        .task {
-            guard !reduceMotion else { return }
-            try? await Task.sleep(for: .seconds(0.9))
-            bounce += 1
-        }
     }
 }
 
@@ -268,7 +257,7 @@ private struct MenuHintBubble: View {
             .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.main.opacity(0.25), lineWidth: 1))
         }
-        .shadow(color: Theme.main.opacity(0.16), radius: 12, y: 6)
+        .shadow(color: Palette.shadow, radius: 12, y: 6)
         .padding(.leading, 12)
         .padding(.top, 2)
         .contentShape(Rectangle())
@@ -357,11 +346,12 @@ private struct AppearFade: ViewModifier {
     @State private var shown = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    // The page rises a few points as it fades in.
     func body(content: Content) -> some View {
         content
             .opacity(shown || reduceMotion ? 1 : 0)
-            .onAppear { withAnimation(Motion.fade) { shown = true } }
-            .onDisappear { shown = false }
+            .offset(y: shown || reduceMotion ? 0 : 10)
+            .onAppear { withAnimation(reduceMotion ? Motion.fade : Motion.enter) { shown = true } }
     }
 }
 
@@ -369,15 +359,18 @@ private struct ScrollFade: ViewModifier {
     let axis: Axis
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    // Cards settle in as they scroll onto the screen and ease away as they
+    // leave, following your finger. Only near the edges, so reading is calm.
     func body(content: Content) -> some View {
         if reduceMotion {
             content
         } else {
             let vertical = axis == .vertical
-            content.scrollTransition(.interactive.threshold(.visible(vertical ? 0.3 : 0.45)), axis: axis) { view, phase in
+            content.scrollTransition(.interactive.threshold(.visible(0.35)), axis: axis) { view, phase in
                 view
-                    .opacity(phase.isIdentity ? 1 : 0.55)
-                    .scaleEffect(phase.isIdentity ? 1 : (vertical ? 0.97 : 0.94))
+                    .opacity(phase.isIdentity ? 1 : 0.4)
+                    .scaleEffect(phase.isIdentity ? 1 : 0.94)
+                    .offset(y: vertical ? CGFloat(phase.value) * 18 : 0)
             }
         }
     }
@@ -394,7 +387,7 @@ extension View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text(title)
-                        .font(.display(24))
+                        .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(Palette.text)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -419,13 +412,14 @@ struct TitleSwitch: View {
                     withMotion(Motion.standard) { selection = i }
                 } label: {
                     Text(title)
-                        .font(.display(19))
-                        .foregroundStyle(selection == i ? Color.white : Palette.text2)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(selection == i ? Palette.text : Palette.muted)
                         .padding(.horizontal, 14)
-                        .frame(height: 32)
+                        .frame(height: 30)
                         .background {
                             if selection == i {
-                                Capsule().fill(Theme.gradient)
+                                Capsule().fill(Palette.surface)
+                                    .shadow(color: Palette.shadow, radius: 2, y: 1)
                                     .matchedGeometryEffect(id: "pill", in: pill)
                             }
                         }
@@ -464,12 +458,13 @@ struct IconRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            // A soft tile in the row's colour with the symbol in that colour.
+            let tint = Color(hex: colors.last ?? 0xD8668D)
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(.white)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(danger ? Palette.danger : tint)
                 .frame(width: 32, height: 32)
-                .background(LinearGradient(colors: colors.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing),
-                            in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .background((danger ? Palette.danger : tint).opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.jakarta(15, .semibold)).foregroundStyle(danger ? Palette.danger : Palette.text)
                 if let detail, !detail.isEmpty {
@@ -495,7 +490,7 @@ struct IconRow: View {
 struct ListHeader: View {
     let title: String
     var body: some View {
-        Text(title).font(.jakarta(12, .heavy)).tracking(0.8).foregroundStyle(Palette.muted)
+        Text(title).font(.jakarta(12, .semibold)).tracking(0.4).foregroundStyle(Palette.muted)
     }
 }
 

@@ -354,7 +354,7 @@ struct CommissionsView: View {
                 .overlay(alignment: .topTrailing) { Circle().fill(.white.opacity(0.13)).frame(width: 180).offset(x: 70, y: -80) }
                 .overlay(alignment: .bottomLeading) { Circle().fill(.white.opacity(0.09)).frame(width: 120).offset(x: -40, y: 50) }
                 .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-                .shadow(color: Theme.main.opacity(0.3), radius: 16, y: 8)
+                .shadow(color: Palette.shadow, radius: 12, y: 8)
         }
     }
 

@@ -1,9 +1,9 @@
 import SwiftUI
 import UIKit
 
-// Sugerly's look, matching the website: warm off-white (or deep plum in dark
-// mode), soft cards, the accent gradient, and the iPhone rounded / Caveat Brush /
-// Plus Jakarta Sans fonts.
+// Sugerly's look: calm and clean. Near-white pages (near-black in dark
+// mode), white cards with a hairline edge, one soft accent colour (pink
+// unless you pick another) used sparingly, and the iPhone's own fonts.
 
 extension UIColor {
     convenience init(hex: UInt32, alpha: CGFloat = 1) {
@@ -28,19 +28,19 @@ extension Color {
 }
 
 enum Palette {
-    // Blush pink background, candy-floss borders.
-    static let bg = Color.dynamic(light: 0xFFF3F7, dark: 0x140A11)
-    static let surface = Color.dynamic(light: 0xFFFFFF, dark: 0x1D1019)
-    static let surface2 = Color.dynamic(light: 0xFFEAF1, dark: 0x271621)
-    static let border = Color.dynamic(light: 0xF8D9E4, dark: 0x351F2C)
-    static let borderStrong = Color.dynamic(light: 0xF0C3D3, dark: 0x45293A)
-    static let text = Color.dynamic(light: 0x2A1620, dark: 0xF7EDF2)
-    static let text2 = Color.dynamic(light: 0x6B5560, dark: 0xC2ADB8)
-    static let muted = Color.dynamic(light: 0x9C8A93, dark: 0x86707C)
-    static let danger = Color(hex: 0xE0526B)
-    static let success = Color(hex: 0x17A673)
-    static let warning = Color(hex: 0xF0A020)
-    static let shadow = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor.black.withAlphaComponent(0.35) : UIColor(hex: 0xC2476F, alpha: 0.10) })
+    // Quiet neutrals with the faintest warm tint; the accent does the talking.
+    static let bg = Color.dynamic(light: 0xF8F7F8, dark: 0x0F0F11)
+    static let surface = Color.dynamic(light: 0xFFFFFF, dark: 0x19191C)
+    static let surface2 = Color.dynamic(light: 0xF1F0F2, dark: 0x232327)
+    static let border = Color.dynamic(light: 0xE9E7EA, dark: 0x2B2B30)
+    static let borderStrong = Color.dynamic(light: 0xDAD7DC, dark: 0x3A3A41)
+    static let text = Color.dynamic(light: 0x1B1A1E, dark: 0xF3F2F5)
+    static let text2 = Color.dynamic(light: 0x58555E, dark: 0xB6B3BC)
+    static let muted = Color.dynamic(light: 0x8E8A94, dark: 0x7E7B85)
+    static let danger = Color(hex: 0xE5484D)
+    static let success = Color(hex: 0x2E9E6B)
+    static let warning = Color(hex: 0xE09A1A)
+    static let shadow = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor.black.withAlphaComponent(0.4) : UIColor.black.withAlphaComponent(0.05) })
 }
 
 // The five accent colours you can pick in Settings (the logo follows along).
@@ -50,16 +50,18 @@ enum Accent: String, CaseIterable, Identifiable {
     var label: String { rawValue.capitalized }
     private var rgb: (UInt32, UInt32) {
         switch self {
-        case .rose: return (0xD9577F, 0xEE8FAE)
-        case .lavender: return (0x7C5CF0, 0xB19CFF)
-        case .mint: return (0x16A37F, 0x5FD3B0)
-        case .peach: return (0xEE6E40, 0xFFAA80)
-        case .sky: return (0x2F80E0, 0x7CBEFF)
+        case .rose: return (0xD8668D, 0xF2B5C9)
+        case .lavender: return (0x7F67E0, 0xC3B6F5)
+        case .mint: return (0x2A9C7C, 0x9EDCC8)
+        case .peach: return (0xE07650, 0xF6C2AC)
+        case .sky: return (0x3A84D8, 0xA9CDF3)
         }
     }
     var main: Color { Color(hex: rgb.0) }
     var light: Color { Color(hex: rgb.1) }
-    var gradient: LinearGradient { LinearGradient(colors: [light, main], startPoint: .topLeading, endPoint: .bottomTrailing) }
+    // Flat: the accent itself (kept as a gradient type so every place that
+    // used one still works).
+    var gradient: LinearGradient { LinearGradient(colors: [main, main], startPoint: .top, endPoint: .bottom) }
     var logo: String { "Logo-\(rawValue)" }
 }
 
@@ -97,7 +99,7 @@ enum Theme {
     static var pink: Color { main }
     static var rose: Color { main }
     static var soft: Color { main.opacity(0.1) }
-    static var gradient: LinearGradient { LinearGradient(colors: [light, main], startPoint: .topLeading, endPoint: .bottomTrailing) }
+    static var gradient: LinearGradient { LinearGradient(colors: [main, main], startPoint: .top, endPoint: .bottom) }
     static let lavender = Color(hex: 0xB19CFF)
     static let background = Palette.bg
     static let card = Palette.surface
@@ -186,77 +188,62 @@ extension Font.TextStyle {
 }
 
 extension UIFont {
-    /// The iPhone's rounded letters (the same as the titles), for the top bars.
-    static func rounded(_ size: CGFloat, _ weight: UIFont.Weight = .heavy) -> UIFont {
-        let base = UIFont.systemFont(ofSize: size, weight: weight)
-        guard let descriptor = base.fontDescriptor.withDesign(.rounded) else { return base }
-        return UIFont(descriptor: descriptor, size: size)
+    /// The top bars' titles: the iPhone's own letters, semibold.
+    static func rounded(_ size: CGFloat, _ weight: UIFont.Weight = .semibold) -> UIFont {
+        UIFont.systemFont(ofSize: size * 0.9, weight: weight == .heavy || weight == .black ? .semibold : weight)
     }
 }
 
 extension Font {
-    // The iPhone's own fully round letters, extra bold: big friendly
-    // headings. (A touch smaller than the size asked for: these letters are
-    // wider than the old bubbly font, so pages keep the same room.) Grows
-    // with the text size picked in iPhone Settings.
+    // Headings: the iPhone's own letters, bold but not shouty, a little
+    // smaller than the size asked for (the old fonts ran large). Grows with
+    // the text size picked in iPhone Settings.
     static func display(_ size: CGFloat, relativeTo style: Font.TextStyle = .title) -> Font {
-        .system(size: UIFontMetrics(forTextStyle: style.uiKit).scaledValue(for: size * 0.9), weight: .heavy, design: .rounded)
+        .system(size: UIFontMetrics(forTextStyle: style.uiKit).scaledValue(for: size * 0.82), weight: .bold)
     }
-    // Caveat Brush: playful accents (names in the greeting, empty states).
+    // Small accents (greetings): the same letters, a touch lighter.
     static func cute(_ size: CGFloat, relativeTo style: Font.TextStyle = .title) -> Font {
-        .custom("CaveatBrush-Regular", size: size, relativeTo: style)
+        .system(size: UIFontMetrics(forTextStyle: style.uiKit).scaledValue(for: size * 0.8), weight: .semibold)
     }
-    // Plus Jakarta Sans: everything else.
+    // Everything else: the iPhone's own text font. (Named after the old
+    // font so every screen picks it up.) Extra-heavy weights are calmed to
+    // semibold / bold.
     static func jakarta(_ size: CGFloat, _ weight: Font.Weight = .regular, relativeTo style: Font.TextStyle = .body) -> Font {
-        let name: String
+        let calm: Font.Weight
         switch weight {
-        case .medium: name = "PlusJakartaSans-Medium"
-        case .semibold: name = "PlusJakartaSans-SemiBold"
-        case .bold: name = "PlusJakartaSans-Bold"
-        case .heavy, .black: name = "PlusJakartaSans-ExtraBold"
-        default: name = "PlusJakartaSans-Regular"
+        case .heavy, .black: calm = .bold
+        case .bold: calm = .semibold
+        default: calm = weight
         }
-        return .custom(name, size: size, relativeTo: style)
+        return .system(size: UIFontMetrics(forTextStyle: style.uiKit).scaledValue(for: size), weight: calm)
     }
 }
 
 // MARK: - Building blocks
 
-// White card with a soft pink-tinted edge, a light top highlight and a
-// layered shadow — the website's .card.
+// A plain card: the surface colour with a hairline edge, no glow.
 struct SugarCard: ViewModifier {
-    var radius: CGFloat = 24
+    var radius: CGFloat = 18
     var padding: CGFloat = 0
-    @Environment(\.colorScheme) private var scheme
     func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        // The shadow belongs to the card's shape only (not everything inside
-        // it), so long cards scroll smoothly.
+        let shape = RoundedRectangle(cornerRadius: min(radius, 20), style: .continuous)
         content
             .padding(padding)
-            .background {
-                shape.fill(Palette.surface)
-                    .shadow(color: scheme == .dark ? Palette.shadow : Theme.main.opacity(0.08), radius: 12, y: 6)
-            }
-            .overlay {
-                shape.strokeBorder(
-                    LinearGradient(colors: [Color.white.opacity(scheme == .dark ? 0.08 : 0.9), Palette.border], startPoint: .top, endPoint: .bottom),
-                    lineWidth: 1
-                )
-            }
+            .background(Palette.surface, in: shape)
+            .overlay(shape.strokeBorder(Palette.border, lineWidth: 1))
     }
 }
 
 extension View {
-    func sugarCard(radius: CGFloat = 24, padding: CGFloat = 0) -> some View { modifier(SugarCard(radius: radius, padding: padding)) }
+    func sugarCard(radius: CGFloat = 18, padding: CGFloat = 0) -> some View { modifier(SugarCard(radius: radius, padding: padding)) }
 
-    // Frosted pink pill for floating bits (music player): soft blur with a
-    // blush tint and a candy border — cute rather than Apple's liquid glass.
-    func glassPill(cornerRadius: CGFloat = 30) -> some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+    // Floating bits (the music player): the surface with a hairline edge and
+    // a soft shadow so it reads above the page.
+    func glassPill(cornerRadius: CGFloat = 22) -> some View {
+        let shape = RoundedRectangle(cornerRadius: min(cornerRadius, 22), style: .continuous)
         return self
-            .background { shape.fill(Palette.surface).shadow(color: Theme.main.opacity(0.2), radius: 16, y: 8) }
-            .overlay(shape.strokeBorder(Theme.light.opacity(0.55), lineWidth: 1.2))
+            .background { shape.fill(Palette.surface).shadow(color: Palette.shadow, radius: 12, y: 4) }
+            .overlay(shape.strokeBorder(Palette.border, lineWidth: 1))
     }
 
     // Text filled with the accent gradient.
@@ -273,7 +260,7 @@ struct GradientButtonStyle: ButtonStyle {
     }
 }
 
-// Candy button: accent gradient, glossy top edge, coloured glow, squish.
+// The main button: the accent colour, white text, softly rounded corners.
 private struct GradientButtonBody: View {
     let configuration: ButtonStyleConfiguration
     let height: CGFloat
@@ -281,50 +268,36 @@ private struct GradientButtonBody: View {
     @Environment(\.isEnabled) private var enabled
 
     var body: some View {
-        JellyPress(content: styled, pressed: configuration.isPressed, scale: 0.96)
-    }
-
-    private var styled: some View {
         configuration.label
-            .font(.jakarta(15, .bold))
+            .font(.jakarta(15, .semibold))
             .foregroundStyle(.white)
-            // Pill buttons stay on one line (shrinking a little if they
-            // must) instead of wrapping into a lopsided two-line blob.
+            // Stays on one line (shrinking a little if it must).
             .lineLimit(1)
             .minimumScaleFactor(0.75)
-            .padding(.horizontal, 20)
-            .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: height)
-            .background {
-                Capsule().fill(Theme.gradient)
-                    .overlay {
-                        Capsule().fill(LinearGradient(colors: [.white.opacity(0.28), .clear], startPoint: .top, endPoint: .center))
-                            .padding(1.5)
-                    }
-                    .overlay(Capsule().strokeBorder(.white.opacity(0.35), lineWidth: 1))
-            }
-            .shadow(color: Theme.main.opacity(configuration.isPressed ? 0.2 : 0.38), radius: configuration.isPressed ? 6 : 14, y: configuration.isPressed ? 3 : 7)
-            .saturation(enabled ? 1 : 0.2)
-            .opacity(enabled ? 1 : 0.6)
+            .padding(.horizontal, 18)
+            .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: min(height, 50))
+            .background(Theme.main, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .opacity(enabled ? (configuration.isPressed ? 0.82 : 1) : 0.45)
+            .scaleEffect(configuration.isPressed && !Motion.reduced ? 0.985 : 1)
             .animation(Motion.press, value: configuration.isPressed)
     }
 }
 
+// The quieter button: a soft grey fill with the accent colour's text.
 struct OutlineButtonStyle: ButtonStyle {
     var height: CGFloat = 44
     var fullWidth = false
     func makeBody(configuration: Configuration) -> some View {
-        let styled = configuration.label
-            .font(.jakarta(14, .bold))
-            .foregroundStyle(Theme.pink)
+        configuration.label
+            .font(.jakarta(14, .semibold))
+            .foregroundStyle(Theme.main)
             .lineLimit(1)
             .minimumScaleFactor(0.75)
-            .padding(.horizontal, 18)
-            .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: height)
-            .background(configuration.isPressed ? Theme.soft : Color.clear, in: Capsule())
-            .background(Palette.surface, in: Capsule())
-            .overlay(Capsule().strokeBorder(Theme.pink.opacity(0.3), lineWidth: 1.4))
-            .shadow(color: Palette.shadow, radius: 6, y: 2)
-        return JellyPress(content: styled, pressed: configuration.isPressed, scale: 0.97)
+            .padding(.horizontal, 16)
+            .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: min(height, 46))
+            .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .animation(Motion.press, value: configuration.isPressed)
     }
 }
 
@@ -341,22 +314,13 @@ struct Chip: View {
                 if let icon { Image(systemName: icon).font(.system(size: 13, weight: .semibold)) }
                 Text(title).font(.jakarta(14, .semibold))
             }
-            .padding(.horizontal, 16)
-            .frame(height: 40)
-            .foregroundStyle(active ? .white : Palette.text2)
-            .background {
-                if active {
-                    Capsule().fill(Theme.gradient)
-                        .overlay(Capsule().fill(LinearGradient(colors: [.white.opacity(0.25), .clear], startPoint: .top, endPoint: .center)).padding(1))
-                        // Small, so it never gets cut off in a scrolling row.
-                        .shadow(color: Theme.pink.opacity(0.28), radius: 4, y: 2)
-                } else {
-                    Capsule().fill(Palette.surface).overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
-                }
-            }
+            .padding(.horizontal, 14)
+            .frame(height: 36)
+            .foregroundStyle(active ? Palette.surface : Palette.text2)
+            .background(active ? Palette.text : Palette.surface2, in: Capsule())
             .contentShape(Capsule())
         }
-        .buttonStyle(BouncyStyle(scale: 0.95))
+        .buttonStyle(SoftPressStyle())
         .sensoryFeedback(.selection, trigger: active)
         .motion(Motion.standard, value: active)
     }
@@ -371,16 +335,13 @@ struct SectionHeader: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 7) {
-            Image(systemName: icon)
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(Theme.main)
-            Text(title).font(.display(23)).foregroundStyle(Palette.text)
+            Text(title).font(.display(22)).foregroundStyle(Palette.text)
                 .lineLimit(1).minimumScaleFactor(0.8)
             Spacer(minLength: 8)
             if let action {
                 Button(action: action) {
-                    HStack(spacing: 3) { Text("See all"); Image(systemName: "chevron.right").font(.system(size: 10, weight: .heavy)) }
-                        .font(.jakarta(13, .bold))
+                    Text("See all")
+                        .font(.jakarta(14, .medium))
                         .foregroundStyle(Theme.main)
                         .padding(.vertical, 6)
                         .contentShape(Rectangle())
@@ -444,7 +405,7 @@ struct XPBar: View {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Palette.border)
-                    Capsule().fill(Theme.gradient).frame(width: max(8, geo.size.width * shown))
+                    Capsule().fill(Theme.main).frame(width: max(8, geo.size.width * shown))
                 }
             }
             .frame(height: 8)
@@ -454,7 +415,7 @@ struct XPBar: View {
     }
 
     private func updateProgress() {
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.35)) { shown = info.progress }
+        withAnimation(reduceMotion ? nil : Motion.drawer.delay(0.12)) { shown = info.progress }
     }
 }
 
@@ -498,28 +459,10 @@ struct AppBadge: View {
     private let sparkles: [(CGFloat, CGFloat, CGFloat, Double)] = [(846, 170, 124, 0), (930, 296, 52, 0.5), (130, 250, 76, 1.0)]
 
     var body: some View {
-        let unit = size / 1024
-        ZStack(alignment: .topLeading) {
-            Image(art).resizable().interpolation(.high).scaledToFit()
-            ForEach(sparkles.indices, id: \.self) { i in
-                let s = sparkles[i]
-                FourPointStar()
-                    .fill(.white)
-                    .frame(width: s.2 * unit, height: s.2 * unit)
-                    // They twinkle and turn in place (no drifting up and down).
-                    .phaseAnimator(reduceMotion ? [1.0] : [0.55, 1.0, 0.8]) { view, phase in
-                        view
-                            .scaleEffect(phase)
-                            .rotationEffect(.degrees(phase * 90))
-                            .opacity(0.55 + phase * 0.45)
-                    } animation: { _ in .easeInOut(duration: 1.1 + Double(i) * 0.25).delay(s.3 * 0.3) }
-                    .position(x: s.0 * unit, y: s.1 * unit)
-            }
-        }
-        .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous))
-        .shadow(color: Theme.main.opacity(0.35), radius: size * 0.12, y: size * 0.05)
-        .accessibilityLabel("Sugerly")
+        Image(art).resizable().interpolation(.high).scaledToFit()
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous))
+            .accessibilityLabel("Sugerly")
     }
 }
 
@@ -540,49 +483,30 @@ struct FourPointStar: Shape {
     }
 }
 
-// Colourful confetti for rewards.
-// A small, soft burst of sparkles for rewards: a few little stars pop out
-// above and to the sides, then fade. (It used to be confetti plus big
-// glowing stars flying everywhere, over the text and other cards.) Their
-// spots are picked once, so they never jump when the screen updates.
+// A reward moment: two soft rings ripple out in your colour and fade.
+// Clean, quick, and it never covers text.
 struct SparkleBurst: View {
     var radius: CGFloat = 80
-    struct Piece { var dx: CGFloat; var dy: CGFloat; var distance: CGFloat; var size: CGFloat; var delay: Double; var white: Bool }
-    @State private var pieces: [Piece] = (0..<8).map { i in
-        let angle: Double = -Double.pi * (0.12 + 0.76 * Double(i) / 7) + Double.random(in: -0.05...0.05)
-        let x: Double = cos(angle)
-        let y: Double = sin(angle)
-        return Piece(dx: CGFloat(x), dy: CGFloat(y), distance: CGFloat.random(in: 0.7...1.0),
-                     size: CGFloat.random(in: 8...14), delay: Double(i % 4) * 0.03, white: i % 2 == 0)
-    }
     @State private var go = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
-            ForEach(pieces.indices, id: \.self) { i in
-                let p = pieces[i]
-                FourPointStar()
-                    .fill(p.white ? AnyShapeStyle(Color.white) : AnyShapeStyle(Theme.main))
-                    .frame(width: p.size, height: p.size)
-                    .phaseAnimator([0, 1, 2], trigger: go) { view, phase in
-                        let reach: CGFloat = phase == 0 ? 0 : radius * p.distance
-                        return view
-                            .scaleEffect(phase == 1 ? 1 : 0.4)
-                            .opacity(phase == 1 ? 1 : 0)
-                            .offset(x: p.dx * reach, y: p.dy * reach)
-                    } animation: { phase in
-                        switch phase {
-                        case 1: return .easeOut(duration: 0.45).delay(p.delay)
-                        case 2: return .easeOut(duration: 0.3).delay(0.12)
-                        default: return .linear(duration: 0.01)
-                        }
-                    }
-            }
+            ring(0)
+            ring(0.12)
         }
+        .frame(width: radius * 2, height: radius * 2)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-        .onAppear { if !reduceMotion { go.toggle() } }
+        .onAppear { go = true }
+    }
+
+    private func ring(_ delay: Double) -> some View {
+        Circle()
+            .strokeBorder(Theme.main, lineWidth: go ? 1 : 5)
+            .scaleEffect(go ? 1 : 0.35)
+            .opacity(reduceMotion ? 0 : (go ? 0 : 0.55))
+            .animation(.easeOut(duration: 0.8).delay(delay), value: go)
     }
 }
 
@@ -684,26 +608,6 @@ struct Twinkle: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appeared = false
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            sparkle(size, x: size * 0.45, y: 0, delay: 0)
-            sparkle(size * 0.6, x: size * 1.45, y: size * 0.75, delay: 0.4)
-            sparkle(size * 0.45, x: 0, y: size * 1.15, delay: 0.8)
-        }
-        .frame(width: size * 2.1, height: size * 1.65, alignment: .topLeading)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-        .onAppear { appeared = true }
-    }
-
-    private func sparkle(_ s: CGFloat, x: CGFloat, y: CGFloat, delay: Double) -> some View {
-        Image(systemName: "sparkle")
-            .font(.system(size: s, weight: .bold))
-            .foregroundStyle(Theme.gradient)
-            .frame(width: s, height: s)
-            .scaleEffect(appeared || reduceMotion ? 1 : 0.8)
-            .opacity(appeared || reduceMotion ? 1 : 0.7)
-            .rotationEffect(.degrees(appeared || reduceMotion ? 0 : -12))
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.3).delay(delay * 0.25), value: appeared)
-            .offset(x: x, y: y)
+        Color.clear.frame(width: 0, height: 0).accessibilityHidden(true)
     }
 }

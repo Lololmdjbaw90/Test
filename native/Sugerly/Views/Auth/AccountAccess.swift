@@ -67,7 +67,7 @@ struct AccessHeader: View {
                 .foregroundStyle(.white)
                 .frame(width: 62, height: 62)
                 .background(Theme.gradient, in: Circle())
-                .shadow(color: Theme.main.opacity(0.3), radius: 12, y: 5)
+                .shadow(color: Palette.shadow, radius: 12, y: 5)
             Text(title)
                 .font(.display(28, relativeTo: .title))
                 .foregroundStyle(Palette.text)
@@ -445,7 +445,7 @@ struct QuickLoginSheet: View {
         VStack(spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 28, style: .continuous).fill(.white)
-                    .shadow(color: Theme.main.opacity(0.18), radius: 18, y: 8)
+                    .shadow(color: Palette.shadow, radius: 12, y: 8)
                 if !code.isEmpty, let image = QRCode.image("sugerly://quick?c=\(code)") {
                     Image(uiImage: image)
                         .interpolation(.none)
@@ -466,7 +466,7 @@ struct QuickLoginSheet: View {
                             .padding(.horizontal, 18)
                             .frame(height: 42)
                             .background(Theme.gradient, in: Capsule())
-                            .shadow(color: Theme.main.opacity(0.3), radius: 8, y: 3)
+                            .shadow(color: Palette.shadow, radius: 8, y: 3)
                     }
                     .buttonStyle(BouncyStyle(scale: 0.92))
                     .transition(.pop)
