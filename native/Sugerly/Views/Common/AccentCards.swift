@@ -43,7 +43,7 @@ struct AccentCard<Art: View>: View {
             .overlay(alignment: .topTrailing) {
                 if picked {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .black))
+                        .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(.white)
                         .frame(width: 22, height: 22)
                         .background(main, in: Circle())

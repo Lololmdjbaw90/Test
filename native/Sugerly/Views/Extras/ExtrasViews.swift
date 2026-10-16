@@ -10,19 +10,18 @@ struct TopArtistsView: View {
     @Environment(PostsStore.self) private var posts
     @State private var artworks: [Artwork] = []
     @State private var appeared = false
-    @State private var risen = false
+    @State private var loaded = false
     @State private var burst = 0
     @State private var range = 0
     @Namespace private var chip
 
     struct RankEntry: Hashable { var email: String; var likes: Int; var works: Int }
 
-    private static let gold = Color(hex: 0xF0A020)
-    private static let goldLight = Color(hex: 0xFFD166)
-    private static let silver = Color(hex: 0x94A3B8)
-    private static let bronze = Color(hex: 0xC2773A)
+    static let gold = Color(hex: 0xF0A020)
+    static let silver = Color(hex: 0x94A3B8)
+    static let bronze = Color(hex: 0xC2773A)
 
-    private var ranking: [RankEntry] {
+    private func ranking(_ range: Int) -> [RankEntry] {
         let since = range == 0 ? "" : Dates.iso(Date().addingTimeInterval(range == 1 ? -7 * 86_400 : -30 * 86_400))
         var likes: [String: Int] = [:]
         var works: [String: Int] = [:]
@@ -30,34 +29,29 @@ struct TopArtistsView: View {
         for p in posts.posts where p.created > since { likes[p.authorEmail, default: 0] += p.likeTotal; works[p.authorEmail, default: 0] += 1 }
         return likes.keys.filter { model.person($0) != nil }
             .map { RankEntry(email: $0, likes: likes[$0] ?? 0, works: works[$0] ?? 0) }
-            .sorted { $0.likes != $1.likes ? $0.likes > $1.likes : $0.works > $1.works }
+            .sorted { $0.likes != $1.likes ? $0.likes > $1.likes : ($0.works != $1.works ? $0.works > $1.works : $0.email < $1.email) }
     }
 
     var body: some View {
-        let list = ranking
-        let top = max(1, list.first?.likes ?? 1)
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 hero.stagger(appeared, 0)
                 rangeSwitch.stagger(appeared, 1)
-                if list.count >= 3 { podium(Array(list.prefix(3))).stagger(appeared, 2) }
-                if let me = model.me?.email, let mine = list.firstIndex(where: { $0.email == me }) {
-                    yourSpot(list, mine).stagger(appeared, 3)
-                }
-                let rest = Array(list.enumerated()).dropFirst(list.count >= 3 ? 3 : 0)
-                if !rest.isEmpty {
-                    VStack(spacing: 0) {
-                        ForEach(Array(rest), id: \.element.email) { i, entry in
-                            if i > (list.count >= 3 ? 3 : 0) { Divider().padding(.leading, 96) }
-                            row(entry, rank: i + 1, top: top)
-                                .opacity(risen ? 1 : 0)
-                                .offset(y: risen ? 0 : 16)
-                                .animation(Motion.reduced ? nil : Motion.enter.delay(0.35 + Double(min(i, 14)) * 0.04), value: risen)
-                        }
+                if loaded {
+                    // Each range is its own board: switching fades the old
+                    // one out and the new one rises in fresh, so nothing
+                    // half-animates in between.
+                    RankBoard(list: ranking(range), path: $path)
+                        .id(range)
+                        .transition(.asymmetric(insertion: .opacity, removal: .opacity.animation(Motion.exit)))
+                } else {
+                    VStack(spacing: 12) {
+                        SkeletonBlock(height: 230, radius: 22)
+                        SkeletonBlock(height: 70, radius: 18)
+                        SkeletonBlock(height: 180, radius: 20)
                     }
-                    .sugarCard(radius: 20)
+                    .transition(.opacity)
                 }
-                if list.isEmpty { EmptyCard(icon: "crown.fill", title: "No artists yet", text: "Post art to get on the board!") }
             }
             .padding(.horizontal, 16)
             .padding(.top, 6)
@@ -70,27 +64,14 @@ struct TopArtistsView: View {
         .dropRemoved($artworks)
         .navigationBarTitleDisplayMode(.inline)
         .task {
+            guard !loaded else { return }
             if posts.posts.isEmpty { await posts.load() }
             artworks = ((try? await FS.query("Artwork", orderBy: "created_date", limit: 200)) ?? []).map(Artwork.init)
-            try? await Task.sleep(for: .milliseconds(150))
-            risen = true
+            withAnimation(Motion.pick(Motion.standard)) { loaded = true }
+            try? await Task.sleep(for: .milliseconds(700))
             burst += 1
         }
-        .onAppear {
-            appeared = true
-            if !artworks.isEmpty || !posts.posts.isEmpty { risen = true }
-        }
-    }
-
-    private func pick(_ i: Int) {
-        guard range != i else { return }
-        withAnimation(Motion.pick(Motion.standard)) { range = i }
-        // Replay the podium rise for the new board.
-        risen = false
-        Task {
-            try? await Task.sleep(for: .milliseconds(60))
-            risen = true
-        }
+        .onAppear { appeared = true }
     }
 
     // All time / This week / This month, with a sliding pill.
@@ -98,7 +79,10 @@ struct TopArtistsView: View {
         HStack(spacing: 4) {
             ForEach(Array(["All time", "This week", "This month"].enumerated()), id: \.offset) { i, title in
                 let on = range == i
-                Button { pick(i) } label: {
+                Button {
+                    guard range != i else { return }
+                    withAnimation(Motion.pick(Motion.standard)) { range = i }
+                } label: {
                     Text(title).font(.jakarta(14, .semibold))
                         .foregroundStyle(on ? Palette.text : Palette.muted)
                         .frame(maxWidth: .infinity).frame(height: 34)
@@ -133,22 +117,65 @@ struct TopArtistsView: View {
                 .font(.jakarta(14)).foregroundStyle(Palette.muted)
         }
     }
+}
 
-    private func podium(_ top: [RankEntry]) -> some View {
+// One board (for one time range): podium, your spot and everyone else. It
+// plays its own rise once, when it appears.
+private struct RankBoard: View {
+    let list: [TopArtistsView.RankEntry]
+    @Binding var path: [Route]
+    @Environment(AppModel.self) private var model
+    @State private var risen = false
+
+    var body: some View {
+        let top = max(1, list.first?.likes ?? 1)
+        let podiumCount = list.count >= 3 ? 3 : 0
+        VStack(alignment: .leading, spacing: 20) {
+            if podiumCount == 3 { podium(Array(list.prefix(3))) }
+            if let me = model.me?.email, let mine = list.firstIndex(where: { $0.email == me }) {
+                yourSpot(mine)
+                    .opacity(risen ? 1 : 0)
+                    .offset(y: risen ? 0 : 12)
+                    .animation(Motion.reduced ? nil : Motion.enter.delay(0.3), value: risen)
+            }
+            let rest = Array(list.enumerated().dropFirst(podiumCount))
+            if !rest.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(rest, id: \.element.email) { i, entry in
+                        if i > podiumCount { Divider().padding(.leading, 96) }
+                        row(entry, rank: i + 1, top: top)
+                            .opacity(risen ? 1 : 0)
+                            .offset(y: risen ? 0 : 14)
+                            .animation(Motion.reduced ? nil : Motion.enter.delay(0.35 + Double(min(i, 14)) * 0.035), value: risen)
+                    }
+                }
+                .sugarCard(radius: 20)
+            }
+            if list.isEmpty {
+                EmptyCard(icon: "crown.fill", title: "No artists yet", text: "Nobody posted in this time yet. Post art to get on the board!", compact: true)
+            }
+        }
+        .task {
+            // One frame later, so the starting look is drawn first.
+            try? await Task.sleep(for: .milliseconds(30))
+            risen = true
+        }
+    }
+
+    private func podium(_ top: [TopArtistsView.RankEntry]) -> some View {
         HStack(alignment: .bottom, spacing: 10) {
-            place(top[1], rank: 2, height: 84, color: Self.silver, delay: 0.1)
-            place(top[0], rank: 1, height: 116, color: Self.gold, delay: 0.2)
-            place(top[2], rank: 3, height: 64, color: Self.bronze, delay: 0)
+            place(top[1], rank: 2, height: 84, color: TopArtistsView.silver, delay: 0.08)
+            place(top[0], rank: 1, height: 116, color: TopArtistsView.gold, delay: 0.16)
+            place(top[2], rank: 3, height: 64, color: TopArtistsView.bronze, delay: 0)
         }
         .padding(.top, 26)
         .padding(.horizontal, 12)
-        .padding(.bottom, 0)
         .background(Palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
-    private func place(_ entry: RankEntry, rank: Int, height: CGFloat, color: Color, delay: Double) -> some View {
+    private func place(_ entry: TopArtistsView.RankEntry, rank: Int, height: CGFloat, color: Color, delay: Double) -> some View {
         let person = model.person(entry.email)
         let size: CGFloat = rank == 1 ? 72 : 58
         return Button { path.append(.person(entry.email)) } label: {
@@ -159,28 +186,29 @@ struct TopArtistsView: View {
                     .overlay(alignment: .top) {
                         if rank == 1 {
                             Image(systemName: "crown.fill").font(.system(size: 20, weight: .semibold))
-                                .foregroundStyle(Self.gold)
-                                .offset(y: -22)
-                                .scaleEffect(risen ? 1 : 0.2, anchor: .bottom)
-                                .animation(Motion.reduced ? nil : Motion.playful.delay(delay + 0.45), value: risen)
+                                .foregroundStyle(TopArtistsView.gold)
+                                .offset(y: risen ? -22 : -40)
+                                .opacity(risen ? 1 : 0)
+                                .animation(Motion.reduced ? nil : Motion.playful.delay(delay + 0.42), value: risen)
                         }
                     }
                     .scaleEffect(risen ? 1 : 0.6)
                     .opacity(risen ? 1 : 0)
-                    .animation(Motion.reduced ? nil : Motion.playful.delay(delay + 0.25), value: risen)
+                    .animation(Motion.reduced ? nil : Motion.playful.delay(delay + 0.2), value: risen)
                 Text(person?.displayName ?? "").font(.jakarta(13, .semibold)).foregroundStyle(Palette.text).lineLimit(1)
                 Label("\(entry.likes)", systemImage: "heart.fill").font(.jakarta(11, .medium)).foregroundStyle(Palette.muted)
-                    .contentTransition(.numericText())
+                // The pillar grows from the floor (a scale, so the text
+                // inside never jumps around).
                 Text("\(rank)").font(.display(rank == 1 ? 30 : 24)).foregroundStyle(color)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: risen ? height : 10, alignment: .top)
                     .padding(.top, 8)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: height, alignment: .top)
                     .background {
                         UnevenRoundedRectangle(topLeadingRadius: 14, topTrailingRadius: 14, style: .continuous)
                             .fill(color.opacity(0.16))
                     }
-                    .clipped()
-                    .animation(Motion.reduced ? nil : .spring(response: 0.6, dampingFraction: 0.78).delay(delay), value: risen)
+                    .scaleEffect(x: 1, y: risen ? 1 : 0.05, anchor: .bottom)
+                    .animation(Motion.reduced ? nil : .spring(response: 0.55, dampingFraction: 0.78).delay(delay), value: risen)
             }
             .frame(maxWidth: .infinity)
         }
@@ -189,14 +217,13 @@ struct TopArtistsView: View {
     }
 
     // Where you are on the board and how far to the next spot.
-    private func yourSpot(_ list: [RankEntry], _ index: Int) -> some View {
+    private func yourSpot(_ index: Int) -> some View {
         let entry = list[index]
         let gap = index > 0 ? list[index - 1].likes - entry.likes + 1 : 0
         return HStack(spacing: 12) {
             Text("#\(index + 1)").font(.display(20)).foregroundStyle(Theme.main)
                 .frame(width: 52, height: 52)
                 .background(Theme.soft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .contentTransition(.numericText())
             VStack(alignment: .leading, spacing: 2) {
                 Text("Your spot").font(.jakarta(15, .semibold)).foregroundStyle(Palette.text)
                 Text(index == 0 ? "You're the top artist. Keep that crown!" : "\(gap) more like\(gap == 1 ? "" : "s") to reach #\(index)")
@@ -208,7 +235,7 @@ struct TopArtistsView: View {
         .sugarCard(radius: 18, padding: 12)
     }
 
-    private func row(_ entry: RankEntry, rank: Int, top: Int) -> some View {
+    private func row(_ entry: TopArtistsView.RankEntry, rank: Int, top: Int) -> some View {
         let person = model.person(entry.email)
         let share = CGFloat(entry.likes) / CGFloat(top)
         return Button { path.append(.person(entry.email)) } label: {
@@ -220,14 +247,16 @@ struct TopArtistsView: View {
                         Text(person?.displayName ?? "").font(.jakarta(15, .semibold)).foregroundStyle(Palette.text).lineLimit(1)
                         Text("\(entry.works) works").font(.jakarta(12)).foregroundStyle(Palette.muted)
                     }
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(Palette.surface2)
-                            Capsule().fill(Theme.main.opacity(0.7)).frame(width: max(6, geo.size.width * (risen ? share : 0)))
-                                .animation(Motion.reduced ? nil : Motion.drawer.delay(0.45 + Double(min(rank, 14)) * 0.04), value: risen)
+                    Capsule().fill(Palette.surface2)
+                        .frame(height: 4)
+                        .overlay(alignment: .leading) {
+                            GeometryReader { geo in
+                                Capsule().fill(Theme.main.opacity(0.7))
+                                    .frame(width: max(6, geo.size.width * share))
+                                    .scaleEffect(x: risen ? 1 : 0, anchor: .leading)
+                                    .animation(Motion.reduced ? nil : Motion.drawer.delay(0.45 + Double(min(rank, 14)) * 0.035), value: risen)
+                            }
                         }
-                    }
-                    .frame(height: 4)
                 }
                 Label("\(entry.likes)", systemImage: "heart.fill").font(.jakarta(13, .medium)).foregroundStyle(Palette.muted)
                 FollowButton(email: entry.email, compact: true)
@@ -277,17 +306,19 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
-        AppRelease(id: "ios-2.4", icon: "paintpalette.fill", title: "A calmer, cleaner Sugerly", date: "2026-10-16T12:00:00Z", items: [
-            "A whole new look: clean, soft pink pages and clearer text. Your own colour still tints everything.",
-            "Drawings, posts and reels grow right out of the card you tap, and shrink back when you go back.",
-            "New loading animations: soft morphing dots and a rosy shimmer while things load.",
-            "Stickers have a smooth white edge and no more grey box behind them.",
+        AppRelease(id: "ios-2.5", icon: "paintpalette.fill", title: "A pastel Sugerly", date: "2026-10-16T21:00:00Z", items: [
+            "A whole new pastel look from one palette: cream, ivory, blush, pink and rose. Pick another colour and the pinks follow it.",
+            "Juicier buttons, chips and cards, with soft rosy shadows and springy taps.",
+            "Every page redesigned: Home, Community, Fan art, chats, profiles, Music, Servers, People, Commissions, Wallet, MimiPlus and What's new.",
+            "Smoother animations everywhere: pages rise in, feeds and filters crossfade instead of jumping, posts glide in as you scroll, and the Top artists podium grows up when you switch between all time, week and month.",
+            "Reels load with a soft placeholder and only show the loading dots if a video takes a moment.",
+            "The weekly challenge and this week's top creators are back at the top of Community.",
+        ]),
+        AppRelease(id: "ios-2.4", icon: "sparkles", title: "A calmer, cleaner Sugerly", date: "2026-10-16T12:00:00Z", items: [
             "New Wallet: see your coins, every way to earn more, and what you can spend them on.",
             "MimiPlus explained simply: what you get, what it costs in coins, and how close you are.",
-            "A tidier Home and menu, with springy buttons and cards that glide in as you scroll.",
-            "A cleaner Fan art wall: simple filter chips, a calmer showcase, and a tidier artwork page with a springy like.",
-            "Cleaner chats: soft rounded bubbles, a simpler chat list and a smooth send button.",
-            "A cleaner Top artists board and weekly challenge: a soft podium that rises in, a simple ranked list and a clear challenge card.",
+            "Drawings, posts and reels grow right out of the card you tap, and shrink back when you go back.",
+            "Stickers have a smooth white edge and no more grey box behind them.",
             "Chat no longer jumps around while you send messages.",
         ]),
         AppRelease(id: "ios-2.2", icon: "key.horizontal.fill", title: "New ways to log in", date: "2026-10-10T12:00:00Z", items: [
@@ -382,6 +413,18 @@ enum AppReleases {
     ]
 }
 
+// The newest release sits on the palette; older ones on plain cards.
+private struct ReleaseCard: ViewModifier {
+    let highlight: Bool
+    @ViewBuilder func body(content: Content) -> some View {
+        if highlight {
+            content.pastelCard(radius: 22, padding: 14)
+        } else {
+            content.sugarCard(radius: 22, padding: 14)
+        }
+    }
+}
+
 struct UpdatesView: View {
     @Environment(AppModel.self) private var model
     @State private var posted: [AppRelease] = []
@@ -403,12 +446,17 @@ struct UpdatesView: View {
                 if model.me?.isAdmin == true { composer }
                 ForEach(Array(all.enumerated()), id: \.element.id) { i, r in
                     HStack(alignment: .top, spacing: 12) {
-                        Image(systemName: r.icon).font(.system(size: 19, weight: .semibold)).foregroundStyle(Theme.gradient).frame(width: 46, height: 46)
-                            .background(Theme.soft, in: Circle())
-                            .overlay(Circle().strokeBorder(Theme.main.opacity(0.25), lineWidth: 1))
+                        Image(systemName: r.icon).font(.system(size: 19, weight: .semibold)).foregroundStyle(Theme.main).frame(width: 46, height: 46)
+                            .background(Palette.tile([Palette.blushHex, Palette.creamHex, Palette.ivoryHex, Palette.pinkHex][i % 4]), in: Circle())
+                            .overlay(Circle().strokeBorder(.white.opacity(0.6), lineWidth: 1))
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
                                 Text(r.title).font(.jakarta(16, .heavy)).foregroundStyle(Palette.text)
+                                if i == 0 {
+                                    Text("New").font(.jakarta(11, .bold)).foregroundStyle(.white)
+                                        .padding(.horizontal, 8).frame(height: 20)
+                                        .background(Theme.candy, in: Capsule())
+                                }
                                 Spacer()
                                 if let docId = r.docId, model.me?.isAdmin == true {
                                     Button { Task { try? await FS.delete("AppUpdate", docId); posted.removeAll { $0.docId == docId } } } label: {
@@ -424,7 +472,7 @@ struct UpdatesView: View {
                                 }
                             }
                         }
-                        .sugarCard(radius: 22, padding: 14)
+                        .modifier(ReleaseCard(highlight: i == 0))
                     }
                     .stagger(appeared, i)
                 }

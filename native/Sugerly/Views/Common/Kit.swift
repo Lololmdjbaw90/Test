@@ -108,6 +108,7 @@ private struct BarIcon: View {
             .symbolRenderingMode(alert ? .multicolor : .monochrome)
             .foregroundStyle(Palette.text2)
             .contentTransition(.symbolEffect(.replace))
+            .symbolEffect(.bounce, value: bounce)
             .frame(width: 34, height: 34)
             .background(Palette.surface, in: Circle())
             .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
@@ -143,12 +144,12 @@ enum TabBarLook {
         guard #unavailable(iOS 26.0) else { return }
         let small = UIFont.systemFont(ofSize: 10, weight: .medium)
         let bold = UIFont.systemFont(ofSize: 10, weight: .semibold)
-        let muted = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x7E7B85) : UIColor(hex: 0x8E8A94) }
+        let muted = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x9C8891) : UIColor(hex: 0xA08893) }
         let bar = UITabBarAppearance()
         bar.configureWithDefaultBackground()
         bar.backgroundEffect = UIBlurEffect(style: .systemThinMaterial)
-        bar.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x0F0F11, alpha: 0.8) : UIColor(hex: 0xFFFFFF, alpha: 0.85) }
-        bar.shadowColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x2B2B30) : UIColor(hex: 0xE9E7EA) }
+        bar.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x1A1418, alpha: 0.82) : UIColor(hex: 0xFFFAF5, alpha: 0.86) }
+        bar.shadowColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x382D33) : UIColor(hex: 0xF7D8E1) }
         for layout in [bar.stackedLayoutAppearance, bar.inlineLayoutAppearance, bar.compactInlineLayoutAppearance] {
             layout.normal.iconColor = muted
             layout.normal.titleTextAttributes = [.foregroundColor: muted, .font: small]
@@ -176,10 +177,14 @@ struct PinkCircleButton: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 34, height: 34)
-                .background(Theme.main, in: Circle())
+                .background {
+                    Circle().fill(Theme.candy)
+                        .overlay(Circle().strokeBorder(.white.opacity(0.25), lineWidth: 1))
+                        .shadow(color: Theme.main.opacity(0.3), radius: 6, y: 3)
+                }
                 .contentShape(Circle())
         }
-        .buttonStyle(SoftPressStyle())
+        .buttonStyle(BouncyStyle(scale: 0.86))
         .accessibilityLabel(label)
     }
 }
@@ -195,7 +200,7 @@ struct AccountButton: View {
         } label: {
             HStack(spacing: 7) {
                 Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 15, weight: .heavy))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.main)
                 Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 28)
             }
@@ -243,10 +248,10 @@ private struct MenuHintBubble: View {
                 .padding(.leading, 26)
             HStack(spacing: 10) {
                 Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 13, weight: .heavy))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 30, height: 30)
-                    .background(Theme.gradient, in: Circle())
+                    .background(Theme.candy, in: Circle())
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Your menu").font(.display(17)).foregroundStyle(Palette.text)
                     Text("Profile, music, servers & settings").font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)
@@ -413,7 +418,7 @@ struct TitleSwitch: View {
                 } label: {
                     Text(title)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(selection == i ? Palette.text : Palette.muted)
+                        .foregroundStyle(selection == i ? Theme.main : Palette.muted)
                         .padding(.horizontal, 14)
                         .frame(height: 30)
                         .background {

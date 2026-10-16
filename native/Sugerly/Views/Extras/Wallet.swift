@@ -113,8 +113,8 @@ struct WalletPage: View {
                 }
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(Palette.surface2)
-                        Capsule().fill(Theme.main)
+                        Capsule().fill(Palette.surface.opacity(0.7))
+                        Capsule().fill(Theme.progress)
                             .frame(width: max(8, geo.size.width * (shown || reduceMotion ? part : 0)))
                             .animation(reduceMotion ? nil : Motion.drawer.delay(0.15), value: shown)
                     }
@@ -122,7 +122,15 @@ struct WalletPage: View {
                 .frame(height: 8)
             }
         }
-        .sugarCard(radius: 22, padding: 18)
+        // Coins live on cream: the palette's warm side.
+        .padding(18)
+        .background {
+            let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
+            shape.fill(LinearGradient(colors: [Palette.cream, Palette.ivory, Palette.blush], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .overlay(shape.fill(LinearGradient(colors: [.white.opacity(0.35), .clear], startPoint: .top, endPoint: .center)))
+                .shadow(color: Palette.gold.opacity(0.16), radius: 14, y: 6)
+        }
+        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(.white.opacity(0.6), lineWidth: 1))
     }
 
     // MARK: rows
@@ -185,7 +193,7 @@ struct WalletPage: View {
             .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(Theme.main)
             .frame(width: 32, height: 32)
-            .background(Theme.soft, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .background(Palette.blush.opacity(0.7), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private func section<Content: View>(_ title: String, _ index: Int, @ViewBuilder _ content: () -> Content) -> some View {

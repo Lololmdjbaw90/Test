@@ -233,7 +233,7 @@ struct MiniPlayer: View {
                         .overlay(alignment: .bottomTrailing) {
                             if player.playing {
                                 Image(systemName: "waveform")
-                                    .font(.system(size: 9, weight: .heavy)).foregroundStyle(.white)
+                                    .font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
                                     .frame(width: 18, height: 18)
                                     .background(Theme.gradient, in: Circle())
                                     .offset(x: 4, y: 4)

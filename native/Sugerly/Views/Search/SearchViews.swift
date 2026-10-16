@@ -146,10 +146,13 @@ struct PeopleView: View {
                 // Round tiles in a grid instead of long rows.
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 12)], spacing: 12) {
                     ForEach(Array(shown.prefix(150).enumerated()), id: \.element.id) { i, person in
-                        PersonBubble(person: person) { path.append(.person(person.email)) }
+                        PersonBubble(person: person, tint: [Palette.blushHex, Palette.creamHex, Palette.ivoryHex, Palette.pinkHex][i % 4]) { path.append(.person(person.email)) }
                             .stagger(appeared, i)
                     }
                 }
+                // Switching tabs swaps the grid with a soft crossfade.
+                .id(filter)
+                .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 12)), removal: .opacity.animation(Motion.exit)))
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
@@ -171,6 +174,8 @@ struct PeopleView: View {
 // follow button.
 struct PersonBubble: View {
     let person: UserProfile
+    // A soft palette wash at the top of the card.
+    var tint: UInt32 = Palette.blushHex
     var open: () -> Void
     @Environment(AppModel.self) private var model
 
@@ -203,8 +208,12 @@ struct PersonBubble: View {
         .padding(.top, 16)
         .padding(.bottom, 14)
         .frame(maxWidth: .infinity)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 32, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 32, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+        .background {
+            let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
+            shape.fill(LinearGradient(colors: [Palette.tile(tint), Palette.surface], startPoint: .top, endPoint: .center))
+                .shadow(color: Palette.shadow, radius: 10, y: 4)
+        }
+        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
     }
 }
 

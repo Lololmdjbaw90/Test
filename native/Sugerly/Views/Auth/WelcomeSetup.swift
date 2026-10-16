@@ -92,10 +92,17 @@ struct WelcomeSetupView: View {
 
     // MARK: pieces
 
-    // A calm, plain page behind everything.
+    // The palette behind everything: the colour you're trying out at the
+    // top, melting into cream, then the page.
     private var background: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             Palette.bg
+            LinearGradient(stops: [
+                .init(color: accent.light.opacity(scheme == .dark ? 0.18 : 0.5), location: 0),
+                .init(color: Palette.cream.opacity(scheme == .dark ? 0.05 : 0.45), location: 0.5),
+                .init(color: .clear, location: 1),
+            ], startPoint: .top, endPoint: .bottom)
+            .frame(height: 440)
         }
         .ignoresSafeArea()
         .animation(.easeInOut(duration: 0.6), value: accent)

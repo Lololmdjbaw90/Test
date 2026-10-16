@@ -158,7 +158,8 @@ struct ProfileContent: View {
             }
             .frame(height: 170)
             .frame(maxWidth: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(.white.opacity(0.4), lineWidth: 1))
             .padding(.horizontal, 12)
 
             // One ring at a time: a chosen frame replaces the plain / MimiPlus
@@ -191,7 +192,8 @@ struct ProfileContent: View {
         } else if person.isNitro {
             LinearGradient(colors: [Color(hex: 0x8B5CF6), Color(hex: 0xC084FC), Color(hex: 0xEE8FAE), Color(hex: 0x7CBEFF)], startPoint: .topLeading, endPoint: .bottomTrailing)
         } else {
-            Theme.gradient
+            // No banner yet: the palette — cream, blush and rose.
+            Theme.pastel
         }
     }
 
@@ -298,30 +300,34 @@ struct ProfileContent: View {
         }
     }
 
+    // Four little tiles, one in each of the palette's colours.
     private var stats: some View {
         HStack(spacing: 8) {
-            stat(posts.count, "Posts", icon: "square.grid.2x2.fill")
-            stat(totalLikes, "Likes", icon: "heart.fill")
-            stat(followers, "Followers", icon: "person.2.fill")
-            stat(person.following.count, "Following", icon: "person.crop.circle.badge.checkmark")
+            stat(posts.count, "Posts", icon: "square.grid.2x2.fill", tint: Palette.creamHex, index: 0)
+            stat(totalLikes, "Likes", icon: "heart.fill", tint: Palette.blushHex, index: 1)
+            stat(followers, "Followers", icon: "person.2.fill", tint: Palette.ivoryHex, index: 2)
+            stat(person.following.count, "Following", icon: "person.crop.circle.badge.checkmark", tint: Palette.pinkHex, index: 3)
         }
     }
 
-    private func stat(_ n: Int, _ label: String, icon: String) -> some View {
+    private func stat(_ n: Int, _ label: String, icon: String, tint: UInt32, index: Int) -> some View {
         VStack(spacing: 4) {
-            Image(systemName: icon).font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.main.opacity(0.8))
+            Image(systemName: icon).font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.main)
             Text("\(n)").font(.display(24)).foregroundStyle(Palette.text).monospacedDigit()
                 .contentTransition(.numericText())
                 .lineLimit(1).minimumScaleFactor(0.6)
-            Text(label).font(.jakarta(11, .semibold)).foregroundStyle(Palette.muted)
+            Text(label).font(.jakarta(11, .semibold)).foregroundStyle(Palette.text2)
                 .lineLimit(1).minimumScaleFactor(0.75)
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 4)
         .frame(maxWidth: .infinity)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
-        .motion(Motion.standard, value: n)
+        .background(Palette.tile(tint), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(0.5), lineWidth: 1))
+        .scaleEffect(appeared || Motion.reduced ? 1 : 0.8)
+        .opacity(appeared ? 1 : 0)
+        .animation(Motion.reduced ? nil : Motion.playful.delay(0.2 + Double(index) * 0.06), value: appeared)
+        .motion(Motion.playful, value: n)
         .accessibilityElement(children: .combine)
     }
 
@@ -341,8 +347,26 @@ struct ProfileContent: View {
     @ViewBuilder
     private var grid: some View {
         if loading {
-            SugarLoader().frame(maxWidth: .infinity).padding(30)
+            // Soft shimmering squares where the pictures will go.
+            LazyVGrid(columns: columns, spacing: 4) {
+                ForEach(0..<6, id: \.self) { _ in
+                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Palette.surface2)
+                        .aspectRatio(1, contentMode: .fit)
+                        .shimmer()
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+            }
+            .transition(.opacity)
         } else {
+            gridContent
+                .id(tab)
+                .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 12)), removal: .opacity.animation(Motion.exit)))
+        }
+    }
+
+    @ViewBuilder
+    private var gridContent: some View {
+        VStack(alignment: .leading, spacing: 8) {
             switch tab {
             case .posts:
                 if posts.isEmpty { EmptyCard(icon: "photo.on.rectangle.angled", title: isMe ? "Share your first post" : "No posts yet", text: isMe ? "Tap + to post to the community." : "Nothing to see here yet.") }
@@ -356,15 +380,15 @@ struct ProfileContent: View {
             case .saved:
                 if savedPosts.isEmpty && savedReels.isEmpty && savedArt.isEmpty { EmptyCard(icon: "bookmark.fill", title: "Nothing saved", text: "Tap the bookmark on any post, reel or fan art to keep it here.") }
                 if !savedReels.isEmpty {
-                    Label("Reels", systemImage: "play.rectangle.fill").font(.jakarta(13, .heavy)).foregroundStyle(Palette.text2)
+                    Label("Reels", systemImage: "play.rectangle.fill").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
                     reelGrid(savedReels)
                 }
                 if !savedPosts.isEmpty {
-                    Label("Posts", systemImage: "square.grid.2x2.fill").font(.jakarta(13, .heavy)).foregroundStyle(Palette.text2).padding(.top, 6)
+                    Label("Posts", systemImage: "square.grid.2x2.fill").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2).padding(.top, 6)
                     postGrid(savedPosts)
                 }
                 if !savedArt.isEmpty {
-                    Label("Fan art", systemImage: "paintpalette.fill").font(.jakarta(13, .heavy)).foregroundStyle(Palette.text2).padding(.top, 6)
+                    Label("Fan art", systemImage: "paintpalette.fill").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2).padding(.top, 6)
                     artGrid(savedArt)
                 }
             }
@@ -408,12 +432,12 @@ struct ProfileContent: View {
             ForEach(list) { post in
                 Button { path.append(.post(post)) } label: {
                     Rectangle()
-                        .fill(post.imageURL.isEmpty ? AnyShapeStyle(Theme.gradient.opacity(0.85)) : AnyShapeStyle(Palette.surface2))
+                        .fill(post.imageURL.isEmpty ? AnyShapeStyle(Theme.pastel) : AnyShapeStyle(Palette.surface2))
                         .aspectRatio(1, contentMode: .fit)
                         .overlay {
                             if post.imageURL.isEmpty {
                                 Text(post.title.isEmpty ? post.text : post.title)
-                                    .font(.jakarta(12, .bold)).foregroundStyle(.white).lineLimit(5).padding(8)
+                                    .font(.jakarta(12, .semibold)).foregroundStyle(Palette.text).lineLimit(5).padding(8)
                             } else {
                                 RemoteImage(url: post.imageURL)
                             }
@@ -427,15 +451,22 @@ struct ProfileContent: View {
     }
 
     private func load() async {
-        defer { loading = false }
         async let followerCount = try? FS.count("User", [.contains("following", person.email)])
         async let postDocs = try? FS.query("CommunityPost", [.equals("user_email", person.email)], orderBy: "created_date", limit: 90)
         async let reelDocs = try? FS.query("Reel", [.equals("user_email", person.email)], orderBy: "created_date", limit: 60)
         async let artDocs = Self.artworks(by: person.email)
-        posts = (await postDocs ?? []).map(Post.init)
-        reels = (await reelDocs ?? []).map(Reel.init)
-        art = await artDocs
-        if let n = await followerCount { followers = n }
+        let nextPosts = (await postDocs ?? []).map(Post.init)
+        let nextReels = (await reelDocs ?? []).map(Reel.init)
+        let nextArt = await artDocs
+        let count = await followerCount
+        // Everything fades in together (no grid popping in piece by piece).
+        withAnimation(Motion.pick(.smooth(duration: 0.4))) {
+            posts = nextPosts
+            reels = nextReels
+            art = nextArt
+            if let count { followers = count }
+            loading = false
+        }
         for post in posts where !store.posts.contains(where: { $0.id == post.id }) { store.posts.append(post) }
     }
 
@@ -807,7 +838,7 @@ struct EditProfileView: View {
                         let on = selection.wrappedValue.lowercased() == swatch.0
                         Button { withMotion(Motion.standard) { selection.wrappedValue = swatch.0 } } label: {
                             Circle().fill(Color(hex: swatch.1)).frame(width: 38, height: 38)
-                                .overlay { if on { Image(systemName: "checkmark").font(.system(size: 14, weight: .heavy)).foregroundStyle(.white) } }
+                                .overlay { if on { Image(systemName: "checkmark").font(.system(size: 14, weight: .bold)).foregroundStyle(.white) } }
                                 .overlay(Circle().strokeBorder(.white, lineWidth: on ? 3 : 0))
                                 .shadow(color: Color(hex: swatch.1).opacity(on ? 0.5 : 0.2), radius: on ? 6 : 3, y: 2)
                                 .scaleEffect(on ? 1.08 : 1)
@@ -992,7 +1023,7 @@ struct MyColorsPicker: View {
                 Circle().fill(LinearGradient(colors: [sub, main], startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(width: 54, height: 54)
                     .overlay(Circle().strokeBorder(.white, lineWidth: inUse ? 3 : 0))
-                    .overlay { if inUse { Image(systemName: "checkmark").font(.system(size: 17, weight: .black)).foregroundStyle(.white) } }
+                    .overlay { if inUse { Image(systemName: "checkmark").font(.system(size: 17, weight: .bold)).foregroundStyle(.white) } }
                     .overlay(Circle().strokeBorder(main.opacity(inUse ? 0.9 : 0), lineWidth: 2).padding(-4))
                 VStack(spacing: 4) {
                     ColorPicker(selection: $main, supportsOpacity: false) { Text("Main").font(.jakarta(14, .semibold)).foregroundStyle(Palette.text) }
@@ -1150,9 +1181,10 @@ struct SettingsView: View {
             HStack(spacing: 14) {
                 Avatar(url: me.picture, name: me.displayName, size: 64)
                     .overlay(Circle().strokeBorder(.white, lineWidth: 3))
+                    .shadow(color: Palette.shadow, radius: 8, y: 3)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(me.displayName).font(.display(24)).foregroundStyle(.white).lineLimit(1)
-                    Text(me.email).font(.jakarta(13, .medium)).foregroundStyle(.white.opacity(0.85)).lineLimit(1)
+                    Text(me.displayName).font(.display(24)).foregroundStyle(Palette.text).lineLimit(1)
+                    Text(me.email).font(.jakarta(13, .medium)).foregroundStyle(Palette.text2).lineLimit(1)
                 }
                 Spacer(minLength: 0)
             }
@@ -1163,36 +1195,24 @@ struct SettingsView: View {
             }
             Button { editing = true } label: {
                 Label("Edit profile", systemImage: "pencil")
-                    .font(.jakarta(14, .heavy)).foregroundStyle(Theme.main)
-                    .frame(maxWidth: .infinity).frame(height: 44)
-                    .background(.white, in: Capsule())
             }
-            .buttonStyle(BouncyStyle(scale: 0.96))
+            .buttonStyle(GradientButtonStyle(height: 44))
         }
-        .padding(18)
-        .background {
-            RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Theme.gradient)
-                .overlay(alignment: .topTrailing) {
-                    Circle().fill(.white.opacity(0.12)).frame(width: 170).offset(x: 60, y: -70)
-                }
-                .overlay(alignment: .bottomLeading) {
-                    Circle().fill(.white.opacity(0.08)).frame(width: 120).offset(x: -40, y: 50)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        }
+        .pastelCard(radius: 24, padding: 18)
     }
 
     private func stat(_ value: String, _ label: String, _ icon: String) -> some View {
         VStack(spacing: 2) {
             HStack(spacing: 4) {
-                Image(systemName: icon).font(.system(size: 11, weight: .bold))
-                Text(value).font(.jakarta(17, .heavy)).lineLimit(1).minimumScaleFactor(0.7)
+                Image(systemName: icon).font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.main)
+                Text(value).font(.jakarta(17, .heavy)).foregroundStyle(Palette.text).lineLimit(1).minimumScaleFactor(0.7)
+                    .contentTransition(.numericText())
             }
-            Text(label).font(.jakarta(10, .bold)).opacity(0.85)
+            Text(label).font(.jakarta(10, .bold)).foregroundStyle(Palette.text2)
         }
-        .foregroundStyle(.white)
         .frame(maxWidth: .infinity).frame(height: 54)
-        .background(.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(Palette.surface.opacity(0.7), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.white.opacity(0.6), lineWidth: 1))
     }
 
     // MARK: groups

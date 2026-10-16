@@ -63,7 +63,7 @@ struct MusicView: View {
                         Text("\(tracks.count) tracks from \(Set(tracks.map(\.authorEmail)).count) artists").font(.jakarta(14)).foregroundStyle(Palette.muted)
                     }
                     Spacer()
-                    Button { uploading = true } label: { Image(systemName: "arrow.up").font(.system(size: 17, weight: .heavy)) }
+                    Button { uploading = true } label: { Image(systemName: "arrow.up").font(.system(size: 17, weight: .bold)) }
                         .buttonStyle(GradientButtonStyle(height: 46, fullWidth: false))
                         .accessibilityLabel("Share a track")
                 }
@@ -128,7 +128,7 @@ struct MusicView: View {
             }
             VStack(alignment: .leading, spacing: 6) {
                 Label("Picked for you", systemImage: "sparkles")
-                    .font(.jakarta(12, .heavy)).foregroundStyle(.white)
+                    .font(.jakarta(12, .semibold)).foregroundStyle(.white)
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(.white.opacity(0.2), in: Capsule())
                 Text(t.title).font(.display(25)).foregroundStyle(.white)
@@ -178,7 +178,7 @@ struct MusicView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(Deezer.genres, id: \.0) { id, name in
-                            Chip(title: name, active: genre == id) { genre = id }
+                            Chip(title: name, active: genre == id) { withAnimation(Motion.pick(.snappy(duration: 0.3))) { genre = id } }
                         }
                     }
                     .padding(.vertical, 2)
@@ -191,6 +191,7 @@ struct MusicView: View {
                 }
                 ForEach(Array(charts.enumerated()), id: \.element.id) { i, t in
                     TrackRow(track: t, list: charts, rank: i + 1) { fullFor = t }.songCard()
+                        .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 10)), removal: .opacity))
                 }
             }
             Text("Previews by Deezer · tap Full for the whole song").font(.jakarta(11)).foregroundStyle(Palette.muted)
@@ -201,7 +202,7 @@ struct MusicView: View {
         guard let docs = try? await FS.query("MusicReview", orderBy: "created_date", limit: 300) else { return }
         let list = docs.map(Track.init).filter { !$0.audioURL.isEmpty }
         await Self.prefetch(list.prefix(30).map(\.coverURL))
-        tracks = list
+        withAnimation(Motion.pick(.smooth(duration: 0.4))) { tracks = list }
     }
 
     // The whole chart in one go (covers fetched before it shows), so nothing
@@ -213,7 +214,7 @@ struct MusicView: View {
         do {
             let result = try await Deezer.page(genre: genre, query: query, index: 0, limit: 50)
             await Self.prefetch(result.tracks.map(\.coverURL))
-            charts = result.tracks
+            withAnimation(Motion.pick(.smooth(duration: 0.35))) { charts = result.tracks }
         } catch {
             if !Task.isCancelled { chartsError = true; charts = [] }
         }
@@ -230,7 +231,7 @@ struct MusicView: View {
     private var appleMusicCard: some View {
         HStack(spacing: 14) {
             Image(systemName: "music.note")
-                .font(.system(size: 20, weight: .heavy)).foregroundStyle(.white)
+                .font(.system(size: 20, weight: .bold)).foregroundStyle(.white)
                 .frame(width: 46, height: 46)
                 .background(Color(hex: 0xFA2D48), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
@@ -311,7 +312,7 @@ struct FullSongSheet: View {
                 ForEach(apps, id: \.0) { name, color, url in
                     Button { if let url { openURL(url) }; dismiss() } label: {
                         HStack(spacing: 10) {
-                            Image(systemName: "play.fill").font(.system(size: 12, weight: .black)).foregroundStyle(.white)
+                            Image(systemName: "play.fill").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
                                 .frame(width: 30, height: 30).background(Color(hex: color), in: Circle())
                             Text(name).font(.jakarta(14, .bold)).foregroundStyle(Palette.text)
                             Spacer(minLength: 0)
@@ -421,5 +422,6 @@ private extension View {
     // round a whole list had to redraw that shadow while you scrolled.)
     func songCard() -> some View {
         self.background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
     }
 }

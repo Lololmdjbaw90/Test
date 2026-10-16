@@ -29,6 +29,8 @@ enum Motion {
     static let drawer = Animation.timingCurve(0.32, 0.72, 0, 1, duration: 0.4)
     /// A little life where it's earned: likes, rewards, a flick.
     static let playful = Animation.spring(response: 0.35, dampingFraction: 0.6)
+    /// Sections arriving: a soft spring that settles with the barest bounce.
+    static let settle = Animation.spring(response: 0.5, dampingFraction: 0.82)
     /// Colour and see-through changes.
     static let fade = Animation.easeOut(duration: 0.2)
     /// Items arriving together: each one this long after the one before.

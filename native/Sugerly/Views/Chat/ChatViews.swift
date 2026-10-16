@@ -194,15 +194,16 @@ struct ChatListView: View {
 
     var body: some View {
         Group {
+            // The two sides slide in from their own side of the switch.
             if section == 1 {
                 ServersHome(path: $path, embedded: true)
-                    .transition(.opacity)
+                    .transition(.asymmetric(insertion: .offset(x: 28).combined(with: .opacity), removal: .opacity.animation(Motion.exit)))
             } else {
                 chats
-                    .transition(.opacity)
+                    .transition(.asymmetric(insertion: .offset(x: -28).combined(with: .opacity), removal: .opacity.animation(Motion.exit)))
             }
         }
-        .animation(.easeOut(duration: 0.22), value: section)
+        .animation(Motion.pick(.snappy(duration: 0.3)), value: section)
         .appearFade()
         // The page colour stays put while the list fades in.
         .sugarBackground()
@@ -308,7 +309,7 @@ struct ChatListView: View {
             ConversationRow(conversation: c, card: false)
         }
         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-        .listRowBackground(c.unread > 0 ? Theme.main.opacity(0.07) : Color.clear)
+        .listRowBackground(c.unread > 0 ? Palette.blush.opacity(0.45) : Color.clear)
         .listRowSeparatorTint(Palette.border)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) { withMotion(Motion.standard) { store.close(c.id) } } label: {
@@ -374,10 +375,10 @@ struct SectionSwitch: View {
     var body: some View {
         HStack(spacing: 4) {
             ForEach(Array(options.enumerated()), id: \.offset) { i, option in
-                Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { selection = i } } label: {
+                Button { withAnimation(Motion.pick(.spring(response: 0.38, dampingFraction: 0.78))) { selection = i } } label: {
                     Label(option.0, systemImage: option.1)
                         .font(.jakarta(14, .semibold))
-                        .foregroundStyle(selection == i ? Palette.text : Palette.muted)
+                        .foregroundStyle(selection == i ? Theme.main : Palette.muted)
                         .frame(maxWidth: .infinity)
                         .frame(height: 36)
                         .background {
@@ -436,7 +437,7 @@ struct ConversationRow: View {
                         Text("\(min(conversation.unread, 99))")
                             .font(.jakarta(11, .bold)).foregroundStyle(.white)
                             .padding(.horizontal, 7).frame(minWidth: 20, minHeight: 20)
-                            .background(Theme.main, in: Capsule())
+                            .background(Theme.candy, in: Capsule())
                             .contentTransition(.numericText())
                             .transition(.pop)
                     }

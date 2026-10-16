@@ -157,7 +157,7 @@ struct SendToChatsSheet: View {
                                         .overlay(Circle().strokeBorder(on ? Theme.main : .clear, lineWidth: 3))
                                         .scaleEffect(on ? 0.94 : 1)
                                     if on {
-                                        Image(systemName: "checkmark").font(.system(size: 11, weight: .heavy)).foregroundStyle(.white)
+                                        Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
                                             .frame(width: 22, height: 22).background(Theme.gradient, in: Circle())
                                             .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
                                             .transition(.pop)
@@ -247,7 +247,7 @@ struct ReelShareSheet: View {
                                         .overlay(Circle().strokeBorder(on ? Theme.main : .clear, lineWidth: 3))
                                         .scaleEffect(on ? 0.94 : 1)
                                     if on {
-                                        Image(systemName: "checkmark").font(.system(size: 11, weight: .heavy)).foregroundStyle(.white)
+                                        Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
                                             .frame(width: 22, height: 22).background(Theme.gradient, in: Circle())
                                             .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
                                             .transition(.pop)

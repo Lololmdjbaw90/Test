@@ -160,9 +160,10 @@ struct AccountView: View {
                 stat("\(me.following.count)", "Following", "heart.fill", Theme.main)
             }
         }
-        .sugarCard(radius: 26, padding: 16)
+        .pastelCard(radius: 24, padding: 16)
         .opacity(shown || reduceMotion ? 1 : 0)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: shown)
+        .scaleEffect(shown || reduceMotion ? 1 : 0.96, anchor: .top)
+        .animation(reduceMotion ? nil : Motion.settle, value: shown)
     }
 
     private func profileButton(_ me: UserProfile, _ info: LevelInfo, _ presence: Presence) -> some View {
@@ -176,12 +177,12 @@ struct AccountView: View {
                     Text("Lv. \(info.level) · \(info.title)")
                         .font(.jakarta(12, .heavy)).foregroundStyle(info.color)
                         .padding(.horizontal, 9).padding(.vertical, 4)
-                        .background(info.color.opacity(0.14), in: Capsule())
+                        .background(Palette.surface.opacity(0.8), in: Capsule())
                 }
                 Spacer(minLength: 6)
                 HStack(spacing: 3) {
                     Text("Profile").font(.jakarta(13, .bold))
-                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .heavy))
+                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold))
                 }
                 .foregroundStyle(Theme.main)
             }
@@ -206,7 +207,8 @@ struct AccountView: View {
             }
             .padding(.horizontal, 14)
             .frame(height: 44)
-            .background(Palette.surface2, in: Capsule())
+            .background(Palette.surface.opacity(0.72), in: Capsule())
+            .overlay(Capsule().strokeBorder(.white.opacity(0.6), lineWidth: 1))
             .contentShape(Capsule())
         }
         .buttonStyle(BouncyStyle(scale: 0.97))
@@ -224,7 +226,8 @@ struct AccountView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
-        .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(Palette.surface.opacity(0.72), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.white.opacity(0.6), lineWidth: 1))
         .accessibilityElement(children: .combine)
     }
 

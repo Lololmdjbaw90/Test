@@ -914,7 +914,7 @@ struct TrimBar: View {
             .frame(width: tab, height: height)
             .overlay {
                 Image(systemName: left ? "chevron.compact.left" : "chevron.compact.right")
-                    .font(.system(size: 18, weight: .heavy)).foregroundStyle(.white)
+                    .font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
             }
             .scaleEffect(y: dragging == (left ? Part.start : Part.end) ? 1.06 : 1)
             .animation(.snappy(duration: 0.2), value: dragging)

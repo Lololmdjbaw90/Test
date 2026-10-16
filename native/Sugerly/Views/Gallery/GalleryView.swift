@@ -107,6 +107,9 @@ struct GalleryView: View {
                         column(stride(from: c, to: shown.count, by: columns).map { shown[$0] }, offset: c)
                     }
                 }
+                // A new filter swaps the wall with a soft crossfade.
+                .id(sort.rawValue + medium)
+                .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 12)), removal: .opacity.animation(Motion.exit)))
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
@@ -153,7 +156,10 @@ struct GalleryView: View {
             Button { adding = true } label: {
                 Image(systemName: "plus").font(.system(size: 18, weight: .semibold)).foregroundStyle(.white)
                     .frame(width: 46, height: 46)
-                    .background(Theme.main, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background {
+                        RoundedRectangle(cornerRadius: 15, style: .continuous).fill(Theme.candy)
+                            .shadow(color: Theme.main.opacity(0.3), radius: 8, y: 4)
+                    }
             }
             .buttonStyle(BouncyStyle(scale: 0.9)).accessibilityLabel("Share fan art")
         }
@@ -310,11 +316,13 @@ struct GalleryView: View {
         LazyVStack(spacing: 16) {
             ForEach(Array(list.enumerated()), id: \.element.id) { i, art in
                 GalleryCard(artwork: art, liked: LikeBook.shared.isLiked(art, me: model.me?.email ?? ""), onOpen: { path.append(.artwork(art)) }, onLike: { toggleLike(art) }, onProfile: { path.append(.person(art.authorEmail)) })
-                    .scrollTransition(.animated(Motion.enter).threshold(.visible(0.05))) { content, phase in
+                    // Pieces glide up into place as they scroll in from below,
+                    // following your finger (none blink or vanish).
+                    .scrollTransition(.interactive.threshold(.visible(0.3))) { content, phase in
                         content
-                            .opacity(phase.isIdentity ? 1 : 0)
-                            .scaleEffect(phase.isIdentity || Motion.reduced ? 1 : 0.96)
-                            .offset(y: phase == .bottomTrailing && !Motion.reduced ? 14 : 0)
+                            .opacity(phase == .bottomTrailing ? 0.4 : 1)
+                            .scaleEffect(phase == .bottomTrailing && !Motion.reduced ? 0.94 : 1)
+                            .offset(y: phase == .bottomTrailing && !Motion.reduced ? 18 : 0)
                     }
                     .onAppear { if i >= list.count - 3 { Task { await loadMore() } } }
             }
@@ -350,7 +358,7 @@ struct GalleryView: View {
         let cutoff = page.map(\.created).min() ?? ""
         let older = artworks.filter { !cutoff.isEmpty && $0.created < cutoff }
         if artworks.isEmpty { hasMore = docs.count >= 60 }
-        artworks = page + older
+        withAnimation(Motion.pick(.smooth(duration: 0.35))) { artworks = page + older }
         await LikeBook.shared.prime(page)
     }
 

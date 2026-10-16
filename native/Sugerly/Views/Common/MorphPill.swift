@@ -40,7 +40,7 @@ struct MorphPill: View {
             HStack(spacing: 5) {
                 if let icon {
                     Image(systemName: icon)
-                        .font(.system(size: fontSize - 1, weight: .heavy))
+                        .font(.system(size: fontSize - 1, weight: .bold))
                         .contentTransition(.symbolEffect(.replace))
                 }
                 // Both words share one spot while they swap, so the pill

@@ -84,7 +84,7 @@ struct ReelTimeline: View {
         HStack(spacing: 8) {
             Button(action: onTogglePlay) {
                 Image(systemName: playing ? "pause.fill" : "play.fill")
-                    .font(.system(size: 13, weight: .black)).foregroundStyle(.white)
+                    .font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
                     .contentTransition(.symbolEffect(.replace))
                     .frame(width: 36, height: 36)
                     .background(Theme.main, in: Circle())
@@ -108,7 +108,7 @@ struct ReelTimeline: View {
 
     private func addLabel(_ title: String, _ icon: String) -> some View {
         HStack(spacing: 5) {
-            Image(systemName: icon).font(.system(size: 10, weight: .black))
+            Image(systemName: icon).font(.system(size: 10, weight: .bold))
             Text(title).font(.jakarta(11, .heavy))
         }
         .foregroundStyle(.white)
@@ -336,7 +336,7 @@ struct ReelTimeline: View {
                             .frame(width: 20, height: 20)
                             .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                     } else {
-                        Image(systemName: s.isEmoji ? "face.smiling" : "textformat").font(.system(size: 10, weight: .black))
+                        Image(systemName: s.isEmoji ? "face.smiling" : "textformat").font(.system(size: 10, weight: .bold))
                             .opacity(0.85)
                     }
                     Text(label(s)).font(.jakarta(11, .bold)).lineLimit(1)
@@ -532,7 +532,7 @@ struct ReelTimeline: View {
     private func chip(_ title: String, _ icon: String, danger: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 5) {
-                Image(systemName: icon).font(.system(size: 11, weight: .black))
+                Image(systemName: icon).font(.system(size: 11, weight: .bold))
                 if !title.isEmpty { Text(title).font(.jakarta(11, .heavy)) }
             }
             .foregroundStyle(danger ? Palette.danger : .white)

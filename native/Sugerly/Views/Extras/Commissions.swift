@@ -286,11 +286,16 @@ struct CommissionsView: View {
             VStack(alignment: .leading, spacing: 16) {
                 hero.stagger(appeared, 0)
                 tabBar.stagger(appeared, 1)
-                switch tab {
-                case .explore: explore
-                case .orders: ordersTab
-                case .shop: shopTab
+                // Each tab slides in softly in place of the last.
+                VStack(alignment: .leading, spacing: 16) {
+                    switch tab {
+                    case .explore: explore
+                    case .orders: ordersTab
+                    case .shop: shopTab
+                    }
                 }
+                .id(tab)
+                .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 14)), removal: .opacity.animation(Motion.exit)))
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
@@ -326,12 +331,12 @@ struct CommissionsView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Commissions").font(.display(34)).foregroundStyle(.white)
-                    Text("Hire artists you love · pay safely by card").font(.jakarta(13, .bold)).foregroundStyle(.white.opacity(0.9))
+                    Text("Commissions").font(.display(34)).foregroundStyle(Palette.text)
+                    Text("Hire artists you love · pay safely by card").font(.jakarta(13, .semibold)).foregroundStyle(Palette.text2)
                 }
                 Spacer(minLength: 0)
-                Image(systemName: "creditcard.and.123").font(.system(size: 20, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 46, height: 46).background(.white.opacity(0.22), in: Circle())
+                Image(systemName: "creditcard.and.123").font(.system(size: 20, weight: .bold)).foregroundStyle(Theme.main)
+                    .frame(width: 46, height: 46).background(Palette.surface.opacity(0.75), in: Circle())
             }
             HStack(spacing: 8) {
                 heroStat("\(list.filter(\.isOpen).count)", "open shops")
@@ -342,30 +347,21 @@ struct CommissionsView: View {
                 if myListings.isEmpty { creating = true } else { withMotion(Motion.standard) { tab = .shop } }
             } label: {
                 Label(myListings.isEmpty ? "Open your shop" : "Go to your shop", systemImage: "storefront.fill")
-                    .font(.jakarta(14, .heavy)).foregroundStyle(Theme.main)
-                    .frame(maxWidth: .infinity).frame(height: 46)
-                    .background(.white, in: Capsule())
             }
-            .buttonStyle(BouncyStyle(scale: 0.96))
+            .buttonStyle(GradientButtonStyle(height: 46))
         }
-        .padding(18)
-        .background {
-            RoundedRectangle(cornerRadius: 30, style: .continuous).fill(Theme.gradient)
-                .overlay(alignment: .topTrailing) { Circle().fill(.white.opacity(0.13)).frame(width: 180).offset(x: 70, y: -80) }
-                .overlay(alignment: .bottomLeading) { Circle().fill(.white.opacity(0.09)).frame(width: 120).offset(x: -40, y: 50) }
-                .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-                .shadow(color: Palette.shadow, radius: 12, y: 8)
-        }
+        .pastelCard(radius: 26, padding: 18)
     }
 
     private func heroStat(_ value: String, _ label: String) -> some View {
         VStack(spacing: 1) {
-            Text(value).font(.jakarta(18, .heavy))
-            Text(label).font(.jakarta(10, .bold)).opacity(0.85)
+            Text(value).font(.jakarta(18, .heavy)).foregroundStyle(Palette.text)
+                .contentTransition(.numericText())
+            Text(label).font(.jakarta(10, .bold)).foregroundStyle(Palette.text2)
         }
-        .foregroundStyle(.white)
         .frame(maxWidth: .infinity).frame(height: 52)
-        .background(.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(Palette.surface.opacity(0.72), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.white.opacity(0.6), lineWidth: 1))
     }
 
     private var tabBar: some View {
@@ -524,10 +520,15 @@ struct CommissionsView: View {
         async let listings = try? FS.query("Commission", orderBy: "created_date", limit: 200)
         async let bought = try? FS.query("CommissionOrder", [.equals("buyer_email", me)], limit: 200)
         async let sold = try? FS.query("CommissionOrder", [.equals("artist_email", me)], limit: 300)
-        if let docs = await listings { list = docs.map(Commission.init) }
         let newest: (CommissionOrder, CommissionOrder) -> Bool = { $0.updated > $1.updated }
-        if let docs = await bought { buying = docs.map(CommissionOrder.init).sorted(by: newest) }
-        if let docs = await sold { selling = docs.map(CommissionOrder.init).sorted(by: newest) }
+        let listingDocs = await listings
+        let boughtDocs = await bought
+        let soldDocs = await sold
+        withAnimation(Motion.pick(.smooth(duration: 0.4))) {
+            if let listingDocs { list = listingDocs.map(Commission.init) }
+            if let boughtDocs { buying = boughtDocs.map(CommissionOrder.init).sorted(by: newest) }
+            if let soldDocs { selling = soldDocs.map(CommissionOrder.init).sorted(by: newest) }
+        }
         payoutsReady = await Payouts.isSetUp(model.me?.id ?? "")
         if model.me?.isAdmin == true {
             async let completed = try? FS.query("CommissionOrder", [.equals("status", "completed")], limit: 300)
@@ -550,8 +551,8 @@ struct ListingCard: View {
                     if let first = c.samples.first {
                         RemoteImage(url: first)
                     } else {
-                        LinearGradient(colors: [Theme.light, Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing)
-                            .overlay(Image(systemName: "paintbrush.pointed.fill").font(.system(size: 34)).foregroundStyle(.white.opacity(0.85)))
+                        Theme.pastel
+                            .overlay(Image(systemName: "paintbrush.pointed.fill").font(.system(size: 34)).foregroundStyle(Theme.main.opacity(0.7)))
                     }
                 }
                 .frame(height: 150)
@@ -1337,7 +1338,7 @@ struct CommissionOrderView: View {
         let other = o.buyerEmail == me ? o.artistEmail : o.buyerEmail
         return HStack(spacing: 12) {
             personChip(o.buyerEmail, o.buyerName, "Buyer")
-            Image(systemName: "arrow.right").font(.system(size: 12, weight: .black)).foregroundStyle(Palette.muted)
+            Image(systemName: "arrow.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.muted)
             personChip(o.artistEmail, o.artistName, "Artist")
             Spacer(minLength: 0)
             Button {

@@ -465,7 +465,7 @@ struct ToolPanel<Content: View>: View {
                 Spacer()
                 Button(action: onDone) {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 14, weight: .heavy))
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.white)
                         .frame(width: 36, height: 36)
                         .background(Theme.gradient, in: Circle())
@@ -769,7 +769,7 @@ private struct PlaybackBar: View {
         HStack(spacing: 12) {
             Button { player.toggle() } label: {
                 Image(systemName: player.playing ? "pause.fill" : "play.fill")
-                    .font(.system(size: 15, weight: .heavy))
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.white)
                     .contentTransition(.symbolEffect(.replace))
                     .frame(width: 44, height: 44)

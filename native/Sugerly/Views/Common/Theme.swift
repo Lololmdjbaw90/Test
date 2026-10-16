@@ -1,9 +1,11 @@
 import SwiftUI
 import UIKit
 
-// Sugerly's look: calm and clean. Near-white pages (near-black in dark
-// mode), white cards with a hairline edge, one soft accent colour (pink
-// unless you pick another) used sparingly, and the iPhone's own fonts.
+// Sugerly's look: soft pastel pages built from one palette — cream
+// (FCF0D6), ivory (F8FBE6), blush (FAD0DC), pink (F6BDCC) and rose (F9B0C4) —
+// with a deeper rose for buttons and links so text stays easy to read, plum
+// text instead of black, and the iPhone's own fonts. Pick another accent in
+// Settings and the pinks follow it; the cream stays.
 
 extension UIColor {
     convenience init(hex: UInt32, alpha: CGFloat = 1) {
@@ -28,28 +30,64 @@ extension Color {
 }
 
 enum Palette {
-    // Soft neutrals with a gentle wash of your accent (pink by default), so
-    // the whole app feels rosy without shouting. Cards stay near-white so
-    // pictures and text read cleanly.
-    static var bg: Color { tinted(light: 0xF8F6F7, dark: 0x0F0E10, 0.075, 0.07) }
-    static var surface: Color { tinted(light: 0xFFFFFF, dark: 0x19181B, 0.012, 0.045) }
-    static var surface2: Color { tinted(light: 0xF2F0F1, dark: 0x232126, 0.09, 0.07) }
-    static var border: Color { tinted(light: 0xEAE7E9, dark: 0x2C2A2F, 0.14, 0.09) }
-    static var borderStrong: Color { tinted(light: 0xDBD7DA, dark: 0x3B383F, 0.16, 0.1) }
-    static var text: Color { tinted(light: 0x1C1A1D, dark: 0xF4F2F4, 0.03, 0.03) }
-    static var text2: Color { tinted(light: 0x58545A, dark: 0xB8B3BA, 0.06, 0.05) }
-    static var muted: Color { tinted(light: 0x8E8990, dark: 0x807B83, 0.08, 0.06) }
+    // The palette itself.
+    static let creamHex: UInt32 = 0xFCF0D6
+    static let ivoryHex: UInt32 = 0xF8FBE6
+    static let blushHex: UInt32 = 0xFAD0DC
+    static let pinkHex: UInt32 = 0xF6BDCC
+    static let roseHex: UInt32 = 0xF9B0C4
+
+    // Pages: a warm cream-white with a breath of your pastel. Cards: near
+    // white. Fields, chips and tracks: your pastel, softened. Text: plum.
+    static var bg: Color { pastel(0xFFF9F2, 0.10, dark: 0x141215, 0.07) }
+    static var surface: Color { pastel(0xFFFFFF, 0.035, dark: 0x1D181C, 0.07) }
+    static var surface2: Color { pastel(0xFFFDF8, 0.30, dark: 0x2A2227, 0.09) }
+    static var border: Color { pastel(0xFFFDF8, 0.36, dark: 0x382D33, 0.10) }
+    static var borderStrong: Color { pastel(0xFFFDF8, 0.60, dark: 0x4A3B43, 0.12) }
+    static var text: Color { ink(0x2B1D24, 0.10, dark: 0xFBF1F4, 0.04) }
+    static var text2: Color { ink(0x5E4A53, 0.12, dark: 0xD6C3CB, 0.05) }
+    static var muted: Color { ink(0x95838B, 0.12, dark: 0x9C8891, 0.06) }
+
+    // Cream and ivory for warm touches (coins, rewards, highlights).
+    static let cream = Color.dynamic(light: creamHex, dark: 0x3A3023)
+    static let ivory = Color.dynamic(light: ivoryHex, dark: 0x2B2D24)
+    // Your blush (the palette's own for rose).
+    static var blush: Color { pastel(0xFFFFFF, 0.55, dark: 0x2A2227, 0.16) }
+
+    // The three stops of a hero card: cream → blush → your pastel. In dark
+    // mode, deep plum shades of your colour.
+    static var heroA: Color { hero(light: mix(creamHex, Theme.lightHex, 0.08), 0.12) }
+    static var heroB: Color { hero(light: mix(0xFFFFFF, Theme.lightHex, 0.55), 0.22) }
+    static var heroC: Color { hero(light: Theme.lightHex, 0.34) }
+
+    // One of the palette colours as a soft tile (light mode), or a plum
+    // shade of it in dark mode.
+    static func tile(_ hex: UInt32) -> Color {
+        let d = mix(0x2A2227, hex, 0.14)
+        return Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: d) : UIColor(hex: hex) })
+    }
+
     static let danger = Color(hex: 0xE5484D)
     static let success = Color(hex: 0x2E9E6B)
     static let warning = Color(hex: 0xE09A1A)
-    static let shadow = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor.black.withAlphaComponent(0.4) : UIColor(hex: 0x6B2A45, alpha: 0.07) })
+    static let gold = Color(hex: 0xE9A21F)
+    static let shadow = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor.black.withAlphaComponent(0.4) : UIColor(hex: 0x7A2E4E, alpha: 0.08) })
 
     // Reading the accent here makes every view that uses a page colour
     // redraw when you pick another accent.
-    private static func tinted(light: UInt32, dark: UInt32, _ lightAmount: Double, _ darkAmount: Double) -> Color {
-        let accent = Theme.mainHex
-        let l = mix(light, accent, lightAmount), d = mix(dark, accent, darkAmount)
+    private static func pastel(_ light: UInt32, _ lightAmount: Double, dark: UInt32, _ darkAmount: Double) -> Color {
+        let l = mix(light, Theme.lightHex, lightAmount), d = mix(dark, Theme.mainHex, darkAmount)
         return Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: d) : UIColor(hex: l) })
+    }
+
+    private static func ink(_ light: UInt32, _ lightAmount: Double, dark: UInt32, _ darkAmount: Double) -> Color {
+        let l = mix(light, Theme.mainHex, lightAmount), d = mix(dark, Theme.lightHex, darkAmount)
+        return Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: d) : UIColor(hex: l) })
+    }
+
+    private static func hero(light: UInt32, _ darkAmount: Double) -> Color {
+        let d = mix(0x1D171B, Theme.mainHex, darkAmount)
+        return Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: d) : UIColor(hex: light) })
     }
 
     static func mix(_ a: UInt32, _ b: UInt32, _ t: Double) -> UInt32 {
@@ -68,7 +106,8 @@ enum Accent: String, CaseIterable, Identifiable {
     var label: String { rawValue.capitalized }
     private var rgb: (UInt32, UInt32) {
         switch self {
-        case .rose: return (0xE0679A, 0xF7BDD3)
+        // Rose is the palette's own pink, with a deeper rose for buttons.
+        case .rose: return (0xDB6491, Palette.roseHex)
         case .lavender: return (0x7F67E0, 0xC3B6F5)
         case .mint: return (0x2A9C7C, 0x9EDCC8)
         case .peach: return (0xE07650, 0xF6C2AC)
@@ -78,6 +117,7 @@ enum Accent: String, CaseIterable, Identifiable {
     var main: Color { Color(hex: rgb.0) }
     var light: Color { Color(hex: rgb.1) }
     var mainHex: UInt32 { rgb.0 }
+    var lightHex: UInt32 { rgb.1 }
     // Flat: the accent itself (kept as a gradient type so every place that
     // used one still works).
     var gradient: LinearGradient { LinearGradient(colors: [main, main], startPoint: .top, endPoint: .bottom) }
@@ -115,11 +155,27 @@ enum Theme {
     }
     static var main: Color { custom.map { Color(hex: $0.main) } ?? accent.main }
     static var mainHex: UInt32 { custom?.main ?? accent.mainHex }
+    static var lightHex: UInt32 { custom?.light ?? accent.lightHex }
     static var light: Color { custom.map { Color(hex: $0.light) } ?? accent.light }
     static var pink: Color { main }
     static var rose: Color { main }
     static var soft: Color { main.opacity(0.12) }
-    static var gradient: LinearGradient { LinearGradient(colors: [main, main], startPoint: .top, endPoint: .bottom) }
+    // The accent as a candy fill (a touch lighter at the top), used for
+    // buttons, badges and highlights everywhere.
+    static var gradient: LinearGradient { candy }
+    // The palette as a soft wash, for hero cards: cream → blush → pastel.
+    static var pastel: LinearGradient {
+        LinearGradient(colors: [Palette.heroA, Palette.heroB, Palette.heroC], startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+    // A juicy candy fill for main buttons: the accent, a touch lighter at
+    // the top.
+    static var candy: LinearGradient {
+        LinearGradient(colors: [Color(hex: Palette.mix(mainHex, 0xFFFFFF, 0.14)), main], startPoint: .top, endPoint: .bottom)
+    }
+    // Progress bars: pastel into the accent.
+    static var progress: LinearGradient {
+        LinearGradient(colors: [light, main], startPoint: .leading, endPoint: .trailing)
+    }
     static let lavender = Color(hex: 0xB19CFF)
     static var background: Color { Palette.bg }
     static var card: Color { Palette.surface }
@@ -241,21 +297,46 @@ extension Font {
 
 // MARK: - Building blocks
 
-// A plain card: the surface colour with a hairline edge, no glow.
+// A card: the near-white surface, a soft blush hairline and a gentle plum
+// shadow underneath, so it sits lightly on the page.
 struct SugarCard: ViewModifier {
     var radius: CGFloat = 18
     var padding: CGFloat = 0
     func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: min(radius, 20), style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: min(radius, 22), style: .continuous)
         content
             .padding(padding)
-            .background(Palette.surface, in: shape)
+            .background {
+                shape.fill(Palette.surface)
+                    .shadow(color: Palette.shadow, radius: 10, y: 4)
+            }
             .overlay(shape.strokeBorder(Palette.border, lineWidth: 1))
+    }
+}
+
+// A hero card in the palette: cream into blush into your pastel.
+struct PastelCard: ViewModifier {
+    var radius: CGFloat = 22
+    var padding: CGFloat = 16
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        content
+            .padding(padding)
+            .background {
+                shape.fill(Theme.pastel)
+                    .overlay(alignment: .topLeading) {
+                        // A soft sheen along the top edge.
+                        shape.fill(LinearGradient(colors: [.white.opacity(0.35), .clear], startPoint: .top, endPoint: .center))
+                    }
+                    .shadow(color: Palette.shadow, radius: 14, y: 6)
+            }
+            .overlay(shape.strokeBorder(.white.opacity(0.55), lineWidth: 1))
     }
 }
 
 extension View {
     func sugarCard(radius: CGFloat = 18, padding: CGFloat = 0) -> some View { modifier(SugarCard(radius: radius, padding: padding)) }
+    func pastelCard(radius: CGFloat = 22, padding: CGFloat = 16) -> some View { modifier(PastelCard(radius: radius, padding: padding)) }
 
     // Floating bits (the music player): the surface with a hairline edge and
     // a soft shadow so it reads above the page.
@@ -280,7 +361,9 @@ struct GradientButtonStyle: ButtonStyle {
     }
 }
 
-// The main button: the accent colour, white text, softly rounded corners.
+// The main button: a candy-rose pill — the accent with a soft highlight on
+// top, white text and a little rosy shadow. It squishes when pressed and
+// springs back.
 private struct GradientButtonBody: View {
     let configuration: ButtonStyleConfiguration
     let height: CGFloat
@@ -288,6 +371,8 @@ private struct GradientButtonBody: View {
     @Environment(\.isEnabled) private var enabled
 
     var body: some View {
+        let pressed = configuration.isPressed
+        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
         configuration.label
             .font(.jakarta(15, .semibold))
             .foregroundStyle(.white)
@@ -296,10 +381,14 @@ private struct GradientButtonBody: View {
             .minimumScaleFactor(0.75)
             .padding(.horizontal, 18)
             .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: min(height, 50))
-            .background(Theme.main, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .opacity(enabled ? (configuration.isPressed ? 0.82 : 1) : 0.45)
-            .scaleEffect(configuration.isPressed && !Motion.reduced ? 0.985 : 1)
-            .animation(Motion.press, value: configuration.isPressed)
+            .background {
+                shape.fill(Theme.candy)
+                    .overlay(shape.strokeBorder(.white.opacity(0.22), lineWidth: 1))
+                    .shadow(color: Theme.main.opacity(enabled ? (pressed ? 0.12 : 0.28) : 0), radius: pressed ? 4 : 10, y: pressed ? 2 : 5)
+            }
+            .opacity(enabled ? (pressed ? 0.92 : 1) : 0.45)
+            .scaleEffect(pressed && !Motion.reduced ? 0.965 : 1)
+            .animation(pressed ? Motion.press : Motion.release, value: pressed)
     }
 }
 
@@ -315,9 +404,11 @@ struct OutlineButtonStyle: ButtonStyle {
             .minimumScaleFactor(0.75)
             .padding(.horizontal, 16)
             .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: min(height, 46))
-            .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .opacity(configuration.isPressed ? 0.7 : 1)
-            .animation(Motion.press, value: configuration.isPressed)
+            .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+            .opacity(configuration.isPressed ? 0.8 : 1)
+            .scaleEffect(configuration.isPressed && !Motion.reduced ? 0.97 : 1)
+            .animation(configuration.isPressed ? Motion.press : Motion.release, value: configuration.isPressed)
     }
 }
 
@@ -336,13 +427,23 @@ struct Chip: View {
             }
             .padding(.horizontal, 14)
             .frame(height: 36)
-            .foregroundStyle(active ? Palette.surface : Palette.text2)
-            .background(active ? Palette.text : Palette.surface2, in: Capsule())
+            .foregroundStyle(active ? Color.white : Palette.text2)
+            .background {
+                if active {
+                    Capsule().fill(Theme.candy)
+                        .shadow(color: Theme.main.opacity(0.25), radius: 6, y: 3)
+                        .transition(.scale(scale: 0.85).combined(with: .opacity))
+                } else {
+                    Capsule().fill(Palette.surface2)
+                        .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
+                }
+            }
+            .scaleEffect(active ? 1 : 0.97)
             .contentShape(Capsule())
         }
-        .buttonStyle(SoftPressStyle())
+        .buttonStyle(BouncyStyle(scale: 0.92))
         .sensoryFeedback(.selection, trigger: active)
-        .motion(Motion.standard, value: active)
+        .motion(Motion.playful, value: active)
     }
 }
 
@@ -360,13 +461,17 @@ struct SectionHeader: View {
             Spacer(minLength: 8)
             if let action {
                 Button(action: action) {
-                    Text("See all")
-                        .font(.jakarta(14, .medium))
-                        .foregroundStyle(Theme.main)
-                        .padding(.vertical, 6)
-                        .contentShape(Rectangle())
+                    HStack(spacing: 3) {
+                        Text("See all")
+                        Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
+                    }
+                    .font(.jakarta(14, .medium))
+                    .foregroundStyle(Theme.main)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(Theme.soft, in: Capsule())
+                    .contentShape(Capsule())
                 }
-                .buttonStyle(BouncyStyle())
+                .buttonStyle(BouncyStyle(scale: 0.92))
             }
         }
     }
@@ -424,8 +529,12 @@ struct XPBar: View {
             .foregroundStyle(Palette.muted)
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Palette.border)
-                    Capsule().fill(Theme.main).frame(width: max(8, geo.size.width * shown))
+                    Capsule().fill(Palette.surface2)
+                    Capsule().fill(Theme.progress).frame(width: max(8, geo.size.width * shown))
+                        .overlay(alignment: .trailing) {
+                            // A little glowing bead at the end of the bar.
+                            Circle().fill(.white).frame(width: 4, height: 4).padding(.trailing, 2).opacity(shown > 0.04 ? 0.9 : 0)
+                        }
                 }
             }
             .frame(height: 8)

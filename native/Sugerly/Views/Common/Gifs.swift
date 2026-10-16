@@ -446,7 +446,7 @@ enum StickerKit {
     // Bubbly text with a thick white edge (sticker style) or black edge (GIF style).
     nonisolated static func drawCaption(_ text: String, in rect: CGRect, fill: UIColor, stroke: UIColor = .white) {
         var size = rect.height * 0.62
-        let font: (CGFloat) -> UIFont = { UIFont(name: "BubblegumSans-Regular", size: $0) ?? .systemFont(ofSize: $0, weight: .black) }
+        let font: (CGFloat) -> UIFont = { UIFont(name: "BubblegumSans-Regular", size: $0) ?? .systemFont(ofSize: $0, weight: .bold) }
         let style = NSMutableParagraphStyle()
         style.alignment = .center
         style.lineBreakMode = .byTruncatingTail

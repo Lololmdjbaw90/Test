@@ -43,7 +43,7 @@ struct ChannelChatView: View {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     if loaded {
                         VStack(alignment: .leading, spacing: 8) {
-                            Image(systemName: "number").font(.system(size: 28, weight: .heavy)).foregroundStyle(.white)
+                            Image(systemName: "number").font(.system(size: 28, weight: .bold)).foregroundStyle(.white)
                                 .frame(width: 64, height: 64).background(Theme.gradient, in: Circle())
                                 .shadow(color: Palette.shadow, radius: 12, y: 6)
                             Text("Welcome to #\(channel.name)!").font(.display(28)).foregroundStyle(Palette.text)
@@ -400,7 +400,7 @@ struct ChannelMessageRow: View {
     var body: some View {
         if message.kind == "join" {
             HStack(spacing: 8) {
-                Image(systemName: "arrow.right").font(.system(size: 11, weight: .heavy)).foregroundStyle(Palette.success)
+                Image(systemName: "arrow.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.success)
                 Text(message.text).font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
                 Text(Dates.time(message.created)).font(.jakarta(11)).foregroundStyle(Palette.muted.opacity(0.7))
             }

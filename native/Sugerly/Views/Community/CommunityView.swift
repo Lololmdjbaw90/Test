@@ -303,6 +303,11 @@ struct CommunityView: View {
                     .padding(.horizontal, 4)
                     .stagger(appeared, 0)
                 stories.stagger(appeared, 1)
+                WeeklyChallengeCard(posts: store.posts, active: tag != nil && tag == DailyContent.challenge?.tag, compose: compose) { t in
+                    withAnimation(Motion.pick(.snappy(duration: 0.3))) { tag = tag == t ? nil : t }
+                }
+                .stagger(appeared, 2)
+                if !topCreators.isEmpty { creatorsRow.stagger(appeared, 3) }
                 Section {
                     if !trending.isEmpty || tag != nil { trendingRow }
 
@@ -317,11 +322,12 @@ struct CommunityView: View {
 
                     // One sheet of conversation: a slim composer on top, then
                     // every post as a thread row with a line down the side.
+                    // Switching feeds swaps the whole sheet with a soft
+                    // crossfade (posts don't fly around).
                     LazyVStack(spacing: 0) {
                         startThread
                         ForEach(Array(visible.enumerated()), id: \.element.id) { index, post in
                             PostCard(post: post, path: $path, reporting: $reporting, conversational: true)
-                                .scrollFade()
                                 .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 18)), removal: .opacity))
                                 .onAppear { if index >= visible.count - 5 { Task { await store.loadMore() } } }
                             if index == 1 && !suggestions.isEmpty && feed == .forYou {
@@ -330,9 +336,14 @@ struct CommunityView: View {
                             }
                         }
                     }
-                    .background(Palette.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-                    .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
+                    .background {
+                        RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Palette.surface)
+                            .shadow(color: Palette.shadow, radius: 12, y: 4)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
+                    .id(feed.rawValue + (tag ?? ""))
+                    .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 14)), removal: .opacity.animation(Motion.exit)))
                 } header: {
                     feedBar
                 }
@@ -341,7 +352,6 @@ struct CommunityView: View {
             .padding(.top, 10)
             .padding(.bottom, 30)
             .sideRails(680)
-            .animation(.spring(response: 0.45, dampingFraction: 0.85), value: feed)
         }
         .appearFade()
         .sugarBackground()
@@ -371,13 +381,16 @@ struct CommunityView: View {
             HStack(spacing: 12) {
                 Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 40)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(model.me?.displayName ?? "You").font(.jakarta(14, .heavy)).foregroundStyle(Palette.text)
+                    Text(model.me?.displayName ?? "You").font(.jakarta(14, .semibold)).foregroundStyle(Palette.text)
                     Text("Start a thread…").font(.jakarta(14)).foregroundStyle(Palette.muted)
                 }
                 Spacer(minLength: 0)
-                Text("Post").font(.jakarta(13, .heavy)).foregroundStyle(.white)
+                Text("Post").font(.jakarta(13, .bold)).foregroundStyle(.white)
                     .padding(.horizontal, 16).frame(height: 34)
-                    .background(Theme.gradient, in: Capsule())
+                    .background {
+                        Capsule().fill(Theme.candy)
+                            .shadow(color: Theme.main.opacity(0.28), radius: 6, y: 3)
+                    }
             }
             .padding(.horizontal, 16).padding(.vertical, 14)
             .contentShape(Rectangle())
@@ -392,22 +405,30 @@ struct CommunityView: View {
             HStack(spacing: 6) {
                 ForEach(Feed.allCases, id: \.self) { f in
                     let on = feed == f
-                    Button { withAnimation(.snappy(duration: 0.25)) { feed = f } } label: {
+                    Button {
+                        guard feed != f else { return }
+                        withAnimation(Motion.pick(.snappy(duration: 0.32))) { feed = f }
+                    } label: {
                         Label(f.rawValue, systemImage: f.icon)
-                            .font(.jakarta(13, on ? .heavy : .semibold))
+                            .font(.jakarta(13, on ? .bold : .semibold))
                             .foregroundStyle(on ? .white : Palette.text2)
                             .padding(.horizontal, 14).frame(height: 36)
                             .background {
-                                if on { Capsule().fill(Theme.gradient).matchedGeometryEffect(id: "feed", in: feedPill) }
+                                if on {
+                                    Capsule().fill(Theme.candy)
+                                        .shadow(color: Theme.main.opacity(0.25), radius: 5, y: 2)
+                                        .matchedGeometryEffect(id: "feed", in: feedPill)
+                                }
                             }
                             .contentShape(Capsule())
                     }
-                    .buttonStyle(SoftPressStyle())
+                    .buttonStyle(BouncyStyle(scale: 0.94))
                 }
             }
             .padding(4)
             .background(Palette.surface, in: Capsule())
             .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
+            .sensoryFeedback(.selection, trigger: feed)
             .padding(.vertical, 8)
         }
         .scrollClipDisabled()
@@ -419,8 +440,8 @@ struct CommunityView: View {
     private var trendingRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                Image(systemName: "number").font(.system(size: 13, weight: .black)).foregroundStyle(.white)
-                    .frame(width: 34, height: 34).background(Theme.gradient, in: Circle())
+                Image(systemName: "number").font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.main)
+                    .frame(width: 34, height: 34).background(Palette.tile(Palette.blushHex), in: Circle())
                 if let tag, !trending.contains(tag) { tagChip(tag) }
                 ForEach(trending, id: \.self) { t in tagChip(t) }
             }
@@ -433,16 +454,20 @@ struct CommunityView: View {
         let on = tag == t
         return Button { withMotion(Motion.standard) { tag = on ? nil : t } } label: {
             HStack(spacing: 5) {
-                Text("#\(t)").font(.jakarta(13, .bold))
-                if on { Image(systemName: "xmark").font(.system(size: 10, weight: .black)) }
+                Text("#\(t)").font(.jakarta(13, .semibold))
+                if on { Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).transition(.scale.combined(with: .opacity)) }
             }
             .foregroundStyle(on ? .white : Palette.text2)
             .padding(.horizontal, 14).frame(height: 34)
             .background {
-                if on { Capsule().fill(Theme.gradient) } else { Capsule().fill(Palette.surface).overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1)) }
+                if on {
+                    Capsule().fill(Theme.candy).shadow(color: Theme.main.opacity(0.25), radius: 5, y: 2)
+                } else {
+                    Capsule().fill(Palette.surface).overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
+                }
             }
         }
-        .buttonStyle(BouncyStyle())
+        .buttonStyle(BouncyStyle(scale: 0.92))
     }
 
     // Who's been posting lately, as round stories; you first, with a +.
@@ -455,8 +480,8 @@ struct CommunityView: View {
                             .padding(3)
                             .overlay(Circle().strokeBorder(Palette.border, lineWidth: 2))
                             .overlay(alignment: .bottomTrailing) {
-                                Image(systemName: "plus").font(.system(size: 11, weight: .black)).foregroundStyle(.white)
-                                    .frame(width: 22, height: 22).background(Theme.gradient, in: Circle())
+                                Image(systemName: "plus").font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                                    .frame(width: 22, height: 22).background(Theme.candy, in: Circle())
                                     .overlay(Circle().strokeBorder(Palette.bg, lineWidth: 2.5))
                             }
                         Text("You").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
@@ -467,7 +492,10 @@ struct CommunityView: View {
                     let person = model.person(email)
                     Button { path.append(.person(email)) } label: {
                         VStack(spacing: 6) {
-                            Avatar(url: person?.picture ?? "", name: person?.displayName ?? email, size: 62, online: person?.isOnline ?? false)
+                            // A ring in the palette for people who posted lately.
+                            Avatar(url: person?.picture ?? "", name: person?.displayName ?? email, size: 58, online: person?.isOnline ?? false)
+                                .padding(3)
+                                .overlay(Circle().strokeBorder(AngularGradient(colors: [Theme.main, Theme.light, Palette.cream, Theme.light, Theme.main], center: .center), lineWidth: 2.5))
                             Text(person?.displayName ?? "").font(.jakarta(12, .semibold)).foregroundStyle(Palette.text).lineLimit(1).frame(width: 70)
                         }
                     }
@@ -485,9 +513,9 @@ struct CommunityView: View {
     private var suggested: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("Suggested for you").font(.jakarta(18, .heavy)).foregroundStyle(Palette.text)
+                Text("Suggested for you").font(.display(20)).foregroundStyle(Palette.text)
                 Spacer()
-                Button("See all") { path.append(.people) }.font(.jakarta(15, .bold)).foregroundStyle(Theme.main)
+                Button("See all") { path.append(.people) }.font(.jakarta(14, .medium)).foregroundStyle(Theme.main)
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
@@ -496,14 +524,14 @@ struct CommunityView: View {
                         VStack(spacing: 6) {
                             Avatar(url: person.picture, name: person.displayName, size: 76, online: person.isOnline)
                                 .padding(.top, 6)
-                            Text(person.displayName).font(.jakarta(16, .heavy)).foregroundStyle(Palette.text).lineLimit(1)
+                            Text(person.displayName).font(.jakarta(15, .semibold)).foregroundStyle(Palette.text).lineLimit(1)
                             Text(reason).font(.jakarta(13)).foregroundStyle(Palette.muted)
                             FollowButton(email: person.email)
                                 .padding(.top, 6)
                         }
                         .frame(width: 150)
                         .padding(.vertical, 16)
-                        .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                        .background(LinearGradient(colors: [Palette.blush.opacity(0.6), Palette.cream.opacity(0.7)], startPoint: .top, endPoint: .bottom), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                         .overlay(alignment: .topTrailing) {
                             Button { withMotion(Motion.standard) { _ = dismissed.insert(person.email) } } label: {
                                 Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.muted).frame(width: 34, height: 34)
@@ -516,7 +544,7 @@ struct CommunityView: View {
                 }
             }
         }
-        .sugarCard(radius: 28, padding: 16)
+        .sugarCard(radius: 22, padding: 16)
     }
 }
 
@@ -556,10 +584,10 @@ struct PostCard: View {
     private var caption: some View {
         VStack(alignment: .leading, spacing: 4) {
             if !post.title.isEmpty {
-                Text(post.title).font(.jakarta(15, .heavy)).foregroundStyle(Palette.text)
+                Text(post.title).font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
             }
             if !post.text.isEmpty {
-                (Text(model.name(post.authorEmail, post.authorName) + "  ").font(.jakarta(14, .heavy)).foregroundStyle(Palette.text)
+                (Text(model.name(post.authorEmail, post.authorName) + "  ").font(.jakarta(14, .bold)).foregroundStyle(Palette.text)
                  + Text(Hashtags.styled(post.text)).font(.jakarta(14)).foregroundStyle(Palette.text))
                     .lineLimit(openable ? 4 : nil)
             }
@@ -696,7 +724,7 @@ struct PostCard: View {
                     moreMenu
                 }
                 if !post.title.isEmpty {
-                    Text(post.title).font(.jakarta(16, .heavy)).foregroundStyle(Palette.text)
+                    Text(post.title).font(.jakarta(16, .bold)).foregroundStyle(Palette.text)
                         .fixedSize(horizontal: false, vertical: true)
                         .contentShape(Rectangle()).onTapGesture { open() }
                 }
@@ -752,11 +780,13 @@ struct PostCard: View {
         .padding(.vertical, 14)
         .contentShape(Rectangle())
         .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1).allowsHitTesting(false) }
-        // Posts glide up and fade in as they come into view.
-        .scrollTransition(.animated(Motion.enter).threshold(.visible(0.08))) { content, phase in
+        // Posts glide up as they come into view from below, following your
+        // finger (no popping in or vanishing at the top).
+        .scrollTransition(.interactive.threshold(.visible(0.25))) { content, phase in
             content
-                .opacity(phase.isIdentity ? 1 : 0)
-                .offset(y: phase == .bottomTrailing && !Motion.reduced ? 12 : 0)
+                .opacity(phase == .bottomTrailing ? 0.35 : 1)
+                .offset(y: phase == .bottomTrailing && !Motion.reduced ? 16 : 0)
+                .scaleEffect(phase == .bottomTrailing && !Motion.reduced ? 0.985 : 1, anchor: .top)
         }
     }
 
@@ -783,10 +813,11 @@ struct PostCard: View {
             Image(systemName: icon).font(.system(size: 17, weight: .semibold))
                 .symbolEffect(.bounce, value: on)
             if let count, count > 0 {
-                Text("\(count)").font(.jakarta(13, .bold)).contentTransition(.numericText())
+                Text("\(count)").font(.jakarta(13, .semibold)).contentTransition(.numericText())
             }
         }
         .foregroundStyle(on ? AnyShapeStyle(Theme.main) : AnyShapeStyle(Palette.text2))
+        .motion(Motion.playful, value: count)
         .frame(minWidth: 30, minHeight: 36, alignment: .leading)
         .contentShape(Rectangle())
     }
@@ -823,7 +854,7 @@ struct PostCard: View {
                     if let author {
                         let info = LevelInfo(xp: author.xp)
                         Text("Lv.\(info.level)")
-                            .font(.jakarta(10, .heavy)).foregroundStyle(.white)
+                            .font(.jakarta(10, .bold)).foregroundStyle(.white)
                             .padding(.horizontal, 6).frame(height: 17)
                             .background(info.color, in: Capsule())
                     }
@@ -912,7 +943,7 @@ struct PostCard: View {
                 .font(.system(size: 16, weight: .bold))
                 .symbolEffect(.bounce, value: bounce)
             if let count {
-                Text("\(count)").font(.jakarta(14, .heavy)).contentTransition(.numericText())
+                Text("\(count)").font(.jakarta(14, .bold)).contentTransition(.numericText())
             }
         }
         .foregroundStyle(active ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.text2))
@@ -929,7 +960,7 @@ struct PostCard: View {
                 Button { open() } label: {
                     HStack(alignment: .top, spacing: 8) {
                         Avatar(url: model.person(top.email)?.picture ?? "", name: model.person(top.email)?.displayName ?? top.name, size: 26)
-                        (Text(model.person(top.email)?.displayName ?? top.name).font(.jakarta(13, .heavy)).foregroundColor(Palette.text)
+                        (Text(model.person(top.email)?.displayName ?? top.name).font(.jakarta(13, .bold)).foregroundColor(Palette.text)
                          + Text("  " + top.text).font(.jakarta(13)).foregroundColor(Palette.text2))
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
@@ -1083,14 +1114,23 @@ struct CommentsScreen<Header: View>: View {
                 HStack(spacing: 8) {
                     Text("Comments").font(.display(24)).foregroundStyle(Palette.text)
                     if !comments.isEmpty {
-                        Text("\(comments.count)\(hasOlder ? "+" : "")").font(.jakarta(13, .heavy)).foregroundStyle(.white)
+                        Text("\(comments.count)\(hasOlder ? "+" : "")").font(.jakarta(13, .bold)).foregroundStyle(.white)
                             .padding(.horizontal, 9).frame(height: 24)
-                            .background(Theme.gradient, in: Capsule())
+                            .background(Theme.candy, in: Capsule())
+                            .contentTransition(.numericText())
+                            .transition(.pop)
                     }
                 }
                 .padding(.horizontal, 4)
                 if comments.isEmpty {
-                    Text("Be the first to say something nice.").font(.jakarta(14)).foregroundStyle(Palette.muted).padding(.horizontal, 4)
+                    HStack(spacing: 8) {
+                        Image(systemName: "bubble.left.and.text.bubble.right").foregroundStyle(Theme.main)
+                        Text("Be the first to say something nice.").font(.jakarta(14)).foregroundStyle(Palette.muted)
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Palette.tile(Palette.creamHex).opacity(0.6), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .transition(.opacity)
                 }
                 if hasOlder {
                     Button { Task { await loadOlder() } } label: {
@@ -1108,9 +1148,11 @@ struct CommentsScreen<Header: View>: View {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     ForEach(threads) { thread in
                         CommentRow(comment: thread.parent, onReply: { reply(to: thread.parent) }, onReport: { report(thread.parent) }, onDelete: { delete(thread.parent) }, onLike: { like(thread.parent) })
+                            .transition(Self.arrival)
                         ForEach(thread.replies) { r in
                             CommentRow(comment: r, onReply: { reply(to: thread.parent) }, onReport: { report(r) }, onDelete: { delete(r) }, onLike: { like(r) })
                                 .padding(.leading, 44)
+                                .transition(Self.arrival)
                         }
                     }
                 }
@@ -1128,6 +1170,13 @@ struct CommentsScreen<Header: View>: View {
         .sheet(isPresented: $gifs) { GifPickerSheet { url in Task { await post(text: "", gif: url) } } }
         .task { await load() }
         .refreshable { await load() }
+    }
+
+    // A new comment grows in from its corner; a deleted one fades.
+    private static var arrival: AnyTransition {
+        guard !Motion.reduced else { return .opacity }
+        return .asymmetric(insertion: .scale(scale: 0.92, anchor: .topLeading).combined(with: .opacity).combined(with: .offset(y: 8)),
+                           removal: .opacity.combined(with: .scale(scale: 0.96)))
     }
 
     private var composer: some View {
@@ -1149,7 +1198,8 @@ struct CommentsScreen<Header: View>: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
                     .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(typing ? Theme.pink.opacity(0.5) : Palette.border, lineWidth: 1.2))
+                    .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(typing ? Theme.main.opacity(0.5) : Palette.border, lineWidth: 1.2))
+                    .motion(Motion.fade, value: typing)
                 SendButton(enabled: !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !sending) { Task { await send() } }
             }
         }
@@ -1256,16 +1306,17 @@ struct SendButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "arrow.up")
-                .font(.system(size: 17, weight: .heavy))
+                .font(.system(size: 17, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(width: 42, height: 42)
-                .background(Theme.gradient, in: Circle())
-                .shadow(color: Theme.pink.opacity(enabled ? 0.5 : 0), radius: 10, y: 4)
+                .background(Theme.candy, in: Circle())
+                .shadow(color: Theme.main.opacity(enabled ? 0.32 : 0), radius: 8, y: 3)
+                .scaleEffect(enabled ? 1 : 0.88)
                 .opacity(enabled ? 1 : 0.4)
         }
         .buttonStyle(BouncyStyle(scale: 0.85))
         .disabled(!enabled)
-        .motion(Motion.standard, value: enabled)
+        .motion(Motion.playful, value: enabled)
     }
 }
 
@@ -1297,8 +1348,8 @@ struct CommentRow: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+                .background(comment.authorEmail == me ? Palette.blush.opacity(0.55) : Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
                 HStack(spacing: 14) {
                     Button(action: onReply) { Label("Reply", systemImage: "arrowshape.turn.up.left.fill") }
                         .foregroundStyle(Palette.text2)
@@ -1314,7 +1365,7 @@ struct CommentRow: View {
                             .foregroundStyle(Palette.muted)
                     }
                 }
-                .font(.jakarta(12, .bold))
+                .font(.jakarta(12, .semibold))
                 .buttonStyle(SoftPressStyle())
                 .padding(.leading, 6)
             }
@@ -1494,7 +1545,7 @@ struct ComposerScaffold<Content: View>: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 if let note = error ?? shownHint {
                     Label(note, systemImage: error != nil ? "exclamationmark.circle.fill" : "hand.point.up.left.fill")
-                        .font(.jakarta(13, .bold))
+                        .font(.jakarta(13, .semibold))
                         .foregroundStyle(error != nil ? Palette.danger : Theme.main)
                         .padding(.horizontal, 14).padding(.vertical, 10)
                         .frame(maxWidth: 640, alignment: .leading)
@@ -1520,7 +1571,7 @@ struct ComposerScaffold<Content: View>: View {
                         if busy {
                             ProgressView().tint(.white)
                         } else {
-                            Text(actionTitle).font(.jakarta(15, .heavy))
+                            Text(actionTitle).font(.jakarta(15, .bold))
                         }
                     }
                     .buttonStyle(.borderedProminent)
@@ -1669,8 +1720,8 @@ struct PhotoPickerCard: View {
                         }
                         .frame(maxWidth: .infinity)
                         .frame(height: 170)
-                        .background(Theme.pink.opacity(0.06), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Theme.pink.opacity(0.35), style: StrokeStyle(lineWidth: 2, dash: [8, 6])))
+                        .background(LinearGradient(colors: [Palette.blush.opacity(0.55), Palette.cream.opacity(0.55)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Theme.main.opacity(0.3), style: StrokeStyle(lineWidth: 1.5, dash: [7, 6])))
                         .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                     }
                     .buttonStyle(BouncyStyle(scale: 0.97))
@@ -1714,7 +1765,7 @@ struct PhotoPickerCard: View {
             .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
             .overlay(alignment: .topTrailing) {
                 Button { withMotion(Motion.standard) { self.image = nil; item = nil } } label: {
-                    Image(systemName: "xmark").font(.system(size: 13, weight: .black)).foregroundStyle(.white)
+                    Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
                         .frame(width: 34, height: 34).background(.black.opacity(0.5), in: Circle())
                         .contentShape(Circle())
                 }
@@ -1725,17 +1776,17 @@ struct PhotoPickerCard: View {
             .overlay(alignment: .bottom) {
                 HStack(spacing: 8) {
                     PhotosPicker(selection: $item, matching: .images) {
-                        Label("Change", systemImage: "photo.on.rectangle.angled").font(.jakarta(13, .heavy)).foregroundStyle(Palette.text)
+                        Label("Change", systemImage: "photo.on.rectangle.angled").font(.jakarta(13, .semibold)).foregroundStyle(Palette.text)
                             .padding(.horizontal, 14).frame(height: 36)
                             .background(.regularMaterial, in: Capsule())
                     }
                     .buttonStyle(BouncyStyle())
                     Spacer(minLength: 0)
                     Button { editing = true } label: {
-                        Label("Edit", systemImage: "wand.and.stars").font(.jakarta(13, .heavy)).foregroundStyle(.white)
+                        Label("Edit", systemImage: "wand.and.stars").font(.jakarta(13, .semibold)).foregroundStyle(.white)
                             .padding(.horizontal, 14).frame(height: 36)
-                            .background(Theme.gradient, in: Capsule())
-                            .shadow(color: Palette.shadow, radius: 8, y: 3)
+                            .background(Theme.candy, in: Capsule())
+                            .shadow(color: Theme.main.opacity(0.28), radius: 6, y: 3)
                     }
                     .buttonStyle(BouncyStyle())
                 }
@@ -1801,10 +1852,10 @@ private struct ConversationSurface: ViewModifier {
     @ViewBuilder func body(content: Content) -> some View {
         if flat {
             content
-                .background(Palette.surface, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
-        } else { content.sugarCard(radius: 30) }
+                .background(Palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
+        } else { content.sugarCard(radius: 22) }
     }
 }
 

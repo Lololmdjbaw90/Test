@@ -821,8 +821,9 @@ struct ChatBubble: View {
     private var bubbleFill: some View {
         let shape = BubbleShape(mine: mine, tail: tail)
         if mine {
-            shape.fill(Palette.surface)
-                .overlay(shape.fill(Theme.main.opacity(scheme == .dark ? 0.3 : 0.14)))
+            // Yours: the palette's blush (your own pastel with another accent).
+            shape.fill(Palette.blush)
+                .overlay(shape.fill(Theme.main.opacity(scheme == .dark ? 0.16 : 0.04)))
         } else {
             shape.fill(Palette.surface)
                 .overlay(shape.stroke(Palette.border, lineWidth: 1))

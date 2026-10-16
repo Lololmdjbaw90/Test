@@ -14,6 +14,7 @@ struct LoginView: View {
     @State private var invite = ""
     @State private var access: Access?
     @State private var showWays = false
+    @State private var appeared = false
     @FocusState private var focus: Field?
 
     enum Field { case name, email, password }
@@ -27,12 +28,18 @@ struct LoginView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 22) {
+                // The badge pops in, then everything else rises after it.
                 AppBadge(size: 104)
+                    .shadow(color: Theme.main.opacity(0.25), radius: 16, y: 8)
                     .padding(.top, 40)
+                    .scaleEffect(appeared || Motion.reduced ? 1 : 0.6)
+                    .opacity(appeared ? 1 : 0)
+                    .animation(Motion.reduced ? nil : Motion.playful, value: appeared)
                 BrandLogo(height: 64)
                     .shadow(color: Palette.shadow, radius: 12)
                     .padding(.top, -8)
                     .accessibilityLabel("Sugerly")
+                    .stagger(appeared, 1)
 
                 VStack(spacing: 6) {
                     Text(register ? "Join Sugerly" : "Welcome back")
@@ -41,13 +48,15 @@ struct LoginView: View {
                         .contentTransition(.opacity)
                     Text(register ? "A cozy home for artists." : "Log in to pick up where you left off.")
                         .font(.jakarta(15, .medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Palette.text2)
                 }
+                .stagger(appeared, 2)
 
                 HStack(spacing: 10) {
                     Chip(title: "Log in", icon: "heart.fill", active: !register) { withMotion(Motion.standard) { register = false } }
                     Chip(title: "Sign up", icon: "sparkles", active: register) { withMotion(Motion.standard) { register = true } }
                 }
+                .stagger(appeared, 3)
 
                 VStack(spacing: 12) {
                     if register {
@@ -131,6 +140,7 @@ struct LoginView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .sugarBackground()
+        .onAppear { appeared = true }
         .sensoryFeedback(.error, trigger: error)
         .sheet(item: $legal) { doc in LegalView(doc: doc) }
         .sheet(item: $access) { way in

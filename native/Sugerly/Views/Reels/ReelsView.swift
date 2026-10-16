@@ -146,6 +146,7 @@ struct ReelsView: View {
     @State private var reels: [Reel] = []
     @State private var activeId: String?
     @State private var feed = "foryou"
+    @Namespace private var feedLine
     @State private var loading = true
     @State private var lastLoad: Date?
     @State private var cursor: String?
@@ -175,7 +176,7 @@ struct ReelsView: View {
         ZStack(alignment: .top) {
             Color.black.ignoresSafeArea()
             if loading && reels.isEmpty {
-                ProgressView().tint(.white).frame(maxWidth: .infinity, maxHeight: .infinity)
+                ReelSkeleton().transition(.opacity)
             } else if shown.isEmpty {
                 VStack(spacing: 14) {
                     Image(systemName: "play.rectangle.fill").font(.system(size: 40)).foregroundStyle(Theme.gradient)
@@ -233,7 +234,15 @@ struct ReelsView: View {
                     Button { withMotion(Motion.standard) { feed = id; activeId = shown.first?.id } } label: {
                         VStack(spacing: 4) {
                             Text(title).font(.jakarta(17, .bold)).foregroundStyle(.white.opacity(feed == id ? 1 : 0.6))
-                            Capsule().fill(.white).frame(width: feed == id ? 24 : 6, height: 3).opacity(feed == id ? 1 : 0)
+                                .scaleEffect(feed == id ? 1 : 0.94)
+                            // One little line that slides to the tab you're on.
+                            ZStack {
+                                if feed == id {
+                                    Capsule().fill(.white).frame(width: 24, height: 3)
+                                        .matchedGeometryEffect(id: "line", in: feedLine)
+                                }
+                            }
+                            .frame(width: 24, height: 3)
                         }
                     }
                     .buttonStyle(SoftPressStyle())
@@ -314,7 +323,7 @@ struct ReelsView: View {
                     ProgressView().tint(.white).controlSize(.small)
                 } else {
                     Image(systemName: "arrow.down")
-                        .font(.system(size: 13, weight: .heavy))
+                        .font(.system(size: 13, weight: .bold))
                         .rotationEffect(.degrees(armed ? 180 : 0))
                         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: armed)
                 }
@@ -375,7 +384,7 @@ struct ReelsView: View {
     // by the on-device brain. More pages load as you scroll (cursor paging),
     // so the feed stays light however many reels exist.
     private func load() async {
-        defer { loading = false }
+        defer { withAnimation(Motion.fade) { loading = false } }
         if let cached = Self.cache, reels.isEmpty {
             reels = cached
             if activeId == nil { activeId = reels.first?.id }
@@ -623,7 +632,7 @@ struct ReelPage: View {
                         .scaleEffect(x: reel.mirror ? -1 : 1, y: 1)
                         .opacity(video.ready ? 1 : 0)
                         .animation(.easeOut(duration: 0.2), value: video.ready)
-                    if !video.ready { ProgressView().tint(.white).controlSize(.large) }
+                    if !video.ready { BufferingDots().transition(.opacity) }
                 }
             } else {
                 ZStack {
@@ -760,7 +769,7 @@ struct ReelPage: View {
                     HStack(spacing: 8) {
                         Image(systemName: "music.note").font(.system(size: 14, weight: .semibold))
                         Text(soundName).lineLimit(1)
-                        Image(systemName: "chevron.right").font(.system(size: 10, weight: .heavy)).opacity(0.7)
+                        Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).opacity(0.7)
                     }
                     .font(.jakarta(14, .medium)).foregroundStyle(.white.opacity(0.95))
                     .padding(.horizontal, 10).padding(.vertical, 5)
@@ -779,7 +788,7 @@ struct ReelPage: View {
                     .overlay(Circle().strokeBorder(.white, lineWidth: 2.5))
                     .overlay(alignment: .bottom) {
                         if (!following || justFollowed) && reel.authorEmail != me {
-                            Image(systemName: justFollowed ? "checkmark" : "plus").font(.system(size: 12, weight: .black))
+                            Image(systemName: justFollowed ? "checkmark" : "plus").font(.system(size: 12, weight: .bold))
                                 .foregroundStyle(justFollowed ? Theme.main : .white)
                                 .frame(width: 24, height: 24)
                                 .background(justFollowed ? AnyShapeStyle(Color.white) : AnyShapeStyle(Theme.gradient), in: Circle())

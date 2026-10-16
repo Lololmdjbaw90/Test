@@ -396,7 +396,7 @@ struct SupportChatView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .overlay(alignment: .topTrailing) {
                             Button { withMotion(Motion.standard) { self.photo = nil } } label: {
-                                Image(systemName: "xmark").font(.system(size: 9, weight: .heavy)).foregroundStyle(.white)
+                                Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
                                     .frame(width: 20, height: 20).background(.black.opacity(0.6), in: Circle())
                             }
                             .offset(x: 6, y: -6)

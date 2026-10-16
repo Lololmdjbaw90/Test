@@ -834,7 +834,7 @@ struct RecorderView: View {
                 Image(systemName: "music.note").font(.system(size: 13, weight: .bold))
                 Text(sound?.title ?? "Add sound").font(.jakarta(13, .bold)).lineLimit(1)
                 if sound != nil {
-                    Image(systemName: "xmark").font(.system(size: 10, weight: .heavy))
+                    Image(systemName: "xmark").font(.system(size: 10, weight: .bold))
                         .onTapGesture { sound = nil }
                 }
             }
@@ -909,7 +909,7 @@ struct RecorderView: View {
                     if ready {
                         Button { Task { await finish() } } label: {
                             Group {
-                                if merging { ProgressView().tint(.white) } else { Image(systemName: "checkmark").font(.system(size: 20, weight: .heavy)) }
+                                if merging { ProgressView().tint(.white) } else { Image(systemName: "checkmark").font(.system(size: 20, weight: .bold)) }
                             }
                             .foregroundStyle(.white)
                             .frame(width: 54, height: 54)

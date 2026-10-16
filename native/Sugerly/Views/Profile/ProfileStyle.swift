@@ -113,7 +113,7 @@ struct NitroBadge: View {
     var compact = false
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: "sparkles").font(.system(size: compact ? 9 : 11, weight: .heavy))
+            Image(systemName: "sparkles").font(.system(size: compact ? 9 : 11, weight: .bold))
             if !compact { Text("Plus").font(.jakarta(12, .heavy)) }
         }
         .foregroundStyle(.white)
@@ -456,7 +456,7 @@ struct AvatarFramePicker: View {
                         .frame(width: 72, height: 72)
                         .overlay(alignment: .bottomTrailing) {
                             if active {
-                                Image(systemName: "checkmark").font(.system(size: 10, weight: .black)).foregroundStyle(.white)
+                                Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.white)
                                     .frame(width: 22, height: 22)
                                     .background(tint, in: Circle())
                                     .overlay(Circle().strokeBorder(Palette.bg, lineWidth: 2.5))
@@ -491,7 +491,7 @@ struct CoinIcon: View {
     var size: CGFloat = 18
     var body: some View {
         Image(systemName: "sparkle")
-            .font(.system(size: size * 0.5, weight: .heavy))
+            .font(.system(size: size * 0.5, weight: .bold))
             .foregroundStyle(.white)
             .frame(width: size, height: size)
             .background(LinearGradient(colors: [Color(hex: 0xFFD978), Color(hex: 0xF0A020)], startPoint: .top, endPoint: .bottom), in: Circle())
@@ -582,7 +582,7 @@ struct NitroShopView: View {
             }
             preview
         }
-        .sugarCard(radius: 22, padding: 16)
+        .pastelCard(radius: 24, padding: 16)
     }
 
     // You, with the perks switched on (your own style if you have one).
@@ -614,8 +614,9 @@ struct NitroShopView: View {
             .padding(.bottom, 16)
         }
         .frame(maxWidth: .infinity)
-        .background(Palette.surface2)
+        .background(Palette.surface)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: Palette.shadow, radius: 10, y: 4)
         .accessibilityElement(children: .combine)
     }
 

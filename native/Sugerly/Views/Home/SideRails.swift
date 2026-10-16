@@ -127,7 +127,7 @@ struct PaletteOfTheDay: View {
                     } label: {
                         RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(hex: hex))
                             .frame(height: 44)
-                            .overlay { if copied == code { Image(systemName: "checkmark").font(.system(size: 13, weight: .heavy)).foregroundStyle(.white).shadow(radius: 2) } }
+                            .overlay { if copied == code { Image(systemName: "checkmark").font(.system(size: 13, weight: .bold)).foregroundStyle(.white).shadow(radius: 2) } }
                     }
                     .buttonStyle(BouncyStyle(scale: 0.9))
                     .accessibilityLabel("Copy \(code)")

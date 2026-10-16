@@ -91,18 +91,26 @@ struct EmptyCard: View {
                 Button(action: action) {
                     Text(actionTitle).font(.jakarta(14, .bold)).foregroundStyle(.white)
                         .padding(.horizontal, 18).frame(height: 38)
-                        .background(Theme.main, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .background {
+                            Capsule().fill(Theme.candy).shadow(color: Theme.main.opacity(0.28), radius: 6, y: 3)
+                        }
                 }
-                .buttonStyle(SoftPressStyle())
+                .buttonStyle(BouncyStyle(scale: 0.92))
                 .padding(.top, 8)
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 22)
         .padding(.vertical, compact ? 18 : 26)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background {
+            // A soft wash of the palette: blush into cream.
+            let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+            shape.fill(Palette.surface)
+                .overlay(shape.fill(LinearGradient(colors: [Palette.blush.opacity(0.5), Palette.cream.opacity(0.4)], startPoint: .top, endPoint: .bottom)))
+                .shadow(color: Palette.shadow, radius: 10, y: 4)
+        }
         .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Palette.border, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.border, lineWidth: 1)
         }
     }
 }

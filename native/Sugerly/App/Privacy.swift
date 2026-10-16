@@ -67,7 +67,7 @@ struct PresenceDot: View {
             case .online:
                 Circle().fill(Color(hex: presence.color)).padding(size * 0.16)
             case .idle:
-                Image(systemName: "moon.fill").font(.system(size: size * 0.62, weight: .black))
+                Image(systemName: "moon.fill").font(.system(size: size * 0.62, weight: .bold))
                     .foregroundStyle(Color(hex: presence.color)).rotationEffect(.degrees(-20))
             case .dnd:
                 Circle().fill(Color(hex: presence.color)).padding(size * 0.16)

@@ -191,8 +191,9 @@ struct NotificationsPage: View {
                 Text("\(count)")
                     .font(.jakarta(11, .heavy)).foregroundStyle(.white)
                     .padding(.horizontal, 7).frame(height: 19)
-                    .background(Theme.main, in: Capsule())
+                    .background(Theme.candy, in: Capsule())
                     .contentTransition(.numericText())
+                    .transition(.pop)
             }
         }
         .padding(.leading, 4)
@@ -242,12 +243,12 @@ struct NotificationsPage: View {
         .padding(.leading, 16)
         .padding(.trailing, 14)
         .padding(.vertical, 12)
-        .background(b.unread ? Theme.main.opacity(0.06) : Color.clear)
+        .background(b.unread ? Palette.blush.opacity(0.45) : Color.clear)
         .overlay(alignment: .leading) {
             if b.unread {
-                Circle().fill(Theme.main).frame(width: 7, height: 7)
+                Circle().fill(Theme.candy).frame(width: 7, height: 7)
                     .padding(.leading, 5)
-                    .transition(.opacity)
+                    .transition(.scale.combined(with: .opacity))
             }
         }
     }
@@ -288,7 +289,7 @@ struct NotificationsPage: View {
                 face(one, 44)
             }
             Image(systemName: icon(type))
-                .font(.system(size: 9, weight: .black))
+                .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(width: 19, height: 19)
                 .background(LinearGradient(colors: tint(type), startPoint: .topLeading, endPoint: .bottomTrailing), in: Circle())

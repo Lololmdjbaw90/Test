@@ -50,7 +50,7 @@ struct StoriesRow: View {
                         Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 62)
                             .padding(4)
                             .overlay(alignment: .bottomTrailing) {
-                                Image(systemName: "plus").font(.system(size: 12, weight: .black)).foregroundStyle(.white)
+                                Image(systemName: "plus").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
                                     .frame(width: 24, height: 24)
                                     .background(Theme.gradient, in: Circle())
                                     .overlay(Circle().strokeBorder(Palette.bg, lineWidth: 2.5))
@@ -138,6 +138,7 @@ struct HomeComposerBar: View {
                         .foregroundStyle(.white)
                         .frame(width: 38, height: 38)
                         .background(Theme.gradient, in: Circle())
+                        .shadow(color: Theme.main.opacity(0.28), radius: 6, y: 3)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
@@ -146,10 +147,10 @@ struct HomeComposerBar: View {
             .buttonStyle(BouncyStyle(scale: 0.98))
             Rectangle().fill(Palette.border).frame(height: 1).padding(.horizontal, 14)
             HStack(spacing: 0) {
-                action("Post", "text.bubble.fill") { compose(.post) }
-                action("Reel", "play.rectangle.fill") { compose(.reel) }
-                action("Drawing", "paintbrush.pointed.fill") { compose(.artwork) }
-                action("Song", "music.note") { compose(.track) }
+                action("Post", "text.bubble.fill", Palette.blushHex) { compose(.post) }
+                action("Reel", "play.rectangle.fill", Palette.pinkHex) { compose(.reel) }
+                action("Drawing", "paintbrush.pointed.fill", Palette.creamHex) { compose(.artwork) }
+                action("Song", "music.note", Palette.ivoryHex) { compose(.track) }
             }
             .padding(.horizontal, 6)
             .padding(.vertical, 6)
@@ -157,14 +158,15 @@ struct HomeComposerBar: View {
         .sugarCard(radius: 24)
     }
 
-    private func action(_ title: String, _ icon: String, _ run: @escaping () -> Void) -> some View {
+    private func action(_ title: String, _ icon: String, _ tint: UInt32, _ run: @escaping () -> Void) -> some View {
         Button(action: run) {
             VStack(spacing: 4) {
                 Image(systemName: icon)
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(Theme.main)
-                    .frame(width: 34, height: 34)
-                    .background(Theme.soft, in: Circle())
+                    .frame(width: 36, height: 36)
+                    .background(Palette.tile(tint), in: Circle())
+                    .overlay(Circle().strokeBorder(.white.opacity(0.6), lineWidth: 1))
                 Text(title).font(.jakarta(11, .bold)).foregroundStyle(Palette.text2).lineLimit(1)
             }
             .frame(maxWidth: .infinity)
@@ -209,54 +211,40 @@ struct ArtPromptCard: View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
-                    Label("TODAY'S PROMPT", systemImage: "paintpalette.fill").font(.jakarta(11, .black)).tracking(1)
-                        .foregroundStyle(.white.opacity(0.9))
+                    Label("Today's prompt", systemImage: "paintpalette.fill").font(.jakarta(12, .semibold))
+                        .foregroundStyle(Palette.text2)
                     if model.me?.isAdmin == true { AdminEditChip { editing = true } }
                 }
-                Text(prompt.text).font(.display(24)).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
-                Text(DailyContent.promptPinned ? "Picked by the Sugerly team" : "New prompt in \(hoursLeft)h").font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.8))
+                Text(prompt.text).font(.display(24)).foregroundStyle(Palette.text).fixedSize(horizontal: false, vertical: true)
+                Text(DailyContent.promptPinned ? "Picked by the Sugerly team" : "New prompt in \(hoursLeft)h").font(.jakarta(12, .medium)).foregroundStyle(Palette.text2)
                 HStack(spacing: 8) {
                     Button { compose(.artwork) } label: {
                         Label("Draw it", systemImage: "paintbrush.pointed.fill").font(.jakarta(13, .heavy))
-                            .foregroundStyle(Theme.main)
+                            .foregroundStyle(.white)
                             .padding(.horizontal, 14).frame(height: 36)
-                            .background(.white, in: Capsule())
+                            .background {
+                                Capsule().fill(Theme.candy).shadow(color: Theme.main.opacity(0.28), radius: 6, y: 3)
+                            }
                     }
                     Button { compose(.post) } label: {
                         Label("Share", systemImage: "photo.fill").font(.jakarta(13, .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Theme.main)
                             .padding(.horizontal, 14).frame(height: 36)
-                            .background(.white.opacity(0.22), in: Capsule())
+                            .background(Palette.surface.opacity(0.75), in: Capsule())
                     }
                 }
                 .buttonStyle(BouncyStyle(scale: 0.93))
                 .padding(.top, 2)
             }
             Spacer(minLength: 0)
-            ZStack {
-                Circle().fill(.white.opacity(0.2)).frame(width: 86, height: 86)
-                // A gentle swing in place (no bobbing up and down).
-                Image(systemName: prompt.icon).font(.system(size: 38, weight: .bold)).foregroundStyle(.white)
-                    .symbolEffect(.bounce, options: .repeat(2), value: float && !reduceMotion)
-            }
-            .frame(width: 86, height: 86)
-            .overlay(alignment: .topTrailing) { Twinkle(size: 12).offset(x: 10, y: -8) }
-            .padding(.trailing, 6)
+            Image(systemName: prompt.icon).font(.system(size: 34, weight: .semibold)).foregroundStyle(Theme.main)
+                .symbolEffect(.bounce, options: .repeat(2), value: float && !reduceMotion)
+                .frame(width: 82, height: 82)
+                .background(Palette.surface.opacity(0.75), in: Circle())
+                .overlay(Circle().strokeBorder(.white.opacity(0.7), lineWidth: 1))
+                .padding(.trailing, 4)
         }
-        .padding(18)
-        .background {
-            RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Theme.gradient)
-                .overlay(alignment: .topTrailing) {
-                    Circle().fill(.white.opacity(0.12)).frame(width: 150, height: 150).offset(x: 50, y: -60)
-                }
-                .overlay(alignment: .bottomLeading) {
-                    Circle().fill(.white.opacity(0.1)).frame(width: 90, height: 90).offset(x: -30, y: 40)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-                // Shadow on the card shape only, so the floating icon
-                // doesn't make the whole card's shadow redraw every frame.
-                .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Theme.main).shadow(color: Palette.shadow, radius: 12, y: 8))
-        }
+        .pastelCard(radius: 24, padding: 18)
         .onAppear { float = true }
         .onDisappear { float = false }
     }
@@ -343,7 +331,7 @@ struct HappeningNow: View {
         return HStack(spacing: 12) {
             Avatar(url: person?.picture ?? "", name: person?.displayName ?? item.name, size: 42, online: person?.isOnline ?? false)
                 .overlay(alignment: .bottomTrailing) {
-                    Image(systemName: item.icon).font(.system(size: 8, weight: .black)).foregroundStyle(.white)
+                    Image(systemName: item.icon).font(.system(size: 8, weight: .bold)).foregroundStyle(.white)
                         .frame(width: 18, height: 18)
                         .background(Color(hex: item.tint), in: Circle())
                         .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
@@ -470,7 +458,7 @@ struct SuggestedPeople: View {
         .sugarCard(radius: 24, padding: 0)
         .overlay(alignment: .topTrailing) {
             Button { withMotion(Motion.standard) { _ = hidden.insert(person.email) } } label: {
-                Image(systemName: "xmark").font(.system(size: 10, weight: .heavy)).foregroundStyle(Palette.muted)
+                Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).foregroundStyle(Palette.muted)
                     .frame(width: 26, height: 26)
             }
             .padding(4)

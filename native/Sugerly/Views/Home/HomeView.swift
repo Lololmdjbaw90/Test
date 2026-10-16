@@ -37,9 +37,9 @@ struct DailyRewardButton: View {
         HStack(spacing: 12) {
             Image(systemName: status.claimed ? "checkmark" : "gift.fill")
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(status.claimed ? Palette.success : Theme.main)
-                .frame(width: 40, height: 40)
-                .background((status.claimed ? Palette.success : Theme.main).opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .foregroundStyle(status.claimed ? Palette.success : Palette.gold)
+                .frame(width: 42, height: 42)
+                .background(status.claimed ? Palette.success.opacity(0.12) : Palette.surface, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                 .contentTransition(.symbolEffect(.replace))
                 .symbolEffect(.bounce, value: ripple)
                 .overlay { if ripple > 0 { SparkleBurst(radius: 44).id(ripple) } }
@@ -64,16 +64,29 @@ struct DailyRewardButton: View {
                     }
                     .font(.jakarta(14, .bold)).foregroundStyle(.white)
                     .padding(.horizontal, 14).frame(height: 36)
-                    .background(Theme.main, in: Capsule())
+                    .background {
+                        Capsule().fill(Theme.candy)
+                            .shadow(color: Theme.main.opacity(0.3), radius: 6, y: 3)
+                    }
                 }
-                .buttonStyle(BouncyStyle(scale: 0.92))
+                .buttonStyle(BouncyStyle(scale: 0.9))
                 .disabled(claiming)
                 .transition(.pop)
                 .accessibilityLabel("Collect \(next) coins")
             }
         }
         .padding(12)
-        .sugarCard(radius: 18)
+        .background {
+            let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+            if status.claimed {
+                shape.fill(Palette.surface).shadow(color: Palette.shadow, radius: 10, y: 4)
+            } else {
+                // A reward is waiting: warm cream, like a little present.
+                shape.fill(LinearGradient(colors: [Palette.cream, Palette.ivory], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .shadow(color: Palette.gold.opacity(0.18), radius: 10, y: 4)
+            }
+        }
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(status.claimed ? Palette.border : Palette.gold.opacity(0.25), lineWidth: 1))
         .motion(Motion.playful, value: status.claimed)
     }
 
@@ -244,7 +257,7 @@ struct HomeView: View {
                 HomeComposerBar(compose: compose).homeSection(appeared, 2)
                 StoriesRow(reels: reels, path: $path, compose: compose).homeSection(appeared, 3)
                 community.homeSection(appeared, 4)
-                if !reels.isEmpty { reelStrip.homeSection(appeared, 5) }
+                if !reels.isEmpty { reelStrip.homeSection(appeared, 5).transition(.rise) }
                 featured.homeSection(appeared, 6)
                 ArtPromptCard(compose: compose).scrollFade()
                 friendsRow.scrollFade()
@@ -319,13 +332,16 @@ struct HomeView: View {
         let nextServers = await serverDocs
         let nextReels = await reelDocs
         guard !Task.isCancelled else { return }
-        // Keep what's showing if a refresh fails.
-        if let nextArt { artworks = nextArt.map(Artwork.init) }
-        if let nextTracks { tracks = nextTracks.map(Track.init) }
-        if let nextServers { servers = nextServers.map(Server.init) }
-        if let nextReels { reels = nextReels.map(Reel.init) }
+        // Keep what's showing if a refresh fails. New things fade in softly
+        // instead of popping.
+        withAnimation(Motion.pick(.smooth(duration: 0.4))) {
+            if let nextArt { artworks = nextArt.map(Artwork.init) }
+            if let nextTracks { tracks = nextTracks.map(Track.init) }
+            if let nextServers { servers = nextServers.map(Server.init) }
+            if let nextReels { reels = nextReels.map(Reel.init) }
+            loaded = true
+        }
         lastLoad = Date()
-        loaded = true
         if model.people.isEmpty { await model.loadPeople() }
     }
 
@@ -335,16 +351,17 @@ struct HomeView: View {
         let site = SiteTheme.shared
         if site.announcementActive && !site.announcement.isEmpty && dismissedAnnouncement != site.announcement {
             HStack(spacing: 10) {
-                Image(systemName: "megaphone.fill").font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
-                Text(site.announcement).font(.jakarta(14, .bold)).foregroundStyle(.white).frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "megaphone.fill").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                    .symbolEffect(.bounce, options: .repeat(2), value: appeared)
+                Text(site.announcement).font(.jakarta(14, .semibold)).foregroundStyle(.white).frame(maxWidth: .infinity, alignment: .leading)
                 Button { withMotion(Motion.standard) { dismissedAnnouncement = site.announcement } } label: {
-                    Image(systemName: "xmark").font(.system(size: 12, weight: .heavy)).foregroundStyle(.white.opacity(0.85)).frame(width: 30, height: 30)
+                    Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundStyle(.white.opacity(0.85)).frame(width: 30, height: 30)
                 }
                 .accessibilityLabel("Close announcement")
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
-            .background(Color(hex: site.announcementColor), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .shadow(color: Color(hex: site.announcementColor).opacity(0.35), radius: 12, y: 5)
+            .background(Color(hex: site.announcementColor), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .shadow(color: Color(hex: site.announcementColor).opacity(0.25), radius: 10, y: 4)
             .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
@@ -358,22 +375,34 @@ struct HomeView: View {
         let friends = mutualFriends
         let online = friends.filter { model.person($0)?.isOnline == true }.count
         return VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(greeting).font(.jakarta(15, .medium)).foregroundStyle(Palette.muted)
-                Text(name.isEmpty ? "Hi there" : name)
-                    .font(.display(32)).foregroundStyle(Palette.text)
-                    .lineLimit(1).minimumScaleFactor(0.6)
-            }
-            HStack(spacing: 8) {
-                chip(value: Self.compact(me?.coins ?? 0), label: "coins", coin: true) { wallet = true }
-                chip(value: "Lv \(info.level)", label: info.title, dot: info.color) {
-                    if let email = me?.email { path.append(.person(email)) }
+            // Hello, in the palette: cream into blush into rose, with Mimi.
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(greeting).font(.jakarta(15, .medium)).foregroundStyle(Palette.text2)
+                        Text(name.isEmpty ? "Hi there" : name)
+                            .font(.display(32)).foregroundStyle(Palette.text)
+                            .lineLimit(1).minimumScaleFactor(0.6)
+                    }
+                    Spacer(minLength: 0)
+                    MimiBuddy(icon: "sparkles", size: 64)
+                        .padding(.top, -6)
                 }
-                chip(value: "\(online)", label: online == 1 ? "friend online" : "friends online", dot: online > 0 ? Palette.success : nil) {
-                    path.append(.people)
+                HStack(spacing: 8) {
+                    chip(value: Self.compact(me?.coins ?? 0), label: "coins", coin: true) { wallet = true }
+                        .heroPop(appeared, 0)
+                    chip(value: "Lv \(info.level)", label: info.title, dot: info.color) {
+                        if let email = me?.email { path.append(.person(email)) }
+                    }
+                    .heroPop(appeared, 1)
+                    chip(value: "\(online)", label: online == 1 ? "friend online" : "friends online", dot: online > 0 ? Palette.success : nil) {
+                        path.append(.people)
+                    }
+                    .heroPop(appeared, 2)
                 }
+                XPBar(info: info)
             }
-            XPBar(info: info)
+            .pastelCard(radius: 24, padding: 16)
             DailyRewardButton()
         }
     }
@@ -386,42 +415,45 @@ struct HomeView: View {
                 if let dot { Circle().fill(dot).frame(width: 7, height: 7) }
                 Text(value).font(.jakarta(14, .bold)).foregroundStyle(Palette.text).monospacedDigit()
                     .contentTransition(.numericText())
-                Text(label).font(.jakarta(13)).foregroundStyle(Palette.muted).lineLimit(1)
+                Text(label).font(.jakarta(13)).foregroundStyle(Palette.text2).lineLimit(1)
             }
-            .padding(.horizontal, 12).frame(height: 36)
-            .background(Palette.surface, in: Capsule())
-            .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
+            .padding(.horizontal, 12).frame(height: 34)
+            .background(Palette.surface.opacity(0.72), in: Capsule())
+            .overlay(Capsule().strokeBorder(.white.opacity(0.6), lineWidth: 1))
             .minimumScaleFactor(0.8)
         }
-        .buttonStyle(BouncyStyle(scale: 0.94))
+        .buttonStyle(BouncyStyle(scale: 0.92))
     }
 
     // MARK: shortcuts to the places that aren't tabs
 
     private var shortcuts: some View {
-        let items: [(String, String, Route)] = [
-            ("Music", "music.note", .music),
-            ("Servers", "person.3.fill", .servers),
-            ("People", "person.crop.circle.badge.plus", .people),
-            ("Top artists", "crown.fill", .topArtists),
-            ("Commissions", "storefront.fill", .commissions),
+        // Each place gets one of the palette's colours.
+        let items: [(String, String, Route, UInt32)] = [
+            ("Music", "music.note", .music, Palette.blushHex),
+            ("Servers", "person.3.fill", .servers, Palette.ivoryHex),
+            ("People", "person.crop.circle.badge.plus", .people, Palette.creamHex),
+            ("Top artists", "crown.fill", .topArtists, Palette.pinkHex),
+            ("Commissions", "storefront.fill", .commissions, Palette.roseHex),
         ]
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(items, id: \.0) { item in
+                ForEach(Array(items.enumerated()), id: \.element.0) { i, item in
                     Button { path.append(item.2) } label: {
-                        HStack(spacing: 7) {
+                        HStack(spacing: 8) {
                             Image(systemName: item.1)
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(Theme.main)
+                                .frame(width: 26, height: 26)
+                                .background(Palette.surface.opacity(0.85), in: Circle())
                             Text(item.0).font(.jakarta(14, .semibold)).foregroundStyle(Palette.text)
                         }
-                        .padding(.horizontal, 14).frame(height: 40)
-                        .background(Palette.surface, in: Capsule())
-                        .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
+                        .padding(.leading, 6).padding(.trailing, 14).frame(height: 40)
+                        .background(Palette.tile(item.3), in: Capsule())
+                        .overlay(Capsule().strokeBorder(.white.opacity(0.5), lineWidth: 1))
                     }
-                    .buttonStyle(BouncyStyle(scale: 0.94))
-                    .swipeFade()
+                    .buttonStyle(BouncyStyle(scale: 0.92))
+                    .heroPop(appeared, i + 2)
                 }
             }
             .padding(.vertical, 2)
@@ -504,8 +536,10 @@ struct HomeView: View {
                                     Image(systemName: "play.fill")
                                     Text("\(reel.views)")
                                 }
-                                .font(.jakarta(12, .heavy)).foregroundStyle(.white)
-                                .padding(10)
+                                .font(.jakarta(12, .semibold)).foregroundStyle(.white)
+                                .padding(.horizontal, 8).frame(height: 24)
+                                .background(.black.opacity(0.3), in: Capsule())
+                                .padding(8)
                             }
                             .frame(width: 120, height: 200)
                             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -757,7 +791,29 @@ private struct HomeSectionEntrance: ViewModifier {
         let visible = shown || reduceMotion
         content
             .opacity(visible ? 1 : 0)
-            .offset(y: visible ? 0 : 10)
-            .animation(reduceMotion ? nil : Motion.enter.delay(Double(min(index, 7)) * Motion.staggerStep), value: shown)
+            .offset(y: visible ? 0 : 18)
+            .scaleEffect(visible ? 1 : 0.97, anchor: .top)
+            .animation(reduceMotion ? nil : Motion.settle.delay(Double(min(index, 7)) * 0.06), value: shown)
+    }
+}
+
+private extension View {
+    // Little things in the hello card pop in one by one after the card.
+    func heroPop(_ shown: Bool, _ index: Int) -> some View {
+        modifier(HeroPop(shown: shown, index: index))
+    }
+}
+
+private struct HeroPop: ViewModifier {
+    let shown: Bool
+    let index: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        let visible = shown || reduceMotion
+        content
+            .opacity(visible ? 1 : 0)
+            .scaleEffect(visible ? 1 : 0.7)
+            .animation(reduceMotion ? nil : Motion.playful.delay(0.18 + Double(min(index, 8)) * 0.05), value: shown)
     }
 }

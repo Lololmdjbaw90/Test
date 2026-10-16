@@ -151,6 +151,7 @@ struct ServerList: View {
     @State private var query = ""
     @State private var busy: String?
     @State private var creating = false
+    @State private var appeared = false
 
     private var me: String { model.me?.email ?? "" }
     private var mine: [Server] { servers.filter { $0.members.contains(me) } }
@@ -164,17 +165,20 @@ struct ServerList: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 14) {
                 HStack {
-                    Text("Your servers").font(.jakarta(18, .heavy)).foregroundStyle(Palette.text)
+                    Text("Your servers").font(.display(22)).foregroundStyle(Palette.text)
                     Spacer()
                     Button { creating = true } label: {
                         Label("New", systemImage: "plus")
-                            .font(.jakarta(13, .heavy)).foregroundStyle(Theme.main)
+                            .font(.jakarta(13, .bold)).foregroundStyle(.white)
                             .padding(.horizontal, 14).frame(height: 34)
-                            .background(Theme.soft, in: Capsule())
+                            .background {
+                                Capsule().fill(Theme.candy).shadow(color: Theme.main.opacity(0.28), radius: 6, y: 3)
+                            }
                     }
-                    .buttonStyle(BouncyStyle())
+                    .buttonStyle(BouncyStyle(scale: 0.9))
                     .accessibilityLabel("Create a server")
                 }
+                .stagger(appeared, 0)
                 if !loaded {
                     ForEach(0..<3, id: \.self) { _ in SkeletonBlock(height: 64, radius: 20) }
                 } else if mine.isEmpty {
@@ -195,22 +199,29 @@ struct ServerList: View {
                             }
                         }
                     }
-                    .sugarCard(radius: 24)
+                    .sugarCard(radius: 22)
+                    .stagger(appeared, 1)
+                    .transition(.opacity)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Discover").font(.jakarta(18, .heavy)).foregroundStyle(Palette.text)
+                    Text("Discover").font(.display(22)).foregroundStyle(Palette.text)
                     Text("Find your people").font(.jakarta(13, .medium)).foregroundStyle(Palette.muted)
                 }
                 .padding(.top, 10)
+                .stagger(appeared, 2)
                 SearchField(text: $query, placeholder: "Search servers…")
+                    .stagger(appeared, 3)
                 if loaded && discover.isEmpty {
                     EmptyCard(icon: "sparkles", title: query.isEmpty ? "You're in them all" : "Nothing found", text: query.isEmpty ? "Make a new one with New." : "Try another name.", compact: true)
                 }
-                ForEach(discover) { server in
+                ForEach(Array(discover.enumerated()), id: \.element.id) { i, server in
                     ServerCard(server: server, joined: false, busy: busy == server.id) {
                         Task { await join(server) }
                     }
+                    .stagger(appeared, min(i + 4, 10))
+                    .scrollFade()
+                    .transition(.opacity.combined(with: .offset(y: 10)))
                 }
             }
             .padding(16)
@@ -221,6 +232,7 @@ struct ServerList: View {
         .scrollDismissesKeyboard(.interactively)
         .refreshable { await load() }
         .task { if !loaded { await load() } }
+        .onAppear { appeared = true }
         .fullScreenCover(isPresented: $creating) {
             CreateServerView { server in
                 servers.insert(server, at: 0)
@@ -262,8 +274,10 @@ struct ServerList: View {
         let docs = await newest ?? []
         var seen = Set<String>()
         let next = (mineDocs + docs).map(Server.init).filter { seen.insert($0.id).inserted }
-        if !next.isEmpty || !loaded { servers = next }
-        loaded = true
+        withAnimation(Motion.pick(.smooth(duration: 0.4))) {
+            if !next.isEmpty || !loaded { servers = next }
+            loaded = true
+        }
     }
 
     private func join(_ server: Server) async {
@@ -497,7 +511,7 @@ struct ServerCard: View {
                 ZStack(alignment: .bottomLeading) {
                     Group {
                         if server.bannerURL.isEmpty {
-                            LinearGradient(colors: [Theme.light.opacity(0.9), Theme.main.opacity(0.75)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            Theme.pastel
                         } else {
                             RemoteImage(url: server.bannerURL)
                         }
@@ -575,7 +589,8 @@ struct ServerPanel: View {
                     }
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.soft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .background(LinearGradient(colors: [Palette.cream, Palette.blush.opacity(0.7)], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .transition(.opacity)
                 }
                 if !store.loaded {
                     ForEach(0..<4, id: \.self) { _ in SkeletonBlock(height: 44, radius: 14) }
@@ -632,9 +647,7 @@ struct ServerPanel: View {
         VStack(alignment: .leading, spacing: 0) {
             Group {
                 if store.server.bannerURL.isEmpty {
-                    ZStack {
-                        LinearGradient(colors: [Theme.light, Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    }
+                    Theme.pastel
                 } else {
                     RemoteImage(url: store.server.bannerURL, live: true)
                 }

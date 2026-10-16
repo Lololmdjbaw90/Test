@@ -178,13 +178,19 @@ extension View {
 private struct SugarBackground: ViewModifier {
     @Environment(\.colorScheme) private var scheme
 
+    // The page: warm cream-white, with the palette washing down from the
+    // top — your pastel, then cream — and fading into the page.
     func body(content: Content) -> some View {
+        let dark = scheme == .dark
         content.background {
             ZStack(alignment: .top) {
                 Palette.bg
-                LinearGradient(colors: [Theme.light.opacity(scheme == .dark ? 0.14 : 0.32), Theme.light.opacity(0)],
-                               startPoint: .top, endPoint: .bottom)
-                    .frame(height: 340)
+                LinearGradient(stops: [
+                    .init(color: Theme.light.opacity(dark ? 0.16 : 0.42), location: 0),
+                    .init(color: Palette.cream.opacity(dark ? 0.05 : 0.45), location: 0.5),
+                    .init(color: Palette.bg.opacity(0), location: 1),
+                ], startPoint: .top, endPoint: .bottom)
+                .frame(height: 380)
             }
             .ignoresSafeArea()
             .animation(Motion.fade, value: Theme.mainHex)
