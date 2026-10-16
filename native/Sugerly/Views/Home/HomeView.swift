@@ -380,6 +380,7 @@ struct HomeView: View {
         .padding(.horizontal, 4)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("home-\(label.lowercased())")
     }
 
     // MARK: shortcuts to the places that aren't tabs

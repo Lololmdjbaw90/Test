@@ -133,7 +133,7 @@ struct HomeComposerBar: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(SoftPressStyle(scale: 0.99))
-            .accessibilityLabel("Write a post")
+            .accessibilityHint("Write a post")
             Rectangle().fill(Palette.border).frame(height: 1)
             HStack(spacing: 0) {
                 action("Post", "text.bubble") { compose(.post) }
