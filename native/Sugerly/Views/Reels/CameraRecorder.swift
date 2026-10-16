@@ -485,7 +485,7 @@ struct RecorderView: View {
             .sheet(isPresented: $pickingSound) {
                 SoundPicker { track in sound = track }
                     .presentationDetents([.medium, .large])
-                    .presentationCornerRadius(30)
+                    .presentationCornerRadius(24)
             }
             .confirmationDialog("Start over?", isPresented: $confirmRestart, titleVisibility: .visible) {
                 Button("Delete all clips", role: .destructive) { withMotion { camera.restart() } }

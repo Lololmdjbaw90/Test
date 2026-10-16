@@ -94,12 +94,12 @@ struct MediaEditor: View {
                 doc.deleteSticker(id)
             }
             .presentationDetents([.large])
-            .presentationCornerRadius(30)
+            .presentationCornerRadius(24)
         }
         .sheet(isPresented: $choosingSound) {
             SoundPicker { track in doc.setSound(track) }
                 .presentationDetents([.medium, .large])
-                .presentationCornerRadius(30)
+                .presentationCornerRadius(24)
         }
         .fullScreenCover(item: $cropJob) { job in
             ImageCropper(image: job.image, circle: false, aspect: cropAspect(job), choices: CropAspect.editor, title: "Move and pinch to crop", onDone: { rect in

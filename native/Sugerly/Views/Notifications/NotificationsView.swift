@@ -746,7 +746,7 @@ struct AdminView: View {
             }
         }
         .sheet(item: Binding(get: { managing.map { ManagedUser(id: $0) } }, set: { managing = $0?.id })) { m in
-            AdminUserSheet(email: m.id).presentationCornerRadius(30)
+            AdminUserSheet(email: m.id).presentationCornerRadius(24)
         }
     }
 
@@ -877,8 +877,8 @@ struct AdminView: View {
                 adminLink("Weekly challenges", "The themes everyone draws this week", "trophy.fill", [0xFFD166, 0xF0A020]) { editChallenges = true }
                 adminLink("Daily prompts", "A new idea to draw each day", "paintpalette.fill", [0xFF9EC4, 0xE0508A]) { editPrompts = true }
             }
-            .sheet(isPresented: $editChallenges) { DailyContentEditor(kind: .challenges).presentationCornerRadius(30) }
-            .sheet(isPresented: $editPrompts) { DailyContentEditor(kind: .prompts).presentationCornerRadius(30) }
+            .sheet(isPresented: $editChallenges) { DailyContentEditor(kind: .challenges).presentationCornerRadius(24) }
+            .sheet(isPresented: $editPrompts) { DailyContentEditor(kind: .prompts).presentationCornerRadius(24) }
             Divider().padding(.vertical, 6)
             Text("App colours").font(.display(22)).foregroundStyle(Palette.text)
         }

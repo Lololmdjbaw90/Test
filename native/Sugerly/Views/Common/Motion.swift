@@ -15,8 +15,8 @@ import UIKit
 enum Motion {
     /// Finger down: quick, fast start.
     static let press = Animation.easeOut(duration: 0.11)
-    /// Finger up: a quick spring with a tiny overshoot.
-    static let release = Animation.spring(response: 0.3, dampingFraction: 0.62)
+    /// Finger up: a quick spring that settles without wobbling.
+    static let release = Animation.spring(response: 0.3, dampingFraction: 0.9)
     /// Routine changes (tabs, chips, switches, panels): settles, no overshoot.
     static let standard = Animation.spring(response: 0.32, dampingFraction: 1)
     /// Something growing, shrinking or moving on screen.
@@ -27,8 +27,9 @@ enum Motion {
     static let exit = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.18)
     /// Bars, drawers and cards sliding in (the iPhone's own sheet curve).
     static let drawer = Animation.timingCurve(0.32, 0.72, 0, 1, duration: 0.4)
-    /// A little life where it's earned: likes, rewards, a flick.
-    static let playful = Animation.spring(response: 0.35, dampingFraction: 0.6)
+    /// A little life where it's earned: likes, rewards, a flick (a hint of
+    /// give, no bouncing).
+    static let playful = Animation.spring(response: 0.35, dampingFraction: 0.82)
     /// Colour and see-through changes.
     static let fade = Animation.easeOut(duration: 0.2)
     /// Items arriving together: each one this long after the one before.

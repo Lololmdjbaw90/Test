@@ -76,13 +76,13 @@ struct ServerSettingsView: View {
         .onChange(of: iconItem) { _, item in load(item) { iconImage = $0 } }
         .onChange(of: bannerItem) { _, item in load(item) { bannerImage = $0 } }
         .sheet(item: $editingRole) { draft in
-            RoleEditor(store: store, draft: draft).presentationCornerRadius(32)
+            RoleEditor(store: store, draft: draft).presentationCornerRadius(24)
         }
         .sheet(item: $editingChannel) { channel in
-            ChannelEditor(store: store, channel: channel, type: channel.type).presentationCornerRadius(32)
+            ChannelEditor(store: store, channel: channel, type: channel.type).presentationCornerRadius(24)
         }
         .sheet(item: Binding(get: { newChannelType.map { NewChannelKind(type: $0) } }, set: { newChannelType = $0?.type })) { kind in
-            ChannelEditor(store: store, channel: nil, type: kind.type).presentationCornerRadius(32)
+            ChannelEditor(store: store, channel: nil, type: kind.type).presentationCornerRadius(24)
         }
         .confirmationDialog("Delete \(store.server.name)? This can't be undone.", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete server", role: .destructive) {

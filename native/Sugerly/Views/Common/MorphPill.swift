@@ -1,7 +1,7 @@
 import SwiftUI
 
 // A pill button that morphs between two states (Follow ⇄ Following,
-// Join ⇄ Joined…). In one spring: the bright gradient flows into a soft tint,
+// Join ⇄ Joined…). In one smooth change: the solid accent fades to a plain outline,
 // the pill settles to the width of the new words, the icon morphs (plus into
 // a tick) and the words blur from one into the other. Tapping again half-way
 // simply turns it back from where it is.
@@ -40,7 +40,7 @@ struct MorphPill: View {
             HStack(spacing: 5) {
                 if let icon {
                     Image(systemName: icon)
-                        .font(.system(size: fontSize - 1, weight: .heavy))
+                        .font(.system(size: fontSize - 1, weight: .semibold))
                         .contentTransition(.symbolEffect(.replace))
                 }
                 // Both words share one spot while they swap, so the pill
@@ -53,25 +53,24 @@ struct MorphPill: View {
                         .transition(.blurSwap)
                 }
             }
-            .font(.jakarta(fontSize, .heavy))
-            .foregroundStyle(on ? Theme.main : Color.white)
+            .font(.jakarta(fontSize, .semibold))
+            .foregroundStyle(on ? Palette.text : Color.white)
             .padding(.horizontal, size == .small ? 12 : 16)
             .frame(maxWidth: fullWidth ? .infinity : nil)
             .frame(height: height)
             .background {
                 ZStack {
-                    Capsule().fill(Theme.soft)
-                        .overlay(Capsule().strokeBorder(Theme.main.opacity(0.22), lineWidth: 1))
-                    Capsule().fill(Theme.gradient)
-                        .shadow(color: Theme.main.opacity(0.3), radius: 6, y: 3)
+                    Capsule().fill(Palette.surface)
+                        .overlay(Capsule().strokeBorder(Palette.borderStrong, lineWidth: 1))
+                    Capsule().fill(Theme.main)
                         .opacity(on ? 0 : 1)
                 }
             }
             .contentShape(Capsule())
         }
-        .buttonStyle(BouncyStyle(scale: 0.94))
+        .buttonStyle(SoftPressStyle(scale: 0.96))
         .sensoryFeedback(.impact(weight: .light), trigger: on)
-        .motion(.spring(response: 0.34, dampingFraction: 0.78), value: on)
+        .motion(.spring(response: 0.3, dampingFraction: 1), value: on)
         .accessibilityLabel(on ? onTitle : offTitle)
         .accessibilityAddTraits(on ? .isSelected : [])
     }

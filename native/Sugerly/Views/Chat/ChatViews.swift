@@ -230,7 +230,7 @@ struct ChatListView: View {
                     path.append(.chat(c))
                 }
             }
-            .presentationCornerRadius(34)
+            .presentationCornerRadius(24)
         }
     }
 

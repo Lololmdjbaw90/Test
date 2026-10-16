@@ -12,7 +12,6 @@ struct TopArtistsView: View {
     @State private var appeared = false
     @State private var risen = false
     @State private var spin = false
-    @State private var burst = 0
     @State private var range = 0
     @Namespace private var chip
 
@@ -66,8 +65,8 @@ struct TopArtistsView: View {
                     ForEach(Array(list.enumerated()).dropFirst(list.count >= 3 ? 3 : 0), id: \.element.email) { i, entry in
                         row(entry, rank: i + 1, top: top)
                             .opacity(risen ? 1 : 0)
-                            .offset(x: risen ? 0 : 70)
-                            .animation(.spring(response: 0.55, dampingFraction: 0.78).delay(0.5 + Double(min(i, 14)) * 0.05), value: risen)
+                            .offset(x: risen ? 0 : 12)
+                            .animation(.easeOut(duration: 0.3).delay(0.3 + Double(min(i, 14)) * 0.03), value: risen)
                     }
                 }
                 if list.isEmpty { EmptyCard(icon: "crown.fill", title: "No artists yet", text: "Post art to get on the board!") }
@@ -76,7 +75,6 @@ struct TopArtistsView: View {
             .padding(.bottom, 30)
             .sideRails(720)
         }
-        .overlay(alignment: .top) { ConfettiBurst(trigger: burst).frame(height: 520).allowsHitTesting(false) }
         .sugarBackground()
         .navigationTitle("Top artists")
         .dropRemoved($artworks)
@@ -86,7 +84,6 @@ struct TopArtistsView: View {
             artworks = ((try? await FS.query("Artwork", orderBy: "created_date", limit: 200)) ?? []).map(Artwork.init)
             try? await Task.sleep(for: .milliseconds(150))
             risen = true
-            burst += 1
         }
         .onAppear {
             appeared = true
@@ -103,7 +100,6 @@ struct TopArtistsView: View {
         Task {
             try? await Task.sleep(for: .milliseconds(60))
             risen = true
-            burst += 1
         }
     }
 
@@ -169,9 +165,9 @@ struct TopArtistsView: View {
                             .offset(x: size * 0.36, y: size * 0.72)
                     }
                 }
-                .scaleEffect(risen ? 1 : 0.3)
+                .scaleEffect(risen ? 1 : 0.92)
                 .opacity(risen ? 1 : 0)
-                .animation(.spring(response: 0.5, dampingFraction: 0.55).delay(delay + 0.35), value: risen)
+                .animation(.easeOut(duration: 0.3).delay(delay + 0.3), value: risen)
                 Text(person?.displayName ?? "").font(.jakarta(13, .heavy)).foregroundStyle(Palette.text).lineLimit(1)
                 VStack(spacing: 2) {
                     Text("\(rank)").font(.display(rank == 1 ? 36 : 28)).foregroundStyle(.white)
@@ -185,7 +181,7 @@ struct TopArtistsView: View {
                     UnevenRoundedRectangle(topLeadingRadius: 18, topTrailingRadius: 18, style: .continuous)
                         .fill(LinearGradient(colors: [color.opacity(0.85), color], startPoint: .top, endPoint: .bottom))
                 }
-                .animation(.spring(response: 0.7, dampingFraction: 0.7).delay(delay), value: risen)
+                .animation(.spring(response: 0.6, dampingFraction: 1).delay(delay), value: risen)
             }
             .frame(maxWidth: .infinity)
         }
@@ -241,30 +237,6 @@ struct TopArtistsView: View {
     }
 }
 
-// A soft white glint that sweeps across now and then, like the logo shine.
-// The band is much taller than the view and starts/ends well outside it, so
-// no sliver is ever left showing at the edge while it waits.
-struct Glint: View {
-    var pause: Double = 2.2
-    var strength: Double = 0.75
-
-    var body: some View {
-        GeometryReader { geo in
-            let w = geo.size.width, h = geo.size.height
-            let band = max(20, min(w, h) * 0.55)
-            let reach = band + h * 0.5
-            LinearGradient(colors: [.white.opacity(0), .white.opacity(strength), .white.opacity(0)], startPoint: .leading, endPoint: .trailing)
-                .frame(width: band, height: h * 3 + band)
-                .rotationEffect(.degrees(20))
-                .phaseAnimator([false, true]) { v, go in
-                    v.position(x: go ? w + reach : -reach, y: h / 2)
-                } animation: { go in go ? .easeInOut(duration: 0.9).delay(pause) : nil }
-        }
-        .clipped()
-        .allowsHitTesting(false)
-    }
-}
-
 // MARK: - What's new (release notes + updates admins post)
 
 struct AppRelease: Identifiable {
@@ -279,12 +251,12 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
-        AppRelease(id: "ios-2.3", icon: "gamecontroller.fill", title: "Sugar World", date: "2026-10-11T12:00:00Z", items: [
-            "Sugar World: a 3D candy plaza to play in with other people, live. It turns sideways like a real game.",
-            "Touch the left side to walk, tap the big button to jump, wave, dance, cheer or sit, and chat with bubbles over your heads.",
-            "Friends playing: see who you follow is in Sugar World right now and tap Join to land in their room.",
-            "Your own 3D avatar with a skin colour for every body part.",
-            "Clothes made by people: download the shirt or pants template, draw it in any app, upload it and sell it for coins. Makers get 70% of every sale.",
+        AppRelease(id: "ios-2.4", icon: "paintbrush.fill", title: "A calmer, cleaner Sugerly", date: "2026-10-16T12:00:00Z", items: [
+            "A new look everywhere: quieter colours, clearer text, flat cards and simple buttons, so what you came for stands out.",
+            "Home is tidier: your feed, reels, people and servers without the busy background.",
+            "Coins and MimiPlus explained in plain words: what they are, what they cost and what you get.",
+            "No more sounds on every tap (turn them back on in Settings if you liked them) and no more bouncing icons.",
+            "Sugar World is gone, so the app is quicker to open and easier to find your way around.",
         ]),
         AppRelease(id: "ios-2.2", icon: "key.horizontal.fill", title: "New ways to log in", date: "2026-10-10T12:00:00Z", items: [
             "Log in with a code sent to your email, no password needed. Forgot your password? Get a code and pick a new one right in the app.",

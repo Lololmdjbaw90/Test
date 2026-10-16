@@ -600,7 +600,7 @@ struct ServerPanel: View {
             }
         }
         .sheet(isPresented: $settings) {
-            ServerSettingsView(store: store, onDeleted: onLeft).presentationCornerRadius(32)
+            ServerSettingsView(store: store, onDeleted: onLeft).presentationCornerRadius(24)
         }
         .sheet(isPresented: $membersShown) {
             MembersSheet(store: store) { route in
@@ -608,13 +608,13 @@ struct ServerPanel: View {
                 Task { @MainActor in try? await Task.sleep(for: .milliseconds(300)); path.append(route) }
             }
             .presentationDetents([.medium, .large])
-            .presentationCornerRadius(32)
+            .presentationCornerRadius(24)
         }
         .sheet(item: $editingChannel) { channel in
-            ChannelEditor(store: store, channel: channel, type: channel.type).presentationCornerRadius(32)
+            ChannelEditor(store: store, channel: channel, type: channel.type).presentationCornerRadius(24)
         }
         .sheet(item: Binding(get: { newChannelType.map { NewChannelKind(type: $0) } }, set: { newChannelType = $0?.type })) { kind in
-            ChannelEditor(store: store, channel: nil, type: kind.type).presentationCornerRadius(32)
+            ChannelEditor(store: store, channel: nil, type: kind.type).presentationCornerRadius(24)
         }
         .confirmationDialog("Leave \(store.server.name)?", isPresented: $confirmLeave, titleVisibility: .visible) {
             Button("Leave server", role: .destructive) {

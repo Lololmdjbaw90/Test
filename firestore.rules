@@ -448,58 +448,6 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Sugar World: one presence doc per player in a room + WebRTC signalling
-    // (same shape as voice channels).
-    match /WorldPresence/{id} {
-      allow read: if signedIn();
-      allow create: if signedIn() && request.resource.data.user_email == ownEmail();
-      allow update: if signedIn() && resource.data.user_email == ownEmail() && request.resource.data.user_email == ownEmail();
-      allow delete: if signedIn() && (resource.data.user_email == ownEmail() || resource.data.last_active < request.time.toMillis() - 60000);
-    }
-
-    match /WorldSignal/{id} {
-      allow read: if signedIn() && (resource.data.to_email == ownEmail() || resource.data.user_email == ownEmail());
-      allow create: if signedIn() && request.resource.data.user_email == ownEmail();
-      allow delete: if signedIn() && (resource.data.to_email == ownEmail() || resource.data.user_email == ownEmail());
-    }
-
-    // Avatar catalog: shirts and pants people paint and sell for coins.
-    match /CatalogItem/{id} {
-      allow read: if signedIn();
-      allow create: if signedIn() && !mutedNow()
-        && request.resource.data.creator_email == ownEmail()
-        && request.resource.data.kind in ['shirt', 'pants']
-        && request.resource.data.price is int
-        && request.resource.data.price >= 0 && request.resource.data.price <= 1000
-        && request.resource.data.get('sales', 0) == 0
-        && request.resource.data.name is string && request.resource.data.name.size() <= 60;
-      // The maker can rename, reprice or stop selling; a buyer only adds one sale.
-      allow update: if isAdmin()
-        || (signedIn() && resource.data.creator_email == ownEmail()
-            && onlyChanged(['name', 'price', 'on_sale', 'updated_date'])
-            && request.resource.data.get('price', 0) is int
-            && request.resource.data.get('price', 0) >= 0 && request.resource.data.get('price', 0) <= 1000)
-        || (signedIn() && onlyChanged(['sales'])
-            && request.resource.data.sales == resource.data.get('sales', 0) + 1);
-      allow delete: if isAdmin() || (signedIn() && resource.data.creator_email == ownEmail());
-    }
-
-    // One per purchase; the maker collects their share (once) next time
-    // they open the catalog.
-    match /CatalogSale/{id} {
-      allow read: if signedIn() && (resource.data.buyer_email == ownEmail() || resource.data.creator_email == ownEmail() || isAdmin());
-      allow create: if signedIn()
-        && request.resource.data.buyer_email == ownEmail()
-        && request.resource.data.creator_email != ownEmail()
-        && request.resource.data.claimed == false
-        && request.resource.data.payout is int && request.resource.data.payout >= 0
-        && request.resource.data.creator_email == get(/databases/$(database)/documents/CatalogItem/$(request.resource.data.item_id)).data.creator_email
-        && request.resource.data.payout <= get(/databases/$(database)/documents/CatalogItem/$(request.resource.data.item_id)).data.price;
-      allow update: if signedIn() && resource.data.creator_email == ownEmail() && resource.data.claimed == false
-        && request.resource.data.claimed == true && onlyChanged(['claimed', 'claimed_date', 'updated_date']);
-      allow delete: if isAdmin();
-    }
-
     match /{document=**} {
       allow read, write: if false;
     }

@@ -575,7 +575,7 @@ struct ReelPage: View {
                            onDelete: { deleteReel() },
                            onUseSound: { useSound = true })
                 .presentationDetents([.height(500), .large])
-                .presentationCornerRadius(30)
+                .presentationCornerRadius(24)
         }
         .onAppear {
             if active { start() } else if near { preload() }
@@ -607,7 +607,7 @@ struct ReelPage: View {
                 .navigationBarTitleDisplayMode(.inline)
             }
             .presentationDetents([.medium, .large])
-            .presentationCornerRadius(30)
+            .presentationCornerRadius(24)
         }
         .sheet(item: $reporting) { target in ReportSheet(target: target) }
     }

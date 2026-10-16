@@ -109,15 +109,15 @@ struct ChannelChatView: View {
         .sheet(item: $reporting) { target in ReportSheet(target: target) }
         .sheet(isPresented: $gifs) { GifPickerSheet { url in Task { await sendMedia(url) } } }
         .sheet(isPresented: $pinsShown) {
-            PinsSheet(messages: messages.filter(\.pinned), store: store).presentationDetents([.medium, .large]).presentationCornerRadius(32)
+            PinsSheet(messages: messages.filter(\.pinned), store: store).presentationDetents([.medium, .large]).presentationCornerRadius(24)
         }
         .sheet(isPresented: $membersShown) {
             MembersSheet(store: store) { _ in membersShown = false }
-                .presentationDetents([.medium, .large]).presentationCornerRadius(32)
+                .presentationDetents([.medium, .large]).presentationCornerRadius(24)
         }
         .sheet(item: Binding(get: { profile.map { EmailBox(email: $0) } }, set: { profile = $0?.email })) { box in
             MemberSheet(store: store, email: box.email) { _ in profile = nil }
-                .presentationDetents([.medium, .large]).presentationCornerRadius(32)
+                .presentationDetents([.medium, .large]).presentationCornerRadius(24)
         }
         .confirmationDialog("Delete this message?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }), titleVisibility: .visible, presenting: confirmDelete) { message in
             Button("Delete message", role: .destructive) { delete(message) }
@@ -544,7 +544,7 @@ struct MembersSheet: View {
                 open(route)
             })
             .presentationDetents([.medium, .large])
-            .presentationCornerRadius(32)
+            .presentationCornerRadius(24)
         }
     }
 

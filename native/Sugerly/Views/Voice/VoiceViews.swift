@@ -298,7 +298,7 @@ struct VoiceDock: View {
                                   channel: ServerChannel(["id": room.id, "name": room.name, "type": "voice", "community_id": room.serverId]))
                 }
                 .presentationDetents([.large])
-                .presentationCornerRadius(34)
+                .presentationCornerRadius(24)
             }
         }
     }

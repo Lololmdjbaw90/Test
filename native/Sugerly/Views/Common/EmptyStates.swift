@@ -1,8 +1,8 @@
 import SwiftUI
 
-// Empty states with a little character instead of a stock icon: Mimi, the
-// Sugerly bunny (hand-drawn art in every accent colour, so she matches
-// yours), on a sketchbook card with a dashed edge.
+// Mimi, the Sugerly bunny (hand-drawn art in every accent colour, so she
+// matches yours), for the few full-screen moments, and the plain card every
+// empty list uses.
 
 struct MimiBuddy: View {
     enum Mood { case happy, sleepy, sad }
@@ -26,12 +26,7 @@ struct MimiBuddy: View {
 
     // She stands still and just fades in.
     var body: some View {
-        let s = size / 110
         ZStack {
-            // soft shadow on the "floor"
-            Ellipse().fill(Theme.main.opacity(0.14))
-                .frame(width: 52 * s, height: 8 * s)
-                .offset(y: size * 0.5 - 3 * s)
             Image(Self.imageName)
                 .resizable()
                 .interpolation(.high)
@@ -67,7 +62,10 @@ struct DoodleShape: Shape {
     func path(in rect: CGRect) -> Path { make(rect) }
 }
 
-// The sketchbook card every empty state uses.
+// The card every empty state uses: the page's own icon in a soft circle,
+// a short title, one line of help and, when there's something to do, a
+// plain button. (`animated` and `mood` stay so every caller still compiles;
+// Mimi now only shows on the full-screen covers.)
 struct EmptyCard: View {
     let icon: String
     let title: String
@@ -78,64 +76,27 @@ struct EmptyCard: View {
     var action: (() -> Void)? = nil
     var compact = false
 
-    private var face: MimiBuddy.Mood {
-        if let mood { return mood }
-        if icon.contains("exclamationmark") || icon.contains("lock") || icon.contains("wifi") { return .sad }
-        if icon.contains("checkmark") || icon.contains("sparkles") || icon.contains("crown") { return .happy }
-        return .sleepy
-    }
-
     var body: some View {
         VStack(spacing: compact ? 6 : 8) {
-            MimiBuddy(icon: icon, mood: face, size: compact ? 96 : 124, animated: animated)
-                .padding(.bottom, 2)
-            Text(title).font(.display(compact ? 21 : 25)).foregroundStyle(Palette.text).multilineTextAlignment(.center)
-            Doodles.squiggle
-                .stroke(Theme.main.opacity(0.55), style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
-                .frame(width: compact ? 54 : 70, height: 7)
+            Image(systemName: icon)
+                .font(.system(size: compact ? 20 : 24, weight: .regular))
+                .foregroundStyle(Palette.text2)
+                .frame(width: compact ? 48 : 56, height: compact ? 48 : 56)
+                .background(Palette.surface2, in: Circle())
+                .padding(.bottom, 4)
+                .accessibilityHidden(true)
+            Text(title).font(.jakarta(compact ? 16 : 17, .semibold)).foregroundStyle(Palette.text).multilineTextAlignment(.center)
             Text(text).font(.jakarta(14)).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 2)
             if let actionTitle, let action {
-                Button(action: action) {
-                    Text(actionTitle).font(.jakarta(14, .heavy)).foregroundStyle(Theme.main)
-                        .padding(.horizontal, 18).frame(height: 38)
-                        .background(Theme.soft, in: Capsule())
-                        .overlay(Capsule().strokeBorder(Theme.main.opacity(0.35), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])))
-                }
-                .buttonStyle(BouncyStyle(scale: 0.93))
-                .padding(.top, 6)
+                Button(actionTitle, action: action)
+                    .buttonStyle(OutlineButtonStyle(height: 40))
+                    .padding(.top, 8)
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 22)
-        .padding(.vertical, compact ? 18 : 24)
-        .background {
-            RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Palette.surface)
-                .overlay { SketchDots().clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous)) }
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .strokeBorder(Theme.light.opacity(0.9), style: StrokeStyle(lineWidth: 1.6, dash: [7, 6]))
-        }
-    }
-}
-
-// Faint dotted-paper texture.
-private struct SketchDots: View {
-    var body: some View {
-        Canvas { ctx, size in
-            let gap: CGFloat = 16
-            var y: CGFloat = gap / 2
-            while y < size.height {
-                var x: CGFloat = gap / 2
-                while x < size.width {
-                    ctx.fill(Path(ellipseIn: CGRect(x: x - 1, y: y - 1, width: 2, height: 2)), with: .color(Palette.border.opacity(0.9)))
-                    x += gap
-                }
-                y += gap
-            }
-        }
-        .allowsHitTesting(false)
+        .padding(.horizontal, 24)
+        .padding(.vertical, compact ? 20 : 28)
+        .sugarCard(radius: 16)
     }
 }

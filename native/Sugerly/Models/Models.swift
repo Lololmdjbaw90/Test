@@ -106,7 +106,7 @@ struct UserProfile: Identifiable, Hashable {
     var invitesJoined = 0
     // Finished the welcome setup (accounts from before it existed count as done).
     var setupDone = true
-    // Sugar World: your 3D avatar (JSON) and the catalog things you own.
+    // Saved from an older version (a 3D avatar and outfits); kept so nobody's data is lost.
     var avatarLook = ""
     var avatarItems: [String] = []
 

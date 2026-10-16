@@ -52,7 +52,7 @@ struct ShellUITestHost: View {
         .sheet(isPresented: createShown) {
             CreateSheet { _ in model.showCreate = false }
                 .presentationDetents([.height(460)])
-                .presentationCornerRadius(34)
+                .presentationCornerRadius(24)
         }
         .environment(chats).environment(notes).environment(posts).environment(player)
         .environment(VoiceEngine.shared).environment(CallCenter.shared)

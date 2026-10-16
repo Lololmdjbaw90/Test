@@ -41,7 +41,7 @@ final class NavigationInteractionTests: XCTestCase {
         attachment.lifetime = .keepAlways
         add(attachment)
         app.buttons["Create"].tap()
-        XCTAssertTrue(app.staticTexts["Create something"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Pick what you'd like to share."].waitForExistence(timeout: 3))
     }
 
     func testChatEdgeSwipeKeepsNavigationPathInSync() {
