@@ -140,7 +140,7 @@ struct VoiceRoomView: View {
                         muted: p.muted, deafened: p.deafened, speaking: p.speaking, level: p.level,
                         connecting: !p.isSelf && !p.connected, video: track,
                         session: p.isSelf ? voice.cameraSession : nil,
-                        mirror: p.isSelf && voice.frontCamera, isScreen: p.video == "screen")
+                        mirror: p.isSelf && voice.cameraFront, isScreen: p.video == "screen")
     }
 
     // Before joining: who's in there.
@@ -206,7 +206,7 @@ struct VoiceRoomView: View {
                 CallButton(icon: voice.muted ? "mic.slash.fill" : "mic.fill", label: voice.muted ? "Unmute" : "Mute", on: voice.muted) { voice.toggleMute() }
                     .disabled(!access.can(.speak))
                 CallButton(icon: voice.deafened ? "speaker.slash.fill" : "headphones", label: voice.deafened ? "Undeafen" : "Deafen", on: voice.deafened) { voice.toggleDeafen() }
-                CallButton(icon: voice.cameraOn ? "video.fill" : "video.slash.fill", label: "Camera", on: voice.cameraOn) { Task { await voice.toggleCamera() } }
+                CallButton(icon: voice.cameraWanted ? "video.fill" : "video.slash.fill", label: "Camera", on: voice.cameraWanted) { voice.toggleCamera() }
                 CallButton(icon: "rectangle.on.rectangle", label: voice.sharingScreen ? "Stop share" : "Share", on: voice.sharingScreen) { voice.toggleScreenShare() }
                 CallButton(icon: "phone.down.fill", label: "Leave", danger: true) { Task { await voice.leave() } }
             }

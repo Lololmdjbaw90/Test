@@ -172,7 +172,7 @@ struct ServerList: View {
                             .font(.jakarta(13, .bold)).foregroundStyle(.white)
                             .padding(.horizontal, 14).frame(height: 34)
                             .background {
-                                Capsule().fill(Theme.candy).shadow(color: Theme.main.opacity(0.28), radius: 6, y: 3)
+                                Capsule().fill(Theme.candy).shadow(color: Theme.glow(0.28), radius: 6, y: 3)
                             }
                     }
                     .buttonStyle(BouncyStyle(scale: 0.9))

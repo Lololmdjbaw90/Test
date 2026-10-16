@@ -632,7 +632,6 @@ struct ReelPage: View {
                         .scaleEffect(x: reel.mirror ? -1 : 1, y: 1)
                         .opacity(video.ready ? 1 : 0)
                         .animation(.easeOut(duration: 0.2), value: video.ready)
-                    if !video.ready { BufferingDots().transition(.opacity) }
                 }
             } else {
                 ZStack {

@@ -56,8 +56,13 @@ final class VoiceEngine: NSObject {
 
     // Video: your camera or your screen, and everyone else's picture.
     var cameraOn = false
+    // What the camera buttons last asked for (shown straight away; the camera
+    // itself catches up a moment later).
+    var cameraWanted = false
     var sharingScreen = false
     var frontCamera = true
+    private(set) var cameraFront = true
+    @ObservationIgnored private var cameraJob: Task<Void, Never>?
     var remoteVideo: [String: RTCVideoTrack] = [:]   // by peer id
     private(set) var localVideo: RTCVideoTrack?
     // The camera itself, for showing your own picture straight from it
@@ -227,6 +232,10 @@ final class VoiceEngine: NSObject {
         levelLoop?.cancel()
         levelLoop = nil
         call.end()
+        // Camera off first, waiting for one that's still starting so it can't
+        // come back on after the call.
+        cameraWanted = false
+        await cameraJob?.value
         if cameraOn { await cameraCapturer?.stopCapture() }
         if sharingScreen { ScreenBroadcast.shared.requestStop() }
         ScreenBroadcast.shared.frames.attach(nil, nil)
@@ -468,47 +477,105 @@ final class VoiceEngine: NSObject {
         for peer in peers.values { peer.video?.sender.track = on ? localVideo : nil }
     }
 
-    func toggleCamera() async {
-        if cameraOn { stopCamera(); return }
-        guard room != nil else { return }
+    // The camera button. It shows the new state straight away and the camera
+    // catches up one step at a time, so tapping fast can never start or stop
+    // two cameras at once (that froze the call).
+    func toggleCamera() {
+        cameraWanted.toggle()
+        settleCamera()
+    }
+
+    func flipCamera() {
+        frontCamera.toggle()
+        settleCamera()
+    }
+
+    // Brings the camera to what the buttons last asked for: on or off, front
+    // or back. Only one of these runs at a time.
+    private func settleCamera() {
+        guard cameraJob == nil else { return }
+        cameraJob = Task { [weak self] in
+            guard let self else { return }
+            while self.room != nil {
+                if self.cameraWanted {
+                    if self.cameraOn && self.cameraFront == self.frontCamera { break }
+                    let started = await self.startCamera()
+                    // Couldn't (and it's still wanted): the buttons go back to
+                    // how the camera really is. If it was turned off meanwhile,
+                    // the loop just goes on to turn it off.
+                    if !started && self.cameraWanted {
+                        self.cameraWanted = self.cameraOn
+                        self.frontCamera = self.cameraFront
+                        break
+                    }
+                } else {
+                    if !self.cameraOn { break }
+                    await self.stopCamera()
+                }
+            }
+            if self.room == nil { self.cameraWanted = false }
+            self.cameraJob = nil
+        }
+    }
+
+    // Starts the camera, or switches it to the other side; false if it can't.
+    private func startCamera() async -> Bool {
         guard await AVCaptureDevice.requestAccess(for: .video) else {
             error = "Camera access is off — turn it on in Settings → Sugerly."
-            return
+            return false
         }
+        // Left the call, or tapped off (or started sharing the screen) while
+        // the camera permission was being checked.
+        guard room != nil, cameraWanted else { return false }
         if sharingScreen { stopScreenShare() }
         let source = ensureVideo()
         source.adaptOutputFormat(toWidth: 640, height: 480, fps: 24)
+        let front = frontCamera
         let devices = RTCCameraVideoCapturer.captureDevices()
-        guard let device = devices.first(where: { $0.position == (frontCamera ? .front : .back) }) ?? devices.first else {
+        guard let device = devices.first(where: { $0.position == (front ? .front : .back) }) ?? devices.first else {
             error = "No camera found."
-            return
+            return false
         }
         let formats = RTCCameraVideoCapturer.supportedFormats(for: device)
         func width(_ f: AVCaptureDevice.Format) -> Int { Int(CMVideoFormatDescriptionGetDimensions(f.formatDescription).width) }
-        guard let format = formats.min(by: { abs(width($0) - 640) < abs(width($1) - 640) }) else { return }
+        guard let format = formats.min(by: { abs(width($0) - 640) < abs(width($1) - 640) }) else { return false }
         let fps = Int(min(24, format.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? 24))
-        let capturer = cameraCapturer ?? RTCCameraVideoCapturer(delegate: source)
-        try? await capturer.startCapture(with: device, format: format, fps: fps)
-        cameraCapturer = capturer
-        cameraOn = true
-        sendVideo(true)
-        pushPresence()
-        refreshParticipants()
+        // One camera for the whole call.
+        let capturer: RTCCameraVideoCapturer
+        if let cameraCapturer {
+            capturer = cameraCapturer
+        } else {
+            capturer = RTCCameraVideoCapturer(delegate: source)
+            cameraCapturer = capturer
+        }
+        do {
+            try await capturer.startCapture(with: device, format: format, fps: fps)
+        } catch {
+            self.error = "The camera couldn't start. Try again."
+            return false
+        }
+        // Left the call while it was starting.
+        guard room != nil, cameraCapturer === capturer else {
+            await capturer.stopCapture()
+            return false
+        }
+        cameraFront = front
+        if !cameraOn {
+            cameraOn = true
+            sendVideo(true)
+            pushPresence()
+            refreshParticipants()
+        }
+        return true
     }
 
-    func stopCamera() {
-        cameraCapturer?.stopCapture()
+    // Turns the camera off and waits until it really is off.
+    private func stopCamera() async {
         cameraOn = false
         if !sharingScreen { sendVideo(false) }
         pushPresence()
         refreshParticipants()
-    }
-
-    func flipCamera() async {
-        frontCamera.toggle()
-        guard cameraOn else { return }
-        cameraOn = false
-        await toggleCamera()
+        await cameraCapturer?.stopCapture()
     }
 
     // Shares your whole screen, other apps too: opens iPhone's "Start
@@ -529,7 +596,10 @@ final class VoiceEngine: NSObject {
     // The broadcast began: its frames now go out like a camera would.
     private func broadcastStarted() {
         guard room != nil else { ScreenBroadcast.shared.requestStop(); return }
-        if cameraOn { stopCamera() }
+        if cameraWanted {
+            cameraWanted = false
+            settleCamera()
+        }
         let source = ensureVideo()
         source.adaptOutputFormat(toWidth: 720, height: 1280, fps: 15)
         let capturer = RTCVideoCapturer(delegate: source)

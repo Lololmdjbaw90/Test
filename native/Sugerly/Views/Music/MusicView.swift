@@ -115,7 +115,7 @@ struct MusicView: View {
                     .overlay { if t.coverURL.isEmpty { Image(systemName: "music.note").font(.system(size: 30)).foregroundStyle(.white.opacity(0.8)) } }
                     .frame(width: 120, height: 120)
                     .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(.white.opacity(0.4), lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.rim(0.4), lineWidth: 1))
                     .shadow(color: .black.opacity(0.3), radius: 14, y: 8)
                     .rotationEffect(.degrees(playing ? 0 : -3))
                 if playing {
@@ -157,7 +157,7 @@ struct MusicView: View {
                 LinearGradient(colors: [.black.opacity(0.0), .black.opacity(0.22)], startPoint: .top, endPoint: .bottom)
             }
             .clipShape(shape)
-            .overlay(shape.strokeBorder(.white.opacity(0.25), lineWidth: 1))
+            .overlay(shape.strokeBorder(Palette.rim(0.25), lineWidth: 1))
             .shadow(color: Palette.shadow, radius: 12, y: 8)
         }
         .motion(Motion.playful, value: playing)
@@ -368,13 +368,21 @@ struct NewTrackView: View {
                 .sugarCard(radius: 22, padding: 14)
             }
             .buttonStyle(BouncyStyle(scale: 0.97))
-            SugarField(placeholder: "Title", text: $title)
-            HStack(spacing: 10) {
-                SugarField(placeholder: "Genre (Lo-fi, Pop…)", text: $genre)
-                SugarField(placeholder: "Mood (Chill…)", text: $mood)
+            FieldGroup(title: "Title") {
+                SugarField(placeholder: "Name your track", text: $title)
             }
-            SugarField(placeholder: "About this track (optional)", text: $description, lines: 3...6)
-            PhotoPickerCard(item: $coverItem, image: $cover)
+            FieldGroup(title: "Genre and mood") {
+                HStack(spacing: 10) {
+                    SugarField(placeholder: "Lo-fi, Pop…", text: $genre)
+                    SugarField(placeholder: "Chill…", text: $mood)
+                }
+            }
+            FieldGroup(title: "About it") {
+                SugarField(placeholder: "Tell people about it (optional)", text: $description, lines: 3...6)
+            }
+            FieldGroup(title: "Cover picture (optional)") {
+                PhotoPickerCard(item: $coverItem, image: $cover)
+            }
         }
         .fileImporter(isPresented: $picking, allowedContentTypes: [.audio, .mp3, .mpeg4Audio, .wav]) { result in
             if case .success(let url) = result { audio = url; if title.isEmpty { title = url.deletingPathExtension().lastPathComponent } }

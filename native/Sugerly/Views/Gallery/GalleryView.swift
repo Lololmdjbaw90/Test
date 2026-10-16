@@ -158,7 +158,7 @@ struct GalleryView: View {
                     .frame(width: 46, height: 46)
                     .background {
                         RoundedRectangle(cornerRadius: 15, style: .continuous).fill(Theme.candy)
-                            .shadow(color: Theme.main.opacity(0.3), radius: 8, y: 4)
+                            .shadow(color: Theme.glow(0.3), radius: 8, y: 4)
                     }
             }
             .buttonStyle(BouncyStyle(scale: 0.9)).accessibilityLabel("Share fan art")

@@ -18,7 +18,13 @@ extension Color {
         self.init(.sRGB, red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255, opacity: opacity)
     }
     static func dynamic(light: UInt32, dark: UInt32) -> Color {
-        Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: dark) : UIColor(hex: light) })
+        Palette.swatch(light, 1, dark, 1)
+    }
+    // A coloured glow under a tile on light pages; on dark pages a plain soft
+    // shadow (coloured glows look like neon there).
+    func softGlow(_ opacity: Double) -> Color {
+        let tint = UIColor(self)
+        return Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor.black.withAlphaComponent(0.3) : tint.withAlphaComponent(opacity) })
     }
     // 0xRRGGBB, for saving a picked colour.
     var rgbHex: UInt32 {
@@ -63,8 +69,14 @@ enum Palette {
     // One of the palette colours as a soft tile (light mode), or a plum
     // shade of it in dark mode.
     static func tile(_ hex: UInt32) -> Color {
-        let d = mix(0x2A2227, hex, 0.14)
-        return Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: d) : UIColor(hex: hex) })
+        swatch(hex, 1, mix(0x2A2227, hex, 0.14), 1)
+    }
+
+    // The glossy touches (a white rim, a sheen along the top) are for light
+    // pages. On dark pages they fade to a faint hairline, so nothing shines
+    // like plastic.
+    static func rim(_ opacity: Double) -> Color {
+        swatch(0xFFFFFF, opacity, 0xFFFFFF, min(0.07, opacity * 0.12))
     }
 
     static let danger = Color(hex: 0xE5484D)
@@ -76,18 +88,38 @@ enum Palette {
     // Reading the accent here makes every view that uses a page colour
     // redraw when you pick another accent.
     private static func pastel(_ light: UInt32, _ lightAmount: Double, dark: UInt32, _ darkAmount: Double) -> Color {
-        let l = mix(light, Theme.lightHex, lightAmount), d = mix(dark, Theme.mainHex, darkAmount)
-        return Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: d) : UIColor(hex: l) })
+        swatch(mix(light, Theme.lightHex, lightAmount), 1, mix(dark, Theme.mainHex, darkAmount), 1)
     }
 
     private static func ink(_ light: UInt32, _ lightAmount: Double, dark: UInt32, _ darkAmount: Double) -> Color {
-        let l = mix(light, Theme.mainHex, lightAmount), d = mix(dark, Theme.lightHex, darkAmount)
-        return Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: d) : UIColor(hex: l) })
+        swatch(mix(light, Theme.mainHex, lightAmount), 1, mix(dark, Theme.lightHex, darkAmount), 1)
     }
 
     private static func hero(light: UInt32, _ darkAmount: Double) -> Color {
-        let d = mix(0x1D171B, Theme.mainHex, darkAmount)
-        return Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: d) : UIColor(hex: light) })
+        swatch(light, 1, mix(0x1D171B, Theme.mainHex, darkAmount), 1)
+    }
+
+    // Every light/dark pair is made once and then reused, so a colour is the
+    // very same value each time a page redraws. (Fresh copies made SwiftUI
+    // think colours had changed, and bits of a page could blink dark while it
+    // "animated" between two copies of the same colour.)
+    private struct SwatchKey: Hashable {
+        let light: UInt32, dark: UInt32
+        let lightAlpha: UInt8, darkAlpha: UInt8
+    }
+    nonisolated(unsafe) private static var swatches: [SwatchKey: Color] = [:]
+    private static let swatchLock = NSLock()
+
+    static func swatch(_ light: UInt32, _ lightAlpha: Double, _ dark: UInt32, _ darkAlpha: Double) -> Color {
+        func byte(_ v: Double) -> UInt8 { UInt8((max(0, min(1, v)) * 255).rounded()) }
+        let key = SwatchKey(light: light, dark: dark, lightAlpha: byte(lightAlpha), darkAlpha: byte(darkAlpha))
+        swatchLock.lock()
+        defer { swatchLock.unlock() }
+        if let hit = swatches[key] { return hit }
+        let la = CGFloat(key.lightAlpha) / 255, da = CGFloat(key.darkAlpha) / 255
+        let made = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: dark, alpha: da) : UIColor(hex: light, alpha: la) })
+        swatches[key] = made
+        return made
     }
 
     static func mix(_ a: UInt32, _ b: UInt32, _ t: Double) -> UInt32 {
@@ -168,9 +200,17 @@ enum Theme {
         LinearGradient(colors: [Palette.heroA, Palette.heroB, Palette.heroC], startPoint: .topLeading, endPoint: .bottomTrailing)
     }
     // A juicy candy fill for main buttons: the accent, a touch lighter at
-    // the top.
+    // the top. In dark mode it's nearly flat and a touch deeper, so it
+    // doesn't glow.
     static var candy: LinearGradient {
-        LinearGradient(colors: [Color(hex: Palette.mix(mainHex, 0xFFFFFF, 0.14)), main], startPoint: .top, endPoint: .bottom)
+        let top = Palette.swatch(Palette.mix(mainHex, 0xFFFFFF, 0.14), 1, mainHex, 1)
+        let bottom = Palette.swatch(mainHex, 1, Palette.mix(mainHex, 0x000000, 0.1), 1)
+        return LinearGradient(colors: [top, bottom], startPoint: .top, endPoint: .bottom)
+    }
+    // The soft rosy glow under candy buttons and chips. On dark pages it's a
+    // plain shadow instead (a pink glow there looks like neon).
+    static func glow(_ opacity: Double) -> Color {
+        Palette.swatch(mainHex, opacity, 0x000000, opacity > 0 ? 0.32 : 0)
     }
     // Progress bars: pastel into the accent.
     static var progress: LinearGradient {
@@ -326,11 +366,11 @@ struct PastelCard: ViewModifier {
                 shape.fill(Theme.pastel)
                     .overlay(alignment: .topLeading) {
                         // A soft sheen along the top edge.
-                        shape.fill(LinearGradient(colors: [.white.opacity(0.35), .clear], startPoint: .top, endPoint: .center))
+                        shape.fill(LinearGradient(colors: [Palette.rim(0.35), .clear], startPoint: .top, endPoint: .center))
                     }
                     .shadow(color: Palette.shadow, radius: 14, y: 6)
             }
-            .overlay(shape.strokeBorder(.white.opacity(0.55), lineWidth: 1))
+            .overlay(shape.strokeBorder(Palette.rim(0.55), lineWidth: 1))
     }
 }
 
@@ -383,8 +423,8 @@ private struct GradientButtonBody: View {
             .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: min(height, 50))
             .background {
                 shape.fill(Theme.candy)
-                    .overlay(shape.strokeBorder(.white.opacity(0.22), lineWidth: 1))
-                    .shadow(color: Theme.main.opacity(enabled ? (pressed ? 0.12 : 0.28) : 0), radius: pressed ? 4 : 10, y: pressed ? 2 : 5)
+                    .overlay(shape.strokeBorder(Palette.rim(0.22), lineWidth: 1))
+                    .shadow(color: Theme.glow(enabled ? (pressed ? 0.12 : 0.28) : 0), radius: pressed ? 4 : 10, y: pressed ? 2 : 5)
             }
             .opacity(enabled ? (pressed ? 0.92 : 1) : 0.45)
             .scaleEffect(pressed && !Motion.reduced ? 0.965 : 1)
@@ -431,7 +471,7 @@ struct Chip: View {
             .background {
                 if active {
                     Capsule().fill(Theme.candy)
-                        .shadow(color: Theme.main.opacity(0.25), radius: 6, y: 3)
+                        .shadow(color: Theme.glow(0.25), radius: 6, y: 3)
                         .transition(.scale(scale: 0.85).combined(with: .opacity))
                 } else {
                     Capsule().fill(Palette.surface2)

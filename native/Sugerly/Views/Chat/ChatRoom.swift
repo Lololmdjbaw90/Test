@@ -1099,7 +1099,6 @@ struct ChatWallpaper: View {
                     .tag(i)
             }
         }
-        .drawingGroup()
     }
 }
 

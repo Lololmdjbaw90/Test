@@ -75,24 +75,38 @@ extension View {
     }
 }
 
-// Shown only if something takes a moment (a quick load never flashes a
-// spinner): the dots in a dark pill, over a picture or video.
-struct BufferingDots: View {
-    var delay: Double = 0.35
+// A video that's still loading: a soft light sweeps out from the middle of
+// the bar at the bottom, over and over (like TikTok's loading line). Shown
+// only if it takes a moment, so a quick load never flashes it.
+struct BufferingSweep: View {
+    var delay: Double = 0.3
     @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        MorphDots(dot: 8)
-            .tint(.white)
-            .padding(.horizontal, 16).padding(.vertical, 10)
-            .background(.black.opacity(0.35), in: Capsule())
-            .opacity(shown ? 1 : 0)
-            .scaleEffect(shown ? 1 : 0.85)
-            .task {
-                try? await Task.sleep(for: .seconds(delay))
-                withAnimation(Motion.pick(Motion.playful)) { shown = true }
+        Group {
+            if reduceMotion {
+                Capsule().fill(.white.opacity(0.55))
+            } else {
+                Capsule()
+                    .fill(LinearGradient(colors: [.white.opacity(0), .white, .white.opacity(0)], startPoint: .leading, endPoint: .trailing))
+                    .phaseAnimator([false, true]) { line, wide in
+                        line
+                            .scaleEffect(x: wide ? 1 : 0.05, anchor: .center)
+                            .opacity(wide ? 0 : 1)
+                    } animation: { wide in
+                        wide ? Animation.easeOut(duration: 0.9) : Animation.linear(duration: 0.01)
+                    }
             }
-            .allowsHitTesting(false)
+        }
+        .opacity(shown ? 1 : 0)
+        .task {
+            try? await Task.sleep(for: .seconds(delay))
+            withAnimation(Motion.fade) { shown = true }
+        }
+        .allowsHitTesting(false)
+        .accessibilityElement()
+        .accessibilityLabel("Loading")
     }
 }
 
@@ -105,7 +119,7 @@ struct ReelSkeleton: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             LinearGradient(colors: [Color(hex: 0x1C1519), Color(hex: 0x0E0B0D)], startPoint: .top, endPoint: .bottom)
-            RadialGradient(colors: [Theme.main.opacity(glow ? 0.28 : 0.12), .clear], center: .center, startRadius: 10, endRadius: 320)
+            RadialGradient(colors: [Theme.main.opacity(glow ? 0.18 : 0.07), .clear], center: .center, startRadius: 10, endRadius: 320)
                 .animation(reduceMotion ? nil : .easeInOut(duration: 1.4).repeatForever(autoreverses: true), value: glow)
             HStack(alignment: .bottom, spacing: 16) {
                 VStack(alignment: .leading, spacing: 10) {
@@ -126,9 +140,14 @@ struct ReelSkeleton: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 110)
-            MorphDots(dot: 8)
-                .tint(.white)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // The loading line where the video's bar will be.
+            ZStack {
+                Capsule().fill(.white.opacity(0.18))
+                BufferingSweep(delay: 0)
+            }
+            .frame(height: 3)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 92)
         }
         .ignoresSafeArea()
         .onAppear { glow = true }

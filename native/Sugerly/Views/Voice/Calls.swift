@@ -689,7 +689,7 @@ struct CallScreen: View {
                              muted: p.muted, deafened: p.deafened, speaking: p.speaking, level: p.level,
                              connecting: !p.isSelf && !p.connected, video: track(p),
                              session: p.isSelf ? voice.cameraSession : nil,
-                             mirror: p.isSelf && voice.frontCamera, isScreen: p.video == "screen", avatarSize: 72)
+                             mirror: p.isSelf && voice.cameraFront, isScreen: p.video == "screen", avatarSize: 72)
                         .frame(height: 190)
                         .transition(.pop)
                 }
@@ -761,7 +761,7 @@ struct CallScreen: View {
     private var bar: some View {
         CallBar {
             CallButton(icon: voice.muted ? "mic.slash.fill" : "mic.fill", label: voice.muted ? "Unmute" : "Mute", on: voice.muted) { voice.toggleMute() }
-            CallButton(icon: voice.cameraOn ? "video.fill" : "video.slash.fill", label: "Camera", on: voice.cameraOn) { Task { await voice.toggleCamera() } }
+            CallButton(icon: voice.cameraWanted ? "video.fill" : "video.slash.fill", label: "Camera", on: voice.cameraWanted) { voice.toggleCamera() }
             CallButton(icon: "rectangle.on.rectangle", label: voice.sharingScreen ? "Stop share" : "Share", on: voice.sharingScreen) { voice.toggleScreenShare() }
             CallButton(icon: voice.speaker ? "speaker.wave.3.fill" : "speaker.fill", label: "Speaker", on: voice.speaker) { voice.toggleSpeaker() }
             CallButton(icon: "phone.down.fill", label: "End", danger: true) {
@@ -780,14 +780,14 @@ struct CallScreen: View {
                 if let session = voice.cameraSession {
                     CameraSessionView(session: session)
                 } else {
-                    VideoTrackView(track: track, fill: true, mirror: voice.frontCamera)
+                    VideoTrackView(track: track, fill: true, mirror: voice.cameraFront)
                 }
             }
                 .frame(width: 104, height: 150)
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(.white.opacity(0.35), lineWidth: 1.5))
                 .shadow(color: .black.opacity(0.4), radius: 14, y: 6)
-            Button { Task { await voice.flipCamera() } } label: {
+            Button { voice.flipCamera() } label: {
                 Image(systemName: "arrow.triangle.2.circlepath.camera.fill").font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
                     .frame(width: 32, height: 32).background(.black.opacity(0.45), in: Circle())
             }

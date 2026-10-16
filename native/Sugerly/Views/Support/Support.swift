@@ -544,7 +544,7 @@ struct ReportStatusCard: View {
             HStack(alignment: .top, spacing: 10) {
                 let media = report.str("target_media")
                 if !media.isEmpty, !media.lowercased().contains(".m4a"), !media.lowercased().contains(".mp4") {
-                    AnimatedThumb(url: media, fill: true, maxPixel: 200, maxFrames: 20)
+                    AnimatedThumb(url: media, fill: true, maxPixel: 200, maxFrames: 20, budget: AnimatedImages.thumbBudget)
                         .frame(width: 52, height: 52)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }

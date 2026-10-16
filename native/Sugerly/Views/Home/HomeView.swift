@@ -66,7 +66,7 @@ struct DailyRewardButton: View {
                     .padding(.horizontal, 14).frame(height: 36)
                     .background {
                         Capsule().fill(Theme.candy)
-                            .shadow(color: Theme.main.opacity(0.3), radius: 6, y: 3)
+                            .shadow(color: Theme.glow(0.3), radius: 6, y: 3)
                     }
                 }
                 .buttonStyle(BouncyStyle(scale: 0.9))
@@ -361,7 +361,7 @@ struct HomeView: View {
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
             .background(Color(hex: site.announcementColor), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .shadow(color: Color(hex: site.announcementColor).opacity(0.25), radius: 10, y: 4)
+            .shadow(color: Color(hex: site.announcementColor).softGlow(0.25), radius: 10, y: 4)
             .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
@@ -419,7 +419,7 @@ struct HomeView: View {
             }
             .padding(.horizontal, 12).frame(height: 34)
             .background(Palette.surface.opacity(0.72), in: Capsule())
-            .overlay(Capsule().strokeBorder(.white.opacity(0.6), lineWidth: 1))
+            .overlay(Capsule().strokeBorder(Palette.rim(0.6), lineWidth: 1))
             .minimumScaleFactor(0.8)
         }
         .buttonStyle(BouncyStyle(scale: 0.92))
@@ -450,7 +450,7 @@ struct HomeView: View {
                         }
                         .padding(.leading, 6).padding(.trailing, 14).frame(height: 40)
                         .background(Palette.tile(item.3), in: Capsule())
-                        .overlay(Capsule().strokeBorder(.white.opacity(0.5), lineWidth: 1))
+                        .overlay(Capsule().strokeBorder(Palette.rim(0.5), lineWidth: 1))
                     }
                     .buttonStyle(BouncyStyle(scale: 0.92))
                     .heroPop(appeared, i + 2)

@@ -398,7 +398,12 @@ struct ReelSeekBar: View {
             let shown = dragging ?? video.progress
             ZStack(alignment: .leading) {
                 Capsule().fill(.white.opacity(0.25))
-                Capsule().fill(.white).frame(width: max(0, geo.size.width * shown))
+                if video.ready || dragging != nil {
+                    Capsule().fill(.white).frame(width: max(0, geo.size.width * shown))
+                } else {
+                    // Still loading: a light sweeps along the bar.
+                    BufferingSweep()
+                }
                 if dragging != nil {
                     Circle().fill(.white).frame(width: 14, height: 14)
                         .shadow(radius: 3)

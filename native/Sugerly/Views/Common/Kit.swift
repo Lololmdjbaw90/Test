@@ -179,8 +179,8 @@ struct PinkCircleButton: View {
                 .frame(width: 34, height: 34)
                 .background {
                     Circle().fill(Theme.candy)
-                        .overlay(Circle().strokeBorder(.white.opacity(0.25), lineWidth: 1))
-                        .shadow(color: Theme.main.opacity(0.3), radius: 6, y: 3)
+                        .overlay(Circle().strokeBorder(Palette.rim(0.25), lineWidth: 1))
+                        .shadow(color: Theme.glow(0.3), radius: 6, y: 3)
                 }
                 .contentShape(Circle())
         }

@@ -154,7 +154,11 @@ actor ImagePipeline {
 enum MemoryImages {
     nonisolated(unsafe) private static let cache: NSCache<NSString, UIImage> = {
         let c = NSCache<NSString, UIImage>()
-        c.totalCostLimit = 160 * 1024 * 1024
+        c.totalCostLimit = 100 * 1024 * 1024
+        // Low on memory: let go of saved pictures so iOS doesn't close the app.
+        NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: nil) { _ in
+            c.removeAllObjects()
+        }
         return c
     }()
     static func get(_ url: String) -> UIImage? { cache.object(forKey: url as NSString) }
@@ -361,7 +365,7 @@ struct ReportSheet: View {
                 if !target.shownPreview.isEmpty {
                     HStack(alignment: .top, spacing: 12) {
                         if target.showsPicture {
-                            AnimatedThumb(url: target.media, fill: true, maxPixel: 200, maxFrames: 30)
+                            AnimatedThumb(url: target.media, fill: true, maxPixel: 200, maxFrames: 30, budget: AnimatedImages.thumbBudget)
                                 .frame(width: 56, height: 56)
                                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }

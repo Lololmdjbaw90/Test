@@ -85,6 +85,7 @@ struct AnimatedThumb: View {
     var fill = true
     var maxPixel: CGFloat = 240
     var maxFrames = 36
+    var budget = AnimatedImages.defaultBudget
     @State private var image: UIImage?
 
     var body: some View {
@@ -97,7 +98,7 @@ struct AnimatedThumb: View {
         }
         .task(id: url) {
             if AnimatedImages.looksAnimated(url) {
-                if let loaded = await AnimatedImages.load(url, maxPixel: maxPixel, maxFrames: maxFrames) { withAnimation(.easeOut(duration: 0.2)) { image = loaded } }
+                if let loaded = await AnimatedImages.load(url, maxPixel: maxPixel, maxFrames: maxFrames, budget: budget) { withAnimation(.easeOut(duration: 0.2)) { image = loaded } }
             } else if let loaded = await ImagePipeline.shared.load(url) {
                 withAnimation(.easeOut(duration: 0.2)) { image = loaded }
             }
@@ -114,7 +115,7 @@ struct MessageMedia: View {
 
     var body: some View {
         if Media.isSticker(url) {
-            AnimatedThumb(url: url, fill: false, maxPixel: 480, maxFrames: 90)
+            AnimatedThumb(url: url, fill: false, maxPixel: 280, maxFrames: 48)
                 .frame(width: 140, height: 140)
         } else {
             ArtImage(url: url, tallest: tallest, widest: widest)
@@ -232,7 +233,7 @@ struct GifPickerSheet: View {
         Button { pick(item.url) } label: {
             Color.clear
                 .aspectRatio(max(0.4, min(2.5, item.ratio)), contentMode: .fit)
-                .overlay { AnimatedThumb(url: item.preview, fill: !item.sticker, maxPixel: 320, maxFrames: 40) }
+                .overlay { AnimatedThumb(url: item.preview, fill: !item.sticker, maxPixel: 200, maxFrames: 24, budget: AnimatedImages.thumbBudget) }
                 .padding(item.sticker ? 4 : 0)
                 .background(item.sticker ? Color.clear : Palette.surface2)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -317,7 +318,7 @@ struct GifPickerSheet: View {
     private func savedCell(_ url: String, fill: Bool, onRemove: @escaping () -> Void) -> some View {
         Button { pick(url) } label: {
             Color.clear.aspectRatio(1, contentMode: .fit)
-                .overlay { AnimatedThumb(url: url, fill: fill, maxPixel: 220, maxFrames: 30) }
+                .overlay { AnimatedThumb(url: url, fill: fill, maxPixel: 200, maxFrames: 24, budget: AnimatedImages.thumbBudget) }
                 .padding(fill ? 0 : 4)
                 .background(fill ? Palette.surface2 : Color.clear)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -489,11 +490,14 @@ struct StickerMakerView: View {
                 } else {
                     PhotosPicker(selection: $item, matching: .images) {
                         VStack(spacing: 10) {
-                            Image(systemName: "photo.badge.plus").font(.system(size: 30, weight: .bold)).foregroundStyle(Theme.main)
-                            Text("Pick a photo").font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
-                            Text("We'll cut out the subject for you").font(.jakarta(12)).foregroundStyle(Palette.muted)
+                            Image(systemName: "photo.badge.plus").font(.system(size: 22, weight: .semibold)).foregroundStyle(.white)
+                                .frame(width: 56, height: 56).background(Theme.candy, in: Circle())
+                                .shadow(color: Theme.glow(0.28), radius: 8, y: 4)
+                            Text("Pick a photo").font(.jakarta(16, .bold)).foregroundStyle(Palette.text)
+                            Text("We'll cut out the subject for you").font(.jakarta(13)).foregroundStyle(Palette.muted)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(Rectangle())
                     }
                 }
                 if working {
@@ -521,14 +525,18 @@ struct StickerMakerView: View {
                     }
                 }
             }
-            Text("Caption").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
-            SugarField(placeholder: "Optional — like \"so cute\"", text: $caption)
+            FieldGroup(title: "Caption") {
+                SugarField(placeholder: "Optional — like \"so cute\"", text: $caption)
+            }
             if let note { Text(note).font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted) }
         }
         .onChange(of: item) { _, picked in
             guard let picked else { return }
             Task {
-                guard let data = try? await picked.loadTransferable(type: Data.self), let image = UIImage(data: data) else { return }
+                // Opened at a sensible size: a full-size photo took a lot of
+                // memory for a sticker that ends up 512 wide.
+                guard let data = try? await picked.loadTransferable(type: Data.self),
+                      let image = await Task.detached(priority: .userInitiated, operation: { ImagePipeline.downsample(data, maxPixel: 1600) }).value else { return }
                 source = image
                 cut = nil
                 await rebuild()
@@ -677,7 +685,7 @@ struct GifMakerView: View {
     var body: some View {
         ComposerScaffold(title: "New GIF", actionTitle: "Save", busy: saving, canPost: !rendered.isEmpty && !loading, onClose: { dismiss() }, onPost: { Task { await save() } }) {
             ZStack {
-                RoundedRectangle(cornerRadius: 26, style: .continuous).fill(Palette.surface2)
+                RoundedRectangle(cornerRadius: 26, style: .continuous).fill(Theme.pastel)
                 if let preview {
                     AnimatedImageView(image: preview, fill: false)
                         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -685,12 +693,15 @@ struct GifMakerView: View {
                 } else {
                     PhotosPicker(selection: $picked, maxSelectionCount: 30, matching: .any(of: [.images, .videos])) {
                         VStack(spacing: 10) {
-                            Image(systemName: "film.stack.fill").font(.system(size: 30, weight: .bold)).foregroundStyle(Theme.main)
-                            Text("Pick photos or a video").font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
-                            Text("Photos become frames · videos use the first 4 seconds").font(.jakarta(12)).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
+                            Image(systemName: "film.stack.fill").font(.system(size: 22, weight: .semibold)).foregroundStyle(.white)
+                                .frame(width: 56, height: 56).background(Theme.candy, in: Circle())
+                                .shadow(color: Theme.glow(0.28), radius: 8, y: 4)
+                            Text("Pick photos or a video").font(.jakarta(16, .bold)).foregroundStyle(Palette.text)
+                            Text("Photos become frames · videos use the first 4 seconds").font(.jakarta(13)).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
                         }
                         .padding(20)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(Rectangle())
                     }
                 }
                 if loading { ProgressView().tint(Theme.main).padding(16).background(Palette.surface, in: Circle()) }
@@ -715,8 +726,9 @@ struct GifMakerView: View {
                     }
                 }
             }
-            Text("Caption").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
-            SugarField(placeholder: "Optional text on the GIF", text: $caption)
+            FieldGroup(title: "Caption") {
+                SugarField(placeholder: "Optional text on the GIF", text: $caption)
+            }
             if let error { Text(error).font(.jakarta(12, .semibold)).foregroundStyle(Palette.danger) }
         }
         .onChange(of: picked) { _, items in
@@ -741,7 +753,10 @@ struct GifMakerView: View {
             speed = 0.1
         } else {
             for item in items {
-                if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) {
+                // Each photo opened straight at frame size, so 30 photos
+                // don't run the phone out of memory.
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let image = await Task.detached(priority: .userInitiated, operation: { ImagePipeline.downsample(data, maxPixel: 720) }).value {
                     out.append(StickerKit.normalized(image, maxSide: 720))
                 }
             }

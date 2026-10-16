@@ -92,7 +92,7 @@ struct EmptyCard: View {
                     Text(actionTitle).font(.jakarta(14, .bold)).foregroundStyle(.white)
                         .padding(.horizontal, 18).frame(height: 38)
                         .background {
-                            Capsule().fill(Theme.candy).shadow(color: Theme.main.opacity(0.28), radius: 6, y: 3)
+                            Capsule().fill(Theme.candy).shadow(color: Theme.glow(0.28), radius: 6, y: 3)
                         }
                 }
                 .buttonStyle(BouncyStyle(scale: 0.92))

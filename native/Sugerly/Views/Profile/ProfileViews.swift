@@ -159,7 +159,7 @@ struct ProfileContent: View {
             .frame(height: 170)
             .frame(maxWidth: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(.white.opacity(0.4), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(Palette.rim(0.4), lineWidth: 1))
             .padding(.horizontal, 12)
 
             // One ring at a time: a chosen frame replaces the plain / MimiPlus
@@ -323,7 +323,7 @@ struct ProfileContent: View {
         .padding(.horizontal, 4)
         .frame(maxWidth: .infinity)
         .background(Palette.tile(tint), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(0.5), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.rim(0.5), lineWidth: 1))
         .scaleEffect(appeared || Motion.reduced ? 1 : 0.8)
         .opacity(appeared ? 1 : 0)
         .animation(Motion.reduced ? nil : Motion.playful.delay(0.2 + Double(index) * 0.06), value: appeared)
@@ -1212,7 +1212,7 @@ struct SettingsView: View {
         }
         .frame(maxWidth: .infinity).frame(height: 54)
         .background(Palette.surface.opacity(0.7), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.white.opacity(0.6), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.rim(0.6), lineWidth: 1))
     }
 
     // MARK: groups

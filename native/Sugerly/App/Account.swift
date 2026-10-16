@@ -208,7 +208,7 @@ struct AccountView: View {
             .padding(.horizontal, 14)
             .frame(height: 44)
             .background(Palette.surface.opacity(0.72), in: Capsule())
-            .overlay(Capsule().strokeBorder(.white.opacity(0.6), lineWidth: 1))
+            .overlay(Capsule().strokeBorder(Palette.rim(0.6), lineWidth: 1))
             .contentShape(Capsule())
         }
         .buttonStyle(BouncyStyle(scale: 0.97))
@@ -227,7 +227,7 @@ struct AccountView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
         .background(Palette.surface.opacity(0.72), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.white.opacity(0.6), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.rim(0.6), lineWidth: 1))
         .accessibilityElement(children: .combine)
     }
 

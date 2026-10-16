@@ -389,7 +389,7 @@ struct CommunityView: View {
                     .padding(.horizontal, 16).frame(height: 34)
                     .background {
                         Capsule().fill(Theme.candy)
-                            .shadow(color: Theme.main.opacity(0.28), radius: 6, y: 3)
+                            .shadow(color: Theme.glow(0.28), radius: 6, y: 3)
                     }
             }
             .padding(.horizontal, 16).padding(.vertical, 14)
@@ -416,7 +416,7 @@ struct CommunityView: View {
                             .background {
                                 if on {
                                     Capsule().fill(Theme.candy)
-                                        .shadow(color: Theme.main.opacity(0.25), radius: 5, y: 2)
+                                        .shadow(color: Theme.glow(0.25), radius: 5, y: 2)
                                         .matchedGeometryEffect(id: "feed", in: feedPill)
                                 }
                             }
@@ -461,7 +461,7 @@ struct CommunityView: View {
             .padding(.horizontal, 14).frame(height: 34)
             .background {
                 if on {
-                    Capsule().fill(Theme.candy).shadow(color: Theme.main.opacity(0.25), radius: 5, y: 2)
+                    Capsule().fill(Theme.candy).shadow(color: Theme.glow(0.25), radius: 5, y: 2)
                 } else {
                     Capsule().fill(Palette.surface).overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
                 }
@@ -1310,7 +1310,7 @@ struct SendButton: View {
                 .foregroundStyle(.white)
                 .frame(width: 42, height: 42)
                 .background(Theme.candy, in: Circle())
-                .shadow(color: Theme.main.opacity(enabled ? 0.32 : 0), radius: 8, y: 3)
+                .shadow(color: Theme.glow(enabled ? 0.32 : 0), radius: 8, y: 3)
                 .scaleEffect(enabled ? 1 : 0.88)
                 .opacity(enabled ? 1 : 0.4)
         }
@@ -1433,13 +1433,15 @@ struct NewPostView: View {
             SugarField(placeholder: "Title (optional)", text: $title)
             SugarField(placeholder: "What's on your mind? Add #tags!", text: $text, lines: 4...12)
             if gif.isEmpty {
+                Text("Add to your post").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
                 PhotoPickerCard(item: $item, image: $image)
-                Button { gifs = true } label: { Label("Add a GIF or sticker", systemImage: "photo.stack.fill") }
+                Button { gifs = true } label: { Label("Add a GIF or sticker instead", systemImage: "photo.stack.fill") }
                     .buttonStyle(OutlineButtonStyle(fullWidth: true))
             } else {
                 AnimatedThumb(url: gif, fill: false, maxPixel: 600, maxFrames: 90)
                     .frame(height: 260).frame(maxWidth: .infinity)
-                    .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .background(Theme.pastel, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.rim(0.55), lineWidth: 1))
                     .overlay(alignment: .topTrailing) {
                         Button { withMotion(Motion.standard) { gif = "" } } label: {
                             Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
@@ -1510,9 +1512,10 @@ struct NewPostView: View {
     }
 }
 
-// Shared look for the "new post / artwork / track" screens: close on the
-// left, the title, and the post button on the right. While it posts, a soft
-// card says what's happening; a failed try shows why at the top.
+// Shared look for the "new post / artwork / track" screens: Cancel at the
+// top, the form in the middle and one big button at the bottom (it rides
+// above the keyboard). While it posts, a card shows each step with a bar
+// that moves along; a failed try shows why at the top.
 struct ComposerScaffold<Content: View>: View {
     let title: String
     let actionTitle: String
@@ -1531,14 +1534,20 @@ struct ComposerScaffold<Content: View>: View {
     @State private var nudge: CGFloat = 0
     @State private var shownHint: String?
     @State private var hintTask: Task<Void, Never>?
+    @State private var shown = false
+    @State private var progress = 0.0
+    @State private var creep: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) { content() }
+                VStack(alignment: .leading, spacing: 18) { content() }
                     .padding(18)
                     .frame(maxWidth: 640)
                     .frame(maxWidth: .infinity)
+                    // The form settles in as the sheet opens.
+                    .opacity(shown ? 1 : 0)
+                    .offset(y: shown || Motion.reduced ? 0 : 14)
             }
             .scrollDismissesKeyboard(.interactively)
             // What's missing, or why it didn't post, just under the top bar.
@@ -1555,6 +1564,7 @@ struct ComposerScaffold<Content: View>: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) { postBar }
             .sugarBackground()
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
@@ -1564,24 +1574,6 @@ struct ComposerScaffold<Content: View>: View {
                         .font(.jakarta(16, .semibold))
                         .disabled(busy)
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        if canPost { onPost() } else { nudgeHint() }
-                    } label: {
-                        if busy {
-                            ProgressView().tint(.white)
-                        } else {
-                            Text(actionTitle).font(.jakarta(15, .bold))
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .buttonBorderShape(.capsule)
-                    .tint(Theme.main)
-                    .disabled(busy || (!canPost && hint == nil))
-                    .opacity(canPost || busy ? 1 : 0.5)
-                    .modifier(ShakeEffect(shakes: nudge))
-                    .animation(.easeOut(duration: 0.2), value: canPost)
-                }
             }
         }
         .tint(Theme.main)
@@ -1590,25 +1582,97 @@ struct ComposerScaffold<Content: View>: View {
         .overlay {
             if busy {
                 ZStack {
-                    Color.black.opacity(0.08).ignoresSafeArea()
-                    VStack(spacing: 12) {
-                        SugarLoader(size: 16)
-                        Text(status ?? "Posting…").font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
-                            .multilineTextAlignment(.center)
-                            .contentTransition(.opacity)
-                            .animation(.easeOut(duration: 0.2), value: status)
-                    }
-                    .padding(.horizontal, 30).padding(.vertical, 24)
-                    .frame(minWidth: 200)
-                    .sugarCard(radius: 28)
-                    .transition(.scale(scale: 0.92).combined(with: .opacity))
+                    Color.black.opacity(0.18).ignoresSafeArea()
+                    uploadCard
+                        .transition(.scale(scale: 0.92).combined(with: .opacity))
                 }
                 .transition(.opacity)
             }
         }
         .animation(.easeOut(duration: 0.2), value: busy)
         .interactiveDismissDisabled(busy)
-        .onDisappear { hintTask?.cancel() }
+        .onAppear { withAnimation(Motion.pick(Motion.enter)) { shown = true } }
+        .onChange(of: busy) { _, now in now ? startProgress() : stopProgress() }
+        .onChange(of: status) { _, _ in if busy { step() } }
+        .onDisappear {
+            hintTask?.cancel()
+            creep?.cancel()
+        }
+    }
+
+    // The one big button at the bottom.
+    private var postBar: some View {
+        Button {
+            if canPost { onPost() } else { nudgeHint() }
+        } label: {
+            Text(actionTitle)
+        }
+        .buttonStyle(GradientButtonStyle(height: 52))
+        .disabled(busy || (!canPost && hint == nil))
+        .opacity(canPost || busy ? 1 : 0.5)
+        .modifier(ShakeEffect(shakes: nudge))
+        .animation(.easeOut(duration: 0.2), value: canPost)
+        .padding(.horizontal, 18)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .frame(maxWidth: 640)
+        .frame(maxWidth: .infinity)
+        .background {
+            // The page fades out under the button so nothing collides.
+            LinearGradient(colors: [Palette.bg.opacity(0), Palette.bg.opacity(0.94), Palette.bg], startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
+        }
+    }
+
+    // While posting: what's happening, and a bar that moves along with it.
+    private var uploadCard: some View {
+        VStack(spacing: 16) {
+            ZStack {
+                Circle().fill(Theme.soft).frame(width: 64, height: 64)
+                Image(systemName: progress >= 1 ? "checkmark" : "arrow.up")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(Theme.main)
+                    .contentTransition(.symbolEffect(.replace))
+                    .symbolEffect(.pulse, options: .repeating, isActive: progress < 1 && !Motion.reduced)
+            }
+            Text(status ?? "Posting…")
+                .font(.jakarta(16, .bold)).foregroundStyle(Palette.text)
+                .multilineTextAlignment(.center)
+                .contentTransition(.opacity)
+                .animation(.easeOut(duration: 0.2), value: status)
+            SugarBar(value: progress)
+                .tint(Theme.main)
+                .frame(width: 200)
+            Text("Keep Sugerly open until it's done")
+                .font(.jakarta(12)).foregroundStyle(Palette.muted)
+        }
+        .padding(.horizontal, 28).padding(.vertical, 26)
+        .frame(minWidth: 260)
+        .sugarCard(radius: 28)
+    }
+
+    // The bar jumps a little at each new step and creeps on slowly in
+    // between, but never fills up until it's really done.
+    private func startProgress() {
+        progress = 0.08
+        creep?.cancel()
+        creep = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(400))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeOut(duration: 0.4)) { progress += (0.9 - progress) * 0.04 }
+            }
+        }
+    }
+
+    private func step() {
+        withAnimation(Motion.pick(Motion.standard)) { progress = min(0.9, progress + (0.9 - progress) * 0.45) }
+    }
+
+    private func stopProgress() {
+        creep?.cancel()
+        creep = nil
+        progress = 0
     }
 
     // Not ready yet: the button gives a little shake and says what's missing.
@@ -1682,9 +1746,22 @@ struct SugarField: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(focused ? Theme.pink.opacity(0.55) : Palette.border, lineWidth: focused ? 2 : 1))
-        .shadow(color: focused ? Theme.pink.opacity(0.18) : .clear, radius: 10, y: 4)
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(focused ? Theme.main.opacity(0.5) : Palette.border, lineWidth: focused ? 1.5 : 1))
+        .shadow(color: focused ? Theme.glow(0.16) : Palette.shadow.opacity(0.5), radius: focused ? 10 : 6, y: 3)
         .animation(.snappy(duration: 0.2), value: focused)
+    }
+}
+
+// A small label over a field (or a few) on the upload pages.
+struct FieldGroup<Content: View>: View {
+    let title: String
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+            content()
+        }
     }
 }
 
@@ -1708,20 +1785,24 @@ struct PhotoPickerCard: View {
                     PhotosPicker(selection: $item, matching: .images) {
                         VStack(spacing: 10) {
                             if loading {
-                                SugarLoader(size: 16)
-                                Text("Opening your picture…").font(.jakarta(15, .bold)).foregroundStyle(Theme.pink)
+                                ProgressView()
+                                Text("Opening your picture…").font(.jakarta(14, .semibold)).foregroundStyle(Palette.text2)
                             } else {
                                 Image(systemName: "photo.badge.plus")
-                                    .font(.system(size: 30, weight: .semibold))
-                                    .foregroundStyle(Theme.gradient)
-                                Text("Add a picture").font(.jakarta(15, .bold)).foregroundStyle(Theme.pink)
-                                Text("From your photos").font(.jakarta(12)).foregroundStyle(Palette.muted)
+                                    .font(.system(size: 22, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 56, height: 56)
+                                    .background(Theme.candy, in: Circle())
+                                    .shadow(color: Theme.glow(0.28), radius: 8, y: 4)
+                                Text("Add a picture").font(.jakarta(16, .bold)).foregroundStyle(Palette.text)
+                                Text("Choose one from your photos").font(.jakarta(13)).foregroundStyle(Palette.muted)
                             }
                         }
                         .frame(maxWidth: .infinity)
-                        .frame(height: 170)
-                        .background(LinearGradient(colors: [Palette.blush.opacity(0.55), Palette.cream.opacity(0.55)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Theme.main.opacity(0.3), style: StrokeStyle(lineWidth: 1.5, dash: [7, 6])))
+                        .frame(height: 190)
+                        .background(Theme.pastel, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.rim(0.55), lineWidth: 1))
+                        .shadow(color: Palette.shadow, radius: 10, y: 4)
                         .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                     }
                     .buttonStyle(BouncyStyle(scale: 0.97))
@@ -1786,7 +1867,7 @@ struct PhotoPickerCard: View {
                         Label("Edit", systemImage: "wand.and.stars").font(.jakarta(13, .semibold)).foregroundStyle(.white)
                             .padding(.horizontal, 14).frame(height: 36)
                             .background(Theme.candy, in: Capsule())
-                            .shadow(color: Theme.main.opacity(0.28), radius: 6, y: 3)
+                            .shadow(color: Theme.glow(0.28), radius: 6, y: 3)
                     }
                     .buttonStyle(BouncyStyle())
                 }

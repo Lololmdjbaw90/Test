@@ -30,7 +30,7 @@ struct LoginView: View {
             VStack(spacing: 22) {
                 // The badge pops in, then everything else rises after it.
                 AppBadge(size: 104)
-                    .shadow(color: Theme.main.opacity(0.25), radius: 16, y: 8)
+                    .shadow(color: Theme.glow(0.25), radius: 16, y: 8)
                     .padding(.top, 40)
                     .scaleEffect(appeared || Motion.reduced ? 1 : 0.6)
                     .opacity(appeared ? 1 : 0)

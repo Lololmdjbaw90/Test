@@ -999,7 +999,7 @@ struct AdminView: View {
             }
             HStack(alignment: .top, spacing: 10) {
                 if !media.isEmpty, !media.contains(".m4a"), !media.contains(".mp4"), !media.contains(".mov"), !media.contains("audio"), !media.contains("video") {
-                    AnimatedThumb(url: r.str("target_media"), fill: true, maxPixel: 240, maxFrames: 30)
+                    AnimatedThumb(url: r.str("target_media"), fill: true, maxPixel: 240, maxFrames: 30, budget: AnimatedImages.thumbBudget)
                         .frame(width: 64, height: 64)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }

@@ -155,13 +155,23 @@ extension View {
     fileprivate func zoomDestination(_ id: String?) -> some View { modifier(ZoomDestination(id: id)) }
 }
 
+// iOS 26 and later have two bugs with this zoom: the page behind shrinks
+// and shows a black (or white) edge around the screen, and after swiping
+// back the card you came from can vanish. There pages slide in as usual.
+private enum Zoom {
+    static var works: Bool {
+        if #available(iOS 26.0, *) { return false }
+        return true
+    }
+}
+
 private struct ZoomSource: ViewModifier {
     let id: String
     @Environment(\.zoomSpace) private var space
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
-        if #available(iOS 18.0, *), let space, !reduceMotion {
+        if #available(iOS 18.0, *), Zoom.works, let space, !reduceMotion {
             content.matchedTransitionSource(id: id, in: space)
         } else {
             content
@@ -175,7 +185,7 @@ private struct ZoomDestination: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
-        if #available(iOS 18.0, *), let id, let space, !reduceMotion {
+        if #available(iOS 18.0, *), Zoom.works, let id, let space, !reduceMotion {
             content.navigationTransition(.zoom(sourceID: id, in: space))
         } else {
             content
@@ -747,8 +757,8 @@ struct CreateSheet: View {
                     .foregroundStyle(.white)
                     .frame(width: 50, height: 50)
                     .background(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(LinearGradient(colors: [.white.opacity(0.3), .clear], startPoint: .top, endPoint: .center)).padding(1.5))
-                    .shadow(color: colors[1].opacity(0.4), radius: 10, y: 5)
+                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(LinearGradient(colors: [Palette.rim(0.3), .clear], startPoint: .top, endPoint: .center)).padding(1.5))
+                    .shadow(color: colors[1].softGlow(0.4), radius: 10, y: 5)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title).font(.jakarta(16, .heavy)).foregroundStyle(Palette.text)
                     Text(sub).font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)

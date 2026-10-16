@@ -8,9 +8,21 @@ import ImageIO
 enum AnimatedImages {
     nonisolated(unsafe) private static let cache: NSCache<NSString, UIImage> = {
         let c = NSCache<NSString, UIImage>()
-        c.totalCostLimit = 120 * 1024 * 1024
+        c.totalCostLimit = 64 * 1024 * 1024
+        // Low on memory: let go of every unpacked picture so iOS doesn't
+        // close the app.
+        NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: nil) { _ in
+            c.removeAllObjects()
+        }
         return c
     }()
+
+    // The most memory one moving picture may take once unpacked. Stickers
+    // and GIFs used to unpack every frame at full size (a single sticker
+    // could take 80 MB), which crashed chats and the editor's sticker picker.
+    static let defaultBudget = 12 * 1024 * 1024
+    // Small grid cells.
+    static let thumbBudget = 3 * 1024 * 1024
 
     static func looksAnimated(_ url: String) -> Bool {
         let lower = url.lowercased()
@@ -22,43 +34,81 @@ enum AnimatedImages {
     }
 
     // maxFrames keeps grids of many GIFs light (thumbnails skip frames).
-    static func load(_ url: String, maxPixel: CGFloat = 480, maxFrames: Int = 90) async -> UIImage? {
+    static func load(_ url: String, maxPixel: CGFloat = 480, maxFrames: Int = 90, budget: Int = defaultBudget) async -> UIImage? {
         let key = "\(url)#\(Int(maxPixel))#\(maxFrames)" as NSString
         if let hit = cache.object(forKey: key) { return hit }
         guard let link = URL(string: url) else { return nil }
         var request = URLRequest(url: link)
         request.cachePolicy = .returnCacheDataElseLoad
         guard let (data, _) = try? await URLSession.shared.data(for: request) else { return nil }
-        let image = await Task.detached(priority: .userInitiated) { decode(data, maxPixel: maxPixel, maxFrames: maxFrames) }.value
-        if let image {
-            let frames = CGFloat(image.images?.count ?? 1)
-            cache.setObject(image, forKey: key, cost: Int(image.size.width * image.size.height * 4 * frames))
+        // Scrolled away meanwhile: don't unpack it.
+        guard !Task.isCancelled else { return nil }
+        // Only a couple unpack at once, so a grid of GIFs can't spike memory.
+        await DecodeGate.shared.enter()
+        if let hit = cache.object(forKey: key) {
+            await DecodeGate.shared.leave()
+            return hit
         }
+        guard !Task.isCancelled else {
+            await DecodeGate.shared.leave()
+            return nil
+        }
+        let image = await Task.detached(priority: .userInitiated) { decode(data, maxPixel: maxPixel, maxFrames: maxFrames, budget: budget) }.value
+        await DecodeGate.shared.leave()
+        if let image { cache.setObject(image, forKey: key, cost: cost(image)) }
         return image
     }
 
-    nonisolated static func decode(_ data: Data, maxPixel: CGFloat, maxFrames: Int = 90) -> UIImage? {
+    // Memory the unpacked frames take (repeated frames share one picture).
+    static func cost(_ image: UIImage) -> Int {
+        let frames = Set((image.images ?? [image]).map { ObjectIdentifier($0) }).count
+        return Int(image.size.width * image.scale * image.size.height * image.scale * 4) * max(1, frames)
+    }
+
+    nonisolated static func decode(_ data: Data, maxPixel: CGFloat, maxFrames: Int = 90, budget: Int = defaultBudget) -> UIImage? {
         guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary) else { return UIImage(data: data) }
         let count = CGImageSourceGetCount(source)
+        var pixel = maxPixel
+        var wanted = min(count, max(1, maxFrames))
+        // Fit the frames in the memory budget: shrink them a little first so
+        // the motion stays smooth, then skip frames if it still doesn't fit.
+        if count > 1, let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+           let w = (props[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue,
+           let h = (props[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue, w > 0, h > 0 {
+            let longest = max(w, h)
+            func bytes(_ side: Double) -> Double {
+                let s = min(1, side / longest)
+                return (w * s) * (h * s) * 4
+            }
+            let room = Double(max(budget, 256 * 1024))
+            if Double(wanted) * bytes(Double(pixel)) > room {
+                let smooth = Double(min(wanted, 24))
+                let side = longest * (room / (smooth * w * h * 4)).squareRoot()
+                pixel = CGFloat(max(64, min(Double(pixel), side)))
+                wanted = max(1, min(wanted, Int(room / bytes(Double(pixel)))))
+            }
+        }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+            kCGImageSourceThumbnailMaxPixelSize: pixel,
         ]
         if count <= 1 {
             guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return UIImage(data: data) }
             return UIImage(cgImage: cg)
         }
         // Long animations keep every n-th frame so memory stays small.
-        let step = max(1, Int((Double(count) / Double(max(1, maxFrames))).rounded(.up)))
+        let step = max(1, Int((Double(count) / Double(max(1, wanted))).rounded(.up)))
         var frames: [UIImage] = []
         var delays: [Double] = []
         var i = 0
         while i < count {
-            if let cg = CGImageSourceCreateThumbnailAtIndex(source, i, options as CFDictionary) {
-                frames.append(UIImage(cgImage: cg))
-                delays.append((i..<min(count, i + step)).reduce(0) { $0 + frameDelay(source, $1) })
+            autoreleasepool {
+                if let cg = CGImageSourceCreateThumbnailAtIndex(source, i, options as CFDictionary) {
+                    frames.append(UIImage(cgImage: cg))
+                    delays.append((i..<min(count, i + step)).reduce(0) { $0 + frameDelay(source, $1) })
+                }
             }
             i += step
         }
@@ -75,7 +125,10 @@ enum AnimatedImages {
     // The original file, for big GIFs played at full quality.
     nonisolated(unsafe) private static let files: NSCache<NSString, NSData> = {
         let c = NSCache<NSString, NSData>()
-        c.totalCostLimit = 60 * 1024 * 1024
+        c.totalCostLimit = 40 * 1024 * 1024
+        NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: nil) { _ in
+            c.removeAllObjects()
+        }
         return c
     }()
 
@@ -101,6 +154,29 @@ enum AnimatedImages {
         }
         guard let v = value, v > 0.011 else { return 0.1 }
         return v
+    }
+}
+
+// Lets only two moving pictures unpack at the same time.
+actor DecodeGate {
+    static let shared = DecodeGate()
+    private var free = 2
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+
+    func enter() async {
+        if free > 0 {
+            free -= 1
+            return
+        }
+        await withCheckedContinuation { waiting.append($0) }
+    }
+
+    func leave() {
+        if waiting.isEmpty {
+            free += 1
+        } else {
+            waiting.removeFirst().resume()
+        }
     }
 }
 

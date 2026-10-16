@@ -198,6 +198,11 @@ struct CameraSessionView: UIViewRepresentable {
     func updateUIView(_ view: PreviewView, context: Context) {
         if view.preview.session !== session { view.preview.session = session }
     }
+
+    // Let go of the camera as soon as the picture goes away.
+    static func dismantleUIView(_ view: PreviewView, coordinator: Void) {
+        view.preview.session = nil
+    }
 }
 
 // Where the sound goes (speaker, earpiece, headphones…), as a top button.

@@ -361,7 +361,7 @@ struct CommissionsView: View {
         }
         .frame(maxWidth: .infinity).frame(height: 52)
         .background(Palette.surface.opacity(0.72), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.white.opacity(0.6), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.rim(0.6), lineWidth: 1))
     }
 
     private var tabBar: some View {
@@ -1087,9 +1087,10 @@ struct CommissionRequestSheet: View {
                         }
                         if refs.count < 4 {
                             PhotosPicker(selection: $items, maxSelectionCount: 4 - refs.count, matching: .images) {
-                                Image(systemName: "photo.badge.plus").font(.system(size: 22)).foregroundStyle(Theme.main)
+                                Image(systemName: "photo.badge.plus").font(.system(size: 22, weight: .semibold)).foregroundStyle(Theme.main)
                                     .frame(width: 76, height: 76)
-                                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.main.opacity(0.4), style: StrokeStyle(lineWidth: 2, dash: [6, 5])))
+                                    .background(Theme.soft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.main.opacity(0.18), lineWidth: 1))
                             }
                         }
                     }
@@ -1730,9 +1731,10 @@ struct DeliverSheet: View {
                     }
                     if images.count < 8 {
                         PhotosPicker(selection: $items, maxSelectionCount: 8 - images.count, matching: .images) {
-                            Image(systemName: "photo.badge.plus").font(.system(size: 24)).foregroundStyle(Theme.main)
+                            Image(systemName: "photo.badge.plus").font(.system(size: 24, weight: .semibold)).foregroundStyle(Theme.main)
                                 .frame(height: 110).frame(maxWidth: .infinity)
-                                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.main.opacity(0.4), style: StrokeStyle(lineWidth: 2, dash: [6, 5])))
+                                .background(Theme.soft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.main.opacity(0.18), lineWidth: 1))
                         }
                     }
                 }
@@ -1890,9 +1892,10 @@ struct NewCommissionView: View {
                         }
                         if sampleCount < 6 {
                             PhotosPicker(selection: $items, maxSelectionCount: 6 - sampleCount, matching: .images) {
-                                Image(systemName: "photo.badge.plus").font(.system(size: 22)).foregroundStyle(Theme.main)
+                                Image(systemName: "photo.badge.plus").font(.system(size: 22, weight: .semibold)).foregroundStyle(Theme.main)
                                     .frame(width: 84, height: 84)
-                                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.main.opacity(0.4), style: StrokeStyle(lineWidth: 2, dash: [6, 5])))
+                                    .background(Theme.soft, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.main.opacity(0.18), lineWidth: 1))
                             }
                         }
                     }

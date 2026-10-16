@@ -306,6 +306,14 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-2.6", icon: "wand.and.stars", title: "Steadier and comfier", date: "2026-10-16T22:00:00Z", items: [
+            "Tapping the camera button quickly during a call no longer freezes the app.",
+            "Stickers and GIFs use far less memory, so chats and the editor's sticker picker don't crash any more.",
+            "Dark mode is calmer: no more white shine and pink glow on cards and buttons.",
+            "No more black flashes when opening and closing drawings, posts and reels.",
+            "Reels show a thin light along the bottom while a video loads, instead of the dots bubble.",
+            "Cleaner upload pages: a big button at the bottom, a tidy photo picker, and a progress bar while it uploads.",
+        ]),
         AppRelease(id: "ios-2.5", icon: "paintpalette.fill", title: "A pastel Sugerly", date: "2026-10-16T21:00:00Z", items: [
             "A whole new pastel look from one palette: cream, ivory, blush, pink and rose. Pick another colour and the pinks follow it.",
             "Juicier buttons, chips and cards, with soft rosy shadows and springy taps.",
@@ -448,7 +456,7 @@ struct UpdatesView: View {
                     HStack(alignment: .top, spacing: 12) {
                         Image(systemName: r.icon).font(.system(size: 19, weight: .semibold)).foregroundStyle(Theme.main).frame(width: 46, height: 46)
                             .background(Palette.tile([Palette.blushHex, Palette.creamHex, Palette.ivoryHex, Palette.pinkHex][i % 4]), in: Circle())
-                            .overlay(Circle().strokeBorder(.white.opacity(0.6), lineWidth: 1))
+                            .overlay(Circle().strokeBorder(Palette.rim(0.6), lineWidth: 1))
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
                                 Text(r.title).font(.jakarta(16, .heavy)).foregroundStyle(Palette.text)

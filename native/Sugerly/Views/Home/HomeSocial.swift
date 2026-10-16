@@ -138,7 +138,7 @@ struct HomeComposerBar: View {
                         .foregroundStyle(.white)
                         .frame(width: 38, height: 38)
                         .background(Theme.gradient, in: Circle())
-                        .shadow(color: Theme.main.opacity(0.28), radius: 6, y: 3)
+                        .shadow(color: Theme.glow(0.28), radius: 6, y: 3)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
@@ -166,7 +166,7 @@ struct HomeComposerBar: View {
                     .foregroundStyle(Theme.main)
                     .frame(width: 36, height: 36)
                     .background(Palette.tile(tint), in: Circle())
-                    .overlay(Circle().strokeBorder(.white.opacity(0.6), lineWidth: 1))
+                    .overlay(Circle().strokeBorder(Palette.rim(0.6), lineWidth: 1))
                 Text(title).font(.jakarta(11, .bold)).foregroundStyle(Palette.text2).lineLimit(1)
             }
             .frame(maxWidth: .infinity)
@@ -223,7 +223,7 @@ struct ArtPromptCard: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 14).frame(height: 36)
                             .background {
-                                Capsule().fill(Theme.candy).shadow(color: Theme.main.opacity(0.28), radius: 6, y: 3)
+                                Capsule().fill(Theme.candy).shadow(color: Theme.glow(0.28), radius: 6, y: 3)
                             }
                     }
                     Button { compose(.post) } label: {
@@ -241,7 +241,7 @@ struct ArtPromptCard: View {
                 .symbolEffect(.bounce, options: .repeat(2), value: float && !reduceMotion)
                 .frame(width: 82, height: 82)
                 .background(Palette.surface.opacity(0.75), in: Circle())
-                .overlay(Circle().strokeBorder(.white.opacity(0.7), lineWidth: 1))
+                .overlay(Circle().strokeBorder(Palette.rim(0.7), lineWidth: 1))
                 .padding(.trailing, 4)
         }
         .pastelCard(radius: 24, padding: 18)
