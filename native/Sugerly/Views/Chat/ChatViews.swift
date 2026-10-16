@@ -337,14 +337,14 @@ struct ChatListView: View {
             ForEach(list) { c in row(c) }
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: icon).font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 40, height: 40).background(Theme.gradient, in: Circle())
+                Image(systemName: icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.main)
+                    .frame(width: 40, height: 40).background(Theme.soft, in: Circle())
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.jakarta(15, .heavy)).foregroundStyle(Palette.text)
+                    Text(title).font(.jakarta(15, .semibold)).foregroundStyle(Palette.text)
                     Text(note).font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(1)
                 }
                 Spacer(minLength: 0)
-                Text("\(list.count)").font(.jakarta(12, .heavy)).foregroundStyle(.white)
+                Text("\(list.count)").font(.jakarta(12, .semibold)).foregroundStyle(.white)
                     .frame(minWidth: 22, minHeight: 22).background(Theme.main, in: Capsule())
             }
         }
@@ -376,14 +376,14 @@ struct SectionSwitch: View {
             ForEach(Array(options.enumerated()), id: \.offset) { i, option in
                 Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { selection = i } } label: {
                     Label(option.0, systemImage: option.1)
-                        .font(.jakarta(14, .bold))
-                        .foregroundStyle(selection == i ? .white : Palette.text2)
+                        .font(.jakarta(14, .semibold))
+                        .foregroundStyle(selection == i ? Palette.text : Palette.muted)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 40)
+                        .frame(height: 36)
                         .background {
                             if selection == i {
-                                Capsule().fill(Theme.gradient)
-                                    .shadow(color: Palette.shadow, radius: 8, y: 3)
+                                Capsule().fill(Palette.surface)
+                                    .shadow(color: Palette.shadow, radius: 4, y: 1)
                                     .matchedGeometryEffect(id: "pill", in: pill)
                             }
                         }
@@ -392,9 +392,8 @@ struct SectionSwitch: View {
                 .buttonStyle(BouncyStyle(scale: 0.96))
             }
         }
-        .padding(4)
-        .background(Palette.surface, in: Capsule())
-        .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
+        .padding(3)
+        .background(Palette.surface2, in: Capsule())
         .sensoryFeedback(.selection, trigger: selection)
     }
 }
@@ -411,17 +410,17 @@ struct ConversationRow: View {
         let unread = conversation.unread > 0
         let row = HStack(spacing: 14) {
             if conversation.isGroup {
-                Image(systemName: "person.3.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 56, height: 56)
-                    .background(LinearGradient(colors: [Theme.lavender, Theme.pink], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                Image(systemName: "person.3.fill").font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.main)
+                    .frame(width: 52, height: 52)
+                    .background(Theme.soft, in: Circle())
             } else {
-                Avatar(url: conversation.picture(model), name: conversation.title(model), size: 56, online: other?.isOnline ?? false, ring: unread)
+                Avatar(url: conversation.picture(model), name: conversation.title(model), size: 52, online: other?.isOnline ?? false)
             }
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text(conversation.title(model)).font(.jakarta(16, .bold)).foregroundStyle(Palette.text).lineLimit(1)
+                    Text(conversation.title(model)).font(.jakarta(16, unread ? .bold : .semibold)).foregroundStyle(Palette.text).lineLimit(1)
                     Spacer()
-                    Text(Dates.ago(conversation.last?.created ?? "")).font(.jakarta(12, unread ? .bold : .regular)).foregroundStyle(unread ? Theme.pink : Palette.muted)
+                    Text(Dates.ago(conversation.last?.created ?? "")).font(.jakarta(12, unread ? .semibold : .regular)).foregroundStyle(unread ? Theme.main : Palette.muted)
                 }
                 HStack(spacing: 5) {
                     if let last = conversation.last, last.authorEmail == me, last.kind != "call" {
@@ -435,10 +434,11 @@ struct ConversationRow: View {
                     Spacer()
                     if unread {
                         Text("\(min(conversation.unread, 99))")
-                            .font(.jakarta(11, .heavy)).foregroundStyle(.white)
-                            .padding(.horizontal, 8).frame(minHeight: 22)
-                            .background(Theme.gradient, in: Capsule())
-                            .shadow(color: Palette.shadow, radius: 6, y: 3)
+                            .font(.jakarta(11, .bold)).foregroundStyle(.white)
+                            .padding(.horizontal, 7).frame(minWidth: 20, minHeight: 20)
+                            .background(Theme.main, in: Capsule())
+                            .contentTransition(.numericText())
+                            .transition(.pop)
                     }
                 }
             }
@@ -446,9 +446,8 @@ struct ConversationRow: View {
         if card {
             row
                 .padding(12)
-                .background(unread ? Theme.pink.opacity(0.06) : Palette.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(unread ? Theme.pink.opacity(0.25) : Palette.border, lineWidth: 1))
-                .shadow(color: unread ? Theme.main.opacity(0.12) : Palette.shadow, radius: unread ? 12 : 6, y: 3)
+                .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
         } else {
             row.contentShape(Rectangle())
         }

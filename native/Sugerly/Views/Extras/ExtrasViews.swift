@@ -284,6 +284,8 @@ enum AppReleases {
             "New Wallet: see your coins, every way to earn more, and what you can spend them on.",
             "MimiPlus explained simply: what you get, what it costs in coins, and how close you are.",
             "A tidier Home and menu, with springy buttons and cards that glide in as you scroll.",
+            "A cleaner Fan art wall: simple filter chips, a calmer showcase, and a tidier artwork page with a springy like.",
+            "Cleaner chats: soft rounded bubbles, a simpler chat list and a smooth send button.",
             "Chat no longer jumps around while you send messages.",
         ]),
         AppRelease(id: "ios-2.2", icon: "key.horizontal.fill", title: "New ways to log in", date: "2026-10-10T12:00:00Z", items: [

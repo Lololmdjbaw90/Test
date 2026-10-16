@@ -175,13 +175,12 @@ struct ChatView: View {
 
     private var emptyState: some View {
         VStack(spacing: 12) {
-            Avatar(url: conversation.picture(model), name: conversation.title(model), size: 88)
-                .shadow(color: Palette.shadow, radius: 12, y: 6)
-            Text(conversation.title(model)).font(.display(28)).foregroundStyle(Palette.text)
+            Avatar(url: conversation.picture(model), name: conversation.title(model), size: 80)
+            Text(conversation.title(model)).font(.display(24)).foregroundStyle(Palette.text)
             Label("Messages here are just between you\(conversation.isGroup ? " all" : " two")", systemImage: "lock.fill")
-                .font(.jakarta(12, .semibold)).foregroundStyle(Palette.text2)
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(Color(hex: 0xFFF3C4).opacity(0.9), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)
+                .padding(.horizontal, 12).padding(.vertical, 7)
+                .background(Palette.surface2, in: Capsule())
             Label("Say hi", systemImage: "hand.wave.fill").font(.jakarta(15)).foregroundStyle(Palette.muted)
         }
         .frame(maxWidth: .infinity)
@@ -287,10 +286,10 @@ struct ChatView: View {
     private func gateCard<Actions: View>(icon: String, title: String, text: String, @ViewBuilder actions: () -> Actions) -> some View {
         VStack(spacing: 10) {
             HStack(spacing: 12) {
-                Image(systemName: icon).font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 40, height: 40).background(Theme.gradient, in: Circle())
+                Image(systemName: icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.main)
+                    .frame(width: 38, height: 38).background(Theme.soft, in: Circle())
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.jakarta(15, .heavy)).foregroundStyle(Palette.text).lineLimit(2)
+                    Text(title).font(.jakarta(15, .semibold)).foregroundStyle(Palette.text).lineLimit(2)
                     Text(text).font(.jakarta(12, .medium)).foregroundStyle(Palette.muted).lineLimit(2)
                 }
                 Spacer(minLength: 0)
@@ -342,15 +341,15 @@ struct ChatView: View {
                             .padding(.vertical, 8)
                             .padding(.leading, 10)
                         Button { gifs = true } label: {
-                            Text("GIF").font(.jakarta(11, .heavy)).foregroundStyle(Palette.text2)
+                            Text("GIF").font(.jakarta(11, .bold)).foregroundStyle(Palette.muted)
                                 .padding(.horizontal, 5).padding(.vertical, 2)
-                                .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Palette.text2, lineWidth: 1.4))
+                                .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Palette.muted, lineWidth: 1.3))
                                 .frame(width: 34, height: 36)
                         }
                         .accessibilityLabel("GIFs and stickers")
                         if draft.isEmpty {
                             Button { studio = true } label: {
-                                Image(systemName: "camera.fill").font(.system(size: 17, weight: .semibold)).foregroundStyle(Palette.text2)
+                                Image(systemName: "camera").font(.system(size: 17, weight: .medium)).foregroundStyle(Palette.muted)
                                     .frame(width: 34, height: 36)
                             }
                             .accessibilityLabel("Send a photo or video")
@@ -358,8 +357,9 @@ struct ChatView: View {
                         }
                     }
                     .padding(.horizontal, 6)
-                    .background(Palette.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+                    .background(Palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(typing ? Theme.main.opacity(0.45) : Palette.border, lineWidth: 1))
+                    .motion(Motion.fade, value: typing)
 
                     let hasText = !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     Button {
@@ -367,12 +367,12 @@ struct ChatView: View {
                         else if canCall { Task { await startRecording() } }
                         else { model.showToast(DMRules.friendsOnly, icon: "person.2.fill", error: true) }
                     } label: {
-                        Image(systemName: hasText ? "paperplane.fill" : "mic.fill")
-                            .font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
-                            .frame(width: 48, height: 48)
-                            .background(Theme.gradient, in: Circle())
-                            .shadow(color: Palette.shadow, radius: 8, y: 3)
+                        Image(systemName: hasText ? "arrow.up" : "mic.fill")
+                            .font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
+                            .frame(width: 42, height: 42)
+                            .background(Theme.main, in: Circle())
                             .contentTransition(.symbolEffect(.replace))
+                            .motion(Motion.playful, value: hasText)
                     }
                     .buttonStyle(BouncyStyle(scale: 0.88))
                     .accessibilityLabel(hasText ? "Send" : "Record a voice message")
@@ -399,7 +399,7 @@ struct ChatView: View {
         HStack(spacing: 10) {
             RoundedRectangle(cornerRadius: 2).fill(Theme.main).frame(width: 4)
             VStack(alignment: .leading, spacing: 2) {
-                Text(message.authorEmail == me ? "You" : model.name(message.authorEmail, message.authorName)).font(.jakarta(13, .heavy)).foregroundStyle(Theme.main)
+                Text(message.authorEmail == me ? "You" : model.name(message.authorEmail, message.authorName)).font(.jakarta(13, .semibold)).foregroundStyle(Theme.main)
                 Text(ChatBubble.preview(message)).font(.jakarta(13)).foregroundStyle(Palette.text2).lineLimit(1)
             }
             Spacer()
@@ -430,8 +430,8 @@ struct ChatView: View {
             .frame(maxWidth: .infinity, minHeight: 44)
             .background(Palette.surface, in: Capsule())
             Button { Task { await sendVoiceNote() } } label: {
-                Image(systemName: "paperplane.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 48, height: 48).background(Theme.gradient, in: Circle())
+                Image(systemName: "arrow.up").font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
+                    .frame(width: 42, height: 42).background(Theme.main, in: Circle())
             }
             .buttonStyle(BouncyStyle(scale: 0.88))
             .accessibilityLabel("Send voice message")
@@ -740,10 +740,8 @@ struct ChatVideoPlayer: View {
 struct DayPill: View {
     let date: Date
     var body: some View {
-        Text(label).font(.jakarta(12, .bold)).foregroundStyle(Palette.text2)
-            .padding(.horizontal, 12).padding(.vertical, 5)
-            .background(Palette.surface, in: Capsule())
-            .shadow(color: .black.opacity(0.06), radius: 2, y: 1)
+        Text(label).font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)
+            .padding(.horizontal, 10).padding(.vertical, 4)
             .frame(maxWidth: .infinity)
     }
     private var label: String {
@@ -755,26 +753,15 @@ struct DayPill: View {
     }
 }
 
-// The bubble shape with WhatsApp's little tail at the top corner.
+// A soft rounded bubble; the first in a run gets a tighter corner on the
+// sender's side so a group of bubbles reads as one thought.
 struct BubbleShape: Shape {
     var mine: Bool
     var tail: Bool
 
     func path(in r: CGRect) -> Path {
-        var p = UnevenRoundedRectangle(topLeadingRadius: tail && !mine ? 4 : 16, bottomLeadingRadius: 16,
-                                       bottomTrailingRadius: 16, topTrailingRadius: tail && mine ? 4 : 16, style: .continuous).path(in: r)
-        guard tail else { return p }
-        if mine {
-            p.move(to: CGPoint(x: r.maxX - 6, y: r.minY))
-            p.addLine(to: CGPoint(x: r.maxX + 7, y: r.minY))
-            p.addQuadCurve(to: CGPoint(x: r.maxX, y: r.minY + 12), control: CGPoint(x: r.maxX + 1, y: r.minY + 2))
-        } else {
-            p.move(to: CGPoint(x: r.minX + 6, y: r.minY))
-            p.addLine(to: CGPoint(x: r.minX - 7, y: r.minY))
-            p.addQuadCurve(to: CGPoint(x: r.minX, y: r.minY + 12), control: CGPoint(x: r.minX - 1, y: r.minY + 2))
-        }
-        p.closeSubpath()
-        return p
+        UnevenRoundedRectangle(topLeadingRadius: tail && !mine ? 6 : 18, bottomLeadingRadius: 18,
+                               bottomTrailingRadius: 18, topTrailingRadius: tail && mine ? 6 : 18, style: .continuous).path(in: r)
     }
 }
 
@@ -835,24 +822,24 @@ struct ChatBubble: View {
         let shape = BubbleShape(mine: mine, tail: tail)
         if mine {
             shape.fill(Palette.surface)
-                .overlay(shape.fill(Theme.light.opacity(scheme == .dark ? 0.3 : 0.4)))
-                .shadow(color: .black.opacity(0.07), radius: 1, y: 1)
+                .overlay(shape.fill(Theme.main.opacity(scheme == .dark ? 0.3 : 0.14)))
         } else {
-            shape.fill(Palette.surface).shadow(color: .black.opacity(0.07), radius: 1, y: 1)
+            shape.fill(Palette.surface)
+                .overlay(shape.stroke(Palette.border, lineWidth: 1))
         }
     }
 
     private var content: some View {
         VStack(alignment: .leading, spacing: 4) {
             if showName {
-                Text(model.name(message.authorEmail, message.authorName)).font(.jakarta(13, .heavy)).foregroundStyle(Self.nameColor(message.authorEmail))
+                Text(model.name(message.authorEmail, message.authorName)).font(.jakarta(13, .semibold)).foregroundStyle(Self.nameColor(message.authorEmail))
                     .padding(.horizontal, 8).padding(.top, 2)
             }
             if !message.replyPreview.isEmpty {
                 HStack(spacing: 8) {
                     RoundedRectangle(cornerRadius: 2).fill(Theme.main).frame(width: 4)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(message.replyName.isEmpty ? "Reply" : message.replyName).font(.jakarta(12, .heavy)).foregroundStyle(Theme.main)
+                        Text(message.replyName.isEmpty ? "Reply" : message.replyName).font(.jakarta(12, .semibold)).foregroundStyle(Theme.main)
                         Text(message.replyPreview).font(.jakarta(12)).foregroundStyle(Palette.text2).lineLimit(2)
                     }
                     Spacer(minLength: 0)
@@ -904,12 +891,11 @@ struct ChatBubble: View {
                 Button { onReact(emoji) } label: {
                     HStack(spacing: 3) {
                         Text(emoji).font(.system(size: 13))
-                        if people.count > 1 { Text("\(people.count)").font(.jakarta(11, .heavy)).foregroundStyle(mineToo ? Theme.main : Palette.text2) }
+                        if people.count > 1 { Text("\(people.count)").font(.jakarta(11, .semibold)).foregroundStyle(mineToo ? Theme.main : Palette.text2).contentTransition(.numericText()) }
                     }
                     .padding(.horizontal, 7).frame(height: 24)
                     .background(Palette.surface, in: Capsule())
                     .overlay(Capsule().strokeBorder(mineToo ? Theme.main.opacity(0.5) : Palette.border, lineWidth: 1))
-                    .shadow(color: .black.opacity(0.06), radius: 2, y: 1)
                 }
                 .buttonStyle(BouncyStyle(scale: 0.85))
                 .transition(.pop)
@@ -1031,8 +1017,7 @@ struct CallMessageRow: View {
                 .background(Theme.soft, in: Capsule())
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .shadow(color: .black.opacity(0.06), radius: 2, y: 1)
+        .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .frame(maxWidth: .infinity)
     }
 }
@@ -1341,7 +1326,7 @@ struct VoiceNoteBubble: View {
                             .contentTransition(.symbolEffect(.replace))
                     }
                 }
-                .frame(width: 40, height: 40).background(Theme.gradient, in: Circle())
+                .frame(width: 38, height: 38).background(Theme.main, in: Circle())
             }
             .buttonStyle(BouncyStyle(scale: 0.88))
             VStack(alignment: .leading, spacing: 4) {

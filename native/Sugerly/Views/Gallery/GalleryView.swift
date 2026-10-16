@@ -70,9 +70,11 @@ struct GalleryView: View {
                 if query.isEmpty && topArtists.count > 1 { artistsRow.stagger(appeared, 4) }
                 if !shown.isEmpty {
                     HStack(alignment: .firstTextBaseline) {
-                        Text(wallTitle).font(.jakarta(18, .heavy)).foregroundStyle(Palette.text)
+                        Text(wallTitle).font(.display(22)).foregroundStyle(Palette.text)
+                            .contentTransition(.opacity)
                         Spacer()
-                        Text("\(shown.count) pieces").font(.jakarta(12, .bold)).foregroundStyle(Palette.muted)
+                        Text("\(shown.count) pieces").font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)
+                            .contentTransition(.numericText())
                     }
                     .padding(.top, 4)
                     .stagger(appeared, 5)
@@ -149,12 +151,11 @@ struct GalleryView: View {
         HStack(spacing: 10) {
             SearchField(text: $query, placeholder: "Search fan art or artists…")
             Button { adding = true } label: {
-                Image(systemName: "plus").font(.system(size: 19, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 48, height: 48)
-                    .background(Theme.gradient, in: Circle())
-                    .shadow(color: Palette.shadow, radius: 8, y: 4)
+                Image(systemName: "plus").font(.system(size: 18, weight: .semibold)).foregroundStyle(.white)
+                    .frame(width: 46, height: 46)
+                    .background(Theme.main, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
-            .buttonStyle(BouncyStyle(scale: 0.88)).accessibilityLabel("Share fan art")
+            .buttonStyle(BouncyStyle(scale: 0.9)).accessibilityLabel("Share fan art")
         }
     }
 
@@ -181,30 +182,29 @@ struct GalleryView: View {
                                 .clipped()
                         }
                         .overlay {
-                            LinearGradient(colors: [.black.opacity(0.2), .clear, .black.opacity(0.72)], startPoint: .top, endPoint: .bottom)
+                            LinearGradient(colors: [.clear, .clear, .black.opacity(0.62)], startPoint: .top, endPoint: .bottom)
                         }
                         .overlay(alignment: .topLeading) {
-                            Label(i == 0 ? "FEATURED" : "#\(i + 1) MOST LOVED", systemImage: i == 0 ? "sparkles" : "heart.fill")
-                                .font(.jakarta(10, .heavy)).tracking(1.1).foregroundStyle(.white)
+                            Text(i == 0 ? "Featured" : "Most loved")
+                                .font(.jakarta(12, .semibold)).foregroundStyle(.white)
                                 .padding(.horizontal, 10).frame(height: 26)
-                                .background(.black.opacity(0.3), in: Capsule())
+                                .background(.ultraThinMaterial.opacity(0.9), in: Capsule())
+                                .environment(\.colorScheme, .dark)
                                 .padding(14)
                         }
                         .overlay(alignment: .bottomLeading) {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text(art.title).font(.display(28)).foregroundStyle(.white).lineLimit(2)
+                                Text(art.title).font(.display(24)).foregroundStyle(.white).lineLimit(2)
                                 HStack(spacing: 8) {
                                     Avatar(url: model.person(art.authorEmail)?.picture ?? art.authorPicture, name: art.authorName, size: 26)
-                                    Text("by \(model.name(art.authorEmail, art.authorName))").font(.jakarta(13, .bold)).foregroundStyle(.white.opacity(0.95)).lineLimit(1)
+                                    Text(model.name(art.authorEmail, art.authorName)).font(.jakarta(13, .semibold)).foregroundStyle(.white.opacity(0.95)).lineLimit(1)
                                     Spacer(minLength: 0)
-                                    Label("\(art.likeTotal)", systemImage: "heart.fill").font(.jakarta(13, .heavy)).foregroundStyle(.white)
-                                        .padding(.horizontal, 10).frame(height: 30)
-                                        .background(.white.opacity(0.22), in: Capsule())
+                                    Label("\(art.likeTotal)", systemImage: "heart.fill").font(.jakarta(13, .semibold)).foregroundStyle(.white)
                                 }
                             }
-                            .padding(18)
+                            .padding(16)
                         }
-                        .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                         .padding(.horizontal, 2)
                     }
                     .buttonStyle(BouncyStyle(scale: 0.98))
@@ -213,13 +213,12 @@ struct GalleryView: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: 400)
-            .shadow(color: Palette.shadow, radius: 12, y: 10)
+            .frame(height: 360)
             // Page dots: the current one stretches.
             HStack(spacing: 6) {
                 ForEach(list.indices, id: \.self) { i in
-                    Capsule().fill(i == featuredIndex ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.border))
-                        .frame(width: i == featuredIndex ? 22 : 7, height: 7)
+                    Capsule().fill(i == featuredIndex ? Theme.main : Palette.borderStrong)
+                        .frame(width: i == featuredIndex ? 18 : 6, height: 6)
                 }
             }
             .animation(.spring(response: 0.35, dampingFraction: 0.75), value: featuredIndex)
@@ -245,55 +244,35 @@ struct GalleryView: View {
         }
     }
 
-    // Colourful tiles to browse the wall (and one per medium).
+    // Simple chips to browse the wall (and one per medium).
     private var browseTiles: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 ForEach(Sort.allCases, id: \.self) { s in
-                    let on = sort == s && medium == "all"
-                    let look: (String, [UInt32]) = {
+                    let icon: String = {
                         switch s {
-                        case .newest: return ("clock.fill", [0xFF9EC4, 0xE0508A])
-                        case .liked: return ("heart.fill", [0xFFB38A, 0xF25F8C])
-                        case .featured: return ("star.fill", [0xFFD166, 0xF0A020])
-                        case .saved: return ("bookmark.fill", [0xB19CFF, 0x7C5CF0])
+                        case .newest: return "clock"
+                        case .liked: return "heart"
+                        case .featured: return "star"
+                        case .saved: return "bookmark"
                         }
                     }()
-                    Button { withMotion(Motion.standard) { sort = s; medium = "all" } } label: {
-                        tile(s.rawValue, look.0, look.1, on: on)
+                    Chip(title: s.rawValue, icon: icon, active: sort == s && medium == "all") {
+                        withMotion(Motion.standard) { sort = s; medium = "all" }
                     }
-                    .buttonStyle(BouncyStyle(scale: 0.93))
+                }
+                if mediums.count > 1 {
+                    Rectangle().fill(Palette.border).frame(width: 1, height: 22).padding(.horizontal, 2)
                 }
                 ForEach(mediums.dropFirst(), id: \.self) { m in
-                    Button { withMotion(Motion.standard) { medium = medium == m ? "all" : m } } label: {
-                        tile(m.capitalized, "paintbrush.pointed.fill", [0x7CBEFF, 0x2F80E0], on: medium == m)
+                    Chip(title: m.replacingOccurrences(of: "_", with: " ").capitalized, active: medium == m) {
+                        withMotion(Motion.standard) { medium = medium == m ? "all" : m }
                     }
-                    .buttonStyle(BouncyStyle(scale: 0.93))
                 }
             }
-            .padding(.vertical, 8).padding(.horizontal, 2)
+            .padding(.vertical, 2).padding(.horizontal, 2)
         }
-        // The tiles' soft shadows aren't cut off at the edges of the row.
         .scrollClipDisabled()
-    }
-
-    private func tile(_ title: String, _ icon: String, _ colors: [UInt32], on: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Image(systemName: icon).font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
-            Spacer(minLength: 0)
-            HStack(spacing: 4) {
-                Text(title).font(.jakarta(13, .heavy)).foregroundStyle(.white).lineLimit(1)
-                if on { Image(systemName: "checkmark.circle.fill").font(.system(size: 12, weight: .bold)).foregroundStyle(.white) }
-            }
-        }
-        .padding(12)
-        .frame(width: 118, height: 84, alignment: .leading)
-        .background(LinearGradient(colors: colors.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.white.opacity(on ? 0.95 : 0.25), lineWidth: on ? 2.5 : 1))
-        // A soft shadow under the tile (deeper on the one you picked), not a
-        // glow around it.
-        .shadow(color: Color(hex: colors.last ?? 0).opacity(on ? 0.32 : 0.14), radius: on ? 8 : 4, y: on ? 5 : 3)
-        .opacity(on || (sort == .newest && medium == "all") ? 1 : 0.85)
     }
 
     // Fans with the most pieces, as round portraits.
@@ -305,7 +284,7 @@ struct GalleryView: View {
 
     private var artistsRow: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Artists on the wall").font(.jakarta(16, .heavy)).foregroundStyle(Palette.text)
+            Text("Artists on the wall").font(.jakarta(16, .bold)).foregroundStyle(Palette.text)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
                     ForEach(topArtists, id: \.email) { entry in
@@ -313,8 +292,8 @@ struct GalleryView: View {
                         Button { path.append(.person(entry.email)) } label: {
                             VStack(spacing: 6) {
                                 Avatar(url: model.person(entry.email)?.picture ?? art?.authorPicture ?? "", name: model.name(entry.email, art?.authorName ?? ""), size: 58)
-                                Text(model.name(entry.email, art?.authorName ?? "")).font(.jakarta(11, .bold)).foregroundStyle(Palette.text).lineLimit(1)
-                                Text("\(entry.count) piece\(entry.count == 1 ? "" : "s")").font(.jakarta(10, .semibold)).foregroundStyle(Palette.muted)
+                                Text(model.name(entry.email, art?.authorName ?? "")).font(.jakarta(12, .medium)).foregroundStyle(Palette.text).lineLimit(1)
+                                Text("\(entry.count) piece\(entry.count == 1 ? "" : "s")").font(.jakarta(11)).foregroundStyle(Palette.muted)
                             }
                             .frame(width: 72)
                         }
@@ -419,16 +398,16 @@ struct GalleryCard: View {
         VStack(alignment: .leading, spacing: 7) {
             Button(action: onOpen) {
                 ArtImage(url: artwork.imageURL, tallest: 0.62, widest: 1.5)
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.border.opacity(0.6), lineWidth: 1))
                     .overlay(alignment: .topLeading) {
                         if artwork.featured {
-                            Image(systemName: "star.fill").font(.system(size: 11, weight: .heavy)).foregroundStyle(Color(hex: 0x3A2230))
-                                .frame(width: 26, height: 26).background(Color(hex: 0xFFE8A3), in: Circle())
+                            Image(systemName: "star.fill").font(.system(size: 10, weight: .semibold)).foregroundStyle(Palette.warning)
+                                .frame(width: 24, height: 24).background(.white.opacity(0.94), in: Circle())
                                 .padding(8)
                                 .accessibilityLabel("Staff pick")
                         }
                     }
-                    .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
             }
             .buttonStyle(BouncyStyle(scale: 0.97))
             .accessibilityLabel("Open \(artwork.title)")
@@ -441,8 +420,8 @@ struct GalleryCard: View {
                 if let pop {
                     ZStack {
                         HeartPop(size: 14, spread: 46).id(pop)
-                        Image(systemName: "heart.fill").font(.system(size: 54)).foregroundStyle(Theme.gradient)
-                            .shadow(color: Palette.shadow, radius: 12)
+                        Image(systemName: "heart.fill").font(.system(size: 50)).foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.25), radius: 10, y: 3)
                     }
                     .transition(.scale(scale: 0.8).combined(with: .opacity))
                     .allowsHitTesting(false)
@@ -450,18 +429,18 @@ struct GalleryCard: View {
             }
             .overlay(alignment: .bottomTrailing) {
                 Button(action: love) {
-                    Image(systemName: liked ? "heart.fill" : "heart").font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(liked ? Theme.main : Palette.text2)
+                    Image(systemName: liked ? "heart.fill" : "heart").font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(liked ? Theme.main : Color(hex: 0x1B1A1E))
                         .symbolEffect(.bounce, value: liked)
-                        .frame(width: 34, height: 34)
+                        .contentTransition(.symbolEffect(.replace))
+                        .frame(width: 32, height: 32)
                         .background(.white.opacity(0.94), in: Circle())
-                        .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
                 }
                 .buttonStyle(BouncyStyle(scale: 0.85))
                 .accessibilityLabel(liked ? "Unlike artwork" : "Like artwork")
                 .padding(8)
             }
-            Text(artwork.title).font(.jakarta(13, .heavy)).foregroundStyle(Palette.text).lineLimit(1)
+            Text(artwork.title).font(.jakarta(14, .semibold)).foregroundStyle(Palette.text).lineLimit(1)
                 .padding(.horizontal, 2)
             HStack(spacing: 6) {
                 Button(action: onProfile) {
@@ -473,7 +452,7 @@ struct GalleryCard: View {
                 .buttonStyle(SoftPressStyle())
                 Spacer(minLength: 0)
                 if artwork.likeTotal > 0 {
-                    Label("\(artwork.likeTotal)", systemImage: "heart.fill").font(.jakarta(10, .heavy)).foregroundStyle(Theme.main)
+                    Label("\(artwork.likeTotal)", systemImage: "heart.fill").font(.jakarta(11, .medium)).foregroundStyle(Palette.muted)
                         .labelStyle(.titleAndIcon)
                         .contentTransition(.numericText())
                 }
@@ -515,19 +494,22 @@ struct ArtworkDetailView: View {
         CommentsScreen(collection: "Comment", field: "artwork_id", targetId: artwork.id, ownerEmail: artwork.authorEmail, link: "/Gallery?art=\(artwork.id)") {
             VStack(alignment: .leading, spacing: 14) {
                 ArtImage(url: artwork.imageURL, tallest: 0.5, widest: 2.2)
-                    .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-                    .shadow(color: Palette.shadow, radius: 16, y: 8)
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Palette.border.opacity(0.6), lineWidth: 1))
                     .overlay {
-                        Image(systemName: "heart.fill").font(.system(size: 100)).foregroundStyle(Theme.gradient)
-                            .shadow(color: Palette.shadow, radius: 12)
-                            .scaleEffect(heart ? 1 : 0.3).opacity(heart ? 1 : 0)
+                        Image(systemName: "heart.fill").font(.system(size: 90)).foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.25), radius: 14, y: 4)
+                            .scaleEffect(heart ? 1 : 0.4)
+                            .rotationEffect(.degrees(heart ? 0 : -12))
+                            .offset(y: heart ? 0 : 12)
+                            .opacity(heart ? 1 : 0)
                     }
                     .onTapGesture(count: 2) { doubleTap() }
                     .onTapGesture { zoom = true }
                 // Who drew it and what it is, on one soft card.
                 VStack(alignment: .leading, spacing: 12) {
                     if !artwork.title.isEmpty {
-                        Text(artwork.title).font(.display(30)).foregroundStyle(Palette.text)
+                        Text(artwork.title).font(.display(26)).foregroundStyle(Palette.text)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     HStack(spacing: 10) {
@@ -535,7 +517,7 @@ struct ArtworkDetailView: View {
                             HStack(spacing: 10) {
                                 Avatar(url: model.person(artwork.authorEmail)?.picture ?? artwork.authorPicture, name: model.name(artwork.authorEmail, artwork.authorName), size: 42)
                                 VStack(alignment: .leading, spacing: 1) {
-                                    Text(model.name(artwork.authorEmail, artwork.authorName)).font(.jakarta(15, .bold)).foregroundStyle(Palette.text).lineLimit(1)
+                                    Text(model.name(artwork.authorEmail, artwork.authorName)).font(.jakarta(15, .semibold)).foregroundStyle(Palette.text).lineLimit(1)
                                     Text(Dates.ago(artwork.created)).font(.jakarta(12)).foregroundStyle(Palette.muted)
                                 }
                             }
@@ -557,13 +539,23 @@ struct ArtworkDetailView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .sugarCard(radius: 26, padding: 16)
-                HStack(spacing: 12) {
+                .padding(.horizontal, 4)
+                HStack(spacing: 10) {
                     Button { toggleLike() } label: {
-                        Label("\(artwork.likeTotal)", systemImage: liked ? "heart.fill" : "heart")
-                            .symbolEffect(.bounce, value: liked)
+                        HStack(spacing: 6) {
+                            Image(systemName: liked ? "heart.fill" : "heart")
+                                .symbolEffect(.bounce, value: liked)
+                                .contentTransition(.symbolEffect(.replace))
+                            Text("\(artwork.likeTotal)").monospacedDigit().contentTransition(.numericText())
+                        }
+                        .font(.jakarta(15, .semibold))
+                        .foregroundStyle(liked ? .white : Palette.text)
+                        .padding(.horizontal, 16).frame(height: 42)
+                        .background(liked ? Theme.main : Palette.surface2, in: Capsule())
+                        .motion(Motion.playful, value: liked)
                     }
-                    .buttonStyle(GradientButtonStyle(height: 44, fullWidth: false))
+                    .buttonStyle(BouncyStyle(scale: 0.92))
+                    .accessibilityLabel(liked ? "Unlike" : "Like")
                     .sensoryFeedback(.impact(weight: .light), trigger: liked)
                     MorphPill(on: saved, offTitle: "Save", onTitle: "Saved", offIcon: "bookmark", onIcon: "bookmark.fill", size: .large) { toggleSave() }
                     ShareLink(item: ReelLinks.artwork(artwork.id), subject: Text(artwork.title), message: Text("\(artwork.title) by \(artwork.authorName) on Sugerly")) { Image(systemName: "paperplane.fill") }
@@ -598,15 +590,15 @@ struct ArtworkDetailView: View {
     }
 
     private func tag(_ text: String, _ icon: String) -> some View {
-        Label(text, systemImage: icon).font(.jakarta(12, .bold)).foregroundStyle(Theme.main)
-            .padding(.horizontal, 12).padding(.vertical, 6)
-            .background(Theme.soft, in: Capsule())
+        Label(text, systemImage: icon).font(.jakarta(12, .medium)).foregroundStyle(Palette.text2)
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(Palette.surface2, in: Capsule())
     }
 
     private func doubleTap() {
         if !liked { toggleLike() }
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { heart = true }
-        Task { try? await Task.sleep(for: .milliseconds(700)); withMotion { heart = false } }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.55)) { heart = true }
+        Task { try? await Task.sleep(for: .milliseconds(650)); withAnimation(.easeIn(duration: 0.2)) { heart = false } }
     }
 
     private func toggleLike() {
