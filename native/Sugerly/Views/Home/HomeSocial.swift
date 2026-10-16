@@ -523,37 +523,38 @@ struct WeeklyChallengeCard: View {
     private func card(_ c: Challenge) -> some View {
         let entries = posts.filter { Hashtags.find($0.title + " " + $0.text).contains(c.tag) }
         let people = Array(uniqued(entries.map(\.authorEmail)).prefix(4))
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Image(systemName: c.icon).font(.system(size: 22, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 50, height: 50)
-                    .background(.white.opacity(0.22), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .symbolEffect(.bounce, options: .repeat(2), value: shine)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: c.icon).font(.system(size: 19, weight: .semibold)).foregroundStyle(Theme.main)
+                    .frame(width: 46, height: 46)
+                    .background(Theme.soft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .symbolEffect(.bounce, value: shine)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 8) {
-                        Text("WEEKLY CHALLENGE").font(.jakarta(11, .black)).tracking(1).foregroundStyle(.white.opacity(0.85))
+                        Text("Weekly challenge").font(.jakarta(13, .medium)).foregroundStyle(Palette.muted)
                         if model.me?.isAdmin == true { AdminEditChip { editing = true } }
                     }
-                    Text(c.title).font(.display(26)).foregroundStyle(.white)
+                    Text(c.title).font(.display(24)).foregroundStyle(Palette.text)
                 }
                 Spacer(minLength: 0)
-                VStack(spacing: 0) {
-                    Text("\(daysLeft)").font(.display(24)).foregroundStyle(.white)
-                    Text(daysLeft == 1 ? "day left" : "days left").font(.jakarta(10, .bold)).foregroundStyle(.white.opacity(0.85))
-                }
+                Text(daysLeft == 1 ? "1 day left" : "\(daysLeft) days left")
+                    .font(.jakarta(12, .semibold)).foregroundStyle(Theme.main)
+                    .padding(.horizontal, 10).frame(height: 26)
+                    .background(Theme.soft, in: Capsule())
             }
             HStack(spacing: 8) {
                 if !people.isEmpty {
-                    HStack(spacing: -10) {
+                    HStack(spacing: -8) {
                         ForEach(people, id: \.self) { email in
                             let p = model.person(email)
-                            Avatar(url: p?.picture ?? "", name: p?.displayName ?? "", size: 28)
-                                .overlay(Circle().strokeBorder(.white, lineWidth: 2))
+                            Avatar(url: p?.picture ?? "", name: p?.displayName ?? "", size: 26)
+                                .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
                         }
                     }
                 }
                 Text(entries.isEmpty ? "Be the first to join with #\(c.tag)" : "\(entries.count) entr\(entries.count == 1 ? "y" : "ies") · #\(c.tag)")
-                    .font(.jakarta(12, .bold)).foregroundStyle(.white.opacity(0.92)).lineLimit(1)
+                    .font(.jakarta(13)).foregroundStyle(Palette.text2).lineLimit(1)
+                    .contentTransition(.numericText())
                 Spacer(minLength: 0)
             }
             HStack(spacing: 8) {
@@ -562,28 +563,24 @@ struct WeeklyChallengeCard: View {
                     model.showToast("#\(c.tag) copied — paste it in your post", icon: "number")
                     compose()
                 } label: {
-                    Label("Join", systemImage: "plus").font(.jakarta(14, .heavy)).foregroundStyle(Theme.main)
+                    Label("Join", systemImage: "plus").font(.jakarta(14, .semibold)).foregroundStyle(.white)
                         .frame(maxWidth: .infinity).frame(height: 40)
-                        .background(.white, in: Capsule())
+                        .background(Theme.main, in: Capsule())
                 }
                 Button { showEntries(c.tag) } label: {
-                    Label(active ? "Showing entries" : "See entries", systemImage: active ? "checkmark" : "square.grid.2x2.fill")
-                        .font(.jakarta(14, .bold)).foregroundStyle(.white)
+                    Label(active ? "Showing entries" : "See entries", systemImage: active ? "checkmark" : "square.grid.2x2")
+                        .font(.jakarta(14, .semibold)).foregroundStyle(Palette.text)
                         .frame(maxWidth: .infinity).frame(height: 40)
-                        .background(.white.opacity(active ? 0.35 : 0.22), in: Capsule())
+                        .background(active ? Theme.soft : Palette.surface2, in: Capsule())
+                        .contentTransition(.symbolEffect(.replace))
                 }
             }
-            .buttonStyle(BouncyStyle(scale: 0.94))
+            .buttonStyle(BouncyStyle(scale: 0.95))
+            .motion(Motion.standard, value: active)
         }
         .padding(16)
-        .background {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(LinearGradient(colors: [Color(hex: 0xB19CFF), Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing))
-                .overlay(alignment: .topTrailing) { Circle().fill(.white.opacity(0.12)).frame(width: 140, height: 140).offset(x: 40, y: -60) }
-                .overlay { Glint(pause: 3, strength: 0.5) }
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        }
-        .shadow(color: Palette.shadow, radius: 12, y: 7)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
         .onAppear { shine = true }
     }
 }

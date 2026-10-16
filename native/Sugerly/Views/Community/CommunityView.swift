@@ -244,12 +244,12 @@ struct CommunityView: View {
     private var creatorsRow: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label("Top creators this week", systemImage: "crown.fill").font(.jakarta(16, .heavy)).foregroundStyle(Palette.text)
+                Label("Top creators this week", systemImage: "crown.fill").font(.jakarta(16, .semibold)).foregroundStyle(Palette.text)
                     .labelStyle(TintedIconLabel(tint: Color(hex: 0xF0A020)))
                 Spacer()
                 Button { path.append(.topArtists) } label: {
-                    HStack(spacing: 3) { Text("Board"); Image(systemName: "chevron.right").font(.system(size: 10, weight: .heavy)) }
-                        .font(.jakarta(13, .bold)).foregroundStyle(Theme.main)
+                    HStack(spacing: 3) { Text("See all"); Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)) }
+                        .font(.jakarta(13, .medium)).foregroundStyle(Theme.main)
                 }
             }
             ScrollView(.horizontal, showsIndicators: false) {
@@ -260,7 +260,7 @@ struct CommunityView: View {
                             VStack(spacing: 5) {
                                 Avatar(url: person?.picture ?? "", name: person?.displayName ?? "", size: 54)
                                     .padding(3)
-                                    .overlay(Circle().strokeBorder(i == 0 ? Color(hex: 0xF0A020) : i == 1 ? Color(hex: 0x94A3B8) : i == 2 ? Color(hex: 0xC2773A) : Palette.border, lineWidth: i < 3 ? 2.5 : 1.5))
+                                    .overlay(Circle().strokeBorder(i == 0 ? Color(hex: 0xF0A020) : i == 1 ? Color(hex: 0x94A3B8) : i == 2 ? Color(hex: 0xC2773A) : Palette.border, lineWidth: i < 3 ? 2 : 1))
                                     .overlay(alignment: .bottomTrailing) {
                                         PresenceBadge(online: person?.isOnline ?? false, size: 54).padding(3)
                                     }
@@ -268,11 +268,10 @@ struct CommunityView: View {
                                         if i == 0 {
                                             Image(systemName: "crown.fill").font(.system(size: 15, weight: .bold)).foregroundStyle(Color(hex: 0xF0A020))
                                                 .offset(y: -13)
-                                                .phaseAnimator(Motion.reduced ? [false] : [false, true]) { v, tilt in v.rotationEffect(.degrees(tilt ? -8 : 8)) } animation: { _ in .easeInOut(duration: 1.2) }
                                         }
                                     }
-                                Text(person?.displayName ?? "").font(.jakarta(11, .bold)).foregroundStyle(Palette.text).lineLimit(1)
-                                Label("\(entry.1)", systemImage: "heart.fill").font(.jakarta(10, .heavy)).foregroundStyle(Theme.main)
+                                Text(person?.displayName ?? "").font(.jakarta(12, .medium)).foregroundStyle(Palette.text).lineLimit(1)
+                                Label("\(entry.1)", systemImage: "heart.fill").font(.jakarta(11)).foregroundStyle(Palette.muted)
                             }
                             .frame(width: 70)
                         }
@@ -283,7 +282,7 @@ struct CommunityView: View {
             }
             .scrollClipDisabled()
         }
-        .sugarCard(radius: 26, padding: 14)
+        .sugarCard(radius: 20, padding: 14)
     }
 
     private var suggestions: [UserProfile] {

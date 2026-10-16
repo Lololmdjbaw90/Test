@@ -11,7 +11,6 @@ struct TopArtistsView: View {
     @State private var artworks: [Artwork] = []
     @State private var appeared = false
     @State private var risen = false
-    @State private var spin = false
     @State private var burst = 0
     @State private var range = 0
     @Namespace private var chip
@@ -38,46 +37,35 @@ struct TopArtistsView: View {
         let list = ranking
         let top = max(1, list.first?.likes ?? 1)
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 20) {
                 hero.stagger(appeared, 0)
-                HStack(spacing: 6) {
-                    ForEach(Array(["All time", "This week", "This month"].enumerated()), id: \.offset) { i, title in
-                        let on = range == i
-                        Button { pick(i) } label: {
-                            Text(title).font(.jakarta(13, .bold))
-                                .foregroundStyle(on ? .white : Palette.text2)
-                                .padding(.horizontal, 14).frame(height: 36)
-                                .background {
-                                    if on { Capsule().fill(LinearGradient(colors: [Self.goldLight, Self.gold], startPoint: .topLeading, endPoint: .bottomTrailing)).matchedGeometryEffect(id: "range", in: chip) }
-                                    else { Capsule().fill(Palette.surface) }
-                                }
-                                .overlay(Capsule().strokeBorder(on ? Color.clear : Palette.border, lineWidth: 1))
-                        }
-                        .buttonStyle(BouncyStyle(scale: 0.94))
-                    }
-                }
-                .sensoryFeedback(.selection, trigger: range)
-                .stagger(appeared, 1)
+                rangeSwitch.stagger(appeared, 1)
                 if list.count >= 3 { podium(Array(list.prefix(3))).stagger(appeared, 2) }
                 if let me = model.me?.email, let mine = list.firstIndex(where: { $0.email == me }) {
                     yourSpot(list, mine).stagger(appeared, 3)
                 }
-                VStack(spacing: 8) {
-                    ForEach(Array(list.enumerated()).dropFirst(list.count >= 3 ? 3 : 0), id: \.element.email) { i, entry in
-                        row(entry, rank: i + 1, top: top)
-                            .opacity(risen ? 1 : 0)
-                            .offset(x: risen ? 0 : 70)
-                            .animation(.spring(response: 0.55, dampingFraction: 0.78).delay(0.5 + Double(min(i, 14)) * 0.05), value: risen)
+                let rest = Array(list.enumerated()).dropFirst(list.count >= 3 ? 3 : 0)
+                if !rest.isEmpty {
+                    VStack(spacing: 0) {
+                        ForEach(Array(rest), id: \.element.email) { i, entry in
+                            if i > (list.count >= 3 ? 3 : 0) { Divider().padding(.leading, 96) }
+                            row(entry, rank: i + 1, top: top)
+                                .opacity(risen ? 1 : 0)
+                                .offset(y: risen ? 0 : 16)
+                                .animation(Motion.reduced ? nil : Motion.enter.delay(0.35 + Double(min(i, 14)) * 0.04), value: risen)
+                        }
                     }
+                    .sugarCard(radius: 20)
                 }
                 if list.isEmpty { EmptyCard(icon: "crown.fill", title: "No artists yet", text: "Post art to get on the board!") }
             }
             .padding(.horizontal, 16)
+            .padding(.top, 6)
             .padding(.bottom, 30)
             .sideRails(720)
         }
-        .overlay(alignment: .top) { ConfettiBurst(trigger: burst).frame(height: 520).allowsHitTesting(false) }
-        .sugarBackground()
+        .overlay(alignment: .top) { ConfettiBurst(trigger: burst).frame(height: 420).allowsHitTesting(false) }
+        .background { Palette.bg.ignoresSafeArea() }
         .navigationTitle("Top artists")
         .dropRemoved($artworks)
         .navigationBarTitleDisplayMode(.inline)
@@ -90,106 +78,114 @@ struct TopArtistsView: View {
         }
         .onAppear {
             appeared = true
-            spin = true
             if !artworks.isEmpty || !posts.posts.isEmpty { risen = true }
         }
     }
 
     private func pick(_ i: Int) {
         guard range != i else { return }
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { range = i }
+        withAnimation(Motion.pick(Motion.standard)) { range = i }
         // Replay the podium rise for the new board.
         risen = false
         Task {
             try? await Task.sleep(for: .milliseconds(60))
             risen = true
-            burst += 1
         }
     }
 
-    // A big gold crown (still: no bouncing or circling sparkles).
-    private var hero: some View {
-        HStack(spacing: 16) {
-            ZStack {
-                Circle().fill(RadialGradient(colors: [Self.goldLight.opacity(0.55), .clear], center: .center, startRadius: 4, endRadius: 52))
-                    .frame(width: 104, height: 104)
-                Image(systemName: "crown.fill")
-                    .font(.system(size: 42, weight: .bold))
-                    .foregroundStyle(LinearGradient(colors: [Self.goldLight, Self.gold], startPoint: .top, endPoint: .bottom))
-                    .shadow(color: Self.gold.opacity(0.5), radius: 10, y: 4)
-            }
-            .frame(width: 104, height: 104)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Top artists").font(.display(36))
-                    .foregroundStyle(LinearGradient(colors: [Self.gold, Theme.main], startPoint: .leading, endPoint: .trailing))
-                Text("The most loved artists on Sugerly. Post, get likes, climb the board!").font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
+    // All time / This week / This month, with a sliding pill.
+    private var rangeSwitch: some View {
+        HStack(spacing: 4) {
+            ForEach(Array(["All time", "This week", "This month"].enumerated()), id: \.offset) { i, title in
+                let on = range == i
+                Button { pick(i) } label: {
+                    Text(title).font(.jakarta(14, .semibold))
+                        .foregroundStyle(on ? Palette.text : Palette.muted)
+                        .frame(maxWidth: .infinity).frame(height: 34)
+                        .background {
+                            if on {
+                                Capsule().fill(Palette.surface)
+                                    .shadow(color: Palette.shadow, radius: 4, y: 1)
+                                    .matchedGeometryEffect(id: "range", in: chip)
+                            }
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(SoftPressStyle())
             }
         }
-        .padding(.top, 6)
+        .padding(3)
+        .background(Palette.surface2, in: Capsule())
+        .sensoryFeedback(.selection, trigger: range)
+    }
+
+    private var hero: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(Self.gold)
+                    .frame(width: 30, height: 30)
+                    .background(Self.gold.opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .symbolEffect(.bounce, value: burst)
+                Text("Top artists").font(.display(28)).foregroundStyle(Palette.text)
+            }
+            Text("The most loved artists on Sugerly. Post, get likes and climb the board.")
+                .font(.jakarta(14)).foregroundStyle(Palette.muted)
+        }
     }
 
     private func podium(_ top: [RankEntry]) -> some View {
         HStack(alignment: .bottom, spacing: 10) {
-            place(top[1], rank: 2, height: 112, color: Self.silver, delay: 0.15)
-            place(top[0], rank: 1, height: 156, color: Self.gold, delay: 0.3)
-            place(top[2], rank: 3, height: 90, color: Self.bronze, delay: 0)
+            place(top[1], rank: 2, height: 84, color: Self.silver, delay: 0.1)
+            place(top[0], rank: 1, height: 116, color: Self.gold, delay: 0.2)
+            place(top[2], rank: 3, height: 64, color: Self.bronze, delay: 0)
         }
-        .padding(.top, 30)
-        .padding(12)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+        .padding(.top, 26)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 0)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     private func place(_ entry: RankEntry, rank: Int, height: CGFloat, color: Color, delay: Double) -> some View {
         let person = model.person(entry.email)
-        let size: CGFloat = rank == 1 ? 78 : 62
+        let size: CGFloat = rank == 1 ? 72 : 58
         return Button { path.append(.person(entry.email)) } label: {
-            VStack(spacing: 8) {
-                ZStack(alignment: .top) {
-                    Avatar(url: person?.picture ?? "", name: person?.displayName ?? "", size: size)
-                        .padding(4)
-                        .overlay {
-                            if rank == 1 {
-                                Circle().strokeBorder(AngularGradient(colors: [Self.goldLight, Self.gold, .white, Self.gold, Self.goldLight], center: .center), lineWidth: 4)
-                            } else {
-                                Circle().strokeBorder(color, lineWidth: 3)
-                            }
+            VStack(spacing: 6) {
+                Avatar(url: person?.picture ?? "", name: person?.displayName ?? "", size: size)
+                    .padding(3)
+                    .overlay(Circle().strokeBorder(color, lineWidth: rank == 1 ? 2.5 : 2))
+                    .overlay(alignment: .top) {
+                        if rank == 1 {
+                            Image(systemName: "crown.fill").font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(Self.gold)
+                                .offset(y: -22)
+                                .scaleEffect(risen ? 1 : 0.2, anchor: .bottom)
+                                .animation(Motion.reduced ? nil : Motion.playful.delay(delay + 0.45), value: risen)
                         }
-                        .shadow(color: color.opacity(0.55), radius: rank == 1 ? 16 : 8)
-                    if rank == 1 {
-                        Image(systemName: "crown.fill").font(.system(size: 26, weight: .bold))
-                            .foregroundStyle(LinearGradient(colors: [Self.goldLight, Self.gold], startPoint: .top, endPoint: .bottom))
-                            .shadow(color: Self.gold.opacity(0.6), radius: 6)
-                            .offset(y: -30)
-                            .rotationEffect(.degrees(-6))
-                    } else {
-                        Text("\(rank)").font(.jakarta(12, .black)).foregroundStyle(.white)
-                            .frame(width: 24, height: 24).background(color, in: Circle())
-                            .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
-                            .offset(x: size * 0.36, y: size * 0.72)
                     }
-                }
-                .scaleEffect(risen ? 1 : 0.3)
-                .opacity(risen ? 1 : 0)
-                .animation(.spring(response: 0.5, dampingFraction: 0.55).delay(delay + 0.35), value: risen)
-                Text(person?.displayName ?? "").font(.jakarta(13, .heavy)).foregroundStyle(Palette.text).lineLimit(1)
-                VStack(spacing: 2) {
-                    Text("\(rank)").font(.display(rank == 1 ? 36 : 28)).foregroundStyle(.white)
-                    Label("\(entry.likes)", systemImage: "heart.fill").font(.jakarta(11, .heavy)).foregroundStyle(.white.opacity(0.92))
-                }
-                .opacity(risen ? 1 : 0)
-                .frame(maxWidth: .infinity)
-                .frame(height: risen ? height : 14, alignment: .top)
-                .padding(.top, 4)
-                .background {
-                    UnevenRoundedRectangle(topLeadingRadius: 18, topTrailingRadius: 18, style: .continuous)
-                        .fill(LinearGradient(colors: [color.opacity(0.85), color], startPoint: .top, endPoint: .bottom))
-                }
-                .animation(.spring(response: 0.7, dampingFraction: 0.7).delay(delay), value: risen)
+                    .scaleEffect(risen ? 1 : 0.6)
+                    .opacity(risen ? 1 : 0)
+                    .animation(Motion.reduced ? nil : Motion.playful.delay(delay + 0.25), value: risen)
+                Text(person?.displayName ?? "").font(.jakarta(13, .semibold)).foregroundStyle(Palette.text).lineLimit(1)
+                Label("\(entry.likes)", systemImage: "heart.fill").font(.jakarta(11, .medium)).foregroundStyle(Palette.muted)
+                    .contentTransition(.numericText())
+                Text("\(rank)").font(.display(rank == 1 ? 30 : 24)).foregroundStyle(color)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: risen ? height : 10, alignment: .top)
+                    .padding(.top, 8)
+                    .background {
+                        UnevenRoundedRectangle(topLeadingRadius: 14, topTrailingRadius: 14, style: .continuous)
+                            .fill(color.opacity(0.16))
+                    }
+                    .clipped()
+                    .animation(Motion.reduced ? nil : .spring(response: 0.6, dampingFraction: 0.78).delay(delay), value: risen)
             }
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(BouncyStyle(scale: 0.96))
+        .accessibilityLabel("Number \(rank), \(person?.displayName ?? ""), \(entry.likes) likes")
     }
 
     // Where you are on the board and how far to the next spot.
@@ -197,18 +193,19 @@ struct TopArtistsView: View {
         let entry = list[index]
         let gap = index > 0 ? list[index - 1].likes - entry.likes + 1 : 0
         return HStack(spacing: 12) {
-            Text("#\(index + 1)").font(.display(26)).foregroundStyle(.white)
-                .frame(width: 58, height: 58)
-                .background(Theme.gradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Your spot").font(.jakarta(15, .heavy)).foregroundStyle(Palette.text)
+            Text("#\(index + 1)").font(.display(20)).foregroundStyle(Theme.main)
+                .frame(width: 52, height: 52)
+                .background(Theme.soft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .contentTransition(.numericText())
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Your spot").font(.jakarta(15, .semibold)).foregroundStyle(Palette.text)
                 Text(index == 0 ? "You're the top artist. Keep that crown!" : "\(gap) more like\(gap == 1 ? "" : "s") to reach #\(index)")
-                    .font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
+                    .font(.jakarta(13)).foregroundStyle(Palette.muted)
             }
             Spacer()
-            Label("\(entry.likes)", systemImage: "heart.fill").font(.jakarta(14, .heavy)).foregroundStyle(Theme.main)
+            Label("\(entry.likes)", systemImage: "heart.fill").font(.jakarta(14, .semibold)).foregroundStyle(Theme.main)
         }
-        .sugarCard(radius: 22, padding: 12)
+        .sugarCard(radius: 18, padding: 12)
     }
 
     private func row(_ entry: RankEntry, rank: Int, top: Int) -> some View {
@@ -216,28 +213,29 @@ struct TopArtistsView: View {
         let share = CGFloat(entry.likes) / CGFloat(top)
         return Button { path.append(.person(entry.email)) } label: {
             HStack(spacing: 12) {
-                Text("\(rank)").font(.display(20)).foregroundStyle(rank <= 10 ? Theme.main : Palette.muted).frame(width: 30)
-                Avatar(url: person?.picture ?? "", name: person?.displayName ?? "", size: 44, online: person?.isOnline ?? false)
-                VStack(alignment: .leading, spacing: 5) {
+                Text("\(rank)").font(.jakarta(15, .semibold)).foregroundStyle(Palette.muted).monospacedDigit().frame(width: 28)
+                Avatar(url: person?.picture ?? "", name: person?.displayName ?? "", size: 40, online: person?.isOnline ?? false)
+                VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 6) {
-                        Text(person?.displayName ?? "").font(.jakarta(15, .bold)).foregroundStyle(Palette.text).lineLimit(1)
-                        Text("\(entry.works) works").font(.jakarta(11)).foregroundStyle(Palette.muted)
+                        Text(person?.displayName ?? "").font(.jakarta(15, .semibold)).foregroundStyle(Palette.text).lineLimit(1)
+                        Text("\(entry.works) works").font(.jakarta(12)).foregroundStyle(Palette.muted)
                     }
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
                             Capsule().fill(Palette.surface2)
-                            Capsule().fill(Theme.gradient).frame(width: max(6, geo.size.width * (risen ? share : 0)))
-                                .animation(.spring(response: 0.9, dampingFraction: 0.8).delay(0.6 + Double(min(rank, 14)) * 0.05), value: risen)
+                            Capsule().fill(Theme.main.opacity(0.7)).frame(width: max(6, geo.size.width * (risen ? share : 0)))
+                                .animation(Motion.reduced ? nil : Motion.drawer.delay(0.45 + Double(min(rank, 14)) * 0.04), value: risen)
                         }
                     }
-                    .frame(height: 6)
+                    .frame(height: 4)
                 }
-                Label("\(entry.likes)", systemImage: "heart.fill").font(.jakarta(13, .heavy)).foregroundStyle(Theme.main)
+                Label("\(entry.likes)", systemImage: "heart.fill").font(.jakarta(13, .medium)).foregroundStyle(Palette.muted)
                 FollowButton(email: entry.email, compact: true)
             }
-            .sugarCard(radius: 20, padding: 10)
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(BouncyStyle(scale: 0.98))
+        .buttonStyle(RowPressStyle())
     }
 }
 
@@ -286,6 +284,7 @@ enum AppReleases {
             "A tidier Home and menu, with springy buttons and cards that glide in as you scroll.",
             "A cleaner Fan art wall: simple filter chips, a calmer showcase, and a tidier artwork page with a springy like.",
             "Cleaner chats: soft rounded bubbles, a simpler chat list and a smooth send button.",
+            "A cleaner Top artists board and weekly challenge: a soft podium that rises in, a simple ranked list and a clear challenge card.",
             "Chat no longer jumps around while you send messages.",
         ]),
         AppRelease(id: "ios-2.2", icon: "key.horizontal.fill", title: "New ways to log in", date: "2026-10-10T12:00:00Z", items: [
