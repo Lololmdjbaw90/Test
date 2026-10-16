@@ -170,8 +170,26 @@ private struct GlowShapes: View {
 }
 
 extension View {
-    // Page background: warm off-white with soft accent glows.
-    func sugarBackground() -> some View { background { Palette.bg.ignoresSafeArea() } }
+    // Page background: a soft rosy page with a gentle wash of your colour
+    // at the very top that fades away as it goes down.
+    func sugarBackground() -> some View { modifier(SugarBackground()) }
+}
+
+private struct SugarBackground: ViewModifier {
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        content.background {
+            ZStack(alignment: .top) {
+                Palette.bg
+                LinearGradient(colors: [Theme.light.opacity(scheme == .dark ? 0.14 : 0.32), Theme.light.opacity(0)],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(height: 340)
+            }
+            .ignoresSafeArea()
+            .animation(Motion.fade, value: Theme.mainHex)
+        }
+    }
 }
 
 // Each pattern is drawn once (a little bigger than the screen) into a

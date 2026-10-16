@@ -116,7 +116,6 @@ struct MessageMedia: View {
         if Media.isSticker(url) {
             AnimatedThumb(url: url, fill: false, maxPixel: 480, maxFrames: 90)
                 .frame(width: 140, height: 140)
-                .shadow(color: Palette.shadow, radius: 6, y: 3)
         } else {
             ArtImage(url: url, tallest: tallest, widest: widest)
                 .frame(width: width)
@@ -234,9 +233,10 @@ struct GifPickerSheet: View {
             Color.clear
                 .aspectRatio(max(0.4, min(2.5, item.ratio)), contentMode: .fit)
                 .overlay { AnimatedThumb(url: item.preview, fill: !item.sticker, maxPixel: 320, maxFrames: 40) }
-                .padding(item.sticker ? 6 : 0)
-                .background(Palette.surface2)
+                .padding(item.sticker ? 4 : 0)
+                .background(item.sticker ? Color.clear : Palette.surface2)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(BouncyStyle(scale: 0.95))
         .contextMenu {
@@ -303,9 +303,9 @@ struct GifPickerSheet: View {
     private func makerTile(_ title: String, _ text: String, _ icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
-                Image(systemName: icon).font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 40, height: 40).background(Theme.gradient, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-                Text(title).font(.jakarta(15, .heavy)).foregroundStyle(Palette.text)
+                Image(systemName: icon).font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.main)
+                    .frame(width: 38, height: 38).background(Theme.soft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                Text(title).font(.jakarta(15, .semibold)).foregroundStyle(Palette.text)
                 Text(text).font(.jakarta(12)).foregroundStyle(Palette.muted).lineLimit(2).multilineTextAlignment(.leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -318,9 +318,10 @@ struct GifPickerSheet: View {
         Button { pick(url) } label: {
             Color.clear.aspectRatio(1, contentMode: .fit)
                 .overlay { AnimatedThumb(url: url, fill: fill, maxPixel: 220, maxFrames: 30) }
-                .padding(fill ? 0 : 6)
-                .background(Palette.surface2)
+                .padding(fill ? 0 : 4)
+                .background(fill ? Palette.surface2 : Color.clear)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(BouncyStyle(scale: 0.95))
         .contextMenu {
@@ -417,12 +418,24 @@ enum StickerKit {
         }
         return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { ctx in
             if outline {
+                // A smooth, solid white edge: the shape is stamped on rings
+                // from the outside in (so thin parts have no gaps), drawn
+                // into its own layer, then given one soft shadow.
                 let white = silhouette(picture, color: .white)
-                ctx.cgContext.setShadow(offset: CGSize(width: 0, height: 4), blur: 10, color: UIColor.black.withAlphaComponent(0.18).cgColor)
-                for i in 0..<24 {
-                    let a = Double(i) / 24 * .pi * 2
-                    white.draw(in: rect.offsetBy(dx: CGFloat(cos(a)) * edge, dy: CGFloat(sin(a)) * edge))
+                let ring = UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { _ in
+                    var radius = edge
+                    while radius > 0 {
+                        let steps = max(16, Int(radius * 4))
+                        for i in 0..<steps {
+                            let a = Double(i) / Double(steps) * .pi * 2
+                            white.draw(in: rect.offsetBy(dx: CGFloat(cos(a)) * radius, dy: CGFloat(sin(a)) * radius))
+                        }
+                        radius -= 3
+                    }
+                    white.draw(in: rect)
                 }
+                ctx.cgContext.setShadow(offset: CGSize(width: 0, height: 2), blur: 6, color: UIColor.black.withAlphaComponent(0.14).cgColor)
+                ring.draw(at: .zero)
                 ctx.cgContext.setShadow(offset: .zero, blur: 0, color: nil)
             }
             picture.draw(in: rect)

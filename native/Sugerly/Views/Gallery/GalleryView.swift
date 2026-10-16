@@ -205,6 +205,7 @@ struct GalleryView: View {
                             .padding(16)
                         }
                         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .zoomSource("art-" + art.id)
                         .padding(.horizontal, 2)
                     }
                     .buttonStyle(BouncyStyle(scale: 0.98))
@@ -399,6 +400,7 @@ struct GalleryCard: View {
             Button(action: onOpen) {
                 ArtImage(url: artwork.imageURL, tallest: 0.62, widest: 1.5)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .zoomSource("art-" + artwork.id)
                     .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.border.opacity(0.6), lineWidth: 1))
                     .overlay(alignment: .topLeading) {
                         if artwork.featured {

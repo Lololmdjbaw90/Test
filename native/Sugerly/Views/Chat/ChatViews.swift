@@ -205,7 +205,7 @@ struct ChatListView: View {
         .animation(.easeOut(duration: 0.22), value: section)
         .appearFade()
         // The page colour stays put while the list fades in.
-        .background { Palette.bg.ignoresSafeArea() }
+        .sugarBackground()
         .navigationTitle(section == 0 ? "Chats" : "Servers")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -298,7 +298,7 @@ struct ChatListView: View {
         .scrollDismissesKeyboard(.interactively)
         .frame(maxWidth: 760)
         .frame(maxWidth: .infinity)
-        .background { Palette.bg.ignoresSafeArea() }
+        .sugarBackground()
         .motion(Motion.standard, value: shown.map(\.id))
         .refreshable { await store.refresh(me: model.me?.email ?? "") }
     }

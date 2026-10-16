@@ -55,7 +55,7 @@ struct AccountView: View {
                 .frame(maxWidth: .infinity)
             }
             .scrollBounceBehavior(.basedOnSize)
-            .background { Palette.bg.ignoresSafeArea() }
+            .sugarBackground()
             .roundTitle("Menu")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

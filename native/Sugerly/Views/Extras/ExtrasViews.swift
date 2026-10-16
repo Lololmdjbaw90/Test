@@ -65,7 +65,7 @@ struct TopArtistsView: View {
             .sideRails(720)
         }
         .overlay(alignment: .top) { ConfettiBurst(trigger: burst).frame(height: 420).allowsHitTesting(false) }
-        .background { Palette.bg.ignoresSafeArea() }
+        .sugarBackground()
         .navigationTitle("Top artists")
         .dropRemoved($artworks)
         .navigationBarTitleDisplayMode(.inline)
@@ -278,7 +278,10 @@ struct AppRelease: Identifiable {
 enum AppReleases {
     static let native: [AppRelease] = [
         AppRelease(id: "ios-2.4", icon: "paintpalette.fill", title: "A calmer, cleaner Sugerly", date: "2026-10-16T12:00:00Z", items: [
-            "A whole new look: clean pages, soft colours and clearer text. Your own colour still tints everything.",
+            "A whole new look: clean, soft pink pages and clearer text. Your own colour still tints everything.",
+            "Drawings, posts and reels grow right out of the card you tap, and shrink back when you go back.",
+            "New loading animations: soft morphing dots and a rosy shimmer while things load.",
+            "Stickers have a smooth white edge and no more grey box behind them.",
             "New Wallet: see your coins, every way to earn more, and what you can spend them on.",
             "MimiPlus explained simply: what you get, what it costs in coins, and how close you are.",
             "A tidier Home and menu, with springy buttons and cards that glide in as you scroll.",

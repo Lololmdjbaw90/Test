@@ -485,6 +485,7 @@ struct HomeView: View {
         }
         .sugarCard(radius: 22)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .zoomSource("post-" + post.id)
     }
 
     // MARK: reels strip
@@ -508,6 +509,7 @@ struct HomeView: View {
                             }
                             .frame(width: 120, height: 200)
                             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                            .zoomSource("reel-" + reel.id)
                             .shadow(color: Palette.shadow, radius: 8, y: 4)
                         }
                         .buttonStyle(BouncyStyle(scale: 0.95))
@@ -554,6 +556,7 @@ struct HomeView: View {
                             }
                             .frame(width: 200, height: 260)
                             .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                            .zoomSource("art-" + art.id)
                             .shadow(color: Palette.shadow, radius: 10, y: 5)
                         }
                         .buttonStyle(BouncyStyle(scale: 0.96))

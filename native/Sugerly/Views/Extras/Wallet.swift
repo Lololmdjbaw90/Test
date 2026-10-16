@@ -81,7 +81,7 @@ struct WalletPage: View {
             .frame(maxWidth: 640)
             .frame(maxWidth: .infinity)
         }
-        .background { Palette.bg.ignoresSafeArea() }
+        .sugarBackground()
         .overlay { ConfettiBurst(trigger: burst) }
         .roundTitle("Wallet")
         .onAppear { shown = true }

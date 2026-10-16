@@ -442,7 +442,7 @@ extension View {
     func sugarList() -> some View {
         self
             .scrollContentBackground(.hidden)
-            .background { Palette.bg.ignoresSafeArea() }
+            .sugarBackground()
     }
 }
 

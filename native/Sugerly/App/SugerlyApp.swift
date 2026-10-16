@@ -33,15 +33,16 @@ struct SugerlyApp: App {
         WindowGroup {
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--polish-ui-test") {
-                PolishUITestHost().environment(model)
+                PolishUITestHost().environment(model).sugarProgress()
             } else if ProcessInfo.processInfo.arguments.contains("--shell-ui-test") {
-                ShellUITestHost().environment(model)
+                ShellUITestHost().environment(model).sugarProgress()
             } else {
-                RootView().environment(model)
+                RootView().environment(model).sugarProgress()
             }
             #else
             RootView()
                 .environment(model)
+                .sugarProgress()
             #endif
         }
     }

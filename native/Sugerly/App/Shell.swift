@@ -105,7 +105,81 @@ struct RouteView: View {
 
 extension View {
     func sugarRoutes(_ path: Binding<[Route]>) -> some View {
-        navigationDestination(for: Route.self) { route in RouteView(route: route, path: path) }
+        modifier(SugarRoutes(path: path))
+    }
+}
+
+// Each tab's pages share one namespace, so a drawing, post or reel can
+// grow out of the card you tapped and shrink back into it (iOS 18+).
+private struct SugarRoutes: ViewModifier {
+    let path: Binding<[Route]>
+    @Namespace private var zoom
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.zoomSpace, zoom)
+            .navigationDestination(for: Route.self) { route in
+                RouteView(route: route, path: path)
+                    .zoomDestination(route.zoomID)
+                    .environment(\.zoomSpace, zoom)
+            }
+    }
+}
+
+extension Route {
+    // Pages that grow out of the card you tapped.
+    var zoomID: String? {
+        switch self {
+        case .artwork(let a): return "art-" + a.id
+        case .post(let p): return "post-" + p.id
+        case .reel(let r): return "reel-" + r.id
+        default: return nil
+        }
+    }
+}
+
+private struct ZoomSpaceKey: EnvironmentKey {
+    static let defaultValue: Namespace.ID? = nil
+}
+
+extension EnvironmentValues {
+    var zoomSpace: Namespace.ID? {
+        get { self[ZoomSpaceKey.self] }
+        set { self[ZoomSpaceKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// The card a page grows out of when you open it.
+    func zoomSource(_ id: String) -> some View { modifier(ZoomSource(id: id)) }
+    fileprivate func zoomDestination(_ id: String?) -> some View { modifier(ZoomDestination(id: id)) }
+}
+
+private struct ZoomSource: ViewModifier {
+    let id: String
+    @Environment(\.zoomSpace) private var space
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *), let space, !reduceMotion {
+            content.matchedTransitionSource(id: id, in: space)
+        } else {
+            content
+        }
+    }
+}
+
+private struct ZoomDestination: ViewModifier {
+    let id: String?
+    @Environment(\.zoomSpace) private var space
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *), let id, let space, !reduceMotion {
+            content.navigationTransition(.zoom(sourceID: id, in: space))
+        } else {
+            content
+        }
     }
 }
 

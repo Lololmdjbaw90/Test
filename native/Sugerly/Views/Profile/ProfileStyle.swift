@@ -546,7 +546,7 @@ struct NitroShopView: View {
                 .frame(maxWidth: 640)
                 .frame(maxWidth: .infinity)
             }
-            .background { Palette.bg.ignoresSafeArea() }
+            .sugarBackground()
             .overlay { ConfettiBurst(trigger: burst) }
             .navigationTitle("MimiPlus")
             .navigationBarTitleDisplayMode(.inline)

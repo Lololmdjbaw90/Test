@@ -28,19 +28,37 @@ extension Color {
 }
 
 enum Palette {
-    // Quiet neutrals with the faintest warm tint; the accent does the talking.
-    static let bg = Color.dynamic(light: 0xF8F7F8, dark: 0x0F0F11)
-    static let surface = Color.dynamic(light: 0xFFFFFF, dark: 0x19191C)
-    static let surface2 = Color.dynamic(light: 0xF1F0F2, dark: 0x232327)
-    static let border = Color.dynamic(light: 0xE9E7EA, dark: 0x2B2B30)
-    static let borderStrong = Color.dynamic(light: 0xDAD7DC, dark: 0x3A3A41)
-    static let text = Color.dynamic(light: 0x1B1A1E, dark: 0xF3F2F5)
-    static let text2 = Color.dynamic(light: 0x58555E, dark: 0xB6B3BC)
-    static let muted = Color.dynamic(light: 0x8E8A94, dark: 0x7E7B85)
+    // Soft neutrals with a gentle wash of your accent (pink by default), so
+    // the whole app feels rosy without shouting. Cards stay near-white so
+    // pictures and text read cleanly.
+    static var bg: Color { tinted(light: 0xF8F6F7, dark: 0x0F0E10, 0.075, 0.07) }
+    static var surface: Color { tinted(light: 0xFFFFFF, dark: 0x19181B, 0.012, 0.045) }
+    static var surface2: Color { tinted(light: 0xF2F0F1, dark: 0x232126, 0.09, 0.07) }
+    static var border: Color { tinted(light: 0xEAE7E9, dark: 0x2C2A2F, 0.14, 0.09) }
+    static var borderStrong: Color { tinted(light: 0xDBD7DA, dark: 0x3B383F, 0.16, 0.1) }
+    static var text: Color { tinted(light: 0x1C1A1D, dark: 0xF4F2F4, 0.03, 0.03) }
+    static var text2: Color { tinted(light: 0x58545A, dark: 0xB8B3BA, 0.06, 0.05) }
+    static var muted: Color { tinted(light: 0x8E8990, dark: 0x807B83, 0.08, 0.06) }
     static let danger = Color(hex: 0xE5484D)
     static let success = Color(hex: 0x2E9E6B)
     static let warning = Color(hex: 0xE09A1A)
-    static let shadow = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor.black.withAlphaComponent(0.4) : UIColor.black.withAlphaComponent(0.05) })
+    static let shadow = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor.black.withAlphaComponent(0.4) : UIColor(hex: 0x6B2A45, alpha: 0.07) })
+
+    // Reading the accent here makes every view that uses a page colour
+    // redraw when you pick another accent.
+    private static func tinted(light: UInt32, dark: UInt32, _ lightAmount: Double, _ darkAmount: Double) -> Color {
+        let accent = Theme.mainHex
+        let l = mix(light, accent, lightAmount), d = mix(dark, accent, darkAmount)
+        return Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: d) : UIColor(hex: l) })
+    }
+
+    static func mix(_ a: UInt32, _ b: UInt32, _ t: Double) -> UInt32 {
+        func ch(_ v: UInt32, _ shift: UInt32) -> Double { Double((v >> shift) & 0xFF) }
+        func blend(_ shift: UInt32) -> UInt32 {
+            UInt32(max(0, min(255, (ch(a, shift) * (1 - t) + ch(b, shift) * t).rounded()))) << shift
+        }
+        return blend(16) | blend(8) | blend(0)
+    }
 }
 
 // The five accent colours you can pick in Settings (the logo follows along).
@@ -50,7 +68,7 @@ enum Accent: String, CaseIterable, Identifiable {
     var label: String { rawValue.capitalized }
     private var rgb: (UInt32, UInt32) {
         switch self {
-        case .rose: return (0xD8668D, 0xF2B5C9)
+        case .rose: return (0xE0679A, 0xF7BDD3)
         case .lavender: return (0x7F67E0, 0xC3B6F5)
         case .mint: return (0x2A9C7C, 0x9EDCC8)
         case .peach: return (0xE07650, 0xF6C2AC)
@@ -59,6 +77,7 @@ enum Accent: String, CaseIterable, Identifiable {
     }
     var main: Color { Color(hex: rgb.0) }
     var light: Color { Color(hex: rgb.1) }
+    var mainHex: UInt32 { rgb.0 }
     // Flat: the accent itself (kept as a gradient type so every place that
     // used one still works).
     var gradient: LinearGradient { LinearGradient(colors: [main, main], startPoint: .top, endPoint: .bottom) }
@@ -95,14 +114,15 @@ enum Theme {
         }
     }
     static var main: Color { custom.map { Color(hex: $0.main) } ?? accent.main }
+    static var mainHex: UInt32 { custom?.main ?? accent.mainHex }
     static var light: Color { custom.map { Color(hex: $0.light) } ?? accent.light }
     static var pink: Color { main }
     static var rose: Color { main }
-    static var soft: Color { main.opacity(0.1) }
+    static var soft: Color { main.opacity(0.12) }
     static var gradient: LinearGradient { LinearGradient(colors: [main, main], startPoint: .top, endPoint: .bottom) }
     static let lavender = Color(hex: 0xB19CFF)
-    static let background = Palette.bg
-    static let card = Palette.surface
+    static var background: Color { Palette.bg }
+    static var card: Color { Palette.surface }
     // Mimi and the logo: with a custom colour they use the rose drawings,
     // turned to the custom hue; otherwise the drawing for your accent.
     static var logoName: String { custom == nil ? accent.logo : Accent.rose.logo }
@@ -515,26 +535,31 @@ struct SparkleBurst: View {
 // A soft light sweeping across a placeholder, like the website's .skeleton.
 struct Shimmer: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var scheme
+    @State private var sweep = false
 
     func body(content: Content) -> some View {
-        // With Reduce Motion on, the placeholder stays still.
-        if reduceMotion { content } else { sweeping(content) }
-    }
-
-    private func sweeping(_ content: Content) -> some View {
-        content.overlay {
-            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
-                let t = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.4) / 1.4
-                GeometryReader { geo in
-                    LinearGradient(colors: [.clear, .white.opacity(0.45), .clear], startPoint: .leading, endPoint: .trailing)
-                        .frame(width: geo.size.width * 0.6)
-                        .offset(x: -geo.size.width * 0.6 + CGFloat(t) * geo.size.width * 1.6)
+        // With Reduce Motion on, the placeholder gently breathes instead.
+        if reduceMotion {
+            content
+        } else {
+            content
+                .overlay {
+                    // A soft rosy light glides across, moved by the graphics
+                    // chip (no redrawing every frame).
+                    GeometryReader { geo in
+                        LinearGradient(colors: [.clear, Theme.light.opacity(scheme == .dark ? 0.16 : 0.42), .white.opacity(scheme == .dark ? 0.06 : 0.5), Theme.light.opacity(scheme == .dark ? 0.16 : 0.42), .clear],
+                                       startPoint: .leading, endPoint: .trailing)
+                            .frame(width: geo.size.width * 0.7)
+                            .offset(x: sweep ? geo.size.width * 1.1 : -geo.size.width * 0.8)
+                    }
+                    .allowsHitTesting(false)
                 }
-            }
-            .blendMode(.plusLighter)
-            .allowsHitTesting(false)
+                .clipped()
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 1.25).repeatForever(autoreverses: false)) { sweep = true }
+                }
         }
-        .clipped()
     }
 }
 
