@@ -213,6 +213,9 @@ struct WelcomeSetupView: View {
                         .frame(width: 176, height: 176)
                         .scaleEffect(pulse ? 1.08 : 1)
                         .opacity(pulse ? 0.2 : 0.8)
+                        // Only the ring breathes: an endless animation started
+                        // with withAnimation would drag the whole page with it.
+                        .animation(Motion.reduced ? nil : .easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: pulse)
                     Group {
                         if let picture {
                             Image(uiImage: picture).resizable().scaledToFill()
@@ -235,7 +238,7 @@ struct WelcomeSetupView: View {
             }
             .buttonStyle(BouncyStyle(scale: 0.95))
             .accessibilityLabel("Choose a photo")
-            .onAppear { if !Motion.reduced { withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { pulse = true } } }
+            .onAppear { if !Motion.reduced { pulse = true } }
             .stagger(appeared, 1)
 
             Button(picture == nil ? "Choose a photo" : "Choose another") { pickingPhoto = true }

@@ -696,34 +696,107 @@ struct SparkleBurst: View {
     }
 }
 
+// Collecting a reward: a warm glow swells, then little coins and sparkles
+// fly out and fade. Drawn from the clock each frame (so it can't get stuck
+// halfway or be skipped by other animations) and played again whenever
+// `trigger` changes.
+struct RewardBurst: View {
+    let trigger: Int
+    @State private var start: Date?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(paused: start == nil)) { timeline in
+            Canvas { context, size in
+                guard let start else { return }
+                let t = timeline.date.timeIntervalSince(start)
+                guard t >= 0, t < 1.3 else { return }
+                let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                let reach = min(size.width, size.height) / 2
+
+                var glow = context
+                glow.opacity = 0.55 * max(0, 1 - t / 0.9)
+                let r = reach * CGFloat(0.35 + 0.45 * min(1, t / 0.25))
+                glow.fill(Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)),
+                          with: .radialGradient(Gradient(colors: [Palette.gold.opacity(0.7), Theme.light.opacity(0.35), .clear]),
+                                                center: center, startRadius: 0, endRadius: r))
+
+                let pieces = 14
+                let flight = 1 - pow(1 - min(1, t), 3)
+                for i in 0..<pieces {
+                    let seed = Double(i) * 12.9898
+                    let jitter = abs(sin(seed) * 43758.5453).truncatingRemainder(dividingBy: 1)
+                    let angle = Double(i) / Double(pieces) * 2 * .pi + jitter * 0.5
+                    let distance = reach * CGFloat(0.3 + (0.55 + 0.25 * jitter) * flight)
+                    var piece = context
+                    piece.opacity = max(0, 1 - max(0, t - 0.45) / 0.6)
+                    piece.translateBy(x: center.x + CGFloat(cos(angle)) * distance,
+                                      y: center.y + CGFloat(sin(angle)) * distance - CGFloat(10 * flight))
+                    let dot = CGFloat((i % 3 == 0 ? 5.0 : 3.6) * (1 - 0.3 * flight))
+                    if i % 3 == 0 {
+                        // A little gold coin with a shine.
+                        piece.fill(Path(ellipseIn: CGRect(x: -dot, y: -dot, width: dot * 2, height: dot * 2)), with: .color(Palette.gold))
+                        piece.fill(Path(ellipseIn: CGRect(x: -dot * 0.45, y: -dot * 0.6, width: dot * 0.7, height: dot * 0.5)), with: .color(.white.opacity(0.7)))
+                    } else {
+                        piece.rotate(by: .radians(t * 3 + jitter * 6))
+                        piece.fill(Self.sparkle(dot * 1.5), with: .color(i % 2 == 0 ? Theme.main : Theme.light))
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .task(id: trigger) {
+            guard trigger > 0, !reduceMotion else { return }
+            start = .now
+            try? await Task.sleep(for: .seconds(1.4))
+            start = nil
+        }
+    }
+
+    // A four-pointed sparkle.
+    private static func sparkle(_ r: CGFloat) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: 0, y: -r))
+        p.addQuadCurve(to: CGPoint(x: r, y: 0), control: .zero)
+        p.addQuadCurve(to: CGPoint(x: 0, y: r), control: .zero)
+        p.addQuadCurve(to: CGPoint(x: -r, y: 0), control: .zero)
+        p.addQuadCurve(to: CGPoint(x: 0, y: -r), control: .zero)
+        return p
+    }
+}
+
 // MARK: - Loading placeholders
 
 // A soft light sweeping across a placeholder, like the website's .skeleton.
 struct Shimmer: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var scheme
-    @State private var sweep = false
+    @State private var start = Date.now
 
     func body(content: Content) -> some View {
-        // With Reduce Motion on, the placeholder gently breathes instead.
+        // With Reduce Motion on, the placeholder simply stays still.
         if reduceMotion {
             content
         } else {
             content
                 .overlay {
-                    // A soft rosy light glides across, moved by the graphics
-                    // chip (no redrawing every frame).
-                    GeometryReader { geo in
-                        LinearGradient(colors: [.clear, Theme.light.opacity(scheme == .dark ? 0.16 : 0.42), .white.opacity(scheme == .dark ? 0.06 : 0.5), Theme.light.opacity(scheme == .dark ? 0.16 : 0.42), .clear],
-                                       startPoint: .leading, endPoint: .trailing)
-                            .frame(width: geo.size.width * 0.7)
-                            .offset(x: sweep ? geo.size.width * 1.1 : -geo.size.width * 0.8)
+                    // A soft rosy light glides across the placeholder's own
+                    // shapes (never the gaps between them). Its place is worked
+                    // out from the clock, so it can't set anything else drifting
+                    // the way an endless animation can.
+                    TimelineView(.animation(minimumInterval: 1 / 30)) { context in
+                        GeometryReader { geo in
+                            let t = (context.date.timeIntervalSince(start) / 1.25).truncatingRemainder(dividingBy: 1)
+                            let eased = t < 0.5 ? 2 * t * t : 1 - pow(2 - 2 * t, 2) / 2
+                            LinearGradient(colors: [.clear, Theme.light.opacity(scheme == .dark ? 0.16 : 0.42), .white.opacity(scheme == .dark ? 0.06 : 0.5), Theme.light.opacity(scheme == .dark ? 0.16 : 0.42), .clear],
+                                           startPoint: .leading, endPoint: .trailing)
+                                .frame(width: geo.size.width * 0.7)
+                                .offset(x: geo.size.width * (1.9 * eased - 0.8))
+                        }
                     }
+                    .mask { content }
                     .allowsHitTesting(false)
-                }
-                .clipped()
-                .onAppear {
-                    withAnimation(.easeInOut(duration: 1.25).repeatForever(autoreverses: false)) { sweep = true }
                 }
         }
     }

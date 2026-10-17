@@ -306,6 +306,14 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-2.9", icon: "person.crop.circle", title: "New profiles", date: "2026-10-17T15:00:00Z", items: [
+            "A fresh look for profiles: your picture in the middle, your name, level and status under it, your numbers in one card, and Posts, Art, Reels and Saved tabs that always fit on the screen.",
+            "No more rings or frames around profile pictures, on profiles or in the menu button.",
+            "The menu, search and bell buttons at the top stay light in light mode, even over dark pictures.",
+            "Collecting your daily reward bursts with little coins and sparkles.",
+            "Reels: the loading line stays in its place at the bottom instead of floating around.",
+            "Video calls fill the screen like FaceTime. Double-tap to see the whole picture.",
+        ]),
         AppRelease(id: "ios-2.8", icon: "server.rack", title: "A new home for Sugerly's server", date: "2026-10-17T12:00:00Z", items: [
             "Login codes, card payments and calls now go to Sugerly's new server, with the old one as a backup, so they keep working even if one of them is down.",
         ]),

@@ -373,12 +373,23 @@ struct SectionSwitch: View {
     @Namespace private var pill
 
     var body: some View {
+        // With big text or a narrow screen the icons go, so the names fit.
+        ViewThatFits(in: .horizontal) {
+            row(icons: true)
+            row(icons: false)
+        }
+        .sensoryFeedback(.selection, trigger: selection)
+    }
+
+    private func row(icons: Bool) -> some View {
         HStack(spacing: 4) {
             ForEach(Array(options.enumerated()), id: \.offset) { i, option in
                 Button { withAnimation(Motion.pick(.spring(response: 0.38, dampingFraction: 0.78))) { selection = i } } label: {
                     Label(option.0, systemImage: option.1)
+                        .labelStyle(SwitchLabel(icon: icons))
                         .font(.jakarta(14, .semibold))
                         .foregroundStyle(selection == i ? Theme.main : Palette.muted)
+                        .padding(.horizontal, 8)
                         .frame(maxWidth: .infinity)
                         .frame(height: 36)
                         .background {
@@ -395,7 +406,17 @@ struct SectionSwitch: View {
         }
         .padding(3)
         .background(Palette.surface2, in: Capsule())
-        .sensoryFeedback(.selection, trigger: selection)
+    }
+}
+
+// A section's name, with or without its icon.
+private struct SwitchLabel: LabelStyle {
+    let icon: Bool
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 6) {
+            if icon { configuration.icon }
+            configuration.title.lineLimit(1)
+        }
     }
 }
 

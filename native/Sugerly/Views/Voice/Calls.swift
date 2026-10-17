@@ -520,8 +520,8 @@ struct CallScreen: View {
     @Environment(VoiceEngine.self) private var voice
     @State private var ringing = false
     @State private var ending = false
-    // The big picture shows all of it by default; double-tap to fill.
-    @State private var stageFill = false
+    // Cameras fill the screen like FaceTime; double-tap shows the whole picture.
+    @State private var stageFill = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var me: String { model.me?.email ?? "" }

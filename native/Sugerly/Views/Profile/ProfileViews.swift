@@ -96,6 +96,7 @@ struct ProfileContent: View {
     @State private var appeared = false
     @State private var statusSheet = false
     @State private var loadingMore = false
+    @Namespace private var tabLine
 
     private var following: Bool { model.me?.following.contains(person.email) ?? false }
     // Counted by the database, so it's right however many people there are.
@@ -106,18 +107,21 @@ struct ProfileContent: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                banner.stagger(appeared, 0)
-                VStack(alignment: .leading, spacing: 14) {
+            VStack(spacing: 0) {
+                header.stagger(appeared, 0)
+                VStack(spacing: 16) {
                     identity.stagger(appeared, 1)
-                    if !person.bio.isEmpty { Text(person.bio).font(.jakarta(15)).foregroundStyle(Palette.text).stagger(appeared, 2) }
+                    stats.stagger(appeared, 2)
                     buttons.stagger(appeared, 2)
-                    stats.stagger(appeared, 3)
-                    if isMe { XPBar(info: LevelInfo(xp: person.xp)).sugarCard(radius: 22, padding: 14).stagger(appeared, 4) }
-                    tabs.stagger(appeared, 4)
-                    grid.stagger(appeared, 5)
+                    if isMe { XPBar(info: LevelInfo(xp: person.xp)).sugarCard(radius: 22, padding: 14).stagger(appeared, 3) }
+                    VStack(spacing: 12) {
+                        tabs
+                        grid
+                    }
+                    .stagger(appeared, 4)
                 }
                 .padding(.horizontal, 16)
+                .padding(.top, 10)
             }
             .padding(.bottom, 30)
             .sideRails(720)
@@ -142,8 +146,10 @@ struct ProfileContent: View {
         .sheet(isPresented: $statusSheet) { StatusSheet().presentationCornerRadius(30) }
     }
 
-    private var banner: some View {
-        ZStack(alignment: .bottomLeading) {
+    // The banner, with the picture in the middle half over its bottom edge.
+    // No ring or frame around the picture, just a soft shadow.
+    private var header: some View {
+        VStack(spacing: 0) {
             ZStack {
                 if person.banner.isEmpty {
                     bannerGradient
@@ -155,33 +161,23 @@ struct ProfileContent: View {
                     ProfileEffectLayer(effect: person.profileEffect, color: person.effectColor, amount: person.effectAmount,
                                        paused: settings || editing || shop || statusSheet)
                 }
+                // A little shade at the bottom so the picture stands out.
+                LinearGradient(colors: [.clear, .black.opacity(0.16)], startPoint: .center, endPoint: .bottom)
+                    .allowsHitTesting(false)
             }
-            .frame(height: 170)
+            .frame(height: 176)
             .frame(maxWidth: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(Palette.rim(0.4), lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
             .padding(.horizontal, 12)
+            .padding(.top, 8)
 
-            // One ring at a time: a chosen frame replaces the plain / MimiPlus
-            // ring (both at once used to draw over each other).
-            let framed = !person.avatarFrame.isEmpty && (person.isNitro || !AvatarFrame.isPremium(person.avatarFrame))
-            Avatar(url: person.picture, name: person.displayName, size: 104, ring: !framed && !person.isNitro, nitro: !framed && person.isNitro)
-                .padding(4)
-                .background(Circle().fill(Palette.bg).shadow(color: (accent ?? Theme.pink).opacity(0.3), radius: 16, y: 8))
-                .overlay {
-                    if framed { AvatarFrameView(frame: person.avatarFrame, color: accent ?? Theme.main, size: 104) }
-                }
-                // The status dot goes on top of the frame, not under it.
+            Avatar(url: person.picture, name: person.displayName, size: 112)
+                .shadow(color: .black.opacity(0.22), radius: 16, y: 8)
                 .overlay(alignment: .bottomTrailing) {
-                    PresenceBadge(presence: isMe ? (Presence(rawValue: person.presence) ?? .online) : person.presenceNow, size: 104)
-                        .padding(4)
+                    PresenceBadge(presence: isMe ? (Presence(rawValue: person.presence) ?? .online) : person.presenceNow, size: 112)
                 }
-                .offset(x: 26, y: 56)
+                .padding(.top, -56)
         }
-        .padding(.top, 8)
-        // Room for the picture that hangs below the banner, so it never
-        // covers the name.
-        .padding(.bottom, 72)
     }
 
     private var accent: Color? { ProfileColors.color(person.profileColor) }
@@ -197,51 +193,60 @@ struct ProfileContent: View {
         }
     }
 
+    // Name, level, status, bio and badges, all in the middle.
     private var identity: some View {
         let info = LevelInfo(xp: person.xp)
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                NameText(name: person.displayName, style: person.nameStyle, size: 34, display: true, nitro: person.isNitro, tint: person.nameColor)
-                if !person.pronouns.isEmpty { Text(person.pronouns).font(.jakarta(14, .semibold)).foregroundStyle(Palette.muted) }
+        let tint = accent ?? Theme.main
+        return VStack(spacing: 10) {
+            VStack(spacing: 4) {
+                NameText(name: person.displayName, style: person.nameStyle, size: 30, display: true, nitro: person.isNitro, tint: person.nameColor)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.7)
+                HStack(spacing: 6) {
+                    if !person.pronouns.isEmpty {
+                        Text(person.pronouns).foregroundStyle(Palette.muted)
+                        Text("·").foregroundStyle(Palette.muted)
+                    }
+                    Label("Lv.\(info.level) · \(info.title)", systemImage: "bolt.fill").foregroundStyle(info.color)
+                }
+                .font(.jakarta(13, .semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
             }
             statusBubble
-            FlowLayout(spacing: 8) {
-                if person.isNitro { NitroBadge() }
-                if person.isAdmin {
-                    Label("Admin", systemImage: "shield.fill").font(.jakarta(12, .bold)).foregroundStyle(Theme.pink)
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(Theme.pink.opacity(0.1), in: Capsule())
-                        .overlay(Capsule().strokeBorder(Theme.pink.opacity(0.3), lineWidth: 1))
-                }
-                Label("Lv.\(info.level) · \(info.title)", systemImage: "bolt.fill").font(.jakarta(12, .bold)).foregroundStyle(info.color)
-                    .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(info.color.opacity(0.12), in: Capsule())
-                    .overlay(Capsule().strokeBorder(info.color.opacity(0.3), lineWidth: 1))
-                if person.dailyStreak > 1 {
-                    Label("\(person.dailyStreak)-day streak", systemImage: "flame.fill").font(.jakarta(12, .bold)).foregroundStyle(Palette.gold)
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(Palette.gold.opacity(0.12), in: Capsule())
-                }
-                if let joined = Dates.parse(person.joined) {
-                    Label("Joined \(joined.formatted(.dateTime.month(.abbreviated).year()))", systemImage: "calendar").font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)
-                }
+            if !person.bio.isEmpty {
+                Text(person.bio).font(.jakarta(15)).foregroundStyle(Palette.text)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            if !person.interests.isEmpty {
-                FlowLayout(spacing: 6) {
-                    ForEach(person.interests, id: \.self) { tag in
-                        Text(tag).font(.jakarta(12, .bold)).foregroundStyle(accent ?? Theme.main)
-                            .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background((accent ?? Theme.main).opacity(0.1), in: Capsule())
-                    }
+            FlowLayout(spacing: 6, centered: true) {
+                if person.isNitro { NitroBadge() }
+                if person.isAdmin { chip("Admin", icon: "shield.fill", color: Theme.pink) }
+                if person.dailyStreak > 1 { chip("\(person.dailyStreak)-day streak", icon: "flame.fill", color: Palette.gold) }
+                if let joined = Dates.parse(person.joined) {
+                    chip("Joined \(joined.formatted(.dateTime.month(.abbreviated).year()))", icon: "calendar", color: Palette.muted)
+                }
+                ForEach(person.interests, id: \.self) { tag in
+                    Text(tag).font(.jakarta(12, .bold)).foregroundStyle(tint)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(tint.opacity(0.1), in: Capsule())
                 }
             }
             if !person.website.isEmpty, let url = URL(string: person.website.hasPrefix("http") ? person.website : "https://\(person.website)") {
                 Link(destination: url) {
                     Label(person.website.replacingOccurrences(of: "https://", with: "").replacingOccurrences(of: "http://", with: ""), systemImage: "link")
-                        .font(.jakarta(13, .bold)).foregroundStyle(accent ?? Theme.main).lineLimit(1)
+                        .font(.jakarta(13, .bold)).foregroundStyle(tint).lineLimit(1)
                 }
             }
         }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func chip(_ title: String, icon: String, color: Color) -> some View {
+        Label(title, systemImage: icon).font(.jakarta(12, .bold)).foregroundStyle(color)
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(color.opacity(0.1), in: Capsule())
     }
 
     // Presence + custom status, like Discord. Tap your own to change it.
@@ -276,6 +281,7 @@ struct ProfileContent: View {
                     .accessibilityLabel("MimiPlus")
                 Button { settings = true } label: { Image(systemName: "gearshape.fill").font(.system(size: 17, weight: .bold)) }
                     .buttonStyle(OutlineButtonStyle())
+                    .accessibilityLabel("Settings")
             } else {
                 MorphPill(on: following, offTitle: "Follow", onTitle: "Following", offIcon: "person.badge.plus",
                           size: .large, fullWidth: true) { toggleFollow() }
@@ -300,48 +306,82 @@ struct ProfileContent: View {
         }
     }
 
-    // Four little tiles in your blush.
+    // Posts, likes, followers and following in one card.
     private var stats: some View {
-        HStack(spacing: 8) {
-            stat(posts.count, "Posts", icon: "square.grid.2x2.fill", index: 0)
-            stat(totalLikes, "Likes", icon: "heart.fill", index: 1)
-            stat(followers, "Followers", icon: "person.2.fill", index: 2)
-            stat(person.following.count, "Following", icon: "person.crop.circle.badge.checkmark", index: 3)
-        }
-    }
-
-    private func stat(_ n: Int, _ label: String, icon: String, index: Int) -> some View {
-        VStack(spacing: 4) {
-            Image(systemName: icon).font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.main)
-            Text("\(n)").font(.display(24)).foregroundStyle(Palette.text).monospacedDigit()
-                .contentTransition(.numericText())
-                .lineLimit(1).minimumScaleFactor(0.6)
-            Text(label).font(.jakarta(11, .semibold)).foregroundStyle(Palette.text2)
-                .lineLimit(1).minimumScaleFactor(0.75)
+        HStack(spacing: 0) {
+            stat(posts.count, "Posts", index: 0)
+            statDivider
+            stat(totalLikes, "Likes", index: 1)
+            statDivider
+            stat(followers, "Followers", index: 2)
+            statDivider
+            stat(person.following.count, "Following", index: 3)
         }
         .padding(.vertical, 12)
-        .padding(.horizontal, 4)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+    }
+
+    private var statDivider: some View {
+        Rectangle().fill(Palette.border).frame(width: 1, height: 28)
+    }
+
+    private func stat(_ n: Int, _ label: String, index: Int) -> some View {
+        VStack(spacing: 2) {
+            Text(n.formatted(.number.notation(.compactName)))
+                .font(.display(22)).foregroundStyle(Palette.text).monospacedDigit()
+                .contentTransition(.numericText())
+                .lineLimit(1).minimumScaleFactor(0.6)
+            Text(label).font(.jakarta(11, .semibold)).foregroundStyle(Palette.muted)
+                .lineLimit(1).minimumScaleFactor(0.75)
+        }
         .frame(maxWidth: .infinity)
-        .background(Palette.blush, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.rim(0.5), lineWidth: 1))
-        .scaleEffect(appeared || Motion.reduced ? 1 : 0.8)
         .opacity(appeared ? 1 : 0)
-        .animation(Motion.reduced ? nil : Motion.playful.delay(0.2 + Double(index) * 0.06), value: appeared)
+        .animation(Motion.reduced ? nil : Motion.enter.delay(0.15 + Double(index) * 0.05), value: appeared)
         .motion(Motion.playful, value: n)
         .accessibilityElement(children: .combine)
     }
 
+    // Posts / Art / Reels / Saved: four equal columns (they always fit), the
+    // one you're on in your colour with a little line under it.
     private var tabs: some View {
         let list = Tab.allCases.filter { isMe || $0 != .saved }
-        let options: [(String, String)] = list.map { t in
-            switch t {
-            case .posts: return (t.rawValue, "square.grid.2x2.fill")
-            case .art: return (t.rawValue, "paintpalette.fill")
-            case .reels: return (t.rawValue, "play.rectangle.fill")
-            case .saved: return (t.rawValue, "bookmark.fill")
+        return HStack(spacing: 0) {
+            ForEach(list, id: \.self) { item in
+                let on = tab == item
+                Button { withMotion(Motion.standard) { tab = item } } label: {
+                    VStack(spacing: 5) {
+                        Image(systemName: icon(item)).font(.system(size: 17, weight: .semibold))
+                        Text(item.rawValue).font(.jakarta(12, .bold))
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                    }
+                    .foregroundStyle(on ? Theme.main : Palette.muted)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 6)
+                    .padding(.bottom, 10)
+                    .overlay(alignment: .bottom) {
+                        if on {
+                            Capsule().fill(Theme.main).frame(width: 30, height: 3)
+                                .matchedGeometryEffect(id: "line", in: tabLine)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
-        return SectionSwitch(options: options, selection: Binding(get: { list.firstIndex(of: tab) ?? 0 }, set: { i in withMotion(Motion.standard) { tab = list[i] } }))
+        .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1) }
+        .sensoryFeedback(.selection, trigger: tab)
+    }
+
+    private func icon(_ item: Tab) -> String {
+        switch item {
+        case .posts: return "square.grid.2x2.fill"
+        case .art: return "paintpalette.fill"
+        case .reels: return "play.rectangle.fill"
+        case .saved: return "bookmark.fill"
+        }
     }
 
     @ViewBuilder
@@ -599,7 +639,6 @@ struct EditProfileView: View {
     @State private var effectColor = ""
     @State private var effectAmount = 16
     @State private var nameColor = ""
-    @State private var frame = ""
     @State private var pattern = ""
     @State private var avatar: PendingPicture?
     @State private var banner: PendingPicture?
@@ -634,9 +673,8 @@ struct EditProfileView: View {
             styleSection
             colorSection("Name colour", selection: $nameColor)
             colorSection("Banner colour", selection: $bannerColor)
-            colorSection("Profile colour (buttons, frame)", selection: $profileColor)
+            colorSection("Profile colour (buttons and accents)", selection: $profileColor)
             patternSection
-            frameSection
             effectSection
         }
         .onAppear(perform: fill)
@@ -891,10 +929,8 @@ struct EditProfileView: View {
                 .frame(height: 110)
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 HStack(alignment: .bottom, spacing: 10) {
-                    Avatar(url: model.me?.picture ?? "", name: name, size: 58, ring: frame.isEmpty && !nitro, nitro: frame.isEmpty && nitro)
-                        .padding(3)
-                        .background(Palette.bg, in: Circle())
-                        .overlay { if !frame.isEmpty { AvatarFrameView(frame: frame, color: accentTint ?? Theme.main, size: 58) } }
+                    Avatar(url: model.me?.picture ?? "", name: name, size: 58)
+                        .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
                     NameText(name: name.isEmpty ? "Your name" : name, style: nameStyle, size: 20, display: true, nitro: nitro, tint: nameColor)
                         .lineLimit(1)
                         .padding(.horizontal, 10).padding(.vertical, 5)
@@ -915,14 +951,6 @@ struct EditProfileView: View {
         }
     }
 
-    private var frameSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Picture frame").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
-            AvatarFramePicker(selection: $frame, picture: model.me?.picture ?? "", name: name,
-                              tint: ProfileColors.color(profileColor) ?? Theme.main, nitro: nitro) { shop = true }
-        }
-    }
-
     // MARK: Load + save
 
     private func fill() {
@@ -940,7 +968,6 @@ struct EditProfileView: View {
         effectColor = me.effectColor
         effectAmount = me.effectAmount > 0 ? me.effectAmount : 16
         nameColor = me.nameColor
-        frame = me.avatarFrame
         pattern = me.bannerPattern
     }
 
@@ -974,7 +1001,7 @@ struct EditProfileView: View {
                 "interests": Array(tags.prefix(12)),
                 "name_style": nameStyle, "banner_color": bannerColor, "profile_color": profileColor, "profile_effect": effect,
                 "effect_color": effectColor, "effect_amount": effectAmount, "name_color": nameColor,
-                "avatar_frame": frame, "banner_pattern": pattern,
+                "avatar_frame": "", "banner_pattern": pattern,
             ]
             if let avatar { fields["profile_picture"] = try await upload(avatar, maxSide: 800) }
             if let banner { fields["banner_url"] = try await upload(banner, maxSide: 1800) } else if removeBanner { fields["banner_url"] = "" }

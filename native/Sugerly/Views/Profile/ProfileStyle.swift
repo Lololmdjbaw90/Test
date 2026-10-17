@@ -236,66 +236,7 @@ struct ProfileEffectLayer: View {
     }
 }
 
-// MARK: - Picture frames + banner patterns
-
-struct AvatarFrame: Identifiable, Hashable {
-    let id: String
-    let label: String
-    let icon: String
-    var premium = false
-
-    static let all: [AvatarFrame] = [
-        AvatarFrame(id: "", label: "Classic", icon: "circle"),
-        AvatarFrame(id: "solid", label: "Colour ring", icon: "circle.circle"),
-        AvatarFrame(id: "double", label: "Double", icon: "circle.circle.fill"),
-        AvatarFrame(id: "dashed", label: "Stitched", icon: "circle.dashed"),
-        AvatarFrame(id: "glow", label: "Glow", icon: "sun.max"),
-        AvatarFrame(id: "rainbow", label: "Rainbow", icon: "rainbow", premium: true),
-        AvatarFrame(id: "hearts", label: "Hearts", icon: "heart.circle", premium: true),
-        AvatarFrame(id: "stars", label: "Stars", icon: "star.circle", premium: true),
-    ]
-
-    static func isPremium(_ id: String) -> Bool { all.first { $0.id == id }?.premium ?? false }
-}
-
-// Drawn around a profile picture (pass the picture's size).
-struct AvatarFrameView: View {
-    let frame: String
-    var color: Color = Theme.main
-    var size: CGFloat = 104
-
-    var body: some View {
-        let d = size + 14
-        ZStack {
-            switch frame {
-            case "solid":
-                Circle().strokeBorder(color, lineWidth: 4)
-            case "double":
-                Circle().strokeBorder(color.opacity(0.45), lineWidth: 2)
-                Circle().strokeBorder(color, lineWidth: 3).padding(5)
-            case "dashed":
-                Circle().strokeBorder(color, style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [6, 5]))
-            case "glow":
-                Circle().strokeBorder(color.opacity(0.9), lineWidth: 3).shadow(color: color.opacity(0.8), radius: 10)
-            case "rainbow":
-                Circle().strokeBorder(AngularGradient(colors: [Color(hex: 0xFF7AA2), Color(hex: 0xFFD166), Color(hex: 0x5EC8B8), Color(hex: 0x7CBEFF), Color(hex: 0xB19CFF), Color(hex: 0xFF7AA2)], center: .center), lineWidth: 5)
-            case "hearts", "stars":
-                Circle().strokeBorder(color.opacity(0.35), lineWidth: 2)
-                ForEach(0..<10, id: \.self) { i in
-                    Image(systemName: frame == "hearts" ? "heart.fill" : "star.fill")
-                        .font(.system(size: 11, weight: .bold)).foregroundStyle(color)
-                        .frame(width: d, height: d, alignment: .top)
-                        .rotationEffect(.degrees(Double(i) * 36))
-                }
-            default:
-                EmptyView()
-            }
-        }
-        .frame(width: d, height: d)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-}
+// MARK: - Banner patterns
 
 struct BannerPattern: Identifiable, Hashable {
     let id: String
@@ -426,63 +367,6 @@ struct BannerPatternPicker: View {
     }
 }
 
-// Little pictures to pick a frame from, each showing the frame.
-struct AvatarFramePicker: View {
-    @Binding var selection: String
-    var picture: String
-    var name: String
-    var tint: Color = Theme.main
-    var nitro: Bool
-    var onLocked: () -> Void
-
-    var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 78), spacing: 10)], spacing: 12) {
-            ForEach(AvatarFrame.all) { item in
-                let active = selection == item.id
-                let locked = item.premium && !nitro
-                Button {
-                    if locked { onLocked() } else { withMotion(Motion.standard) { selection = item.id } }
-                } label: {
-                    VStack(spacing: 7) {
-                        ZStack {
-                            Circle()
-                                .fill(active ? tint.opacity(0.18) : Palette.surface)
-                                .overlay(Circle().strokeBorder(active ? tint.opacity(0.5) : Palette.border, lineWidth: active ? 1.5 : 1))
-                                .frame(width: 70, height: 70)
-                                .scaleEffect(active ? 1 : 0.94)
-                            Avatar(url: picture, name: name, size: 42, ring: item.id.isEmpty)
-                            if !item.id.isEmpty { AvatarFrameView(frame: item.id, color: tint, size: 42) }
-                        }
-                        .frame(width: 72, height: 72)
-                        .overlay(alignment: .bottomTrailing) {
-                            if active {
-                                Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.white)
-                                    .frame(width: 22, height: 22)
-                                    .background(tint, in: Circle())
-                                    .overlay(Circle().strokeBorder(Palette.bg, lineWidth: 2.5))
-                                    .transition(.pop)
-                            }
-                        }
-                        .overlay(alignment: .topTrailing) {
-                            if locked {
-                                Image(systemName: "lock.fill").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
-                                    .frame(width: 22, height: 22).background(NitroStyle.gradient, in: Circle())
-                                    .overlay(Circle().strokeBorder(Palette.bg, lineWidth: 2.5))
-                            }
-                        }
-                        Text(item.label).font(.jakarta(11, active ? .heavy : .semibold)).foregroundStyle(active ? tint : Palette.text2)
-                            .lineLimit(1).minimumScaleFactor(0.8)
-                    }
-                    .motion(Motion.playful, value: active)
-                }
-                .buttonStyle(BouncyStyle(scale: 0.95))
-                .accessibilityLabel(locked ? "\(item.label) frame, MimiPlus" : "\(item.label) frame")
-                .accessibilityAddTraits(active ? .isSelected : [])
-            }
-        }
-    }
-}
-
 // MARK: - Nitro shop (a sheet, not a page)
 
 // A MimiCoin: a little gold coin with a sparkle (coins are just for fun,
@@ -525,7 +409,6 @@ struct NitroShopView: View {
         Perk(icon: "photo.stack.fill", title: "GIF picture & banner", text: "Bring your profile to life"),
         Perk(icon: "textformat", title: "Name styles", text: "Gold, Aurora, Neon, Rainbow and Sunset"),
         Perk(icon: "sparkles", title: "Profile effects", text: "12 floating effects for your banner"),
-        Perk(icon: "heart.circle.fill", title: "Premium frames", text: "Rainbow, Hearts and Stars"),
         Perk(icon: "rectangle.inset.filled", title: "Plus banner", text: "A dreamy colour banner when you don't add your own"),
         Perk(icon: "checkmark.seal.fill", title: "MimiPlus badge", text: "Next to your name on your profile"),
     ]
@@ -634,7 +517,7 @@ struct NitroShopView: View {
                 .background(Theme.soft, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text("Use your perks").font(.jakarta(15, .semibold)).foregroundStyle(Palette.text)
-                Text("GIF picture, name style, frame or effect").font(.jakarta(12)).foregroundStyle(Palette.muted)
+                Text("GIF picture, name style or effect").font(.jakarta(12)).foregroundStyle(Palette.muted)
             }
             Spacer(minLength: 8)
             Button("Customise") { editing = true }

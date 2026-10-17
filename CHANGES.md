@@ -1,5 +1,13 @@
 # Changes
 
+## New profiles, steady loaders, light top bar (iOS app)
+
+- **Profiles**: centred header (banner, the picture half over it with only a soft shadow, name, level, status, bio, badges and interests), one stats card, the buttons, then Posts / Art / Reels / Saved as four equal tabs with a sliding line (they always fit). Picture frames are gone: no frame picker, saving clears `avatar_frame`, and the shop no longer lists them. `FlowLayout` can centre its rows.
+- **No more floating loaders**: endless animations started with `withAnimation(.repeatForever)` could carry other views' layout changes along forever (the reels loading line drifted up and down the screen). The shimmer, the reels skeleton and the buffering line are now drawn from the clock (`TimelineView`), the shimmer only on the placeholder's own shapes, and the two remaining pulses use scoped `.animation(_:value:)`.
+- **Top bar**: iOS 26 still re-coloured the menu, search and bell buttons dark over dark pictures, so bar buttons now paint with colours fixed to the app's look (`Color.fixed(_:)`, `barScheme`). The menu button's picture is its round end (its border used to look like a ring around the photo).
+- **Daily reward**: `RewardBurst` (glow, coins and sparkles, clock-driven) replaces the two thin rings, with a success haptic on Home.
+- **Calls**: cameras fill the stage by default; double-tap shows the whole picture. `SectionSwitch` drops its icons when the names wouldn't fit.
+
 ## Server on Firebase (Netlify becomes the backup)
 
 - **One Cloud Function, same code**: `functions/index.js` runs `netlify/functions/*.mjs` unchanged as `api` (Netlify-style requests in, Netlify-style answers out, the raw body kept so Stripe signatures still match). Settings come from one Secret Manager secret, `SUGERLY_ENV`, filled from GitHub secrets by `.github/workflows/firebase-server.yml`, which also puts the website on Firebase Hosting (`/api/**` and `/.netlify/functions/**` go to the function, so `paid.html` works as is).

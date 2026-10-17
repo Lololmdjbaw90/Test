@@ -516,6 +516,8 @@ struct FlowChips: View {
 
 struct FlowLayout: Layout {
     var spacing: CGFloat = 8
+    // Each row in the middle instead of on the left.
+    var centered = false
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? 320
@@ -530,13 +532,24 @@ struct FlowLayout: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX, y = bounds.minY, row: CGFloat = 0
-        for view in subviews {
+        // Split into rows first, so a centred row knows how wide it is.
+        var rows: [[(index: Int, size: CGSize)]] = [[]]
+        var x: CGFloat = 0
+        for (i, view) in subviews.enumerated() {
             let size = view.sizeThatFits(.unspecified)
-            if x + size.width > bounds.maxX, x > bounds.minX { x = bounds.minX; y += row + spacing; row = 0 }
-            view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            if x + size.width > bounds.width, x > 0 { rows.append([]); x = 0 }
+            rows[rows.count - 1].append((index: i, size: size))
             x += size.width + spacing
-            row = max(row, size.height)
+        }
+        var y = bounds.minY
+        for row in rows where !row.isEmpty {
+            let width = row.reduce(0) { $0 + $1.size.width } + spacing * CGFloat(row.count - 1)
+            var left = bounds.minX + (centered ? max(0, (bounds.width - width) / 2) : 0)
+            for item in row {
+                subviews[item.index].place(at: CGPoint(x: left, y: y), proposal: ProposedViewSize(item.size))
+                left += item.size.width + spacing
+            }
+            y += (row.map(\.size.height).max() ?? 0) + spacing
         }
     }
 }

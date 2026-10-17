@@ -86,11 +86,18 @@ private struct PlainToolbar<Leading: View, Trailing: View>: ViewModifier {
             // iOS 26 turns the top bar's buttons dark when dark pictures
             // scroll underneath it, which made the bell and the menu button
             // go black in light mode. They keep the app's own look instead.
+            // Setting the light / dark look on them wasn't enough (their
+            // colours still followed iOS), so they also paint with colours
+            // fixed to the app's look (see barScheme).
             content.toolbar {
-                ToolbarItem(placement: .topBarLeading) { leading.environment(\.colorScheme, scheme) }
-                    .sharedBackgroundVisibility(.hidden)
-                ToolbarItem(placement: .topBarTrailing) { trailing.environment(\.colorScheme, scheme) }
-                    .sharedBackgroundVisibility(.hidden)
+                ToolbarItem(placement: .topBarLeading) {
+                    leading.environment(\.colorScheme, scheme).environment(\.barScheme, scheme)
+                }
+                .sharedBackgroundVisibility(.hidden)
+                ToolbarItem(placement: .topBarTrailing) {
+                    trailing.environment(\.colorScheme, scheme).environment(\.barScheme, scheme)
+                }
+                .sharedBackgroundVisibility(.hidden)
             }
         } else {
             content.toolbar {
@@ -101,22 +108,45 @@ private struct PlainToolbar<Leading: View, Trailing: View>: ViewModifier {
     }
 }
 
+// The light / dark look a top bar's buttons keep whatever scrolls under them
+// (set by plainToolbar). nil everywhere else.
+private struct BarSchemeKey: EnvironmentKey {
+    static let defaultValue: ColorScheme? = nil
+}
+
+extension EnvironmentValues {
+    var barScheme: ColorScheme? {
+        get { self[BarSchemeKey.self] }
+        set { self[BarSchemeKey.self] = newValue }
+    }
+}
+
+extension Color {
+    /// This colour as it looks in `scheme`, so it stays that way even where
+    /// iOS switches light / dark by itself (nil: keeps following the page).
+    func fixed(_ scheme: ColorScheme?) -> Color {
+        guard let scheme else { return self }
+        return Color(uiColor: UIColor(self).resolvedColor(with: UITraitCollection(userInterfaceStyle: scheme == .dark ? .dark : .light)))
+    }
+}
+
 // A round top bar button: a white (or dark) circle with a thin edge.
 private struct BarIcon: View {
     let icon: String
     var alert = false
     var bounce = 0
+    @Environment(\.barScheme) private var barScheme
 
     var body: some View {
         Image(systemName: icon)
             .font(.system(size: 15, weight: .semibold))
             .symbolRenderingMode(alert ? .multicolor : .monochrome)
-            .foregroundStyle(Palette.text2)
+            .foregroundStyle(Palette.text2.fixed(barScheme))
             .contentTransition(.symbolEffect(.replace))
             .symbolEffect(.bounce, value: bounce)
             .frame(width: 34, height: 34)
-            .background(Palette.surface, in: Circle())
-            .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
+            .background(Palette.surface.fixed(barScheme), in: Circle())
+            .overlay(Circle().strokeBorder(Palette.border.fixed(barScheme), lineWidth: 1))
             .contentShape(Circle())
     }
 }
@@ -174,6 +204,7 @@ struct PinkCircleButton: View {
     let label: String
     var action: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.barScheme) private var barScheme
     @State private var bounce = 0
 
     var body: some View {
@@ -184,8 +215,8 @@ struct PinkCircleButton: View {
                 .frame(width: 34, height: 34)
                 .background {
                     Circle().fill(Theme.candy)
-                        .overlay(Circle().strokeBorder(Palette.rim(0.25), lineWidth: 1))
-                        .shadow(color: Theme.glow(0.3), radius: 6, y: 3)
+                        .overlay(Circle().strokeBorder(Palette.rim(0.25).fixed(barScheme), lineWidth: 1))
+                        .shadow(color: Theme.glow(0.3).fixed(barScheme), radius: 6, y: 3)
                 }
                 .contentShape(Circle())
         }
@@ -195,25 +226,27 @@ struct PinkCircleButton: View {
 }
 
 // The menu button in the top left corner: a little pill with the pink
-// menu lines and your picture, so it's clear it opens something.
+// menu lines and your picture, so it's clear it opens something. The
+// picture is the pill's round end (no edge curving around it, which looked
+// like a frame).
 struct AccountButton: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.barScheme) private var barScheme
 
     var body: some View {
         Button {
             model.showMenu = true
         } label: {
-            HStack(spacing: 7) {
+            HStack(spacing: 8) {
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Theme.main)
-                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 28)
+                    .foregroundStyle(Theme.main.fixed(barScheme))
+                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 34)
             }
-            .padding(.leading, 11)
-            .padding(.trailing, 3)
+            .padding(.leading, 12)
             .frame(height: 34)
-            .background(Palette.surface, in: Capsule())
-            .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
+            .background(Palette.surface.fixed(barScheme), in: Capsule())
+            .shadow(color: .black.opacity(0.08), radius: 5, y: 1)
             .contentShape(Capsule())
         }
         // (No click: the menu opening makes its own sound.)

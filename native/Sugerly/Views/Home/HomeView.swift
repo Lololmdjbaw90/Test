@@ -42,7 +42,7 @@ struct DailyRewardButton: View {
                 .background(status.claimed ? Palette.success.opacity(0.12) : Palette.surface, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                 .contentTransition(.symbolEffect(.replace))
                 .symbolEffect(.bounce, value: ripple)
-                .overlay { if ripple > 0 { SparkleBurst(radius: 44).id(ripple) } }
+                .overlay { RewardBurst(trigger: ripple).frame(width: 150, height: 150) }
             VStack(alignment: .leading, spacing: 2) {
                 Text(titleText(status.claimed))
                     .font(.jakarta(15, .semibold)).foregroundStyle(Palette.text)
@@ -88,6 +88,7 @@ struct DailyRewardButton: View {
         }
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(status.claimed ? Palette.border : Palette.gold.opacity(0.25), lineWidth: 1))
         .motion(Motion.playful, value: status.claimed)
+        .sensoryFeedback(.success, trigger: ripple)
     }
 
     private func titleText(_ claimed: Bool) -> String {
@@ -146,9 +147,7 @@ struct DailyRewardSheet: View {
                     .contentTransition(.symbolEffect(.replace))
             }
             .padding(.top, 34)
-            .overlay {
-                if reward != nil { SparkleBurst(radius: 100) }
-            }
+            .overlay { RewardBurst(trigger: reward == nil ? 0 : 1).frame(width: 280, height: 280) }
 
             Text(reward == nil ? "Daily reward" : "+\(reward ?? 0) coins").font(.display(34)).foregroundStyle(Palette.text)
                 .contentTransition(.numericText())

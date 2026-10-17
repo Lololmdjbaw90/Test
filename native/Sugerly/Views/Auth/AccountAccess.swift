@@ -521,10 +521,9 @@ struct PulseDot: View {
             .frame(width: 8, height: 8)
             .scaleEffect(on ? 1.25 : 0.8)
             .opacity(on ? 1 : 0.45)
-            .onAppear {
-                guard !Motion.reduced else { return }
-                withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) { on = true }
-            }
+            // Scoped to the dot, so nothing around it gets carried along.
+            .animation(Motion.reduced ? nil : .easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: on)
+            .onAppear { if !Motion.reduced { on = true } }
     }
 }
 
