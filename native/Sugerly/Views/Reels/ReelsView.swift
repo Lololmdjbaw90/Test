@@ -679,18 +679,10 @@ struct ReelPage: View {
                     RemoteImage(url: url, contentMode: .fit).tag(i)
                 }
             }
+            // Photos stay put until you swipe to the next one (they used to
+            // move on by themselves).
             .tabViewStyle(.page(indexDisplayMode: .always))
             .ignoresSafeArea()
-            .task(id: active) {
-                // Slideshows move on by themselves, like on the website.
-                while active && !Task.isCancelled {
-                    try? await Task.sleep(for: .seconds(reel.slideSeconds(slide) / max(0.25, playSpeed)))
-                    if active && !paused {
-                        if autoScroll && slide == reel.pictures.count - 1 { onNext() }
-                        withAnimation(.easeInOut) { slide = (slide + 1) % reel.pictures.count }
-                    }
-                }
-            }
         } else {
             RemoteImage(url: reel.pictures.first ?? "", contentMode: .fit).ignoresSafeArea()
         }

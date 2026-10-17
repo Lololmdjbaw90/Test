@@ -3,13 +3,16 @@ import UIKit
 import AVFoundation
 import AudioToolbox
 import ReplayKit
+import Network
 import WebRTC
 
 // Voice channels, compatible with the website: a WebRTC mesh between everyone
 // in the channel, signalled through the same two collections —
 //   VoicePresence  one doc per connected person (room, user, mute state)
 //   VoiceSignal    offers / answers / ICE candidates addressed to one person
-// The app checks for new signals every ~0.7 s (the website listens live).
+//                  (and "restart": please reconnect, my network changed)
+// The app checks for new signals quickly while anyone is connecting and
+// slowly once everyone is (the website listens live).
 @MainActor
 @Observable
 final class VoiceEngine: NSObject {
@@ -53,6 +56,8 @@ final class VoiceEngine: NSObject {
     var speaker = true
     var ping: Int?
     var systemCall = false
+    // Someone's line dropped (e.g. Wi-Fi to mobile data) and it's reconnecting.
+    var reconnecting = false
 
     // Video: your camera or your screen, and everyone else's picture.
     var cameraOn = false
@@ -62,6 +67,9 @@ final class VoiceEngine: NSObject {
     var sharingScreen = false
     var frontCamera = true
     private(set) var cameraFront = true
+    // iOS stops the camera while Sugerly is in the background: the others see
+    // your picture (not a frozen frame) until you're back.
+    private(set) var cameraPaused = false
     @ObservationIgnored private var cameraJob: Task<Void, Never>?
     var remoteVideo: [String: RTCVideoTrack] = [:]   // by peer id
     private(set) var localVideo: RTCVideoTrack?
@@ -71,7 +79,7 @@ final class VoiceEngine: NSObject {
     @ObservationIgnored private var videoSource: RTCVideoSource?
     @ObservationIgnored private var cameraCapturer: RTCCameraVideoCapturer?
     @ObservationIgnored private var screenCapturer: RTCVideoCapturer?
-    private var videoState: String { sharingScreen ? "screen" : cameraOn ? "camera" : "" }
+    private var videoState: String { sharingScreen ? "screen" : (cameraOn && !cameraPaused) ? "camera" : "" }
 
     private var selfId = ""
     private var email = ""
@@ -101,6 +109,7 @@ final class VoiceEngine: NSObject {
         var level = 0.0
         var video: RTCRtpTransceiver?   // the lane pictures travel on
         var videoKind = ""              // what they're showing ("", "camera", "screen")
+        var everConnected = false       // so a dropped line shows as reconnecting
         init(id: String, email: String) { self.id = id; self.email = email }
     }
     private var peers: [String: Peer] = [:]
@@ -108,6 +117,12 @@ final class VoiceEngine: NSObject {
     // Signals already used (a signal can come back once more before it's deleted).
     private var handled = Set<String>()
     private var restartedAt: [String: Date] = [:]
+    // Until when the loop checks quickly (something is connecting or changed).
+    @ObservationIgnored private var busyUntil = Date.distantPast
+    @ObservationIgnored private var network: NWPathMonitor?
+    @ObservationIgnored private var lastNetwork = ""
+    @ObservationIgnored private var observers: [NSObjectProtocol] = []
+    @ObservationIgnored private var floatingPeer: String?
 
     override init() {
         RTCInitializeSSL()
@@ -219,7 +234,10 @@ final class VoiceEngine: NSObject {
         // Your screen can be shared from now on (Share screen, or the
         // broadcast button in Control Center).
         ScreenBroadcast.shared.open()
-        call.connected()
+        // A voice channel is "connected" at once; a call only once the other
+        // person is really there (iPhone's call timer starts then).
+        if !room.isCall { call.connected() }
+        watchSurroundings()
         Chime.play(.join)
         refreshParticipants()
         loop = Task { [weak self] in await self?.run() }
@@ -250,6 +268,11 @@ final class VoiceEngine: NSObject {
         VideoRelay.forgetAll()
         selfLevel = 0
         speakingSelf = false
+        stopWatching()
+        cameraPaused = false
+        reconnecting = false
+        floatingPeer = nil
+        CallPiP.shared.end()
         for peer in peers.values { peer.pc?.close() }
         peers = [:]
         byConnection = [:]
@@ -285,6 +308,95 @@ final class VoiceEngine: NSObject {
         } catch {
             self.error = "Couldn't change the audio output. Try again."
         }
+        updateProximity()
+    }
+
+    // MARK: network, sound route and background
+
+    private func watchSurroundings() {
+        stopWatching()
+        // Wi-Fi ↔ mobile data: reconnect at once instead of waiting for the
+        // line to time out.
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            let summary = "\(path.status)|" + path.availableInterfaces.map { "\($0.type)" }.joined(separator: ",")
+            let online = path.status == .satisfied
+            Task { @MainActor [weak self] in self?.networkChanged(summary, online: online) }
+        }
+        monitor.start(queue: DispatchQueue(label: "sugerly.calls.network"))
+        network = monitor
+        let center = NotificationCenter.default
+        observers = [
+            // AirPods in or out, speaker on or off: the Speaker button follows.
+            center.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in self?.routeChanged() }
+            },
+            // iOS stops the camera when you leave Sugerly (unless the floating
+            // window keeps it going) and starts it again when you're back.
+            center.addObserver(forName: AVCaptureSession.wasInterruptedNotification, object: nil, queue: .main) { [weak self] note in
+                let session = note.object.map { ObjectIdentifier($0 as AnyObject) }
+                Task { @MainActor [weak self] in self?.cameraInterrupted(session, true) }
+            },
+            center.addObserver(forName: AVCaptureSession.interruptionEndedNotification, object: nil, queue: .main) { [weak self] note in
+                let session = note.object.map { ObjectIdentifier($0 as AnyObject) }
+                Task { @MainActor [weak self] in self?.cameraInterrupted(session, false) }
+            },
+        ]
+        updateProximity()
+    }
+
+    private func stopWatching() {
+        network?.cancel()
+        network = nil
+        lastNetwork = ""
+        for observer in observers { NotificationCenter.default.removeObserver(observer) }
+        observers = []
+        UIDevice.current.isProximityMonitoringEnabled = false
+    }
+
+    private func networkChanged(_ summary: String, online: Bool) {
+        defer { lastNetwork = summary }
+        guard room != nil, !lastNetwork.isEmpty, summary != lastNetwork, online else { return }
+        hurry()
+        for peer in peers.values where peer.pc != nil { restart(peer) }
+    }
+
+    private func routeChanged() {
+        guard room != nil else { return }
+        let onSpeaker = AVAudioSession.sharedInstance().currentRoute.outputs.contains { $0.portType == .builtInSpeaker }
+        if speaker != onSpeaker { speaker = onSpeaker }
+        updateProximity()
+    }
+
+    // On the earpiece with no pictures: holding the phone to your ear turns
+    // the screen off, so your cheek can't press buttons (like a phone call).
+    private func updateProximity() {
+        let earpiece = room != nil && AVAudioSession.sharedInstance().currentRoute.outputs.contains { $0.portType == .builtInReceiver }
+        let pictures = cameraOn || sharingScreen || peers.values.contains { !$0.videoKind.isEmpty }
+        let wanted = earpiece && !pictures
+        if UIDevice.current.isProximityMonitoringEnabled != wanted { UIDevice.current.isProximityMonitoringEnabled = wanted }
+    }
+
+    // Turning the camera on with the phone at your ear: switch to the speaker,
+    // like FaceTime (unless headphones are in).
+    private func speakerForVideo() {
+        let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
+        guard !speaker, outputs.contains(where: { $0.portType == .builtInReceiver }) else { return }
+        toggleSpeaker()
+    }
+
+    private func cameraInterrupted(_ session: ObjectIdentifier?, _ interrupted: Bool) {
+        guard let capture = cameraCapturer?.captureSession, session == ObjectIdentifier(capture) else { return }
+        pauseCamera(interrupted)
+    }
+
+    // While the camera is stopped the others see your picture, not a frozen frame.
+    private func pauseCamera(_ paused: Bool) {
+        guard room != nil, cameraOn, !sharingScreen, cameraPaused != paused else { return }
+        cameraPaused = paused
+        sendVideo(!paused)
+        pushPresence()
+        refreshParticipants()
     }
 
     func toggleMute() {
@@ -325,19 +437,43 @@ final class VoiceEngine: NSObject {
         Task { try? await FS.update("VoicePresence", presenceId, fields) }
     }
 
-    // MARK: the loop: signals often, presence and heartbeat less often
+    // MARK: the loop: quick while connecting, calm once everyone's connected
+
+    // Check quickly for a while (someone joined or left, a line dropped, the
+    // network changed, a handshake is going on).
+    private func hurry(_ seconds: Double = 15) {
+        busyUntil = max(busyUntil, Date().addingTimeInterval(seconds))
+    }
+
+    // Everyone connected and nothing happening: messages can wait a moment,
+    // which saves most of the database reads of a long call.
+    private var calm: Bool {
+        Date() > busyUntil && peers.values.allSatisfy { peer in
+            guard let pc = peer.pc else { return false }
+            return pc.iceConnectionState == .connected || pc.iceConnectionState == .completed
+        }
+    }
 
     private func run() async {
         // Give the relay list a moment to arrive before connecting to anyone.
         let deadline = Date().addingTimeInterval(3)
         while relaysLoading && Date() < deadline { try? await Task.sleep(for: .milliseconds(100)) }
-        var tick = 0
+        hurry()
+        var lastPresence = Date.distantPast
+        var lastBeat = Date()
         while !Task.isCancelled, room != nil {
+            let quiet = calm
             await pollSignals()
-            if tick % 4 == 0 { await pollPresence() }
-            if tick % 14 == 0 { pushPresence() }
-            tick += 1
-            try? await Task.sleep(for: .milliseconds(700))
+            let now = Date()
+            if now.timeIntervalSince(lastPresence) >= (quiet ? 2.8 : 1.4) {
+                lastPresence = now
+                await pollPresence()
+            }
+            if now.timeIntervalSince(lastBeat) >= 10 {
+                lastBeat = now
+                pushPresence()
+            }
+            try? await Task.sleep(for: .milliseconds(quiet ? 1500 : 350))
         }
     }
 
@@ -365,15 +501,20 @@ final class VoiceEngine: NSObject {
                 peer.initiator = true
                 connect(peer)
             }
-            if isNew { Chime.play(.join) }
+            if isNew {
+                hurry()
+                Chime.play(.join)
+            }
         }
         for (id, peer) in peers where !seen.contains(id) {
             peer.pc?.close()
             if let pc = peer.pc { byConnection[ObjectIdentifier(pc)] = nil }
             peers[id] = nil
             remoteVideo[id] = nil
+            hurry()
             Chime.play(.leave)
         }
+        updateProximity()
         refreshParticipants()
     }
 
@@ -386,6 +527,7 @@ final class VoiceEngine: NSObject {
             handled.insert(id)
             Task { try? await FS.delete("VoiceSignal", id) }
             guard d.str("channel_id") == room?.id else { continue }
+            hurry(10)
             let from = d.str("from_peer")
             let peer = peers[from] ?? Peer(id: from, email: d.str("user_email").lowercased())
             peers[from] = peer
@@ -393,6 +535,15 @@ final class VoiceEngine: NSObject {
                   let payload = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { continue }
             if peer.pc == nil { connect(peer) }
             guard let pc = peer.pc else { continue }
+            if d.str("kind") == "restart" {
+                // Their network changed: the side that made the connection
+                // starts it again.
+                if peer.initiator {
+                    restartedAt[peer.id] = Date()
+                    await offer(peer, restart: true)
+                }
+                continue
+            }
             if d.str("kind") == "description" {
                 let typeString = payload["type"] as? String ?? ""
                 let sdp = payload["sdp"] as? String ?? ""
@@ -411,6 +562,7 @@ final class VoiceEngine: NSObject {
                         send(peer, "description", ["type": "answer", "sdp": answer.sdp])
                     }
                 }
+                if let sender = peer.video?.sender, sender.track != nil { tune(sender) }
             } else if d.str("kind") == "ice" {
                 let candidate = RTCIceCandidate(sdp: payload["candidate"] as? String ?? "",
                                                 sdpMLineIndex: Int32((payload["sdpMLineIndex"] as? Int) ?? 0),
@@ -474,7 +626,24 @@ final class VoiceEngine: NSObject {
     }
 
     private func sendVideo(_ on: Bool) {
-        for peer in peers.values { peer.video?.sender.track = on ? localVideo : nil }
+        for peer in peers.values {
+            guard let sender = peer.video?.sender else { continue }
+            sender.track = on ? localVideo : nil
+            if on { tune(sender) }
+        }
+    }
+
+    // A ceiling for the picture (sharp but never hogging the line) and how to
+    // give way on a weak one: cameras keep moving smoothly, screens stay sharp.
+    private func tune(_ sender: RTCRtpSender) {
+        let parameters = sender.parameters
+        guard !parameters.encodings.isEmpty else { return }
+        for encoding in parameters.encodings {
+            encoding.maxBitrateBps = NSNumber(value: sharingScreen ? 1_200_000 : 1_800_000)
+            encoding.maxFramerate = NSNumber(value: sharingScreen ? 15 : 30)
+        }
+        parameters.degradationPreference = NSNumber(value: (sharingScreen ? RTCDegradationPreference.maintainResolution : RTCDegradationPreference.balanced).rawValue)
+        sender.parameters = parameters
     }
 
     // The camera button. It shows the new state straight away and the camera
@@ -529,7 +698,9 @@ final class VoiceEngine: NSObject {
         guard room != nil, cameraWanted else { return false }
         if sharingScreen { stopScreenShare() }
         let source = ensureVideo()
-        source.adaptOutputFormat(toWidth: 640, height: 480, fps: 24)
+        // HD (1280×720) at 30 frames a second; on a weak line WebRTC lowers
+        // the size or the frame rate by itself.
+        source.adaptOutputFormat(toWidth: 1280, height: 720, fps: 30)
         let front = frontCamera
         let devices = RTCCameraVideoCapturer.captureDevices()
         guard let device = devices.first(where: { $0.position == (front ? .front : .back) }) ?? devices.first else {
@@ -538,14 +709,18 @@ final class VoiceEngine: NSObject {
         }
         let formats = RTCCameraVideoCapturer.supportedFormats(for: device)
         func width(_ f: AVCaptureDevice.Format) -> Int { Int(CMVideoFormatDescriptionGetDimensions(f.formatDescription).width) }
-        guard let format = formats.min(by: { abs(width($0) - 640) < abs(width($1) - 640) }) else { return false }
-        let fps = Int(min(24, format.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? 24))
+        guard let format = formats.min(by: { abs(width($0) - 1280) < abs(width($1) - 1280) }) else { return false }
+        let fps = Int(min(30, format.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? 30))
         // One camera for the whole call.
         let capturer: RTCCameraVideoCapturer
         if let cameraCapturer {
             capturer = cameraCapturer
         } else {
             capturer = RTCCameraVideoCapturer(delegate: source)
+            // Keeps your camera going in the floating window when you leave
+            // Sugerly (iOS 18 and later let video calling apps do this).
+            let session = capturer.captureSession
+            if session.isMultitaskingCameraAccessSupported { session.isMultitaskingCameraAccessEnabled = true }
             cameraCapturer = capturer
         }
         do {
@@ -562,9 +737,12 @@ final class VoiceEngine: NSObject {
         cameraFront = front
         if !cameraOn {
             cameraOn = true
+            cameraPaused = false
             sendVideo(true)
+            speakerForVideo()
             pushPresence()
             refreshParticipants()
+            updateProximity()
         }
         return true
     }
@@ -572,9 +750,11 @@ final class VoiceEngine: NSObject {
     // Turns the camera off and waits until it really is off.
     private func stopCamera() async {
         cameraOn = false
+        cameraPaused = false
         if !sharingScreen { sendVideo(false) }
         pushPresence()
         refreshParticipants()
+        updateProximity()
         await cameraCapturer?.stopCapture()
     }
 
@@ -609,6 +789,7 @@ final class VoiceEngine: NSObject {
         sendVideo(true)
         pushPresence()
         refreshParticipants()
+        updateProximity()
     }
 
     private func broadcastStopped() {
@@ -616,9 +797,10 @@ final class VoiceEngine: NSObject {
         screenCapturer = nil
         guard sharingScreen else { return }
         sharingScreen = false
-        if !cameraOn { sendVideo(false) }
+        if !cameraOn { sendVideo(false) } else { sendVideo(!cameraPaused) }
         pushPresence()
         refreshParticipants()
+        updateProximity()
     }
 
     private func offer(_ peer: Peer, restart: Bool = false) async {
@@ -678,17 +860,39 @@ final class VoiceEngine: NSObject {
     }
 
     fileprivate func stateChanged(_ pcId: ObjectIdentifier) {
+        guard let id = byConnection[pcId], let peer = peers[id], let pc = peer.pc else {
+            refreshParticipants()
+            return
+        }
+        let state = pc.iceConnectionState
+        if state == .connected || state == .completed {
+            peer.everConnected = true
+            // The other person is really there: iPhone's call timer starts.
+            if room?.isCall == true { call.connected() }
+        } else {
+            hurry()
+        }
         refreshParticipants()
-        // The line dropped (e.g. Wi-Fi to mobile data): the side that started
-        // the connection tries again on the new network.
-        guard let id = byConnection[pcId], let peer = peers[id], let pc = peer.pc, peer.initiator,
-              pc.iceConnectionState == .failed || pc.iceConnectionState == .disconnected else { return }
-        if let last = restartedAt[id], Date().timeIntervalSince(last) < 6 { return }
-        restartedAt[id] = Date()
+        // The line dropped (e.g. Wi-Fi to mobile data): reconnect on the new
+        // network (after a short grace period for a passing blip).
+        guard state == .failed || state == .disconnected else { return }
         Task {
-            if pc.iceConnectionState == .disconnected { try? await Task.sleep(for: .seconds(2)) }
-            guard pc.iceConnectionState == .failed || pc.iceConnectionState == .disconnected else { return }
-            await self.offer(peer, restart: true)
+            if state == .disconnected { try? await Task.sleep(for: .seconds(2)) }
+            guard self.peers[id] === peer, pc.iceConnectionState == .failed || pc.iceConnectionState == .disconnected else { return }
+            self.restart(peer)
+        }
+    }
+
+    // Connects again with this person on the current network. The side that
+    // made the connection does it; the other side asks it to.
+    private func restart(_ peer: Peer) {
+        if let last = restartedAt[peer.id], Date().timeIntervalSince(last) < 4 { return }
+        restartedAt[peer.id] = Date()
+        hurry()
+        if peer.initiator {
+            Task { await self.offer(peer, restart: true) }
+        } else {
+            send(peer, "restart", [:])
         }
     }
 
@@ -750,6 +954,22 @@ final class VoiceEngine: NSObject {
                                     picture: peer.picture, muted: peer.muted, deafened: peer.deafened, speaking: peer.speaking, isSelf: false, connected: connected, level: Self.shown(peer.level), video: peer.videoKind))
         }
         if list != participants { participants = list }
+        let dropped = peers.values.contains { peer in
+            peer.everConnected && !(peer.pc.map { $0.iceConnectionState == .connected || $0.iceConnectionState == .completed } ?? false)
+        }
+        if dropped != reconnecting { reconnecting = dropped }
+        floatPicture()
+    }
+
+    // Whose picture floats over your other apps when you leave Sugerly: the
+    // one already floating while they still show it, else a shared screen,
+    // else a camera.
+    private func floatPicture() {
+        let showing = participants.filter { !$0.isSelf && !$0.video.isEmpty && remoteVideo[$0.id] != nil }
+        let pick = showing.first { $0.id == floatingPeer } ?? showing.first { $0.video == "screen" } ?? showing.first
+        floatingPeer = pick?.id
+        let name = pick?.name ?? participants.first { !$0.isSelf }?.name ?? ""
+        CallPiP.shared.show(pick.flatMap { remoteVideo[$0.id] }, name: name)
     }
 }
 

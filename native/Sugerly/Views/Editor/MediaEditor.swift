@@ -112,8 +112,13 @@ struct MediaEditor: View {
             guard let item else { return }
             Task {
                 defer { overlayItem = nil }
-                guard let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) else { return }
-                doc.addPhotoOverlay(EditorModel.overlayPicture(image))
+                guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+                // Opened and shrunk in the background, so adding a big photo
+                // never freezes the editor.
+                let picture = await Task.detached(priority: .userInitiated) {
+                    UIImage(data: data).map { EditorModel.overlayPicture($0) }
+                }.value
+                if let picture { doc.addPhotoOverlay(picture) }
             }
         }
         .onChange(of: editingText?.id) { _, id in
@@ -392,7 +397,8 @@ private struct OverlayLayer: View {
     var body: some View {
         // Only overlays with a time follow the playhead.
         let timed = !doc.isPhoto && doc.stickers.contains { $0.isTimed }
-        StickerCanvas(stickers: $doc.stickers, size: size, onEdit: { sticker in
+        let hidden: Set<UUID> = timed ? Set(doc.stickers.filter { !doc.isShown($0) }.map(\.id)) : []
+        StickerCanvas(stickers: doc.stickers, size: size, hidden: hidden, onChange: { doc.stickers = $0 }, onEdit: { sticker in
             doc.selectedOverlay = sticker.id
             guard sticker.image == nil else { return }
             doc.checkpoint()
@@ -401,9 +407,8 @@ private struct OverlayLayer: View {
             if doc.isSlides { doc.player.stepSlide(step) }
         }, onBegin: {
             doc.checkpoint()
-        }, isShown: { sticker in
-            timed ? doc.isShown(sticker) : true
         }, corner: 22)
+        .equatable()
     }
 }
 

@@ -95,26 +95,40 @@ struct ReelTimeline: View {
             .accessibilityLabel(playing ? "Pause" : "Play")
             (Text(Self.clock(playhead)).foregroundStyle(.white) + Text("  \(Self.clock(length))").foregroundStyle(.white.opacity(0.4)))
                 .font(.jakarta(12, .heavy)).monospacedDigit()
-                .lineLimit(1).minimumScaleFactor(0.7)
+                .lineLimit(1)
+                .fixedSize()
+                .layoutPriority(1)
             Spacer(minLength: 0)
-            Button(action: onAddText) { addLabel("Text", "textformat") }
+            // On a narrow phone the add buttons show just their icons, so
+            // nothing in this row gets cut off.
+            ViewThatFits(in: .horizontal) {
+                addButtons(named: true)
+                addButtons(named: false)
+            }
+        }
+    }
+
+    private func addButtons(named: Bool) -> some View {
+        HStack(spacing: 8) {
+            Button(action: onAddText) { addLabel("Text", "textformat", named: named) }
                 .buttonStyle(BouncyStyle(scale: 0.9))
-            Button(action: onAddSticker) { addLabel("Sticker", "star.fill") }
+            Button(action: onAddSticker) { addLabel("Sticker", "star.fill", named: named) }
                 .buttonStyle(BouncyStyle(scale: 0.9))
-            PhotosPicker(selection: $photoItem, matching: .images) { addLabel("Photo", "photo.fill") }
+            PhotosPicker(selection: $photoItem, matching: .images) { addLabel("Photo", "photo.fill", named: named) }
                 .buttonStyle(BouncyStyle(scale: 0.9))
         }
     }
 
-    private func addLabel(_ title: String, _ icon: String) -> some View {
+    private func addLabel(_ title: String, _ icon: String, named: Bool) -> some View {
         HStack(spacing: 5) {
-            Image(systemName: icon).font(.system(size: 10, weight: .bold))
-            Text(title).font(.jakarta(11, .heavy))
+            Image(systemName: icon).font(.system(size: named ? 10 : 12, weight: .bold))
+            if named { Text(title).font(.jakarta(11, .heavy)).lineLimit(1).fixedSize() }
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, 10)
-        .frame(height: 32)
+        .padding(.horizontal, named ? 10 : 0)
+        .frame(minWidth: 34, minHeight: 32)
         .background(EditorPalette.chip, in: Capsule())
+        .accessibilityLabel(title)
     }
 
     // MARK: time ruler
@@ -169,7 +183,7 @@ struct ReelTimeline: View {
                     Image(uiImage: slides[i]).resizable().scaledToFill()
                         .frame(width: sw, height: trackHeight).clipped()
                         .overlay(alignment: .bottomLeading) {
-                            if sw > 30 {
+                            if sw > 46 {
                                 Text(Self.seconds(secs)).font(.jakarta(9, .heavy)).foregroundStyle(.white)
                                     .monospacedDigit()
                                     .contentTransition(.numericText())
@@ -288,13 +302,29 @@ struct ReelTimeline: View {
         let x0 = min(CGFloat(start / total) * w, max(0, w - minWidth))
         let x1 = min(w, max(x0 + minWidth, CGFloat(end / total) * w))
         let lifted = lifting == sticker.id
+        let dimmed = selected != nil && !isSelected
+        // A short bar has no room for its name: it goes next to the bar
+        // instead (on whichever side has more space), never cut off.
+        let narrow = x1 - x0 < Self.nameRoom
+        let nameAfter = w - x1 >= 64 || w - x1 >= x0
         return ZStack(alignment: .leading) {
             Color.clear
                 .frame(width: w, height: laneHeight)
                 .contentShape(Rectangle())
                 .onTapGesture { selected = nil }
-            bar(sticker, selected: isSelected, dimmed: selected != nil && !isSelected, lifted: lifted,
-                width: x1 - x0, span: end - start)
+            if narrow {
+                Text(label(sticker))
+                    .font(.jakarta(11, .bold)).foregroundStyle(.white.opacity(dimmed ? 0.35 : 0.8))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(width: max(0, nameAfter ? w - x1 - (isSelected ? 18 : 8) : x0 - (isSelected ? 18 : 8)),
+                           alignment: nameAfter ? .leading : .trailing)
+                    .offset(x: nameAfter ? x1 + (isSelected ? 16 : 6) : 0)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+            bar(sticker, selected: isSelected, dimmed: dimmed, lifted: lifted,
+                width: x1 - x0, span: end - start, narrow: narrow)
                 .frame(width: x1 - x0, height: laneHeight)
                 .offset(x: x0)
                 .zIndex(1)
@@ -326,20 +356,27 @@ struct ReelTimeline: View {
         .coordinateSpace(name: sticker.id)
     }
 
-    private func bar(_ s: TextSticker, selected: Bool, dimmed: Bool, lifted: Bool, width: CGFloat, span: Double) -> some View {
+    // How wide a bar must be to show its name inside.
+    private static let nameRoom: CGFloat = 76
+
+    private func bar(_ s: TextSticker, selected: Bool, dimmed: Bool, lifted: Bool, width: CGFloat, span: Double, narrow: Bool) -> some View {
         let shape = RoundedRectangle(cornerRadius: barCorner, style: .continuous)
+        // Between a picked bar's handles there may be no room even for the icon.
+        let iconFits = width - (selected ? tabWidth * 2 + 4 : 6) >= 16
         return shape.fill(barColor(for: s))
-            .overlay(alignment: .leading) {
+            .overlay(alignment: narrow ? .center : .leading) {
                 HStack(spacing: 6) {
-                    if let image = s.image {
-                        Image(uiImage: image).resizable().scaledToFill()
-                            .frame(width: 20, height: 20)
-                            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                    } else {
-                        Image(systemName: s.isEmoji ? "face.smiling" : "textformat").font(.system(size: 10, weight: .bold))
-                            .opacity(0.85)
+                    if iconFits {
+                        if let image = s.image {
+                            Image(uiImage: image).resizable().scaledToFill()
+                                .frame(width: narrow ? 16 : 20, height: narrow ? 16 : 20)
+                                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                        } else {
+                            Image(systemName: s.isEmoji ? "face.smiling" : "textformat").font(.system(size: 10, weight: .bold))
+                                .opacity(0.85)
+                        }
                     }
-                    Text(label(s)).font(.jakarta(11, .bold)).lineLimit(1)
+                    if !narrow { Text(label(s)).font(.jakarta(11, .bold)).lineLimit(1) }
                     if selected && width > 120 {
                         Spacer(minLength: 4)
                         Text(Self.seconds((span * 10).rounded() / 10)).font(.jakarta(10, .heavy)).monospacedDigit()
@@ -349,7 +386,7 @@ struct ReelTimeline: View {
                     }
                 }
                 .foregroundStyle(.white)
-                .padding(.horizontal, selected ? tabWidth + 7 : 9)
+                .padding(.horizontal, narrow ? 0 : selected ? tabWidth + 7 : 9)
             }
             .clipShape(shape)
             .overlay {
@@ -509,10 +546,14 @@ struct ReelTimeline: View {
                 chip("", "chevron.left") { onMoveSlide(i, i - 1) }
                     .disabled(i == 0).opacity(i == 0 ? 0.4 : 1)
                 chip("", "minus") { changeSlide(i, -0.5) }
-                Text("Slide \(i + 1) · \(Self.seconds(slideSeconds[i]))")
-                    .font(.jakarta(12, .bold)).foregroundStyle(.white).monospacedDigit()
-                    .contentTransition(.numericText())
-                    .lineLimit(1).minimumScaleFactor(0.8)
+                // Shorter on a narrow phone rather than cut off.
+                ViewThatFits(in: .horizontal) {
+                    Text("Slide \(i + 1) · \(Self.seconds(slideSeconds[i]))")
+                    Text("\(i + 1) · \(Self.seconds(slideSeconds[i]))")
+                }
+                .font(.jakarta(12, .bold)).foregroundStyle(.white).monospacedDigit()
+                .contentTransition(.numericText())
+                .lineLimit(1)
                 chip("", "plus") { changeSlide(i, 0.5) }
                 chip("", "chevron.right") { onMoveSlide(i, i + 1) }
                     .disabled(i >= slides.count - 1).opacity(i >= slides.count - 1 ? 0.4 : 1)

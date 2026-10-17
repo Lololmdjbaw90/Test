@@ -249,7 +249,7 @@ struct VoiceDock: View {
                             .frame(width: 36, height: 36).background(Palette.success, in: Circle())
                             .symbolEffect(.variableColor.iterative, isActive: true)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(voice.connecting ? "Connecting…" : voice.sharingScreen ? "Sharing your screen" : room.isCall ? "In a call · tap to open" : "Voice connected").font(.jakarta(12, .heavy)).foregroundStyle(voice.sharingScreen ? Theme.main : Palette.success)
+                            Text(voice.connecting ? "Connecting…" : voice.reconnecting ? "Reconnecting…" : voice.sharingScreen ? "Sharing your screen" : room.isCall ? "In a call · tap to open" : "Voice connected").font(.jakarta(12, .heavy)).foregroundStyle(voice.reconnecting ? Palette.warning : voice.sharingScreen ? Theme.main : Palette.success)
                             Text(room.isCall ? room.name : "\(room.name) · \(room.serverName)").font(.jakarta(12, .semibold)).foregroundStyle(Palette.text2).lineLimit(1)
                         }
                         Spacer(minLength: 0)
@@ -289,6 +289,8 @@ struct VoiceDock: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .glassPill(cornerRadius: 26)
+            // A video call floats out of here when you leave Sugerly.
+            .background(CallPiPAnchor())
             .padding(.horizontal, 12)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: voice.sharingScreen)
             .transition(.move(edge: .bottom).combined(with: .opacity))

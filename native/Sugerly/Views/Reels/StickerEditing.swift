@@ -60,19 +60,30 @@ struct StickerRectsKey: PreferenceKey {
 // two fingers move the sticker under them, and at the same time two fingers
 // pinch to resize and twist to turn (like TikTok). Drop it on the bin to
 // delete, tap to edit. Touching empty space taps / swipes the media instead.
-struct StickerCanvas: View {
-    @Binding var stickers: [TextSticker]
+struct StickerCanvas: View, Equatable {
+    // The stickers as they are now; changes go back through onChange.
+    let stickers: [TextSticker]
     let size: CGSize
+    // Timeline: stickers outside their time are hidden and can't be grabbed.
+    var hidden: Set<UUID> = []
+    var onChange: ([TextSticker]) -> Void
     var onEdit: (TextSticker) -> Void
     var onTapEmpty: () -> Void
     var onSwipe: (Int) -> Void
     var onBegin: () -> Void
-    // Timeline: stickers outside their time are hidden and can't be grabbed.
-    var isShown: (TextSticker) -> Bool = { _ in true }
     // Rounded corners of the picture, so stickers are cut off at its edge.
     var corner: CGFloat = 26
 
-    @State private var rects: [UUID: CGRect] = [:]
+    // Redrawn only when the stickers, the size or what's hidden change, not
+    // on every frame of the video playing underneath (that made it lag).
+    nonisolated static func == (a: StickerCanvas, b: StickerCanvas) -> Bool {
+        a.stickers == b.stickers && a.size == b.size && a.hidden == b.hidden && a.corner == b.corner
+    }
+
+    // Where each sticker is, for finding the one under a finger. Kept out of
+    // the view's state: it changes as stickers move and needs no redraw.
+    final class Rects { var value: [UUID: CGRect] = [:] }
+    @State private var rects = Rects()
     @State private var grabbed: UUID?
     @State private var selected: UUID?
     @State private var drag: CGSize = .zero
@@ -87,7 +98,7 @@ struct StickerCanvas: View {
             ZStack {
             ForEach(stickers) { sticker in
                 let live = grabbed == sticker.id
-                StickerLabel(sticker: sticker, width: size.width)
+                StickerLabel(sticker: sticker, width: size.width, flat: true)
                     .background {
                         GeometryReader { g in
                             Color.clear.preference(key: StickerRectsKey.self, value: [sticker.id: g.frame(in: .named("stickerCanvas"))])
@@ -97,7 +108,7 @@ struct StickerCanvas: View {
                     .rotationEffect(.radians(sticker.rotation + (live ? twist : 0)))
                     .opacity(isShown(sticker) ? (live && overTrash ? 0.45 : 1) : 0)
                     .animation(.easeOut(duration: 0.15), value: isShown(sticker))
-                    .shadow(color: selected == sticker.id ? Theme.main.opacity(0.6) : .clear, radius: 10)
+                    .modifier(PickedGlow(on: selected == sticker.id))
                     .position(x: clampX(sticker.x * size.width + (live ? drag.width : 0)), y: clampY(sticker.y * size.height + (live ? drag.height : 0)))
             }
             }
@@ -150,7 +161,7 @@ struct StickerCanvas: View {
         }
         .frame(width: size.width, height: size.height)
         .coordinateSpace(name: "stickerCanvas")
-        .onPreferenceChange(StickerRectsKey.self) { rects = $0 }
+        .onPreferenceChange(StickerRectsKey.self) { rects.value = $0 }
         .sensoryFeedback(.impact(weight: .medium), trigger: overTrash)
         .sensoryFeedback(.selection, trigger: grabbed)
     }
@@ -159,9 +170,11 @@ struct StickerCanvas: View {
     private func clampX(_ x: CGFloat) -> CGFloat { min(size.width * 0.97, max(size.width * 0.03, x)) }
     private func clampY(_ y: CGFloat) -> CGFloat { min(size.height * 0.97, max(size.height * 0.03, y)) }
 
+    private func isShown(_ sticker: TextSticker) -> Bool { !hidden.contains(sticker.id) }
+
     private func hit(_ point: CGPoint) -> UUID? {
         for sticker in stickers.reversed() where isShown(sticker) {
-            if let rect = rects[sticker.id], rect.insetBy(dx: -22, dy: -22).contains(point) { return sticker.id }
+            if let rect = rects.value[sticker.id], rect.insetBy(dx: -22, dy: -22).contains(point) { return sticker.id }
         }
         return nil
     }
@@ -182,12 +195,14 @@ struct StickerCanvas: View {
             overTrash = false
         }
         guard let i = stickers.firstIndex(where: { $0.id == id }) else { return }
+        var list = stickers
         if isOverTrash(id, t) {
-            withMotion(Motion.standard) { stickers.remove(at: i) }
+            list.remove(at: i)
+            withMotion(Motion.standard) { onChange(list) }
             selected = nil
             return
         }
-        var next = stickers[i]
+        var next = list[i]
         next.x = min(0.97, max(0.03, next.x + t.width / max(1, size.width)))
         next.y = min(0.97, max(0.03, next.y + t.height / max(1, size.height)))
         next.scale = min(5, max(0.3, next.scale * s))
@@ -196,7 +211,21 @@ struct StickerCanvas: View {
         let quarter = Double.pi / 2
         let nearest = (next.rotation / quarter).rounded() * quarter
         if abs(next.rotation - nearest) < 0.06 { next.rotation = nearest }
-        stickers[i] = next
+        list[i] = next
+        onChange(list)
+    }
+}
+
+// The glow round the sticker you picked (only that one: a see-through glow
+// on every sticker still cost a drawing pass each).
+private struct PickedGlow: ViewModifier {
+    let on: Bool
+    func body(content: Content) -> some View {
+        if on {
+            content.shadow(color: Theme.main.opacity(0.6), radius: 10)
+        } else {
+            content
+        }
     }
 }
 
@@ -365,10 +394,33 @@ struct StickerTouchLayer: UIViewRepresentable {
 struct StickerLabel: View {
     let sticker: TextSticker
     let width: CGFloat
+    // On the editing canvas each sticker is drawn once into its own layer,
+    // shadow and all, and moving or turning it just moves that layer, so
+    // lots of stickers over a playing video stay smooth.
+    var flat = false
 
     private var fontSize: CGFloat { width * sticker.baseSize * sticker.scale }
 
+    // Room around the sticker for its shadow or glow inside that layer.
+    private var shadowRoom: CGFloat {
+        if sticker.image != nil { return 14 }
+        if sticker.isEmoji { return 2 }
+        return sticker.style == .glow ? fontSize * 0.9 + 4 : 10
+    }
+
     var body: some View {
+        if flat {
+            content
+                .padding(shadowRoom)
+                .drawingGroup()
+                .padding(-shadowRoom)
+        } else {
+            content
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if let image = sticker.image, sticker.framed {
             let edge = fontSize * TextSticker.frameEdge
             Image(uiImage: image).resizable().scaledToFit()

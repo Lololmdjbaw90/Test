@@ -1,5 +1,14 @@
 # Changes
 
+## Better calls, smoother editor, whole landscape slides (iOS app)
+
+- **Calls keep going outside the app**: `CallPiP` shows the other person's camera or screen in iOS's video-call picture-in-picture window (`AVPictureInPictureVideoCallViewController`) when you leave Sugerly; frames go through an `AVSampleBufferDisplayLayer` (I420 from browsers is repacked as NV12, rotation kept). Tapping the window reopens the call screen. Your camera keeps running there where iOS allows multitasking camera access (iOS 18+); otherwise it pauses when the camera is interrupted and the others see your picture.
+- **FaceTime-style call screen**: one-to-one video (and shared screens in groups) fill the screen; the buttons hide after 5 s or on tap (never with VoiceOver, errors or while reconnecting); your own camera can be dragged to any corner.
+- **Steadier, cheaper connections**: a network change (Wi-Fi ↔ mobile data) restarts ICE straight away, from either side (new `restart` signal; the website ignores it), and a dropped line shows "Reconnecting…". Signals are checked every 0.35 s while anyone is connecting and every 1.5 s once everyone is, and incoming-call checks only read calls from the last two minutes (most read nothing). iPhone's call timer starts when the other person really connects.
+- **Video and sound**: 1280×720 at up to 30 fps with a bitrate ceiling (cameras keep moving smoothly on a weak line, screens stay sharp); the camera switches to the speaker; the speaker button follows AirPods and other routes; the proximity sensor turns the screen off on the earpiece.
+- **Editor**: short timeline bars show their name beside them (never clipped), the top row drops the add buttons' names on narrow phones, stickers no longer redraw on every video frame (`StickerCanvas` is `Equatable` and each sticker is drawn into its own layer), vector stickers are made in the background, and big stickers and photos are shrunk off the main thread.
+- **Slides**: pictures that aren't close to 9:16 (landscape drawings…) are shown whole over a blurred copy of themselves instead of being cropped, in the editor and in the posted reel (`SlideFraming`). Photo reels no longer move on by themselves.
+
 ## New profiles, steady loaders, light top bar (iOS app)
 
 - **Profiles**: centred header (banner, the picture half over it with only a soft shadow, name, level, status, bio, badges and interests), one stats card, the buttons, then Posts / Art / Reels / Saved as four equal tabs with a sliding line (they always fit). Picture frames are gone: no frame picker, saving clears `avatar_frame`, and the shop no longer lists them. `FlowLayout` can centre its rows.

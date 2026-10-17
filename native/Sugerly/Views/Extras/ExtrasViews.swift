@@ -306,6 +306,15 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-3.0", icon: "video.fill", title: "Better calls", date: "2026-10-17T20:00:00Z", items: [
+            "Leave Sugerly during a video call and it keeps going in a small floating window, like FaceTime. Tap it to come back.",
+            "Video calls fill the whole screen. Tap the picture to hide or show the buttons, and drag your own little camera to any corner.",
+            "Sharper video (HD), and calls reconnect by themselves when you switch between Wi-Fi and mobile data. You'll see \"Reconnecting…\" while it happens.",
+            "Turning your camera on switches to the speaker, and the buttons follow your AirPods. Holding the phone to your ear turns the screen off, like a normal call.",
+            "Calls use much less data in the background.",
+            "Editor: names on the timeline are never cut off, and stickers are much smoother (no more lag).",
+            "Reels: photo slides stay put until you swipe, and landscape drawings show whole instead of being cut off.",
+        ]),
         AppRelease(id: "ios-2.9", icon: "person.crop.circle", title: "New profiles", date: "2026-10-17T15:00:00Z", items: [
             "A fresh look for profiles: your picture in the middle, your name, level and status under it, your numbers in one card, and Posts, Art, Reels and Saved tabs that always fit on the screen.",
             "No more rings or frames around profile pictures, on profiles or in the menu button.",

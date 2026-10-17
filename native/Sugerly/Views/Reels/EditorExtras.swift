@@ -23,10 +23,38 @@ enum VectorStickers {
         Item(symbol: "heart.circle.fill", color: 0xD9577F), Item(symbol: "star.circle.fill", color: 0x7CBEFF),
     ]
 
+    private static let lock = NSLock()
     nonisolated(unsafe) private static var cache: [Int: UIImage] = [:]
 
+    // The finished sticker if it's been made already.
+    static func cached(_ index: Int) -> UIImage? {
+        lock.lock()
+        defer { lock.unlock() }
+        return cache[index]
+    }
+
+    static var allReady: Bool { all.indices.allSatisfy { cached($0) != nil } }
+
     static func image(_ index: Int) -> UIImage {
-        if let hit = cache[index] { return hit }
+        if let hit = cached(index) { return hit }
+        let out = make(index)
+        lock.lock()
+        cache[index] = out
+        lock.unlock()
+        return out
+    }
+
+    // Makes them all in the background: opening the stickers used to make
+    // every one at once and froze the editor for a moment.
+    static func prepare() async {
+        await Task.detached(priority: .userInitiated) {
+            for i in VectorStickers.all.indices where VectorStickers.cached(i) == nil {
+                _ = VectorStickers.image(i)
+            }
+        }.value
+    }
+
+    private static func make(_ index: Int) -> UIImage {
         let item = all[index]
         var config = UIImage.SymbolConfiguration(pointSize: 300, weight: .bold)
         if item.multicolor { config = config.applying(UIImage.SymbolConfiguration.preferringMulticolor()) }
@@ -37,9 +65,7 @@ enum VectorStickers {
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
         let flat = UIGraphicsImageRenderer(size: tinted.size, format: format).image { _ in tinted.draw(at: .zero) }
-        let out = StickerKit.compose(flat, outline: true, rounded: false, caption: "", side: 360)
-        cache[index] = out
-        return out
+        return StickerKit.compose(flat, outline: true, rounded: false, caption: "", side: 360)
     }
 }
 
@@ -49,6 +75,7 @@ struct StickerTray: View {
     @Environment(AppModel.self) private var model
     @State private var giphy = false
     @State private var loading = false
+    @State private var ready = VectorStickers.allReady
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -74,10 +101,20 @@ struct StickerTray: View {
                 }
                 ForEach(VectorStickers.all.indices, id: \.self) { i in
                     Button { onAdd(VectorStickers.image(i)) } label: {
-                        Image(uiImage: VectorStickers.image(i)).resizable().scaledToFit()
-                            .padding(3)
-                            .frame(width: 50, height: 50)
-                            .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        Group {
+                            if ready, let made = VectorStickers.cached(i) {
+                                Image(uiImage: made).resizable().scaledToFit()
+                                    .transition(.opacity)
+                            } else {
+                                // A plain one until the die-cut sticker is ready.
+                                Image(systemName: VectorStickers.all[i].symbol)
+                                    .font(.system(size: 22, weight: .bold))
+                                    .foregroundStyle(Color(hex: VectorStickers.all[i].color))
+                            }
+                        }
+                        .padding(3)
+                        .frame(width: 50, height: 50)
+                        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                     .buttonStyle(BouncyStyle(scale: 0.8))
                 }
@@ -85,6 +122,11 @@ struct StickerTray: View {
             .padding(.horizontal, 16)
         }
         .sheet(isPresented: $giphy) { GifPickerSheet { url in add(url) } }
+        .task {
+            guard !ready else { return }
+            await VectorStickers.prepare()
+            withMotion(Motion.fade) { ready = true }
+        }
     }
 
     private func add(_ url: String) {
@@ -95,8 +137,12 @@ struct StickerTray: View {
             if AnimatedImages.looksAnimated(url) {
                 let loaded = await AnimatedImages.load(url, maxPixel: 600, maxFrames: 1)
                 image = loaded?.images?.first ?? loaded
+            } else if let full = await ImagePipeline.shared.load(url) {
+                // A sticker never needs more than this; bigger ones made the
+                // editor slow to move them.
+                image = await Task.detached(priority: .userInitiated) { StickerKit.normalized(full, maxSide: 720) }.value
             } else {
-                image = await ImagePipeline.shared.load(url)
+                image = nil
             }
             if let image { onAdd(image) }
         }

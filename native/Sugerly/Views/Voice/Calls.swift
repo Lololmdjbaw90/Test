@@ -315,8 +315,17 @@ final class CallCenter {
         defer { if watchToken == token { watchToken = nil } }
         while !Task.isCancelled && watchToken == token {
             await check(me)
-            try? await Task.sleep(for: .seconds(current != nil || incoming != nil ? 2 : 3.5))
+            try? await Task.sleep(for: .seconds(checkGap))
         }
+    }
+
+    // Quick around a call (it rings, or the other person hangs up); slower
+    // once this phone can be rung by push anyway (iPhone's call screen rings
+    // first), and slower still with Sugerly in the background.
+    private var checkGap: Double {
+        if incoming != nil || current != nil { return 2 }
+        guard IncomingCalls.shared.readiness == .ready else { return 3.5 }
+        return UIApplication.shared.applicationState == .background ? 30 : 6
     }
 
     private func check(_ me: UserProfile) async {
@@ -331,7 +340,11 @@ final class CallCenter {
                 }
             }
         }
-        guard let docs = try? await FS.query("Call", [.contains("member_emails", me.email)], orderBy: "created_date", limit: 8) else { return }
+        // Only calls started in the last two minutes, so most checks read
+        // nothing at all (it used to read your last 8 calls every time).
+        let since = Dates.iso(Date().addingTimeInterval(-120))
+        guard let docs = try? await FS.query("Call", [.contains("member_emails", me.email), .after("created_date", since)],
+                                             orderBy: "created_date", limit: 4) else { return }
         let calls = docs.map(CallInfo.init)
         let ringingMe = calls.first { c in
             c.callerEmail != me.email && c.ringing && !c.declinedBy.contains(me.email) && !c.joined.contains(me.email)
@@ -522,34 +535,57 @@ struct CallScreen: View {
     @State private var ending = false
     // Cameras fill the screen like FaceTime; double-tap shows the whole picture.
     @State private var stageFill = true
+    // Over a picture the buttons tuck away after a few seconds (tap to bring
+    // them back), so nothing covers the other person.
+    @State private var controlsShown = true
+    @State private var hideJob: Task<Void, Never>?
+    // Your own little camera, wherever you dragged it.
+    @State private var corner = Corner.topTrailing
+    @State private var dragged = CGSize.zero
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
 
     private var me: String { model.me?.email ?? "" }
     private var call: CallInfo? { calls.current }
     private var others: [VoiceEngine.Participant] { voice.participants.filter { !$0.isSelf } }
     private var alone: Bool { others.isEmpty }
 
-    // Someone showing their camera or screen gets the big stage (screens first).
+    // The whole screen goes to the other person's camera or screen in a
+    // one-to-one call, and to a shared screen in a group (their cameras show
+    // in everyone's tiles).
     private var stage: (VoiceEngine.Participant, RTCVideoTrack)? {
-        let showing = others.filter { !$0.video.isEmpty }.sorted { $0.video == "screen" && $1.video != "screen" }
+        let showing = others.filter { !$0.video.isEmpty && (others.count == 1 || $0.video == "screen") }
+            .sorted { $0.video == "screen" && $1.video != "screen" }
         for p in showing { if let track = voice.remoteVideo[p.id] { return (p, track) } }
         return nil
     }
 
+    // The buttons stay put while there's no picture, something needs you, or
+    // VoiceOver is on.
+    private var canHide: Bool {
+        stage != nil && !voiceOver && !voice.sharingScreen && !voice.reconnecting && voice.error == nil && calls.error == nil
+    }
+
     var body: some View {
+        let shown = stage
+        let chrome = controlsShown || !canHide
         ZStack {
             background
+            if let shown {
+                // Their camera or screen fills the whole screen, like FaceTime:
+                // tap to hide or show the buttons, double-tap for the whole
+                // picture.
+                fullStage(shown.0, shown.1)
+                    .transition(.opacity)
+                scrims
+                    .opacity(chrome ? 1 : 0)
+            }
             VStack(spacing: 0) {
                 topBar
-                if let shown = stage {
-                    // Their camera or screen sits between the top bar and the
-                    // buttons, whole and uncovered (it used to fill the screen
-                    // behind the buttons, which hid most of them).
-                    stageView(shown.0, shown.1)
-                        .padding(.horizontal, 10)
-                        .padding(.top, 8)
-                        .padding(.bottom, 12)
-                        .transition(.opacity)
+                    .opacity(chrome ? 1 : 0)
+                    .allowsHitTesting(chrome)
+                if shown != nil {
+                    Spacer(minLength: 0)
                 } else {
                     ScrollView {
                         VStack(spacing: 20) {
@@ -565,29 +601,88 @@ struct CallScreen: View {
                     }
                     .scrollBounceBehavior(.basedOnSize)
                 }
+                if let shown {
+                    stageCaption(shown.0)
+                        .opacity(chrome ? 1 : 0)
+                        .allowsHitTesting(chrome)
+                }
                 notices
                 bar
+                    .opacity(chrome ? 1 : 0)
+                    .offset(y: chrome ? 0 : 30)
+                    .allowsHitTesting(chrome)
             }
             .padding(.bottom, 20)
+            // Using a button keeps the buttons up a little longer.
+            .simultaneousGesture(TapGesture().onEnded { if chrome { scheduleHide() } })
             .animation(.spring(response: 0.45, dampingFraction: 0.85), value: alone)
             .animation(.spring(response: 0.45, dampingFraction: 0.85), value: others.count)
             // (In a group your own tile shows your camera already.)
-            if voice.cameraOn, let mine = voice.localVideo, others.count <= 1 || stage != nil {
-                selfPreview(mine)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    .padding(.top, 70).padding(.trailing, 18)
-                    .transition(.scale(scale: 0.85, anchor: .topTrailing).combined(with: .opacity))
+            if voice.cameraOn, let mine = voice.localVideo, others.count <= 1 || shown != nil {
+                selfPreviewLayer(mine, roomy: !chrome)
+                    .transition(.scale(scale: 0.85).combined(with: .opacity))
             }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: stage?.0.id)
+        // The floating window grows out of this screen when you leave Sugerly.
+        .background(CallPiPAnchor())
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: shown?.0.id)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: voice.cameraOn)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: voice.sharingScreen)
+        .animation(.easeInOut(duration: 0.25), value: chrome)
         .onChange(of: voice.sharingScreen) { _, sharing in
             // Sharing shows the rest of the app, so step out of the way.
             if sharing { withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) { calls.showScreen = false } }
         }
-        .statusBarHidden(false)
+        .onChange(of: shown?.0.id) { _, id in
+            if id != nil {
+                showControls()
+            } else {
+                hideJob?.cancel()
+                controlsShown = true
+            }
+        }
+        .onChange(of: canHide) { _, can in if can { scheduleHide() } }
+        .onAppear { scheduleHide() }
+        .onDisappear { hideJob?.cancel() }
+        .statusBarHidden(!chrome)
         .preferredColorScheme(.dark)
+    }
+
+    private func showControls() {
+        withAnimation(.easeOut(duration: 0.2)) { controlsShown = true }
+        scheduleHide()
+    }
+
+    private func scheduleHide() {
+        hideJob?.cancel()
+        guard canHide else { return }
+        hideJob = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled, canHide else { return }
+            withAnimation(.easeInOut(duration: 0.35)) { controlsShown = false }
+        }
+    }
+
+    private func toggleControls() {
+        if controlsShown && canHide {
+            hideJob?.cancel()
+            withAnimation(.easeInOut(duration: 0.25)) { controlsShown = false }
+        } else {
+            showControls()
+        }
+    }
+
+    // A soft shade at the top and bottom so the buttons read on any picture.
+    private var scrims: some View {
+        VStack(spacing: 0) {
+            LinearGradient(colors: [.black.opacity(0.55), .clear], startPoint: .top, endPoint: .bottom)
+                .frame(height: 170)
+            Spacer(minLength: 0)
+            LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
+                .frame(height: 320)
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
     }
 
     // A still background (moving blurred lights redrew the whole screen on
@@ -757,14 +852,25 @@ struct CallScreen: View {
         .animation(.spring(response: 0.22, dampingFraction: 0.7), value: p.speaking)
     }
 
-    // Their camera or screen, with their name at the bottom. Double-tap (or
-    // the corner button) to switch between the whole picture and filling.
-    private func stageView(_ p: VoiceEngine.Participant, _ track: RTCVideoTrack) -> some View {
-        ZStack(alignment: .bottomLeading) {
+    // Their camera or screen across the whole screen. A screen always shows
+    // whole; a camera fills the screen until you double-tap it.
+    private func fullStage(_ p: VoiceEngine.Participant, _ track: RTCVideoTrack) -> some View {
+        ZStack {
             Color.black
             VideoTrackView(track: track, fill: stageFill && p.video == "camera")
-            LinearGradient(colors: [.clear, .clear, .black.opacity(0.55)], startPoint: .top, endPoint: .bottom)
-                .allowsHitTesting(false)
+        }
+        .ignoresSafeArea()
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) { if p.video == "camera" { withMotion(Motion.standard) { stageFill.toggle() } } }
+        .onTapGesture { toggleControls() }
+        .accessibilityElement()
+        .accessibilityLabel(p.video == "screen" ? "\(name(p))'s screen" : "\(name(p))'s camera")
+        .accessibilityAddTraits(.isImage)
+    }
+
+    // Whose picture it is, and the button for the whole picture or filling.
+    private func stageCaption(_ p: VoiceEngine.Participant) -> some View {
+        HStack(spacing: 10) {
             HStack(spacing: 8) {
                 Avatar(url: model.person(p.email)?.picture ?? p.picture, name: p.name, size: 26)
                 Text(p.video == "screen" ? "\(name(p))'s screen" : name(p)).font(.jakarta(13, .bold)).lineLimit(1)
@@ -774,9 +880,7 @@ struct CallScreen: View {
             .foregroundStyle(.white)
             .padding(.leading, 6).padding(.trailing, 12).padding(.vertical, 6)
             .background(.ultraThinMaterial, in: Capsule())
-            .padding(12)
-        }
-        .overlay(alignment: .bottomTrailing) {
+            Spacer(minLength: 0)
             if p.video == "camera" {
                 Button { withMotion(Motion.standard) { stageFill.toggle() } } label: {
                     Image(systemName: stageFill ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
@@ -785,12 +889,10 @@ struct CallScreen: View {
                 }
                 .buttonStyle(BouncyStyle(scale: 0.85))
                 .accessibilityLabel(stageFill ? "Show the whole picture" : "Fill the screen")
-                .padding(12)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .onTapGesture(count: 2) { if p.video == "camera" { withMotion(Motion.standard) { stageFill.toggle() } } }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 10)
     }
 
     // One floating bar of buttons, the same whether or not a picture is
@@ -810,7 +912,41 @@ struct CallScreen: View {
         }
     }
 
-    // Your own camera in a small corner card; tap the arrows to flip it.
+    private enum Corner {
+        case topLeading, topTrailing, bottomLeading, bottomTrailing
+        init(left: Bool, top: Bool) { self = top ? (left ? .topLeading : .topTrailing) : (left ? .bottomLeading : .bottomTrailing) }
+        var left: Bool { self == .topLeading || self == .bottomLeading }
+        var top: Bool { self == .topLeading || self == .topTrailing }
+    }
+
+    // Your own camera in a corner: drag it to any corner and it stays there.
+    // It moves out of the buttons' way and back as they show and hide.
+    private func selfPreviewLayer(_ track: RTCVideoTrack, roomy: Bool) -> some View {
+        GeometryReader { geo in
+            let card = CGSize(width: 104, height: 150)
+            let top: CGFloat = roomy ? 12 : 66
+            let bottom: CGFloat = roomy ? 24 : 200
+            let x = corner.left ? 16 + card.width / 2 : geo.size.width - 16 - card.width / 2
+            let y = corner.top ? top + card.height / 2 : geo.size.height - bottom - card.height / 2
+            selfPreview(track)
+                .position(x: x + dragged.width, y: y + dragged.height)
+                .gesture(
+                    DragGesture()
+                        .onChanged { dragged = $0.translation }
+                        .onEnded { value in
+                            let endX = x + value.predictedEndTranslation.width
+                            let endY = y + value.predictedEndTranslation.height
+                            withAnimation(.spring(response: 0.42, dampingFraction: 0.8)) {
+                                corner = Corner(left: endX < geo.size.width / 2, top: endY < geo.size.height / 2)
+                                dragged = .zero
+                            }
+                        }
+                )
+                .animation(.spring(response: 0.42, dampingFraction: 0.85), value: roomy)
+        }
+    }
+
+    // Your own camera in a small card; tap the arrows to flip it.
     private func selfPreview(_ track: RTCVideoTrack) -> some View {
         ZStack(alignment: .bottomTrailing) {
             Group {
@@ -837,6 +973,13 @@ struct CallScreen: View {
     @ViewBuilder
     private var notices: some View {
         VStack(spacing: 10) {
+            if voice.reconnecting {
+                Label("Reconnecting…", systemImage: "wifi.exclamationmark")
+                    .font(.jakarta(13, .bold)).foregroundStyle(Color(hex: 0xFFD166))
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(.black.opacity(0.45), in: Capsule())
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            }
             if voice.sharingScreen {
                 HStack(spacing: 10) {
                     Image(systemName: "rectangle.on.rectangle").font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.light)
@@ -876,6 +1019,7 @@ struct CallScreen: View {
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 12)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: voice.reconnecting)
     }
 
     // Opens this call's chat and keeps the call going in the little bar.

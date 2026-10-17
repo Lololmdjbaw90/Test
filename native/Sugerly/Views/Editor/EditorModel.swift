@@ -112,7 +112,7 @@ final class EditorModel {
 
     func openSlides(_ images: [UIImage]) async {
         guard !images.isEmpty else { return }
-        let ready = await Self.ready(images)
+        let ready = await Self.ready(images, slides: true)
         resetEdits()
         kind = .slides
         videoURL = nil
@@ -131,7 +131,7 @@ final class EditorModel {
     }
 
     func openPhoto(_ image: UIImage) async {
-        let ready = await Self.ready([image])
+        let ready = await Self.ready([image], slides: false)
         resetEdits()
         kind = .photo
         photos = ready.photos
@@ -143,10 +143,10 @@ final class EditorModel {
 
     // Big photos are made ready in the background, so opening ten of them
     // doesn't freeze the screen.
-    nonisolated private static func ready(_ images: [UIImage]) async -> (photos: [UIImage], screen: [UIImage]) {
+    nonisolated private static func ready(_ images: [UIImage], slides: Bool) async -> (photos: [UIImage], screen: [UIImage]) {
         await Task.detached(priority: .userInitiated) {
             let photos = images.map { EditorModel.prepare($0) }
-            return (photos, photos.map { EditorModel.screenCopy($0) })
+            return (photos, photos.map { EditorModel.screenBase($0, slide: slides) })
         }.value
     }
 
@@ -304,7 +304,8 @@ final class EditorModel {
     }
 
     private func rebuildBases() {
-        bases = photos.map(Self.screenCopy)
+        let slides = isSlides
+        bases = photos.map { Self.screenBase($0, slide: slides) }
         previews = bases
     }
 
@@ -350,7 +351,7 @@ final class EditorModel {
         if let i = job.slide, photos.indices.contains(i) {
             photos[i] = Cropping.crop(photos[i], rect, maxSide: 2048)
             if bases.indices.contains(i) {
-                bases[i] = Self.screenCopy(photos[i])
+                bases[i] = Self.screenBase(photos[i], slide: isSlides)
                 if previews.indices.contains(i) { previews[i] = bases[i] }
             }
             refreshLook()
@@ -570,7 +571,13 @@ extension EditorModel {
         }
     }
 
-    // A picture filling a frame (cut at the sides or top, like the preview).
+    // What the editor shows: a screen-sized copy, already framed for the
+    // reel when it's a slide (so it looks exactly as it will be posted).
+    nonisolated static func screenBase(_ image: UIImage, slide: Bool) -> UIImage {
+        slide ? SlideFraming.frame(image, to: CGSize(width: 608, height: 1080)) : screenCopy(image)
+    }
+
+    // A picture filling a frame (cut at the sides or top).
     nonisolated static func fill(_ image: UIImage, to size: CGSize) -> UIImage {
         let k = max(size.width / max(1, image.size.width), size.height / max(1, image.size.height))
         let drawn = CGSize(width: image.size.width * k, height: image.size.height * k)
@@ -598,7 +605,7 @@ extension EditorModel {
         }
     }
 
-    // The slides as posted: each photo filled into the 9:16 frame (exactly as
+    // The slides as posted: each photo framed for the 9:16 reel (exactly as
     // it looked in the editor) with the look, the drawing and the overlays
     // timed onto it. Made in the background.
     func bakedSlides() async -> [UIImage] {
@@ -613,7 +620,7 @@ extension EditorModel {
         }
         return await Task.detached(priority: .userInitiated) {
             pictures.indices.map { i in
-                PhotoBaker.bake(Self.fill(pictures[i], to: Self.slideSize), look: look, stickers: perSlide[i], strokes: strokes)
+                PhotoBaker.bake(SlideFraming.frame(pictures[i], to: Self.slideSize), look: look, stickers: perSlide[i], strokes: strokes)
             }
         }.value
     }
@@ -745,5 +752,43 @@ extension EditorModel {
         made.scaleTimeRange(CMTimeRange(start: .zero, duration: range.duration),
                             toDuration: CMTimeMultiplyByFloat64(range.duration, multiplier: 1 / rate))
         return made
+    }
+}
+
+// A slide for the 9:16 reel. A picture that's nearly that shape fills it;
+// any other (a landscape drawing, a square one…) shows whole over a soft,
+// blurred copy of itself instead of being cut off at the sides.
+enum SlideFraming {
+    private static let blur = CIContext(options: [.cacheIntermediates: false])
+
+    static func frame(_ image: UIImage, to size: CGSize) -> UIImage {
+        let aspect = image.size.width / max(1, image.size.height)
+        let target = size.width / max(1, size.height)
+        if abs(aspect - target) / target < 0.08 { return EditorModel.fill(image, to: size) }
+        let k = min(size.width / max(1, image.size.width), size.height / max(1, image.size.height))
+        let shown = CGSize(width: (image.size.width * k).rounded(), height: (image.size.height * k).rounded())
+        let backdrop = blurred(image, size: size)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIColor.black.setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            backdrop?.draw(in: CGRect(origin: .zero, size: size))
+            UIColor.black.withAlphaComponent(0.28).setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            image.draw(in: CGRect(x: ((size.width - shown.width) / 2).rounded(), y: ((size.height - shown.height) / 2).rounded(),
+                                  width: shown.width, height: shown.height))
+        }
+    }
+
+    // The picture filling the frame, tiny and very blurred (it's only the
+    // backdrop, so it costs next to nothing).
+    private static func blurred(_ image: UIImage, size: CGSize) -> UIImage? {
+        let small = CGSize(width: max(1, (size.width / 8).rounded()), height: max(1, (size.height / 8).rounded()))
+        guard let cg = EditorModel.fill(image, to: small).cgImage else { return nil }
+        let base = CIImage(cgImage: cg)
+        let soft = base.clampedToExtent().applyingGaussianBlur(sigma: 5).cropped(to: base.extent)
+        return blur.createCGImage(soft, from: base.extent).map { UIImage(cgImage: $0) }
     }
 }

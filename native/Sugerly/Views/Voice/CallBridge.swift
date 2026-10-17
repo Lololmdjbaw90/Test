@@ -18,6 +18,8 @@ final class CallBridge: NSObject, CXProviderDelegate {
     private let controller = CXCallController()
     private(set) var callId: UUID?
     private var outgoing = false
+    // iPhone's call timer starts once, when the other person first connects.
+    private var reportedConnected = false
     var onMute: ((Bool) -> Void)?
     var onEnd: (() -> Void)?
     // A ringing call was answered / declined on iOS's call screen (Sugerly call id).
@@ -52,6 +54,7 @@ final class CallBridge: NSObject, CXProviderDelegate {
         action.isVideo = false
         callId = id
         outgoing = true
+        reportedConnected = false
         do {
             try await controller.request(CXTransaction(action: action))
         } catch {
@@ -78,11 +81,13 @@ final class CallBridge: NSObject, CXProviderDelegate {
         answered = nil
         callId = id
         outgoing = false
+        reportedConnected = false
         return true
     }
 
     func connected() {
-        guard let callId, outgoing else { return }
+        guard let callId, outgoing, !reportedConnected else { return }
+        reportedConnected = true
         provider.reportOutgoingCall(with: callId, connectedAt: Date())
     }
 
@@ -95,6 +100,7 @@ final class CallBridge: NSObject, CXProviderDelegate {
         guard let id = callId else { return }
         callId = nil
         outgoing = false
+        reportedConnected = false
         controller.request(CXTransaction(action: CXEndCallAction(call: id))) { _ in }
     }
 
