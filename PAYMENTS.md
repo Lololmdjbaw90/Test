@@ -22,26 +22,24 @@ everyone else), so nobody can fake a payment.
 
 ## One-time setup (about 10 minutes)
 
+The payment server runs on Firebase (see "Server on Firebase" in
+`DEPLOYMENT.md`); Netlify runs the same code as a backup.
+
 1. Make a Stripe account at <https://dashboard.stripe.com/register> and finish
    the business details so you can accept live payments.
-2. In Netlify: **Site configuration → Environment variables**, add:
-
-   | Key | Value |
-   | --- | --- |
-   | `STRIPE_SECRET_KEY` | Stripe → Developers → API keys → **Secret key** (`sk_live_…`, or `sk_test_…` to try it with test cards first) |
-   | `FIREBASE_CLIENT_EMAIL` | the `client_email` from your Firebase service-account key file |
-   | `FIREBASE_PRIVATE_KEY` | the `private_key` from the same file (from `-----BEGIN` to `END PRIVATE KEY-----`) |
-
-   You can also use `FIREBASE_SERVICE_ACCOUNT` with the whole key file instead
-   of the two Firebase keys.
-3. Redeploy the site (Deploys → Trigger deploy). The payment functions are in
-   `netlify/functions` and deploy with the site.
-4. **Recommended:** in Stripe → Developers → Webhooks, add the endpoint
-   `https://sugerly.netlify.app/.netlify/functions/commission-webhook` for the
-   event `checkout.session.completed`. Put its **signing secret** (`whsec_…`) in
-   Netlify as `STRIPE_WEBHOOK_SECRET`. This marks orders paid even if the buyer
-   closes the page right after paying. Without the webhook, orders are marked
-   paid when the buyer comes back to Sugerly.
+2. In GitHub → Settings → Secrets and variables → Actions, add
+   `STRIPE_SECRET_KEY` (Stripe → Developers → API keys → **Secret key**,
+   `sk_live_…`, or `sk_test_…` to try it with test cards first) next to the
+   Firebase key (`FIREBASE_SERVICE_ACCOUNT`).
+3. Run the **Deploy server to Firebase** workflow. The payment functions are
+   in `netlify/functions`; it deploys them to Firebase.
+4. **Recommended:** in Stripe → Developers → Webhooks, add a destination for
+   `checkout.session.completed` (and `checkout.session.async_payment_succeeded`)
+   at `https://us-central1-umikoworks-86333.cloudfunctions.net/api/commission-webhook`.
+   Put its **signing secret** (`whsec_…`) in GitHub as
+   `STRIPE_WEBHOOK_SECRET` and deploy again. This marks orders paid even if
+   the buyer closes the page right after paying. Without the webhook, orders
+   are marked paid when the buyer comes back to Sugerly.
 
 To test: use a `sk_test_…` key and the card `4242 4242 4242 4242` with any
 future date and any CVC.
