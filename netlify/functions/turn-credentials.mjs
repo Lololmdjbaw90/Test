@@ -7,7 +7,7 @@
 //     CLOUDFLARE_TURN_KEY_ID, CLOUDFLARE_TURN_API_TOKEN
 //   Metered.ca:
 //     METERED_TURN_APP (the part before .metered.live), METERED_TURN_API_KEY
-import { Problem, handle, signedInUser } from "../lib/sugerly.mjs";
+import { Problem, SETTINGS, handle, signedInUser } from "../lib/sugerly.mjs";
 
 const STUN = [{ urls: ["stun:stun.cloudflare.com:3478", "stun:stun.l.google.com:19302"] }];
 
@@ -19,7 +19,7 @@ async function cloudflare() {
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ ttl: 86400 }),
   });
-  if (!res.ok) throw new Problem(502, `Call relay (Cloudflare) said ${res.status}. Check the TURN key in Netlify.`);
+  if (!res.ok) throw new Problem(502, `Call relay (Cloudflare) said ${res.status}. Check the TURN key in ${SETTINGS}.`);
   const data = await res.json();
   const list = Array.isArray(data.iceServers) ? data.iceServers : data.iceServers ? [data.iceServers] : [];
   return list;
@@ -29,7 +29,7 @@ async function metered() {
   const app = process.env.METERED_TURN_APP, key = process.env.METERED_TURN_API_KEY;
   if (!app || !key) return null;
   const res = await fetch(`https://${app}.metered.live/api/v1/turn/credentials?apiKey=${encodeURIComponent(key)}`);
-  if (!res.ok) throw new Problem(502, `Call relay (Metered) said ${res.status}. Check the TURN key in Netlify.`);
+  if (!res.ok) throw new Problem(502, `Call relay (Metered) said ${res.status}. Check the TURN key in ${SETTINGS}.`);
   const list = await res.json();
   return Array.isArray(list) ? list : [];
 }

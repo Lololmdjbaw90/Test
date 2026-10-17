@@ -9,8 +9,16 @@
 //                            "client_email" and "private_key"), or the whole
 //                            key as FIREBASE_SERVICE_ACCOUNT
 //   SITE_URL                 optional, defaults to https://sugerly.netlify.app
+//   LOGIN_SECRET             optional: any long random text. Login and backup
+//                            codes are fingerprinted with it, so they keep
+//                            working when the Firebase key is replaced.
+// The same code also runs on Firebase (functions/index.js), where these come
+// from GitHub secrets (.github/workflows/firebase-server.yml).
 import crypto from "node:crypto";
 
+// Where this server's settings are kept, for setup messages: Netlify's
+// environment variables, or GitHub secrets when it runs on Firebase.
+export const SETTINGS = process.env.SUGERLY_SETTINGS || "Netlify";
 export const PROJECT = process.env.FIREBASE_PROJECT_ID || "umikoworks-86333";
 // The Firebase web API key is a public identifier (it's in the app too).
 const WEB_API_KEY = process.env.FIREBASE_WEB_API_KEY || "AIzaSyA__4874dkVIZMdV5GWQVzWX0rSPET_W4E";
@@ -131,10 +139,10 @@ async function googleToken(scope = DATASTORE) {
     key = serviceAccount();
   } catch (e) {
     if (e instanceof Problem) throw e;
-    throw new Problem(503, "Payments setup: FIREBASE_SERVICE_ACCOUNT on Netlify isn't a valid key file.");
+    throw new Problem(503, `Payments setup: FIREBASE_SERVICE_ACCOUNT on ${SETTINGS} isn't a valid key file.`);
   }
   if (!key.client_email || !String(key.client_email).includes("@")) {
-    throw new Problem(503, "Payments setup: FIREBASE_CLIENT_EMAIL on Netlify is missing or wrong.");
+    throw new Problem(503, `Payments setup: FIREBASE_CLIENT_EMAIL on ${SETTINGS} is missing or wrong.`);
   }
   const now = Math.floor(Date.now() / 1000);
   const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
@@ -148,7 +156,7 @@ async function googleToken(scope = DATASTORE) {
   } catch {
     // Says what's there (never the key itself): a full key is about 1,600 characters.
     const info = cleanPem.info || {};
-    throw new Problem(503, `Payments setup: FIREBASE_PRIVATE_KEY on Netlify is incomplete (start line: ${info.hasBegin ? "yes" : "missing"}, end line: ${info.hasEnd ? "yes" : "missing"}, ${info.length ?? 0} of about 1,600 characters). Paste the whole private_key, from -----BEGIN to END PRIVATE KEY-----.`);
+    throw new Problem(503, `Payments setup: FIREBASE_PRIVATE_KEY on ${SETTINGS} is incomplete (start line: ${info.hasBegin ? "yes" : "missing"}, end line: ${info.hasEnd ? "yes" : "missing"}, ${info.length ?? 0} of about 1,600 characters). Paste the whole private_key, from -----BEGIN to END PRIVATE KEY-----.`);
   }
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -158,7 +166,7 @@ async function googleToken(scope = DATASTORE) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     // Usually the key was deleted in Google Cloud or doesn't match the email.
-    throw new Problem(503, `Payments setup: Google refused the Firebase key on Netlify (${data.error_description || data.error || res.status}). Make a new key and put it in Netlify.`);
+    throw new Problem(503, `Payments setup: Google refused the Firebase key on ${SETTINGS} (${data.error_description || data.error || res.status}). Make a new key and put it in ${SETTINGS}.`);
   }
   tokens.set(scope, { value: data.access_token, expires: Date.now() + data.expires_in * 1000 });
   return data.access_token;
@@ -203,7 +211,7 @@ async function firestore(path, init = {}) {
   if (res.status === 404) return null;
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 || res.status === 403) {
-    throw new Problem(503, `Payments setup: the Firebase key on Netlify can't use the database (${data.error?.status || res.status}). Check it's from the umikoworks-86333 project.`);
+    throw new Problem(503, `Payments setup: the Firebase key on ${SETTINGS} can't use the database (${data.error?.status || res.status}). Check it's from the umikoworks-86333 project.`);
   }
   if (!res.ok) throw new Error(`Firestore ${res.status}: ${data.error?.message || ""}`);
   return data;
@@ -301,7 +309,7 @@ async function authAdmin(method, payload) {
   });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 || res.status === 403) {
-    throw new Problem(503, `Login setup: the Firebase key on Netlify can't manage accounts (${data.error?.status || res.status}).`);
+    throw new Problem(503, `Login setup: the Firebase key on ${SETTINGS} can't manage accounts (${data.error?.status || res.status}).`);
   }
   if (!res.ok) {
     const code = String(data.error?.message || res.status);
@@ -345,8 +353,11 @@ export function customToken(uid) {
 }
 
 // Codes are only ever stored as this keyed fingerprint, never as typed.
+// Without LOGIN_SECRET the Firebase key is the secret, so a new key means
+// new backup codes.
 export function fingerprint(text) {
-  return crypto.createHmac("sha256", `sugerly-login:${serviceAccount().private_key}`).update(String(text)).digest("hex");
+  const secret = (process.env.LOGIN_SECRET || "").trim() || serviceAccount().private_key;
+  return crypto.createHmac("sha256", `sugerly-login:${secret}`).update(String(text)).digest("hex");
 }
 
 export function sameFingerprint(a, b) {
@@ -371,9 +382,9 @@ export async function sendMail({ to, subject, html, text }) {
   const resend = (process.env.RESEND_API_KEY || "").trim();
   let res;
   if (brevo) {
-    if (!from) throw new Problem(503, "Email setup: add MAIL_FROM on Netlify (the sender email you verified in Brevo).");
+    if (!from) throw new Problem(503, `Email setup: add MAIL_FROM on ${SETTINGS} (the sender email you verified in Brevo).`);
     if (brevo.startsWith("xsmtpsib-")) {
-      throw new Problem(503, "Email setup: BREVO_API_KEY on Netlify is Brevo's SMTP key. In Brevo → SMTP & API → API keys, make an API key (it starts with xkeysib-) and paste that instead.");
+      throw new Problem(503, `Email setup: BREVO_API_KEY on ${SETTINGS} is Brevo's SMTP key. In Brevo → SMTP & API → API keys, make an API key (it starts with xkeysib-) and paste that instead.`);
     }
     res = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
@@ -394,9 +405,9 @@ export async function sendMail({ to, subject, html, text }) {
     const detail = String(data.message || data.code || "");
     if (res.status === 401 || res.status === 403) {
       if (/\bIP\b|ip address/i.test(detail)) {
-        throw new Problem(503, "Email setup: Brevo is blocking Netlify's address. In Brevo → Settings → Security → Authorised IPs, turn off blocking of unknown IP addresses.");
+        throw new Problem(503, `Email setup: Brevo is blocking the server's address. In Brevo → Settings → Security → Authorised IPs, turn off blocking of unknown IP addresses.`);
       }
-      throw new Problem(503, `Email setup: the email service didn't accept the API key on Netlify${brevo ? " (it should start with xkeysib-)" : ""}. ${detail.slice(0, 80)}`.trim());
+      throw new Problem(503, `Email setup: the email service didn't accept the API key on ${SETTINGS}${brevo ? " (it should start with xkeysib-)" : ""}. ${detail.slice(0, 80)}`.trim());
     }
     throw new Problem(502, `The email didn't send (${(detail || String(res.status)).slice(0, 120)}).`);
   }
@@ -424,13 +435,13 @@ function stripeKey() {
   if (!key) throw new Problem(503, "Card payments aren't set up yet (missing Stripe key on the server).");
   // Never echo the value back: just say what kind of thing is there.
   if (/BEGIN PRIVATE KEY|private_key/.test(key)) {
-    throw new Problem(503, "Payments setup: STRIPE_SECRET_KEY on Netlify holds the Firebase key by mistake. Put your Stripe secret key there (it starts with sk_test_ or sk_live_).");
+    throw new Problem(503, `Payments setup: STRIPE_SECRET_KEY on ${SETTINGS} holds the Firebase key by mistake. Put your Stripe secret key there (it starts with sk_test_ or sk_live_).`);
   }
   if (key.startsWith("pk_")) {
-    throw new Problem(503, "Payments setup: STRIPE_SECRET_KEY on Netlify is the publishable key (pk_…). Use the secret key, which starts with sk_test_ or sk_live_.");
+    throw new Problem(503, `Payments setup: STRIPE_SECRET_KEY on ${SETTINGS} is the publishable key (pk_…). Use the secret key, which starts with sk_test_ or sk_live_.`);
   }
   if (!/^(sk|rk)_(test|live)_[A-Za-z0-9]+$/.test(key)) {
-    throw new Problem(503, "Payments setup: STRIPE_SECRET_KEY on Netlify isn't a Stripe secret key. It should start with sk_test_ or sk_live_.");
+    throw new Problem(503, `Payments setup: STRIPE_SECRET_KEY on ${SETTINGS} isn't a Stripe secret key. It should start with sk_test_ or sk_live_.`);
   }
   return key;
 }
@@ -444,7 +455,7 @@ export async function stripe(path, params, method = "POST") {
   const data = await res.json().catch(() => ({}));
   if (res.status === 401) {
     // Stripe's own text repeats part of the key, so it isn't passed on.
-    throw new Problem(503, "Payments setup: Stripe didn't accept STRIPE_SECRET_KEY on Netlify. Copy the secret key again from Stripe → Developers → API keys.");
+    throw new Problem(503, `Payments setup: Stripe didn't accept STRIPE_SECRET_KEY on ${SETTINGS}. Copy the secret key again from Stripe → Developers → API keys.`);
   }
   if (!res.ok) throw new Problem(502, data.error?.message || "Stripe didn't accept that.");
   return data;

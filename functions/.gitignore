@@ -1,0 +1,3 @@
+node_modules/
+# Copied from ../netlify by scripts/sync-server.mjs before each deploy.
+netlify/

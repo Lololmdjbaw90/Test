@@ -1,0 +1,133 @@
+# Runs Sugerly's server on Firebase instead of Netlify: the code in
+# netlify/functions (login codes, card payments, call ringing, call relay) as
+# one Cloud Function, "api", and the website (Help, Terms, Privacy and the
+# "payment done" page) on Firebase Hosting. It only runs when started by hand
+# (Actions → "Deploy server to Firebase" → Run workflow); run it again after
+# changing a secret or the code in netlify/.
+#
+# One-time setup:
+# 1. Google Cloud console → IAM & Admin → IAM → the firebase-adminsdk-…
+#    account (the key in FIREBASE_SERVICE_ACCOUNT) → Edit → add the roles
+#    Editor, Cloud Functions Admin, Cloud Run Admin, Secret Manager Admin and
+#    Service Account User.
+# 2. GitHub → Settings → Secrets and variables → Actions: the same values as
+#    in Netlify's environment variables (skip the ones you don't use):
+#    FIREBASE_SERVICE_ACCOUNT, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
+#    BREVO_API_KEY (or RESEND_API_KEY), MAIL_FROM, APNS_KEY, APNS_KEY_ID,
+#    APPLE_TEAM_ID, CLOUDFLARE_TURN_KEY_ID + CLOUDFLARE_TURN_API_TOKEN (or
+#    METERED_TURN_APP + METERED_TURN_API_KEY), and LOGIN_SECRET: any long
+#    random text, which keeps backup codes working if the Firebase key changes.
+# The settings travel as one Secret Manager secret (SUGERLY_ENV) and old
+# copies are removed, so it stays inside Firebase's free allowance.
+name: Deploy server to Firebase
+
+on:
+  workflow_dispatch:
+  # Only so GitHub knows this job on branches other than main. A push never
+  # deploys: the job below runs only when started by hand.
+  push:
+    paths:
+      - ".github/workflows/firebase-server.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-server
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      # Secrets are only handed to the steps that need them, never to the
+      # package installs.
+      - name: Needs the FIREBASE_SERVICE_ACCOUNT secret
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT$FIREBASE_PRIVATE_KEY" ]; then
+            echo "::error title=Server not deployed::Add the FIREBASE_SERVICE_ACCOUNT secret (see the top of .github/workflows/firebase-server.yml), then run this again."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Build the website
+        env:
+          VITE_LEGAL_SITE: "true"
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Get the server ready
+        run: |
+          node scripts/sync-server.mjs
+          npm ci --prefix functions --no-audit --no-fund
+          npm install --global --no-audit --no-fund firebase-tools@15
+
+      - name: Firebase key
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+        run: |
+          node scripts/firebase-key.mjs > "$RUNNER_TEMP/key.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/key.json" >> "$GITHUB_ENV"
+          echo "PROJECT=$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).project_id" "$RUNNER_TEMP/key.json")" >> "$GITHUB_ENV"
+
+      - name: Server settings (from the GitHub secrets)
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          APNS_KEY: ${{ secrets.APNS_KEY }}
+          APNS_KEY_ID: ${{ secrets.APNS_KEY_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CLOUDFLARE_TURN_KEY_ID: ${{ secrets.CLOUDFLARE_TURN_KEY_ID }}
+          CLOUDFLARE_TURN_API_TOKEN: ${{ secrets.CLOUDFLARE_TURN_API_TOKEN }}
+          METERED_TURN_APP: ${{ secrets.METERED_TURN_APP }}
+          METERED_TURN_API_KEY: ${{ secrets.METERED_TURN_API_KEY }}
+          LOGIN_SECRET: ${{ secrets.LOGIN_SECRET }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+        run: |
+          node scripts/server-settings.mjs "$RUNNER_TEMP/sugerly-env.json"
+          firebase functions:secrets:set SUGERLY_ENV --data-file "$RUNNER_TEMP/sugerly-env.json" --project "$PROJECT" --non-interactive --force
+          rm -f "$RUNNER_TEMP/sugerly-env.json"
+
+      # --force sets up the automatic clean-up of old server images (so they
+      # don't pile up and cost money). It only touches this "server" codebase.
+      - name: Deploy the server and website
+        run: firebase deploy --only functions,hosting --project "$PROJECT" --non-interactive --force
+
+      - name: Remove old copies of the settings
+        continue-on-error: true
+        run: firebase functions:secrets:prune --project "$PROJECT" --non-interactive --force
+
+      - name: Check it answers
+        run: |
+          for url in "https://us-central1-$PROJECT.cloudfunctions.net/api/status" "https://$PROJECT.web.app/api/status"; do
+            for try in 1 2 3 4 5 6; do
+              if out=$(curl -fsS --max-time 30 "$url"); then echo "$url → $out"; break; fi
+              if [ "$try" = 6 ]; then echo "::error title=Server not answering::$url"; exit 1; fi
+              sleep 10
+            done
+            case "$out" in *'"settings":0'*) echo "::error title=No settings::The server started without its settings (SUGERLY_ENV)."; exit 1;; esac
+          done
+          curl -fsS --max-time 30 -o /dev/null "https://$PROJECT.web.app/paid.html" && echo "Website is up: https://$PROJECT.web.app"
+
+      - name: Clean up
+        if: always()
+        run: rm -f "$RUNNER_TEMP/key.json" "$RUNNER_TEMP/sugerly-env.json"

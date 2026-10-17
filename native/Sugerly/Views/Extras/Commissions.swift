@@ -192,36 +192,11 @@ struct CommissionOrder: Identifiable, Hashable {
     var earnings: Double { artistEarnings ?? price * 0.9 }
 }
 
-// Talks to the payment server on the website (Netlify functions).
+// Talks to Sugerly's server (payments, call ringing, the call relay).
 enum Payments {
-    static let base = "https://sugerly.netlify.app/.netlify/functions"
-
     @discardableResult
     static func call(_ name: String, _ body: [String: Any]) async throws -> [String: Any] {
-        guard let url = URL(string: "\(base)/\(name)") else { throw APIError(message: "Bad address.") }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 30
-        request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        // Not the Authorization header: Netlify can answer that one itself.
-        request.setValue(try await AuthClient.shared.token(), forHTTPHeaderField: "X-Sugerly-Token")
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await URLSession.shared.data(for: request)
-        } catch {
-            throw APIError(message: "No connection — check your internet and try again.", status: -1)
-        }
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
-        guard (200..<300).contains(status) else {
-            // A 404 without our JSON means the payment server isn't deployed at all.
-            if status == 404 && json["error"] == nil { throw APIError(message: "Card payments aren't switched on yet (the payment server isn't deployed). Ask the Sugerly team.", status: status) }
-            throw APIError(message: json["error"] as? String ?? json["msg"] as? String ?? "Payments aren't available right now (\(status)).", status: status)
-        }
-        return json
+        try await Backend.call(name, body, signedIn: true, missing: "Sugerly's server isn't answering right now. Please try again in a moment.")
     }
 }
 

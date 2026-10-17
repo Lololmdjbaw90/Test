@@ -1,5 +1,11 @@
 # Changes
 
+## Server on Firebase (Netlify becomes the backup)
+
+- **One Cloud Function, same code**: `functions/index.js` runs `netlify/functions/*.mjs` unchanged as `api` (Netlify-style requests in, Netlify-style answers out, the raw body kept so Stripe signatures still match). Settings come from one Secret Manager secret, `SUGERLY_ENV`, filled from GitHub secrets by `.github/workflows/firebase-server.yml`, which also puts the website on Firebase Hosting (`/api/**` and `/.netlify/functions/**` go to the function, so `paid.html` works as is).
+- **Setup messages say where settings live** (`SETTINGS`: "Netlify", or "GitHub" on Firebase), and `LOGIN_SECRET` (optional) fingerprints login and backup codes so they survive a new Firebase key.
+- **iOS app**: account, payments, call ringing and the call relay all go through `Backend.call`, which tries Firebase, then Netlify, then Netlify's preview copy. Only an answer with Sugerly's own JSON counts, so a server that isn't deployed (or can't be reached) simply hands over to the next.
+
 ## One set of hashtags for everything, and trending tags (iOS app + ranking job)
 
 - **`tags` on every post, reel, drawing and song**: a list of lowercase tags without the `#` (letters, numbers and `_`, 2–40 long, at most 10, the same rule everywhere). The iOS app saves it when posting; `scripts/rank.mjs` fills it in for older things, things made on the website and edited captions. A tag's page finds everything with one indexed `array-contains` query per kind, a page at a time (indexes in `firestore.indexes.json`).

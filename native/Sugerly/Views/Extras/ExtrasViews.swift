@@ -306,6 +306,9 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-2.8", icon: "server.rack", title: "A new home for Sugerly's server", date: "2026-10-17T12:00:00Z", items: [
+            "Login codes, card payments and calls now go to Sugerly's new server, with the old one as a backup, so they keep working even if one of them is down.",
+        ]),
         AppRelease(id: "ios-2.7", icon: "number", title: "Hashtags everywhere", date: "2026-10-17T08:00:00Z", items: [
             "One set of #hashtags for posts, reels, drawings and songs. Tap any #tag to see everything with it in one place, newest or most loved.",
             "Trending tags from all of Sugerly on Home and in Community, and search finds hashtags too.",

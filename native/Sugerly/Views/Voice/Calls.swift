@@ -438,7 +438,7 @@ final class CallCenter {
             return "Their phone only rings while Sugerly is open (the call server said: \(why))."
         }
         if (result["setup"] as? Bool) == false {
-            return "Their phone only rings while Sugerly is open (the Apple call key isn't set up on the website)."
+            return "Their phone only rings while Sugerly is open (the Apple call key isn't set up on the server)."
         }
         let sent = (result["sent"] as? Int) ?? (result["sent"] as? Double).map(Int.init) ?? 0
         if sent > 0 { return nil }
