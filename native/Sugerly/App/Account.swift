@@ -83,7 +83,7 @@ struct AccountView: View {
             NavigationLink {
                 SettingsView()
             } label: {
-                rowLabel("Settings", "Account, privacy and colours", "gearshape.fill", [0x8FA3B8, 0x5B6B80])
+                rowLabel("Settings", "Account, privacy and colours", "gearshape.fill", .accent)
             }
             .buttonStyle(RowPressStyle())
             divider
