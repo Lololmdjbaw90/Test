@@ -289,6 +289,14 @@ final class EditorModel {
         }
     }
 
+    // A filter picked on the camera: the edit starts with it on (not an undo
+    // step, it's where the edit begins).
+    func startWith(_ filter: ReelFilter) {
+        guard filter != .none, filter != look.filter else { return }
+        look.filter = filter
+        refreshLook()
+    }
+
     func setFilter(_ filter: ReelFilter) {
         guard filter != look.filter else { return }
         checkpoint()

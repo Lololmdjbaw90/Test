@@ -306,6 +306,14 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-3.1", icon: "camera.fill", title: "A brand-new camera", date: "2026-10-17T22:00:00Z", items: [
+            "The camera has been rebuilt from scratch: it opens faster, and the window is exactly the shape of your reel, so what you see is what you get.",
+            "Switch lenses with the .5, 1, 2 and 3 buttons (ultra wide and zoom on iPhones that have them), or pinch.",
+            "Live filters: tap Filters, or swipe sideways on the camera. The filter you pick is already on when the editor opens.",
+            "Tap to focus and slide up or down for brighter or darker. Hold to lock focus and light.",
+            "A new record button and clip bar. Tap delete once to see which clip goes, twice to delete it.",
+            "Mixing front and back camera clips, or slow and fast ones, always comes out the right way round.",
+        ]),
         AppRelease(id: "ios-3.0", icon: "video.fill", title: "Better calls", date: "2026-10-17T20:00:00Z", items: [
             "Leave Sugerly during a video call and it keeps going in a small floating window, like FaceTime. Tap it to come back.",
             "Video calls fill the whole screen. Tap the picture to hide or show the buttons, and drag your own little camera to any corner.",

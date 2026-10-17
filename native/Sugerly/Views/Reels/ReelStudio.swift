@@ -413,10 +413,10 @@ struct ReelStudioView: View {
     // Making a reel opens the camera straight away (like TikTok). Upload
     // picks from your library; Drafts opens the ones you saved.
     private var pickScreen: some View {
-        RecorderView(sound: Binding(get: { doc.sound }, set: { doc.setSound($0) }), onVideo: { url in
-            Task { await openVideo(url) }
-        }, onPhotos: { images in
-            Task { await openPhotos(images) }
+        RecorderView(sound: Binding(get: { doc.sound }, set: { doc.setSound($0) }), onVideo: { url, filter in
+            Task { await openVideo(url, filter: filter) }
+        }, onPhotos: { images, filter in
+            Task { await openPhotos(images, filter: filter) }
         }, onClose: { dismiss() },
         onUpload: { library = true },
         draftCount: isChat ? 0 : drafts.count,
@@ -607,19 +607,22 @@ struct ReelStudioView: View {
         await openPhotos(images)
     }
 
-    private func openVideo(_ url: URL) async {
+    // (A filter picked on the camera is already on when the editor opens.)
+    private func openVideo(_ url: URL, filter: ReelFilter = .none) async {
         guard await doc.openVideo(url) else {
             error = "That video couldn't be opened."
             return
         }
+        doc.startWith(filter)
         error = nil
         withMotion { step = .edit }
     }
 
-    private func openPhotos(_ images: [UIImage]) async {
+    private func openPhotos(_ images: [UIImage], filter: ReelFilter = .none) async {
         guard !images.isEmpty else { return }
         loadingPick = true
         await doc.openSlides(images)
+        doc.startWith(filter)
         loadingPick = false
         error = nil
         withMotion { step = .edit }

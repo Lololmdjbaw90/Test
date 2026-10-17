@@ -1,5 +1,14 @@
 # Changes
 
+## A new camera (iOS app)
+
+- **Rebuilt from scratch** in `native/Sugerly/Views/Camera/` (the old `CameraRecorder.swift` is gone). `CaptureCore` owns the capture session and does all camera work on its own queue (setting up, flipping, zooming, focus, torch, recording), so the screen never waits for the hardware. `CameraEngine` is what the screen reads: clips, lenses, zoom, focus, exposure, filter, recording state.
+- **Lenses**: the back camera is the best virtual device (triple, dual wide, dual, wide), so 0.5× / 1× / 2× / 3× stops switch lenses by themselves, like the Camera app; pinch and hold-and-slide zoom keep working. Clips are 1080p with video stabilisation.
+- **Focus and light**: tap to focus and expose there, slide up or down for brighter or darker, hold to lock both (AE/AF lock); the camera takes over again when the scene changes.
+- **Live filters**: the same `ReelFilter`s as the editor, drawn live from a video data output through Core Image onto a sample-buffer display layer (only while a filter is on). Clips are filmed clean and the editor opens with the filter already on (`EditorModel.startWith`).
+- **Screen**: the camera window is the reel's 9:16 shape under the status bar (full screen on 9:16 phones), with a clip bar, a labelled tool rail (icons only when space is short), lens stops, a new record button with a tick per clip, a two-tap delete, a discard question, and progress while clips are joined. Photos are cropped to what the window showed.
+- **Joining clips** (`ClipStitcher`): one clip at normal speed is used as is; same-camera clips at normal speed are copied without re-encoding; anything else (front and back mixed, slow or fast clips) is drawn upright into one 1080×1920 video, so no clip comes out sideways or mirrored the wrong way.
+
 ## Better calls, smoother editor, whole landscape slides (iOS app)
 
 - **Calls keep going outside the app**: `CallPiP` shows the other person's camera or screen in iOS's video-call picture-in-picture window (`AVPictureInPictureVideoCallViewController`) when you leave Sugerly; frames go through an `AVSampleBufferDisplayLayer` (I420 from browsers is repacked as NV12, rotation kept). Tapping the window reopens the call screen. Your camera keeps running there where iOS allows multitasking camera access (iOS 18+); otherwise it pauses when the camera is interrupted and the others see your picture.
