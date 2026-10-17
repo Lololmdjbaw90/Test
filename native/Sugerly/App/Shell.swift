@@ -24,6 +24,7 @@ enum Route: Hashable {
     case notifications
     // A #tag's page: everything with it.
     case hashtag(String)
+    case bunny
 }
 
 enum AppTab: Hashable {
@@ -102,6 +103,7 @@ struct RouteView: View {
         case .supportTicket(let email): SupportTicketView(email: email)
         case .notifications: NotificationsPage(path: $path)
         case .hashtag(let tag): HashtagView(tag: tag, path: $path)
+        case .bunny: BunnyMakerView()
         }
     }
 }

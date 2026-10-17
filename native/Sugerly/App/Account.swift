@@ -34,6 +34,7 @@ struct AccountView: View {
             Place(title: "People", detail: "Find friends and artists", icon: "person.2.fill") { go(.people) },
             Place(title: "Top artists", detail: "This week's most loved", icon: "crown.fill", tone: .gold) { go(.topArtists) },
             Place(title: "Commissions", detail: "Order art or sell yours", icon: "paintbrush.pointed.fill") { go(.commissions) },
+            Place(title: "Bunny maker", detail: "Dress up your own bunny", icon: "hare.fill") { go(.bunny) },
         ]
     }
 

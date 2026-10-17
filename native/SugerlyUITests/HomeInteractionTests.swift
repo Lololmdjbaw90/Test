@@ -15,9 +15,11 @@ final class HomeInteractionTests: XCTestCase {
         XCTAssertTrue(composer.isHittable)
         let feed = app.scrollViews["home-feed"]
         XCTAssertTrue(feed.exists)
-        for _ in 0..<5 { feed.swipeUp() }
+        // Home is a long page: scroll until the last section shows, then
+        // all the way back up.
+        for _ in 0..<10 where !app.staticTexts["Your servers"].exists { feed.swipeUp() }
         XCTAssertTrue(app.staticTexts["Your servers"].exists)
-        for _ in 0..<6 { feed.swipeDown() }
+        for _ in 0..<12 where !composer.isHittable { feed.swipeDown() }
         XCTAssertTrue(composer.isHittable)
         app.buttons["Editor"].tap()
         app.buttons["Home"].tap()

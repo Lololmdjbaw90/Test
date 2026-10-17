@@ -1,5 +1,13 @@
 # Changes
 
+## Bunny maker, colour and motion (iOS app)
+
+- **Bunny maker** (`native/Sugerly/Views/Bunny/`): the bunny artwork is cut into layers (fur, outfit, collar, bow, eyes, outlines; `scripts/bunny-layers.py` finds the parts by colour and by the outlines between them, and paints fur under the eyes so faces can be swapped). Each colour layer is recoloured with a hue / saturation / brightness tint, so the drawing's shading and texture stay. Faces (wow, happy, wink, sleepy, love, starry), extras (crown, daisy, star clip, heart specs, halo, sparkles) and scenes (candy, clouds, mint, sunset, night, picnic, with drifting patterns) are drawn on top. The look is kept per account on the phone (`BunnyStore`). Save to Photos, or upload as your profile picture. Reached from a Home tile, a Home invite (until you've made one) and the menu (`Route.bunny`).
+- **Living bunny** (`BunnyBuddy`): bobs (`phaseAnimator`), blinks every few seconds, and jumps with squash and stretch (`keyframeAnimator`) and a puff of hearts when tapped. She replaces Mimi in Home's hello card; a long press opens the maker.
+- **Colour is back**: every page has soft colour glows (your pastel, peach, lavender, mint, lemon) drawn once and drifted / breathed by Core Animation (`AuroraLayer`); the moving pattern is back at the top of Home and its picker is in Settings → Appearance → Background. Buttons, chips and progress bars use a three-stop gradient (a warmer light top-left → your colour → its purple partner, `Theme.partnerHex`), and hero cards a peach → pastel → orchid wash.
+- **Home**: shortcuts are six candy tiles in two rows (names always fit); the composer moved up under the hello card; section titles have candy badges that hop into view.
+- **Animations**: particle sparkles (`SparkleEmitter`, `CAEmitterLayer`) in the hello card and bunny invite, a shine sweeping across main buttons and hero cards (`ShineSweep`), a random shortcut icon hopping every few seconds, the daily-reward present wiggling while it waits (iOS 18). Everything that keeps moving on its own is off with Reduce Motion and during the UI tests (`Motion.ambient`).
+
 ## A cleaner, juicier design (iOS app)
 
 - **Calmer colours**: the page is a warm off-white (`Palette.bg`) with only a faint wash of your pastel under the top bar; cards are clean white with a soft double shadow and a barely-there hairline; chips, fields and tracks are a soft warm grey (`surface2`) instead of pink, and hero cards run from a pale tint into a juicier shade of your colour. Empty-state cards are plain white.

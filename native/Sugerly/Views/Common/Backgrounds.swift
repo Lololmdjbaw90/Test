@@ -86,10 +86,9 @@ struct HeaderWallpaper: View {
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        // The calm design keeps the top of Home plain.
-        let kind = AppBackground.off
+        let kind = AppBackground(rawValue: choice) ?? .dots
         if kind != .off {
-            PatternBackground(kind: kind, animated: !still && scenePhase == .active)
+            PatternBackground(kind: kind, animated: !still && scenePhase == .active && Motion.ambient)
                 .id("\(kind.rawValue)-\(still)-\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)")
                 .mask {
                     LinearGradient(stops: [
@@ -170,29 +169,164 @@ private struct GlowShapes: View {
 }
 
 extension View {
-    // Page background: a calm off-white page with just a faint glow of your
-    // colour behind the top bar, so the cards and colours on it stand out.
+    // Page background: a light page with soft colour glows (your pastel,
+    // peach, lavender, mint) that drift slowly behind everything.
     func sugarBackground() -> some View { modifier(SugarBackground()) }
 }
 
 private struct SugarBackground: ViewModifier {
     @Environment(\.colorScheme) private var scheme
 
-    // The page: calm warm off-white, with a faint wash of your pastel under
-    // the top bar that's gone well before the first cards.
     func body(content: Content) -> some View {
         let dark = scheme == .dark
         content.background {
             ZStack(alignment: .top) {
                 Palette.bg
+                AuroraLayer()
                 LinearGradient(stops: [
-                    .init(color: Theme.light.opacity(dark ? 0.10 : 0.22), location: 0),
+                    .init(color: Theme.light.opacity(dark ? 0.12 : 0.3), location: 0),
                     .init(color: Palette.bg.opacity(0), location: 1),
                 ], startPoint: .top, endPoint: .bottom)
-                .frame(height: 220)
+                .frame(height: 260)
             }
             .ignoresSafeArea()
             .animation(Motion.fade, value: Theme.mainHex)
+        }
+    }
+}
+
+// Big soft glows of colour, drawn once into a picture and slowly drifted
+// and breathed by Core Animation (nothing is redrawn while they move).
+struct AuroraLayer: View {
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.backgroundPaused) private var paused
+
+    var body: some View {
+        let key = AuroraArt.key(scheme)
+        if let image = AuroraArt.image(key, scheme: scheme) {
+            DriftView(image: image, moving: !reduceMotion && !paused && Motion.ambient)
+                .accessibilityHidden(true)
+                .allowsHitTesting(false)
+        }
+    }
+}
+
+@MainActor
+enum AuroraArt {
+    static var cache: [String: UIImage] = [:]
+
+    static func key(_ scheme: ColorScheme) -> String {
+        "\(scheme == .dark)-\(Theme.mainHex)-\(Theme.lightHex)"
+    }
+
+    static func image(_ key: String, scheme: ColorScheme) -> UIImage? {
+        if let hit = cache[key] { return hit }
+        let dark = scheme == .dark
+        let blobs: [(UInt32, CGPoint, CGFloat, Double)] = [
+            (dark ? Theme.mainHex : Theme.lightHex, CGPoint(x: 0.12, y: 0.08), 0.75, dark ? 0.22 : 0.62),
+            (dark ? Theme.partnerHex : Theme.peachHex, CGPoint(x: 0.95, y: 0.16), 0.6, dark ? 0.16 : 0.42),
+            (dark ? 0x5B4BB0 : 0xD9CBFF, CGPoint(x: 0.88, y: 0.55), 0.65, dark ? 0.18 : 0.5),
+            (dark ? 0x1F6B5A : 0xC4F1DE, CGPoint(x: 0.08, y: 0.72), 0.6, dark ? 0.14 : 0.48),
+            (dark ? Theme.partnerHex : 0xFFE9B0, CGPoint(x: 0.7, y: 0.97), 0.55, dark ? 0.12 : 0.42),
+        ]
+        let size = CGSize(width: 390, height: 844)
+        let canvas = Canvas { ctx, s in
+            for (hex, at, radius, alpha) in blobs {
+                let center = CGPoint(x: at.x * s.width, y: at.y * s.height)
+                let r = radius * s.width
+                ctx.fill(Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)),
+                         with: .radialGradient(Gradient(colors: [Color(hex: hex, opacity: alpha), Color(hex: hex, opacity: alpha * 0.45), Color(hex: hex, opacity: 0)]),
+                                               center: center, startRadius: 0, endRadius: r))
+            }
+        }
+        .frame(width: size.width, height: size.height)
+        let renderer = ImageRenderer(content: canvas)
+        renderer.scale = 1
+        renderer.isOpaque = false
+        guard let image = renderer.uiImage else { return nil }
+        if cache.count > 8 { cache.removeAll() }
+        cache[key] = image
+        return image
+    }
+}
+
+// The glows: a picture a little bigger than the page that slowly wanders
+// and swells (Core Animation, on the graphics chip).
+private struct DriftView: UIViewRepresentable {
+    let image: UIImage
+    var moving: Bool
+
+    func makeUIView(context: Context) -> Drifter { Drifter() }
+
+    func updateUIView(_ view: Drifter, context: Context) {
+        view.update(image: image, moving: moving)
+    }
+
+    final class Drifter: UIView {
+        private let glow = CALayer()
+        private var image: UIImage?
+        private var moving = false
+        private var laidOut = CGSize.zero
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            isUserInteractionEnabled = false
+            clipsToBounds = true
+            glow.contentsGravity = .resize
+            layer.addSublayer(glow)
+        }
+
+        required init?(coder: NSCoder) { nil }
+
+        func update(image: UIImage, moving: Bool) {
+            guard image !== self.image || moving != self.moving else { return }
+            self.image = image
+            self.moving = moving
+            glow.contents = image.cgImage
+            setNeedsLayout()
+            restart()
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            glow.frame = bounds.insetBy(dx: -bounds.width * 0.12, dy: -bounds.height * 0.08)
+            CATransaction.commit()
+            // The drift is measured in page sizes: start again when it changes.
+            if bounds.size != laidOut {
+                laidOut = bounds.size
+                restart()
+            }
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            restart()
+        }
+
+        private func restart() {
+            glow.removeAllAnimations()
+            guard window != nil, moving, bounds.width > 0 else { return }
+            let wander = CABasicAnimation(keyPath: "transform.translation")
+            wander.fromValue = NSValue(cgSize: CGSize(width: -bounds.width * 0.07, height: -bounds.height * 0.03))
+            wander.toValue = NSValue(cgSize: CGSize(width: bounds.width * 0.07, height: bounds.height * 0.04))
+            wander.duration = 13
+            wander.autoreverses = true
+            wander.repeatCount = .infinity
+            wander.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            wander.isRemovedOnCompletion = false
+            glow.add(wander, forKey: "wander")
+            let breathe = CABasicAnimation(keyPath: "transform.scale")
+            breathe.fromValue = 1.0
+            breathe.toValue = 1.1
+            breathe.duration = 9
+            breathe.autoreverses = true
+            breathe.repeatCount = .infinity
+            breathe.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            breathe.isRemovedOnCompletion = false
+            glow.add(breathe, forKey: "breathe")
         }
     }
 }

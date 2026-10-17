@@ -43,6 +43,11 @@ enum Motion {
         return MainActor.assumeIsolated { UIAccessibility.isReduceMotionEnabled }
     }
 
+    /// Things that keep moving on their own (drifting backgrounds, a
+    /// bobbing bunny, twinkles): off with Reduce Motion, and off during the
+    /// automatic UI tests (which wait for the screen to be still).
+    static let ambient: Bool = !ProcessInfo.processInfo.arguments.contains { $0.hasSuffix("-ui-test") }
+
     /// The animation to use, or a short fade with Reduce Motion on.
     static func pick(_ animation: Animation) -> Animation { reduced ? fade : animation }
 

@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "bunny-eyes.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

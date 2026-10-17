@@ -1294,6 +1294,12 @@ struct SettingsView: View {
             }
             .padding(.vertical, 4)
             .buttonStyle(.borderless)
+            VStack(alignment: .leading, spacing: 12) {
+                IconRow(title: "Background", detail: "A moving pattern at the top of Home.", icon: "sparkles")
+                BackgroundPicker()
+            }
+            .padding(.vertical, 4)
+            .buttonStyle(.borderless)
         } header: { ListHeader(title: "APPEARANCE") }
     }
 

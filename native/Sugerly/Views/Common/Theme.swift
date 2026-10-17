@@ -65,9 +65,9 @@ enum Palette {
     // The three stops of a hero card: a fresh, clear run from a pale tint of
     // your pastel into a juicier shade of it. In dark mode, deep plum shades
     // of your colour.
-    static var heroA: Color { hero(light: mix(0xFFFFFF, Theme.lightHex, 0.22), 0.12) }
-    static var heroB: Color { hero(light: mix(0xFFFFFF, Theme.lightHex, 0.58), 0.22) }
-    static var heroC: Color { hero(light: mix(Theme.lightHex, Theme.mainHex, 0.22), 0.34) }
+    static var heroA: Color { hero(light: mix(0xFFFFFF, Theme.peachHex, 0.42), 0.12) }
+    static var heroB: Color { hero(light: mix(0xFFFFFF, Theme.lightHex, 0.75), 0.22) }
+    static var heroC: Color { hero(light: mix(Theme.lightHex, Theme.partnerHex, 0.45), 0.34) }
 
     // The glossy touches (a white rim, a sheen along the top) are for light
     // pages. On dark pages they fade to a faint hairline, so nothing shines
@@ -126,6 +126,26 @@ enum Palette {
         }
         return blend(16) | blend(8) | blend(0)
     }
+
+    // The same colour turned round the colour wheel (negative: towards
+    // purple, positive: towards orange).
+    static func turn(_ hex: UInt32, _ degrees: Double, saturation: Double = 1, brightness: Double = 1) -> UInt32 {
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(hex: hex).getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        var hue = h + CGFloat(degrees / 360)
+        hue -= floor(hue)
+        let color = UIColor(hue: hue, saturation: min(1, s * saturation), brightness: min(1, b * brightness), alpha: 1)
+        return color.rgbHex
+    }
+}
+
+extension UIColor {
+    var rgbHex: UInt32 {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        getRed(&r, green: &g, blue: &b, alpha: &a)
+        func byte(_ v: CGFloat) -> UInt32 { UInt32((max(0, min(1, v)) * 255).rounded()) }
+        return (byte(r) << 16) | (byte(g) << 8) | byte(b)
+    }
 }
 
 // The few colours icons and tiles use, so colour always means the same
@@ -178,7 +198,7 @@ enum Candy: CaseIterable {
     // thing always has the same colour.
     static func matching(_ icon: String) -> Candy? {
         let rules: [(String, Candy)] = [
-            ("music", .sky), ("bell", .berry), ("heart", .berry), ("drop", .berry),
+            ("music", .sky), ("bell", .berry), ("heart", .berry), ("drop", .berry), ("hare", .berry),
             ("person", .grape), ("moon", .grape), ("gearshape", .grape),
             ("bubble", .mint), ("message", .mint), ("phone", .mint), ("video", .mint),
             ("crown", .lemon), ("star", .lemon), ("gift", .lemon), ("hexagongrid", .lemon), ("sparkles", .lemon), ("key", .lemon), ("flame", .lemon),
@@ -281,26 +301,34 @@ enum Theme {
     // The accent as a candy fill (a touch lighter at the top), used for
     // buttons, badges and highlights everywhere.
     static var gradient: LinearGradient { candy }
-    // The palette as a soft wash, for hero cards: cream → blush → pastel.
+    // Your colour's partner: the same colour turned a little towards
+    // purple (rose → orchid, sky → periwinkle…), and a warm peach. Gradients
+    // run between them so they look juicy instead of flat.
+    static var partnerHex: UInt32 { Palette.turn(mainHex, -28, saturation: 0.95) }
+    static var peachHex: UInt32 { Palette.turn(mainHex, 30, saturation: 0.9, brightness: 1.08) }
+    static var partner: Color { Color(hex: partnerHex) }
+    // A juicy wash for hero cards: peachy light → your pastel → a touch of
+    // its purple partner.
     static var pastel: LinearGradient {
         LinearGradient(colors: [Palette.heroA, Palette.heroB, Palette.heroC], startPoint: .topLeading, endPoint: .bottomTrailing)
     }
-    // A juicy candy fill for main buttons: the accent, a touch lighter at
-    // the top. In dark mode it's nearly flat and a touch deeper, so it
-    // doesn't glow.
+    // A juicy candy fill for main buttons: a lighter, warmer top-left into
+    // the accent, then its purple partner bottom-right. In dark mode it's
+    // a touch deeper, so it doesn't glow.
     static var candy: LinearGradient {
-        let top = Palette.swatch(Palette.mix(mainHex, 0xFFFFFF, 0.14), 1, mainHex, 1)
-        let bottom = Palette.swatch(mainHex, 1, Palette.mix(mainHex, 0x000000, 0.1), 1)
-        return LinearGradient(colors: [top, bottom], startPoint: .top, endPoint: .bottom)
+        let top = Palette.swatch(Palette.mix(Palette.turn(mainHex, 12), 0xFFFFFF, 0.2), 1, Palette.mix(mainHex, 0xFFFFFF, 0.06), 1)
+        let middle = Palette.swatch(mainHex, 1, Palette.mix(mainHex, 0x000000, 0.06), 1)
+        let bottom = Palette.swatch(partnerHex, 1, Palette.mix(partnerHex, 0x000000, 0.14), 1)
+        return LinearGradient(colors: [top, middle, bottom], startPoint: .topLeading, endPoint: .bottomTrailing)
     }
     // The soft rosy glow under candy buttons and chips. On dark pages it's a
     // plain shadow instead (a pink glow there looks like neon).
     static func glow(_ opacity: Double) -> Color {
         Palette.swatch(mainHex, opacity, 0x000000, opacity > 0 ? 0.32 : 0)
     }
-    // Progress bars: pastel into the accent.
+    // Progress bars: pastel into the accent into its partner.
     static var progress: LinearGradient {
-        LinearGradient(colors: [light, main], startPoint: .leading, endPoint: .trailing)
+        LinearGradient(colors: [light, main, partner], startPoint: .leading, endPoint: .trailing)
     }
     static let lavender = Color(hex: 0xB19CFF)
     static var background: Color { Palette.bg }
@@ -516,6 +544,7 @@ private struct GradientButtonBody: View {
             .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: min(height, 50))
             .background {
                 shape.fill(Theme.candy)
+                    .overlay { if enabled { ShineSweep(every: 4.2).clipShape(shape) } }
                     .overlay(shape.strokeBorder(Palette.rim(0.22), lineWidth: 1))
                     .shadow(color: Theme.glow(enabled ? (pressed ? 0.12 : 0.28) : 0), radius: pressed ? 4 : 10, y: pressed ? 2 : 5)
             }
@@ -587,9 +616,26 @@ struct SectionHeader: View {
     let icon: String
     let title: String
     var action: (() -> Void)? = nil
+    @State private var shown = false
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 7) {
+        HStack(alignment: .center, spacing: 10) {
+            // A little candy badge in the section's colour, which gives a
+            // hop when the section comes into view.
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(.white)
+                .symbolEffect(.bounce, value: shown)
+                .frame(width: 30, height: 30)
+                .background {
+                    let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    if let candy = Candy.matching(icon) {
+                        shape.fill(candy.gradient).shadow(color: candy.color.softGlow(0.3), radius: 5, y: 2)
+                    } else {
+                        shape.fill(Theme.candy).shadow(color: Theme.glow(0.28), radius: 5, y: 2)
+                    }
+                }
+                .accessibilityHidden(true)
             Text(title).font(.display(22)).foregroundStyle(Palette.text)
                 .lineLimit(1).minimumScaleFactor(0.8)
             Spacer(minLength: 8)
@@ -601,6 +647,7 @@ struct SectionHeader: View {
                     }
                     .font(.jakarta(14, .medium))
                     .foregroundStyle(Theme.main)
+                    .lineLimit(1)
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(Theme.soft, in: Capsule())
                     .contentShape(Capsule())
@@ -608,6 +655,109 @@ struct SectionHeader: View {
                 .buttonStyle(BouncyStyle(scale: 0.92))
             }
         }
+        .onAppear { shown = true }
+        .onDisappear { shown = false }
+    }
+}
+
+// A soft band of light that sweeps across now and then (buttons, hero
+// cards). Still with Reduce Motion on.
+struct ShineSweep: View {
+    var every: Double = 4.5
+    var strength: Double = 0.38
+
+    var body: some View {
+        if Motion.ambient && !Motion.reduced {
+            GeometryReader { geo in
+                LinearGradient(colors: [.clear, .white.opacity(strength), .clear], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: max(36, geo.size.width * 0.32), height: geo.size.height * 2)
+                    .rotationEffect(.degrees(16))
+                    .offset(y: -geo.size.height / 2)
+                    .phaseAnimator([false, true]) { band, across in
+                        band.offset(x: across ? geo.size.width * 1.25 : -geo.size.width * 0.55)
+                    } animation: { across in
+                        across ? .easeInOut(duration: 0.95).delay(every) : nil
+                    }
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+    }
+}
+
+// Little sparkles that float up and fade (Core Animation particles, so
+// they cost almost nothing). Hidden with Reduce Motion on.
+struct SparkleEmitter: UIViewRepresentable {
+    var colors: [UIColor] = [.white]
+    var rate: Float = 1.2
+
+    func makeUIView(context: Context) -> EmitterView { EmitterView(colors: colors, rate: rate) }
+    func updateUIView(_ view: EmitterView, context: Context) {}
+
+    final class EmitterView: UIView {
+        private let emitter = CAEmitterLayer()
+        private let on: Bool
+
+        init(colors: [UIColor], rate: Float) {
+            on = Motion.ambient && !UIAccessibility.isReduceMotionEnabled
+            super.init(frame: .zero)
+            isUserInteractionEnabled = false
+            clipsToBounds = true
+            emitter.emitterShape = .line
+            emitter.emitterCells = colors.map { color in
+                let cell = CAEmitterCell()
+                cell.contents = Self.sparkle
+                cell.birthRate = rate / Float(max(colors.count, 1))
+                cell.lifetime = 5
+                cell.velocity = 26
+                cell.velocityRange = 12
+                cell.emissionLongitude = -.pi / 2
+                cell.emissionRange = 0.6
+                cell.scale = 0.32
+                cell.scaleRange = 0.18
+                cell.alphaRange = 0.3
+                cell.alphaSpeed = -0.18
+                cell.spin = 0.5
+                cell.spinRange = 1.4
+                cell.color = color.cgColor
+                return cell
+            }
+            layer.addSublayer(emitter)
+        }
+
+        required init?(coder: NSCoder) { nil }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            emitter.frame = bounds
+            emitter.emitterPosition = CGPoint(x: bounds.midX, y: bounds.maxY + 4)
+            emitter.emitterSize = CGSize(width: bounds.width, height: 1)
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            emitter.birthRate = window != nil && on ? 1 : 0
+            if window != nil { emitter.beginTime = CACurrentMediaTime() }
+        }
+
+        // A soft four-pointed sparkle, drawn once.
+        static let sparkle: CGImage? = {
+            let size = CGSize(width: 28, height: 28)
+            let image = UIGraphicsImageRenderer(size: size).image { _ in
+                let path = UIBezierPath()
+                let c = CGPoint(x: 14, y: 14)
+                for i in 0..<8 {
+                    let angle = CGFloat(i) * .pi / 4 - .pi / 2
+                    let r: CGFloat = i.isMultiple(of: 2) ? 13 : 3.6
+                    let p = CGPoint(x: c.x + r * cos(angle), y: c.y + r * sin(angle))
+                    if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
+                }
+                path.close()
+                UIColor.white.setFill()
+                path.fill()
+            }
+            return image.cgImage
+        }()
     }
 }
 

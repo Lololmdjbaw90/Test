@@ -306,6 +306,13 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-3.3", icon: "hare.fill", title: "Your own bunny, and a livelier app", date: "2026-10-18T02:00:00Z", items: [
+            "Bunny maker: dress up your own bunny. Pick her fur, bow, collar and outfit colours, her face (wink, sleepy, love eyes…), a little extra (crown, daisy, heart specs, halo…) and a scene. Save her to Photos or make her your profile picture.",
+            "Your bunny lives on Home: she bobs, blinks, and jumps with a puff of hearts when you tap her. Hold her to dress her up.",
+            "Colour is back: soft glows of colour drift behind every page, your moving pattern is back at the top of Home (pick it in Settings → Background), and buttons, chips and cards have juicy gradients again.",
+            "Home shortcuts are big colourful tiles in two rows, so every name fits.",
+            "Lots of new little animations: sparkles in your hello card, a shine across buttons, hopping icons, a wiggling present when your daily reward is waiting.",
+        ]),
         AppRelease(id: "ios-3.2", icon: "paintpalette.fill", title: "A cleaner, juicier look", date: "2026-10-17T23:30:00Z", items: [
             "Calmer pages: a clean off-white background with crisp white cards, instead of pink on pink.",
             "Colourful candy icons for places and actions: music is sky blue, servers mint, people grape, rewards lemon, posts berry and reels peach, everywhere in the app.",

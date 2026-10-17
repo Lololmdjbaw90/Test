@@ -37,11 +37,19 @@ struct DailyRewardButton: View {
         HStack(spacing: 12) {
             Image(systemName: status.claimed ? "checkmark" : "gift.fill")
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(status.claimed ? Palette.success : Palette.gold)
+                .foregroundStyle(status.claimed ? Palette.success : .white)
                 .frame(width: 42, height: 42)
-                .background(status.claimed ? Palette.success.opacity(0.12) : Palette.surface, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .background {
+                    let shape = RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    if status.claimed {
+                        shape.fill(Palette.success.opacity(0.12))
+                    } else {
+                        shape.fill(Candy.lemon.gradient).shadow(color: Candy.lemon.color.softGlow(0.35), radius: 6, y: 3)
+                    }
+                }
                 .contentTransition(.symbolEffect(.replace))
                 .symbolEffect(.bounce, value: ripple)
+                .modifier(GiftWiggle(active: !status.claimed))
                 .overlay { RewardBurst(trigger: ripple).frame(width: 150, height: 150) }
             VStack(alignment: .leading, spacing: 2) {
                 Text(titleText(status.claimed))
@@ -241,6 +249,7 @@ struct HomeView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var lastLoad = Date.distantPast
     @State private var wallet = false
+    @State private var bunny = BunnyStore.shared
     @AppStorage("sugerly.dismissedAnnouncement") private var dismissedAnnouncement = ""
 
     private var greeting: String {
@@ -253,8 +262,9 @@ struct HomeView: View {
             LazyVStack(alignment: .leading, spacing: 28) {
                 announcementBanner
                 hero.homeSection(appeared, 0)
-                shortcuts.homeSection(appeared, 1)
-                HomeComposerBar(compose: compose).homeSection(appeared, 2)
+                HomeComposerBar(compose: compose).homeSection(appeared, 1)
+                shortcuts.homeSection(appeared, 2)
+                if !bunny.made { bunnyInvite.homeSection(appeared, 3).transition(.pop) }
                 StoriesRow(reels: reels, path: $path, compose: compose).homeSection(appeared, 3)
                 community.homeSection(appeared, 4)
                 if !reels.isEmpty { reelStrip.homeSection(appeared, 5).transition(.rise) }
@@ -273,8 +283,15 @@ struct HomeView: View {
         }
         .scrollIndicators(.hidden)
         .appearFade()
+        // Your moving pattern (Settings → Background) at the top of Home,
+        // fading into the page.
+        .background(alignment: .top) {
+            HeaderWallpaper().frame(height: 440).ignoresSafeArea(edges: .top)
+        }
         .sugarBackground()
         .accessibilityIdentifier("home-feed")
+        .onAppear { bunny.use(model.me?.email ?? "") }
+        .onChange(of: model.me?.email) { _, email in bunny.use(email ?? "") }
         .navigationTitle("Home")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -376,8 +393,11 @@ struct HomeView: View {
                             .lineLimit(1).minimumScaleFactor(0.6)
                     }
                     Spacer(minLength: 0)
-                    MimiBuddy(icon: "sparkles", size: 64)
-                        .padding(.top, -6)
+                    // Your bunny (tap her!). Long press to dress her up.
+                    BunnyBuddy(look: bunny.look, height: 92)
+                        .padding(.top, -14)
+                        .padding(.bottom, -8)
+                        .onLongPressGesture { path.append(.bunny) }
                 }
                 // Three even tiles (number on top, a short word under it), so
                 // nothing gets cut off whatever the text size.
@@ -396,6 +416,17 @@ struct HomeView: View {
                 XPBar(info: info)
             }
             .pastelCard(radius: 24, padding: 16)
+            .overlay {
+                // Sparkles rising through the hello, and a shine sweeping by.
+                SparkleEmitter(colors: [.white, UIColor(Theme.main), UIColor(hex: 0xFFC53D)], rate: 1.2)
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .opacity(0.85)
+                    .allowsHitTesting(false)
+            }
+            .overlay {
+                ShineSweep(every: 5.5, strength: 0.32)
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            }
             DailyRewardButton()
         }
     }
@@ -426,36 +457,68 @@ struct HomeView: View {
 
     // MARK: shortcuts to the places that aren't tabs
 
-    // Five candy tiles in one even row (they always fit the screen, no
-    // sideways scrolling), each place in its own colour.
+    // Six juicy candy tiles in two rows of three: each place in its own
+    // colour, with room for its whole name. Now and then one of the icons
+    // gives a little hop.
     private var shortcuts: some View {
-        let items: [(String, String, Candy, Route)] = [
-            ("Music", "music.note", .sky, .music),
-            ("Servers", "bubble.left.and.bubble.right.fill", .mint, .servers),
-            ("People", "person.2.fill", .grape, .people),
-            ("Top artists", "crown.fill", .lemon, .topArtists),
-            ("Commissions", "paintbrush.pointed.fill", .peach, .commissions),
-        ]
-        return HStack(alignment: .top, spacing: 4) {
-            ForEach(Array(items.enumerated()), id: \.element.0) { i, item in
-                Button { path.append(item.3) } label: {
-                    VStack(spacing: 7) {
-                        CandyTile(icon: item.1, candy: item.2, size: 50)
-                        Text(item.0).font(.jakarta(11.5, .semibold)).foregroundStyle(Palette.text2)
-                            .lineLimit(1).minimumScaleFactor(0.7)
+        ShortcutGrid(appeared: appeared, items: [
+            .init(title: "Music", icon: "music.note", candy: .sky, route: .music),
+            .init(title: "Servers", icon: "bubble.left.and.bubble.right.fill", candy: .mint, route: .servers),
+            .init(title: "People", icon: "person.2.fill", candy: .grape, route: .people),
+            .init(title: "Top artists", icon: "crown.fill", candy: .lemon, route: .topArtists),
+            .init(title: "Commissions", icon: "paintbrush.pointed.fill", candy: .peach, route: .commissions),
+            .init(title: "Bunny", icon: "hare.fill", candy: .berry, route: .bunny),
+        ]) { route in path.append(route) }
+    }
+
+    // Until you've made your own bunny: an invite to the bunny maker.
+    private var bunnyInvite: some View {
+        Button { path.append(.bunny) } label: {
+            HStack(spacing: 12) {
+                BunnyBuddy(look: Self.inviteLook, height: 104, tappable: false)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("NEW").font(.jakarta(10, .heavy)).tracking(0.6).foregroundStyle(.white)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(.white.opacity(0.25), in: Capsule())
+                    Text("Make your bunny").font(.display(23)).foregroundStyle(.white)
+                        .lineLimit(1).minimumScaleFactor(0.75)
+                    Text("Pick her fur, bow, outfit and face.").font(.jakarta(13, .medium)).foregroundStyle(.white.opacity(0.92))
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 5) {
+                        Text("Start")
+                        Image(systemName: "arrow.right")
                     }
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
+                    .font(.jakarta(14, .bold)).foregroundStyle(Theme.main)
+                    .padding(.horizontal, 14).frame(height: 34)
+                    .background(.white, in: Capsule())
+                    .padding(.top, 2)
                 }
-                .buttonStyle(BouncyStyle(scale: 0.9))
-                .accessibilityLabel(item.0)
-                .heroPop(appeared, i + 2)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 14)
+            .background {
+                let shape = RoundedRectangle(cornerRadius: 26, style: .continuous)
+                shape.fill(Theme.candy)
+                    .overlay {
+                        // Soft bubbles in the corner.
+                        GeometryReader { geo in
+                            Circle().fill(.white.opacity(0.14)).frame(width: geo.size.width * 0.5)
+                                .offset(x: geo.size.width * 0.68, y: -geo.size.width * 0.18)
+                            Circle().fill(.white.opacity(0.1)).frame(width: geo.size.width * 0.28)
+                                .offset(x: geo.size.width * 0.55, y: geo.size.height * 0.6)
+                        }
+                        .clipShape(shape)
+                    }
+                    .overlay { SparkleEmitter(colors: [.white], rate: 1.6).clipShape(shape) }
+                    .overlay { ShineSweep(every: 4.8, strength: 0.3).clipShape(shape) }
+                    .shadow(color: Theme.glow(0.32), radius: 14, y: 6)
             }
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 6)
-        .sugarCard(radius: 22)
+        .buttonStyle(BouncyStyle(scale: 0.97))
+        .accessibilityLabel("Make your bunny")
     }
+
+    private static let inviteLook = BunnyLook(fur: 0, bow: 4, collar: 0, outfit: 0, face: .happy, extra: .none, scene: .candy)
 
     // MARK: community
 
@@ -811,5 +874,86 @@ private struct HeroPop: ViewModifier {
             .opacity(visible ? 1 : 0)
             .scaleEffect(visible ? 1 : 0.7)
             .animation(reduceMotion ? nil : Motion.playful.delay(0.18 + Double(min(index, 8)) * 0.05), value: shown)
+    }
+}
+
+// Home's shortcuts: candy tiles with a white icon and the place's name.
+private struct ShortcutGrid: View {
+    struct Item {
+        let title: String
+        let icon: String
+        let candy: Candy
+        let route: Route
+    }
+    let appeared: Bool
+    let items: [Item]
+    var open: (Route) -> Void
+    @State private var hops: [Int] = Array(repeating: 0, count: 8)
+
+    var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+            ForEach(Array(items.enumerated()), id: \.element.title) { i, item in
+                Button { open(item.route) } label: { tile(item, hop: hops[i % hops.count]) }
+                    .buttonStyle(BouncyStyle(scale: 0.92))
+                    .accessibilityLabel(item.title)
+                    .heroPop(appeared, i + 2)
+            }
+        }
+        .task {
+            // Every few seconds one icon hops, so Home never sits still.
+            guard Motion.ambient, !Motion.reduced, !items.isEmpty else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2.4))
+                guard !Task.isCancelled else { return }
+                hops[Int.random(in: 0..<items.count)] += 1
+            }
+        }
+    }
+
+    private func tile(_ item: Item, hop: Int) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+        return VStack(alignment: .leading, spacing: 0) {
+            Image(systemName: item.icon)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(.white)
+                .symbolEffect(.bounce, value: hop)
+                .frame(width: 38, height: 38)
+                .background(.white.opacity(0.24), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            Spacer(minLength: 12)
+            Text(item.title)
+                .font(.jakarta(13, .bold)).foregroundStyle(.white)
+                .lineLimit(1).minimumScaleFactor(0.75)
+                .shadow(color: .black.opacity(0.12), radius: 1, y: 1)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 96, alignment: .leading)
+        .background {
+            shape.fill(item.candy.gradient)
+                .overlay {
+                    // A soft bubble in the corner and a shine along the top.
+                    GeometryReader { geo in
+                        Circle().fill(.white.opacity(0.16))
+                            .frame(width: geo.size.width * 0.7)
+                            .offset(x: geo.size.width * 0.5, y: geo.size.height * 0.35)
+                    }
+                    .clipShape(shape)
+                }
+                .overlay(shape.fill(LinearGradient(colors: [Palette.rim(0.35), .clear], startPoint: .top, endPoint: .center)).padding(1))
+                .shadow(color: item.candy.color.softGlow(0.35), radius: 8, y: 4)
+        }
+        .contentShape(shape)
+    }
+}
+
+// A present waiting to be opened gives a little wiggle every few seconds.
+private struct GiftWiggle: ViewModifier {
+    let active: Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *), active, Motion.ambient, !Motion.reduced {
+            content.symbolEffect(.wiggle.byLayer, options: .repeat(.periodic(delay: 2.5)), isActive: true)
+        } else {
+            content
+        }
     }
 }
