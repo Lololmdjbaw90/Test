@@ -749,6 +749,7 @@ struct ReelStudioView: View {
                 "music_title": sound?.title ?? "", "music_artist": sound?.artist ?? "", "music_url": sound?.audioURL ?? "",
                 "music_source": source, "duration": (length * 10).rounded() / 10, "edits": edits,
                 "comments_off": !allowComments, "likes": [String](), "views": 0,
+                "tags": Hashtags.tags(caption),
                 "user_email": me.email, "user_display_name": me.displayName, "user_profile_picture": me.picture,
                 "created_by": me.email, "created_date": now, "updated_date": now,
             ]

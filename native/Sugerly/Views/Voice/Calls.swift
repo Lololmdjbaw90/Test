@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 import AudioToolbox
 import AVKit
+import CallKit
 import WebRTC
 
 // MARK: - DM and group calls
@@ -354,8 +355,19 @@ final class CallCenter {
         }
         if let ringingMe {
             if incoming?.id != ringingMe.id {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { incoming = ringingMe }
-                ring()
+                // iPhone's own call screen (Accept / Decline, your ringtone
+                // and vibration), even with the app open. If iOS won't show
+                // it (you're already in a call), the app rings instead; with
+                // Do Not Disturb on it only shows, quietly.
+                switch await ringOnSystem(ringingMe, me: me) {
+                case .shown:
+                    return
+                case .quiet:
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { incoming = ringingMe }
+                case .failed:
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { incoming = ringingMe }
+                    ring()
+                }
             }
         } else if incoming != nil {
             stopRinging()
@@ -363,14 +375,39 @@ final class CallCenter {
         }
     }
 
+    private enum SystemRing { case shown, quiet, failed }
+
+    // Shows a call ringing you on iPhone's call screen.
+    private func ringOnSystem(_ call: CallInfo, me: UserProfile) async -> SystemRing {
+        guard let bridge = voice?.bridge, voice?.room == nil, !bridge.isRinging(call.id) else { return .failed }
+        let title = call.title(for: me.email)
+        let problem: Error? = await withCheckedContinuation { done in
+            bridge.reportIncoming(callId: call.id, title: title) { _, error in done.resume(returning: error) }
+        }
+        if let problem {
+            // Do Not Disturb (or a number blocked in iOS): no ringing.
+            if let reason = problem as? CXErrorCodeIncomingCallError,
+               reason.code == .filteredByDoNotDisturb || reason.code == .filteredByBlockList {
+                return .quiet
+            }
+            return .failed
+        }
+        // Stops ringing there when they hang up, it's answered on another of
+        // your phones, or nobody answers.
+        IncomingCalls.shared.watch(call.id)
+        return .shown
+    }
+
     // MARK: sounds
 
     private func ring() {
         ringTask?.cancel()
+        // Vibrate even while the microphone is in use.
+        try? AVAudioSession.sharedInstance().setAllowHapticsAndSystemSoundsDuringRecording(true)
         ringTask = Task {
             while !Task.isCancelled, incoming != nil {
                 CallTones.play(.ringtone)
-                AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
+                AudioServicesPlayAlertSound(kSystemSoundID_Vibrate)
                 try? await Task.sleep(for: .seconds(2.2))
             }
         }

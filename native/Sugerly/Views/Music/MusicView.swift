@@ -410,6 +410,7 @@ struct NewTrackView: View {
             let now = FS.nowISO()
             let doc: Doc = [
                 "title": title.trimmingCharacters(in: .whitespaces), "genre": genre, "mood": mood, "description": description,
+                "tags": Hashtags.tags(title, description),
                 "music_url": musicURL, "cover_url": coverURL, "identified_song": "", "ai_review": "",
                 "user_email": me.email, "user_display_name": me.displayName, "user_profile_picture": me.picture,
                 "likes": [String](), "created_by": me.email, "created_date": now, "updated_date": now,

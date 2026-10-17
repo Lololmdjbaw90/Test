@@ -22,6 +22,8 @@ enum Route: Hashable {
     case support
     case supportTicket(String)
     case notifications
+    // A #tag's page: everything with it.
+    case hashtag(String)
 }
 
 enum AppTab: Hashable {
@@ -99,6 +101,7 @@ struct RouteView: View {
         case .support: SupportView()
         case .supportTicket(let email): SupportTicketView(email: email)
         case .notifications: NotificationsPage(path: $path)
+        case .hashtag(let tag): HashtagView(tag: tag, path: $path)
         }
     }
 }
@@ -569,6 +572,13 @@ struct MainShell: View {
             Task { await open(url.host()?.lowercased() ?? "", target) }
         }
         .sheet(item: $quickLink) { link in QuickApproveSheet(initialCode: link.code) }
+        // Tapping a #tag in any post, caption or comment opens its page on
+        // the tab you're on.
+        .environment(\.openURL, OpenURLAction { url in
+            guard let tag = Hashtags.tag(from: url) else { return .systemAction }
+            nav.push(.hashtag(tag))
+            return .handled
+        })
         .task {
             calls.attach(voice: voice)
         }
@@ -704,6 +714,8 @@ extension MainShell {
             if target.isEmpty { nav.community = [] }
             else if let doc = try? await FS.get("CommunityPost", target) { nav.community = [.post(Post(doc))] }
             else { model.showToast("This post is no longer available.", error: true) }
+        case "tag":
+            if let tag = Hashtags.normalize(target) { nav.push(.hashtag(tag)) }
         case "home": nav.tab = .home; nav.home = []
         case "alerts", "social":
             model.showNotifications = true
@@ -732,10 +744,10 @@ struct CreateSheet: View {
                 }
                 .padding(.top, 22)
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                    tile(0, .reel, "Reel", "Film or pick a video", "video.fill", [Color(hex: 0xFF7AA2), Color(hex: 0xD9577F)])
-                    tile(1, .artwork, "Fan art", "Hang a drawing on the wall", "paintpalette.fill", [Color(hex: 0xFFAA80), Color(hex: 0xEE6E40)])
-                    tile(2, .post, "Post", "Share with the community", "text.bubble.fill", [Color(hex: 0xB19CFF), Color(hex: 0x7C5CF0)])
-                    tile(3, .track, "Track", "Share your music", "music.note", [Color(hex: 0x7CBEFF), Color(hex: 0x2F80E0)])
+                    tile(0, .reel, "Reel", "Film or pick a video", "video.fill")
+                    tile(1, .artwork, "Fan art", "Hang a drawing on the wall", "paintpalette.fill")
+                    tile(2, .post, "Post", "Share with the community", "text.bubble.fill")
+                    tile(3, .track, "Track", "Share your music", "music.note")
                 }
             }
             .padding(.horizontal, 20)
@@ -748,7 +760,7 @@ struct CreateSheet: View {
     }
 
     // The four tiles pop in one after another.
-    private func tile(_ index: Int, _ kind: Composer, _ title: String, _ sub: String, _ icon: String, _ colors: [Color]) -> some View {
+    private func tile(_ index: Int, _ kind: Composer, _ title: String, _ sub: String, _ icon: String) -> some View {
         let visible = shown || reduceMotion
         return Button { onPick(kind) } label: {
             VStack(alignment: .leading, spacing: 10) {
@@ -756,9 +768,8 @@ struct CreateSheet: View {
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(width: 50, height: 50)
-                    .background(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(LinearGradient(colors: [Palette.rim(0.3), .clear], startPoint: .top, endPoint: .center)).padding(1.5))
-                    .shadow(color: colors[1].softGlow(0.4), radius: 10, y: 5)
+                    .background(Theme.candy, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .shadow(color: Theme.glow(0.3), radius: 10, y: 5)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title).font(.jakarta(16, .heavy)).foregroundStyle(Palette.text)
                     Text(sub).font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)

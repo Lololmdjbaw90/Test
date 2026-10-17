@@ -67,18 +67,17 @@ enum Support {
         let title: String
         let icon: String
         let hint: String
-        let colors: [UInt32]
         var id: String { title }
     }
 
     static let topics: [Topic] = [
-        Topic(title: "Account & login", icon: "person.crop.circle.fill", hint: "What happens when you try to log in or change your account?", colors: [0x7CBEFF, 0x2F80E0]),
-        Topic(title: "Something's broken", icon: "ladybug.fill", hint: "What were you doing when it went wrong? A screenshot helps a lot.", colors: [0xFFAA80, 0xEE6E40]),
-        Topic(title: "MimiPlus & coins", icon: "sparkles", hint: "Tell us what you bought or expected to get.", colors: [0xF472B6, 0xC084FC]),
-        Topic(title: "Commissions", icon: "paintbrush.pointed.fill", hint: "Which order is it about, and what's the problem?", colors: [0x5FD3B0, 0x16A37F]),
-        Topic(title: "Safety & reports", icon: "shield.lefthalf.filled", hint: "Who or what is it about? We keep this private.", colors: [0xFF7AA2, 0xD9577F]),
-        Topic(title: "Privacy & my data", icon: "lock.fill", hint: "What would you like to see, change or delete?", colors: [0xB19CFF, 0x7C5CF0]),
-        Topic(title: "Something else", icon: "questionmark.bubble.fill", hint: "Ask us anything.", colors: [0xFFD166, 0xF0A020]),
+        Topic(title: "Account & login", icon: "person.crop.circle.fill", hint: "What happens when you try to log in or change your account?"),
+        Topic(title: "Something's broken", icon: "ladybug.fill", hint: "What were you doing when it went wrong? A screenshot helps a lot."),
+        Topic(title: "MimiPlus & coins", icon: "sparkles", hint: "Tell us what you bought or expected to get."),
+        Topic(title: "Commissions", icon: "paintbrush.pointed.fill", hint: "Which order is it about, and what's the problem?"),
+        Topic(title: "Safety & reports", icon: "shield.lefthalf.filled", hint: "Who or what is it about? We keep this private."),
+        Topic(title: "Privacy & my data", icon: "lock.fill", hint: "What would you like to see, change or delete?"),
+        Topic(title: "Something else", icon: "questionmark.bubble.fill", hint: "Ask us anything."),
     ]
 
     static let answers: [(String, String)] = [
@@ -292,7 +291,7 @@ struct SupportChatView: View {
                         HStack(spacing: 10) {
                             Image(systemName: t.icon).font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
                                 .frame(width: 32, height: 32)
-                                .background(LinearGradient(colors: t.colors.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .background(Theme.candy, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                             Text(t.title).font(.jakarta(13, .bold)).foregroundStyle(Palette.text).lineLimit(2).multilineTextAlignment(.leading)
                             Spacer(minLength: 0)
                         }

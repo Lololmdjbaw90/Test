@@ -380,9 +380,11 @@ struct ReelsView: View {
         }
     }
 
-    // First page: the newest reels plus a few from people you follow, ranked
-    // by the on-device brain. More pages load as you scroll (cursor paging),
-    // so the feed stays light however many reels exist.
+    // First page: the newest reels, the server's best right now, a few from
+    // people you follow and a few about the #tags you like most, ranked by
+    // the on-device brain. Each source is one small indexed look-up and more
+    // pages load as you scroll (cursor paging), so the feed stays light
+    // however many reels exist.
     private func load() async {
         defer { withAnimation(Motion.fade) { loading = false } }
         if let cached = Self.cache, reels.isEmpty {
@@ -404,9 +406,11 @@ struct ReelsView: View {
         async let r1 = Self.reels(by: picks.count > 1 ? picks[1] : nil)
         async let r2 = Self.reels(by: picks.count > 2 ? picks[2] : nil)
         async let r3 = Self.reels(by: picks.count > 3 ? picks[3] : nil)
+        let favourites = await ReelBrain.shared.favouriteTags(2)
+        let tagged = await Self.reels(tagged: favourites, before: nil)
         let extra = await r0 + r1 + r2 + r3
-        let have = Set(batch.map(\.id))
-        batch += extra.filter { !have.contains($0.id) }
+        var have = Set(batch.map(\.id))
+        batch += (extra + tagged).filter { have.insert($0.id).inserted }
         let ranked = await ReelBrain.shared.rank(batch, me: model.me?.email ?? "", following: Set(model.me?.following ?? []))
         await LikeBook.shared.prime(ranked)
         Self.cache = ranked
@@ -444,6 +448,18 @@ struct ReelsView: View {
         return ((try? await FS.query("Reel", [.equals("user_email", email)], limit: 4)) ?? []).map(Reel.init)
     }
 
+    // A few reels for each #tag (newest first, or from before a moment in
+    // the past for variety).
+    private static func reels(tagged tags: [String], before: String?) async -> [Reel] {
+        var out: [Reel] = []
+        for tag in tags {
+            var filters: [FS.Filter] = [.contains("tags", tag)]
+            if let before { filters.append(.before("created_date", before)) }
+            out += ((try? await FS.query("Reel", filters, orderBy: "created_date", limit: 6)) ?? []).map(Reel.init)
+        }
+        return out
+    }
+
     // Next page. Most pages continue down the timeline; every third one also
     // dives to a random point in the past, so with millions of reels the feed
     // still surfaces older gems instead of only the newest.
@@ -462,6 +478,11 @@ struct ReelsView: View {
             self.cursor = timeline.map(\.created).filter { !$0.isEmpty }.min() ?? cursor
             exhausted = docs.count < Self.pageSize
             page += timeline
+        }
+        // Every other page: a few about one of the #tags you like most, from
+        // a random point in the past, so your interests keep showing up.
+        if pageCount % 2 == 0, let tag = await ReelBrain.shared.favouriteTags(4).randomElement() {
+            page += await Self.reels(tagged: [tag], before: Self.randomPoint(before: nil))
         }
         // Plus the next few from the server's ranking (liked, watched and
         // commented most for their age), so good reels reach everyone.
@@ -1115,8 +1136,11 @@ enum ReelCaption {
     static func styled(_ text: String) -> AttributedString {
         var out = AttributedString()
         for (i, word) in text.split(separator: " ", omittingEmptySubsequences: false).enumerated() {
-            var piece = AttributedString((i > 0 ? " " : "") + word)
+            if i > 0 { out += AttributedString(" ") }
+            var piece = AttributedString(String(word))
             if word.hasPrefix("#") || word.hasPrefix("@") { piece.font = Font.jakarta(15, .heavy) }
+            // A #tag opens its page (everything with it).
+            if word.hasPrefix("#"), let tag = Hashtags.tags(String(word)).first { piece.link = Hashtags.link(tag) }
             out += piece
         }
         return out

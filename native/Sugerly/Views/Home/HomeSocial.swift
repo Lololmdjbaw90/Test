@@ -90,7 +90,7 @@ struct StoriesRow: View {
                         if story.reel == nil {
                             Circle().strokeBorder(Palette.success, lineWidth: 3)
                         } else if fresh {
-                            Circle().strokeBorder(AngularGradient(colors: [Theme.main, Theme.light, Color(hex: 0xFFD166), Theme.main], center: .center), lineWidth: 3.2)
+                            Circle().strokeBorder(AngularGradient(colors: [Theme.main, Theme.light, Theme.main], center: .center), lineWidth: 3.2)
                         } else {
                             Circle().strokeBorder(Palette.border, lineWidth: 2)
                         }
@@ -147,10 +147,10 @@ struct HomeComposerBar: View {
             .buttonStyle(BouncyStyle(scale: 0.98))
             Rectangle().fill(Palette.border).frame(height: 1).padding(.horizontal, 14)
             HStack(spacing: 0) {
-                action("Post", "text.bubble.fill", Palette.blushHex) { compose(.post) }
-                action("Reel", "play.rectangle.fill", Palette.pinkHex) { compose(.reel) }
-                action("Drawing", "paintbrush.pointed.fill", Palette.creamHex) { compose(.artwork) }
-                action("Song", "music.note", Palette.ivoryHex) { compose(.track) }
+                action("Post", "text.bubble.fill") { compose(.post) }
+                action("Reel", "play.rectangle.fill") { compose(.reel) }
+                action("Drawing", "paintbrush.pointed.fill") { compose(.artwork) }
+                action("Song", "music.note") { compose(.track) }
             }
             .padding(.horizontal, 6)
             .padding(.vertical, 6)
@@ -158,14 +158,14 @@ struct HomeComposerBar: View {
         .sugarCard(radius: 24)
     }
 
-    private func action(_ title: String, _ icon: String, _ tint: UInt32, _ run: @escaping () -> Void) -> some View {
+    private func action(_ title: String, _ icon: String, _ run: @escaping () -> Void) -> some View {
         Button(action: run) {
             VStack(spacing: 4) {
                 Image(systemName: icon)
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(Theme.main)
                     .frame(width: 36, height: 36)
-                    .background(Palette.tile(tint), in: Circle())
+                    .background(Palette.blush, in: Circle())
                     .overlay(Circle().strokeBorder(Palette.rim(0.6), lineWidth: 1))
                 Text(title).font(.jakarta(11, .bold)).foregroundStyle(Palette.text2).lineLimit(1)
             }
@@ -268,7 +268,6 @@ struct HappeningNow: View {
         var name: String
         var verb: String
         var icon: String
-        var tint: UInt32
         var thumb: String
         var created: String
         var route: Route?
@@ -280,17 +279,17 @@ struct HappeningNow: View {
         let blocked = Set(model.me?.blocked ?? [])
         var all: [Item] = []
         for p in posts.prefix(40) {
-            all.append(Item(id: "p" + p.id, email: p.authorEmail, name: p.authorName, verb: p.imageURL.isEmpty ? "shared a thought" : "posted a new picture", icon: "bubble.left.fill", tint: 0xFF7AA2, thumb: p.imageURL, created: p.created, route: .post(p)))
+            all.append(Item(id: "p" + p.id, email: p.authorEmail, name: p.authorName, verb: p.imageURL.isEmpty ? "shared a thought" : "posted a new picture", icon: "bubble.left.fill", thumb: p.imageURL, created: p.created, route: .post(p)))
         }
         for a in artworks.prefix(30) {
-            all.append(Item(id: "a" + a.id, email: a.authorEmail, name: a.authorName, verb: a.title.isEmpty ? "finished a drawing" : "drew “\(a.title)”", icon: "paintbrush.pointed.fill", tint: 0xB19CFF, thumb: a.imageURL, created: a.created, route: .artwork(a)))
+            all.append(Item(id: "a" + a.id, email: a.authorEmail, name: a.authorName, verb: a.title.isEmpty ? "finished a drawing" : "drew “\(a.title)”", icon: "paintbrush.pointed.fill", thumb: a.imageURL, created: a.created, route: .artwork(a)))
         }
         for r in reels.prefix(20) {
-            all.append(Item(id: "r" + r.id, email: r.authorEmail, name: r.authorName, verb: "posted a reel", icon: "play.rectangle.fill", tint: 0xF08A20, thumb: r.coverURL.isEmpty ? (r.pictures.first ?? "") : r.coverURL, created: r.created, route: .reel(r)))
+            all.append(Item(id: "r" + r.id, email: r.authorEmail, name: r.authorName, verb: "posted a reel", icon: "play.rectangle.fill", thumb: r.coverURL.isEmpty ? (r.pictures.first ?? "") : r.coverURL, created: r.created, route: .reel(r)))
         }
         for t in tracks.prefix(10) {
             let name = model.person(t.authorEmail)?.displayName ?? t.artist
-            all.append(Item(id: "t" + t.id, email: t.authorEmail, name: name, verb: "shared “\(t.title)”", icon: "music.note", tint: 0x7CBEFF, thumb: t.coverURL, created: t.created, route: nil))
+            all.append(Item(id: "t" + t.id, email: t.authorEmail, name: name, verb: "shared “\(t.title)”", icon: "music.note", thumb: t.coverURL, created: t.created, route: nil))
         }
         let visible = all.filter { $0.email != me && !blocked.contains($0.email) }
         let friends = visible.filter { following.contains($0.email) }
@@ -333,7 +332,7 @@ struct HappeningNow: View {
                 .overlay(alignment: .bottomTrailing) {
                     Image(systemName: item.icon).font(.system(size: 8, weight: .bold)).foregroundStyle(.white)
                         .frame(width: 18, height: 18)
-                        .background(Color(hex: item.tint), in: Circle())
+                        .background(Theme.main, in: Circle())
                         .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
                         .offset(x: 4, y: 4)
                 }
@@ -361,34 +360,42 @@ struct TrendingTags: View {
     let reels: [Reel]
     var open: (String) -> Void
 
+    // Trending across all of Sugerly (scripts/rank.mjs works it out from the
+    // last few days of everything); just what's loaded here until then.
     private var tags: [(String, Int)] {
+        let everywhere = TagTrends.shared.items
+        if !everywhere.isEmpty { return everywhere.prefix(12).map { ("#" + $0.tag, $0.uses) } }
         var count: [String: Int] = [:]
-        let texts = posts.prefix(150).map { $0.text + " " + $0.title } + reels.map(\.caption)
-        for text in texts {
-            for tag in Set(Hashtags.find(text)) { count["#" + tag, default: 0] += 1 }
+        for tags in posts.prefix(150).map(\.tags) + reels.map(\.tags) {
+            for tag in Set(tags) { count["#" + tag, default: 0] += 1 }
         }
         return count.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }.prefix(12).map { ($0.key, $0.value) }
     }
 
     var body: some View {
         let list = tags
-        if !list.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                SectionHeader(icon: "number", title: "Trending tags")
-                FlowLayout(spacing: 8) {
-                    ForEach(Array(list.enumerated()), id: \.element.0) { i, tag in
-                        Button { open(tag.0) } label: {
-                            HStack(spacing: 5) {
-                                if i < 3 { Image(systemName: "flame.fill").font(.system(size: 11, weight: .bold)).foregroundStyle(Color(hex: 0xF08A20)) }
-                                Text(tag.0).font(.jakarta(13, .bold)).foregroundStyle(i < 3 ? Theme.main : Palette.text2)
-                                Text("\(tag.1)").font(.jakarta(11, .heavy)).foregroundStyle(Palette.muted)
-                            }
-                            .padding(.horizontal, 12).frame(height: 34)
-                            .background(i < 3 ? Theme.soft : Palette.surface, in: Capsule())
-                            .overlay(Capsule().strokeBorder(i < 3 ? Theme.main.opacity(0.25) : Palette.border, lineWidth: 1))
+        Group {
+            if !list.isEmpty { content(list) }
+        }
+        .task { await TagTrends.shared.refresh() }
+    }
+
+    private func content(_ list: [(String, Int)]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(icon: "number", title: "Trending tags")
+            FlowLayout(spacing: 8) {
+                ForEach(Array(list.enumerated()), id: \.element.0) { i, tag in
+                    Button { open(tag.0) } label: {
+                        HStack(spacing: 5) {
+                            if i < 3 { Image(systemName: "flame.fill").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.gold) }
+                            Text(tag.0).font(.jakarta(13, .bold)).foregroundStyle(i < 3 ? Theme.main : Palette.text2)
+                            Text("\(tag.1)").font(.jakarta(11, .heavy)).foregroundStyle(Palette.muted)
                         }
-                        .buttonStyle(BouncyStyle(scale: 0.92))
+                        .padding(.horizontal, 12).frame(height: 34)
+                        .background(i < 3 ? Theme.soft : Palette.surface, in: Capsule())
+                        .overlay(Capsule().strokeBorder(i < 3 ? Theme.main.opacity(0.25) : Palette.border, lineWidth: 1))
                     }
+                    .buttonStyle(BouncyStyle(scale: 0.92))
                 }
             }
         }
@@ -509,7 +516,7 @@ struct WeeklyChallengeCard: View {
 
     @ViewBuilder
     private func card(_ c: Challenge) -> some View {
-        let entries = posts.filter { Hashtags.find($0.title + " " + $0.text).contains(c.tag) }
+        let entries = posts.filter { $0.tags.contains(c.tag) }
         let people = Array(uniqued(entries.map(\.authorEmail)).prefix(4))
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 12) {

@@ -251,6 +251,8 @@ struct Post: Identifiable, Hashable {
     var likes: [String]
     var likeCount: Int?
     var created: String
+    // Its #tags (see Hashtags).
+    var tags: [String]
 
     init(_ d: Doc) {
         id = d.str("id")
@@ -263,6 +265,8 @@ struct Post: Identifiable, Hashable {
         likes = d.strs("likes")
         likeCount = d.optInt("like_count")
         created = d.str("created_date")
+        let saved = d.strs("tags")
+        tags = saved.isEmpty ? Hashtags.tags(title, text) : saved
     }
 }
 
@@ -421,6 +425,7 @@ struct Artwork: Identifiable, Hashable {
     var featured: Bool
     var created: String
     var year: String
+    var tags: [String]
 
     init(_ d: Doc) {
         id = d.str("id")
@@ -436,6 +441,8 @@ struct Artwork: Identifiable, Hashable {
         likeCount = d.optInt("like_count")
         featured = d.bool("is_featured") || d.bool("featured")
         created = d.str("created_date")
+        let saved = d.strs("tags")
+        tags = saved.isEmpty ? Hashtags.tags(title, text) : saved
     }
 }
 
@@ -451,6 +458,7 @@ struct Track: Identifiable, Hashable {
     var authorEmail: String
     var likes: [String]
     var created: String
+    var tags: [String] = []
     var external: URL? = nil
 
     init(_ d: Doc) {
@@ -464,6 +472,8 @@ struct Track: Identifiable, Hashable {
         authorEmail = d.str("user_email").lowercased()
         likes = d.strs("likes")
         created = d.str("created_date")
+        let saved = d.strs("tags")
+        tags = saved.isEmpty ? Hashtags.tags(d.str("title"), d.str("description")) : saved
     }
 
     init(id: String, title: String, artist: String, audioURL: String, coverURL: String, external: URL?) {
@@ -513,6 +523,7 @@ struct Reel: Identifiable, Hashable {
     var mirror = false
     // Slideshows: how long each picture shows (timeline); 3 s when not set.
     var slideDurations: [Double] = []
+    var tags: [String] = []
 
     func slideSeconds(_ i: Int) -> Double {
         slideDurations.indices.contains(i) ? max(0.5, slideDurations[i]) : 3
@@ -551,6 +562,8 @@ struct Reel: Identifiable, Hashable {
         mirror = edits["mirror"] as? Bool ?? false
         slideDurations = (edits["slide_durations"] as? [Any] ?? []).compactMap { ReelText.num($0) }
         created = d.str("created_date")
+        let saved = d.strs("tags")
+        tags = saved.isEmpty ? Hashtags.tags(caption) : saved
     }
 
     var isVideo: Bool { kind == "video" || (mediaURLs.isEmpty && [".mp4", ".mov", ".m4v", ".webm"].contains(where: { mediaURL.lowercased().contains($0) })) }

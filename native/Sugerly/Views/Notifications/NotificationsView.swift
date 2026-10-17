@@ -359,16 +359,10 @@ struct NotificationsPage: View {
         go(b.first)
     }
 
+    // One colour for every kind (the icon says what it is); gold only for
+    // money (commissions).
     private func tint(_ type: String) -> [Color] {
-        switch type {
-        case "like": return [Color(hex: 0xFF7AA2), Color(hex: 0xE0406F)]
-        case "follow": return [Color(hex: 0xB19CFF), Color(hex: 0x7C5CF0)]
-        case "comment", "reply": return [Color(hex: 0x7CBEFF), Color(hex: 0x2F80E0)]
-        case "mention": return [Color(hex: 0x5FD3B0), Color(hex: 0x16A37F)]
-        case "message": return [Color(hex: 0x5FD3B0), Color(hex: 0x16A37F)]
-        case "commission": return [Color(hex: 0xFFD166), Color(hex: 0xF0A020)]
-        default: return [Theme.light, Theme.main]
-        }
+        type == "commission" ? [Palette.gold.opacity(0.75), Palette.gold] : [Theme.light, Theme.main]
     }
 
     private func icon(_ type: String) -> String {
@@ -553,7 +547,7 @@ struct AdminView: View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 12) {
                     Image(systemName: "shield.lefthalf.filled").font(.system(size: 22, weight: .bold)).foregroundStyle(.white)
-                        .frame(width: 52, height: 52).background(LinearGradient(colors: [Color(hex: 0xFFD166), Color(hex: 0xF0A020)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+                        .frame(width: 52, height: 52).background(Theme.candy, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
                         Text("MISSION CONTROL").font(.jakarta(11, .heavy)).tracking(1.2).foregroundStyle(Palette.muted)
                         Text("Admin panel").font(.display(32)).foregroundStyle(Palette.text)
@@ -623,10 +617,10 @@ struct AdminView: View {
         let online = people.filter(\.isOnline).count
         return VStack(alignment: .leading, spacing: 14) {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                statCard("person.2.fill", "Members", "\(people.count)", "\(online) online", [0xFF7AA2, 0xD9577F])
-                statCard("photo.stack.fill", "Posts & art", "\(data.posts.count + data.art.count)", "+\(data.items.filter { $0.date > weekAgo && ($0.label == "Post" || $0.label == "Artwork") }.count) this week", [0xFFAA80, 0xEE6E40])
-                statCard("bubble.left.and.bubble.right.fill", "Messages", "\(data.items.filter { $0.label == "Message" || $0.label == "Comment" }.count)", "+\(data.items.filter { $0.date > weekAgo && ($0.label == "Message" || $0.label == "Comment") }.count) this week", [0xB19CFF, 0x7C5CF0])
-                statCard("music.note", "Tracks & servers", "\(data.tracks.count + data.servers.count)", "\(data.reels.count) reels", [0x7CBEFF, 0x2F80E0])
+                statCard("person.2.fill", "Members", "\(people.count)", "\(online) online")
+                statCard("photo.stack.fill", "Posts & art", "\(data.posts.count + data.art.count)", "+\(data.items.filter { $0.date > weekAgo && ($0.label == "Post" || $0.label == "Artwork") }.count) this week")
+                statCard("bubble.left.and.bubble.right.fill", "Messages", "\(data.items.filter { $0.label == "Message" || $0.label == "Comment" }.count)", "+\(data.items.filter { $0.date > weekAgo && ($0.label == "Message" || $0.label == "Comment") }.count) this week")
+                statCard("music.note", "Tracks & servers", "\(data.tracks.count + data.servers.count)", "\(data.reels.count) reels")
             }
             activityChart
             VStack(alignment: .leading, spacing: 8) {
@@ -645,11 +639,11 @@ struct AdminView: View {
         }
     }
 
-    private func statCard(_ icon: String, _ label: String, _ value: String, _ sub: String, _ colors: [UInt32]) -> some View {
+    private func statCard(_ icon: String, _ label: String, _ value: String, _ sub: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Image(systemName: icon).font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
                 .frame(width: 36, height: 36)
-                .background(LinearGradient(colors: colors.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(Theme.candy, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             Text(value).font(.display(30)).foregroundStyle(Palette.text).contentTransition(.numericText())
             Text(label.uppercased()).font(.jakarta(10, .heavy)).tracking(0.8).foregroundStyle(Palette.muted)
             Text(sub).font(.jakarta(11, .semibold)).foregroundStyle(Palette.text2)
@@ -875,8 +869,8 @@ struct AdminView: View {
             // One full-width row each (side by side, the names wrapped onto
             // two lines and the icons floated at the top).
             VStack(spacing: 8) {
-                adminLink("Weekly challenges", "The themes everyone draws this week", "trophy.fill", [0xFFD166, 0xF0A020]) { editChallenges = true }
-                adminLink("Daily prompts", "A new idea to draw each day", "paintpalette.fill", [0xFF9EC4, 0xE0508A]) { editPrompts = true }
+                adminLink("Weekly challenges", "The themes everyone draws this week", "trophy.fill") { editChallenges = true }
+                adminLink("Daily prompts", "A new idea to draw each day", "paintpalette.fill") { editPrompts = true }
             }
             .sheet(isPresented: $editChallenges) { DailyContentEditor(kind: .challenges).presentationCornerRadius(30) }
             .sheet(isPresented: $editPrompts) { DailyContentEditor(kind: .prompts).presentationCornerRadius(30) }
@@ -885,9 +879,9 @@ struct AdminView: View {
         }
     }
 
-    private func adminLink(_ title: String, _ detail: String, _ icon: String, _ colors: [UInt32], action: @escaping () -> Void) -> some View {
+    private func adminLink(_ title: String, _ detail: String, _ icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            IconRow(title: title, detail: detail, icon: icon, colors: colors, chevron: true)
+            IconRow(title: title, detail: detail, icon: icon, chevron: true)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .sugarCard(radius: 18)

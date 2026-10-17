@@ -15,6 +15,7 @@ protocol Likeable {
     var id: String { get }
     var likes: [String] { get set }
     var likeCount: Int? { get set }
+    var tags: [String] { get }
 }
 
 extension Likeable {
@@ -87,6 +88,12 @@ final class LikeBook {
 
     // Save a like or unlike. `before` is the thing as it was before the tap.
     func write<T: Likeable>(_ before: T, liking: Bool, me: String, owner: String) async throws {
+        // One taste for everything: liking a post or drawing also teaches the
+        // For You feeds its #tags and artist (reels teach it themselves).
+        if T.likeCollection != Reel.likeCollection {
+            let tags = before.tags
+            Task { await ReelBrain.shared.liked(tags: tags, author: owner, on: liking) }
+        }
         let key = Self.key(before)
         let old = known[key]
         known[key] = liking

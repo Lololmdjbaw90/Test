@@ -141,7 +141,7 @@ final class IncomingCalls: NSObject, PKPushRegistryDelegate {
 
     // While it rings: stop when the caller hangs up, someone else picks up
     // (a group call on another phone of yours), or nobody answers.
-    private func watch(_ callId: String) {
+    func watch(_ callId: String) {
         watchers[callId]?.cancel()
         watchers[callId] = Task { [weak self] in
             let bridge = VoiceEngine.shared.bridge
@@ -178,7 +178,7 @@ struct CallReadinessRow: View {
     var body: some View {
         HStack(spacing: 8) {
             IconRow(title: "Calls with Sugerly closed", detail: detail, icon: state == .ready ? "checkmark.circle.fill" : "phone.fill",
-                    colors: state == .ready ? [0x5FD3B0, 0x16A37F] : [0xFFAA80, 0xEE6E40])
+                    tone: state == .ready ? .success : .warning)
             Button {
                 Task {
                     checking = true

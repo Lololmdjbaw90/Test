@@ -146,7 +146,7 @@ struct PeopleView: View {
                 // Round tiles in a grid instead of long rows.
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 12)], spacing: 12) {
                     ForEach(Array(shown.prefix(150).enumerated()), id: \.element.id) { i, person in
-                        PersonBubble(person: person, tint: [Palette.blushHex, Palette.creamHex, Palette.ivoryHex, Palette.pinkHex][i % 4]) { path.append(.person(person.email)) }
+                        PersonBubble(person: person) { path.append(.person(person.email)) }
                             .stagger(appeared, i)
                     }
                 }
@@ -174,8 +174,6 @@ struct PeopleView: View {
 // follow button.
 struct PersonBubble: View {
     let person: UserProfile
-    // A soft palette wash at the top of the card.
-    var tint: UInt32 = Palette.blushHex
     var open: () -> Void
     @Environment(AppModel.self) private var model
 
@@ -210,7 +208,8 @@ struct PersonBubble: View {
         .frame(maxWidth: .infinity)
         .background {
             let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
-            shape.fill(LinearGradient(colors: [Palette.tile(tint), Palette.surface], startPoint: .top, endPoint: .center))
+            // A soft blush wash at the top of the card.
+            shape.fill(LinearGradient(colors: [Palette.blush, Palette.surface], startPoint: .top, endPoint: .center))
                 .shadow(color: Palette.shadow, radius: 10, y: 4)
         }
         .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
@@ -326,8 +325,28 @@ struct SearchView: View {
                 LazyVStack(alignment: .leading, spacing: 18) {
                     if q.isEmpty {
                         idle
-                    } else if people.isEmpty && postHits.isEmpty && artHits.isEmpty && serverHits.isEmpty {
+                    } else if people.isEmpty && postHits.isEmpty && artHits.isEmpty && serverHits.isEmpty && Hashtags.normalize(q) == nil {
                         EmptyCard(icon: "magnifyingglass", title: "Nothing found", text: "Try another word.")
+                    }
+                    // Everything with this #tag, from the whole of Sugerly.
+                    if let tag = Hashtags.normalize(q) {
+                        group("Hashtag", "number") {
+                            Button { open(.hashtag(tag)) } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "number").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
+                                        .frame(width: 44, height: 44)
+                                        .background(Theme.candy, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("#\(tag)").font(.jakarta(15, .heavy)).foregroundStyle(Palette.text)
+                                        Text("Posts, reels, drawings and songs").font(.jakarta(12)).foregroundStyle(Palette.muted)
+                                    }
+                                    Spacer(minLength: 0)
+                                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.muted)
+                                }
+                                .sugarCard(radius: 20, padding: 10)
+                            }
+                            .buttonStyle(BouncyStyle(scale: 0.97))
+                        }
                     }
                     if !people.isEmpty {
                         group("People", "person.2.fill") {

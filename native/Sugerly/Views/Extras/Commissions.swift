@@ -577,7 +577,7 @@ struct ListingCard: View {
                 }
                 HStack(spacing: 8) {
                     if let r = c.rating {
-                        Label(String(format: "%.1f", r), systemImage: "star.fill").font(.jakarta(11, .heavy)).foregroundStyle(Color(hex: 0xF0A020))
+                        Label(String(format: "%.1f", r), systemImage: "star.fill").font(.jakarta(11, .heavy)).foregroundStyle(Palette.gold)
                     }
                     if c.ordersCompleted > 0 {
                         Text("\(c.ordersCompleted) sold").font(.jakarta(11, .bold)).foregroundStyle(Palette.muted)
@@ -777,7 +777,7 @@ struct SetUpPayoutsNotice: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "banknote.fill").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
                 .frame(width: 42, height: 42)
-                .background(LinearGradient(colors: [Color(hex: 0xFFB38A), Color(hex: 0xF0A020)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background(LinearGradient(colors: [Palette.gold.opacity(0.75), Palette.gold], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             VStack(alignment: .leading, spacing: 4) {
                 Text("Set up payouts first").font(.jakarta(15, .heavy)).foregroundStyle(Palette.text)
                 Text("Add the PayPal email where Sugerly should send your money. You can accept paid requests once it's saved.")
@@ -811,7 +811,7 @@ struct AdminPayouts: View {
         let byArtist = Dictionary(grouping: owed, by: \.artistEmail)
         VStack(alignment: .leading, spacing: 12) {
             Label("Admin · payouts", systemImage: "shield.lefthalf.filled").font(.jakarta(15, .heavy)).foregroundStyle(Palette.text)
-                .labelStyle(TintedIconLabel(tint: Color(hex: 0x7C5CF0)))
+                .labelStyle(TintedIconLabel(tint: Theme.main))
             if byArtist.isEmpty && refunds.isEmpty {
                 Text("Nothing to pay out or refund right now.").font(.jakarta(13)).foregroundStyle(Palette.muted)
             }
@@ -903,7 +903,7 @@ struct CommissionDetail: View {
                             Text(model.name(commission.artistEmail, commission.artistName)).font(.jakarta(14, .bold)).foregroundStyle(Palette.text2)
                             if let r = commission.rating {
                                 Label(String(format: "%.1f (%d)", r, commission.ratingCount), systemImage: "star.fill")
-                                    .font(.jakarta(12, .heavy)).foregroundStyle(Color(hex: 0xF0A020))
+                                    .font(.jakarta(12, .heavy)).foregroundStyle(Palette.gold)
                             }
                             if commission.ordersCompleted > 0 {
                                 Text("· \(commission.ordersCompleted) sold").font(.jakarta(12, .bold)).foregroundStyle(Palette.muted)
@@ -1393,7 +1393,7 @@ struct CommissionOrderView: View {
     private func deliveryCard(_ o: CommissionOrder) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Your art", systemImage: "shippingbox.fill").font(.jakarta(14, .heavy)).foregroundStyle(Palette.text)
-                .labelStyle(TintedIconLabel(tint: Color(hex: 0xE8457C)))
+                .labelStyle(TintedIconLabel(tint: Theme.main))
             if !o.deliveryURLs.isEmpty {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 8)], spacing: 8) {
                     ForEach(o.deliveryURLs, id: \.self) { url in
@@ -1415,7 +1415,7 @@ struct CommissionOrderView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 3) {
                 ForEach(1...5, id: \.self) { i in
-                    Image(systemName: i <= o.rating ? "star.fill" : "star").foregroundStyle(Color(hex: 0xF0A020))
+                    Image(systemName: i <= o.rating ? "star.fill" : "star").foregroundStyle(Palette.gold)
                 }
             }
             .font(.system(size: 16, weight: .bold))
@@ -1802,7 +1802,7 @@ struct ApproveSheet: View {
                         Button { withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { rating = i } } label: {
                             Image(systemName: i <= rating ? "star.fill" : "star")
                                 .font(.system(size: 34, weight: .bold))
-                                .foregroundStyle(Color(hex: 0xF0A020))
+                                .foregroundStyle(Palette.gold)
                                 .scaleEffect(i == rating ? 1.12 : 1)
                         }
                         .buttonStyle(SoftPressStyle())

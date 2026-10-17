@@ -69,6 +69,39 @@ actor ReelBrain {
         seen[reel.id] = Date().timeIntervalSince1970
         learn(reel, -1.6)
     }
+    // Opening a #tag's page: a little interest in it.
+    func visited(tag: String) {
+        let key = "#" + tag
+        topics[key] = max(-3, min(4, (topics[key] ?? 0) + 0.35))
+        scheduleSave()
+    }
+
+    // Liking (or unliking) a post or drawing with these #tags.
+    func liked(tags: [String], author: String, on: Bool) {
+        let signal = on ? 0.9 : -0.45
+        for tag in tags.prefix(8) {
+            let key = "#" + tag
+            topics[key] = max(-3, min(4, (topics[key] ?? 0) + 0.18 * signal))
+        }
+        if !author.isEmpty { authors[author] = max(-3, min(5, (authors[author] ?? 0) + 0.18 * signal)) }
+        scheduleSave()
+    }
+
+    // The #tags you like most (without the #), to pull in more about them.
+    func favouriteTags(_ count: Int) -> [String] {
+        topics.filter { $0.key.hasPrefix("#") && $0.value > 0.4 }
+            .sorted { $0.value > $1.value }
+            .prefix(count)
+            .map { String($0.key.dropFirst()) }
+    }
+
+    // How much you like each #tag, for ranking posts and drawings too.
+    func tagWeights() -> [String: Double] {
+        var out: [String: Double] = [:]
+        for (key, value) in topics where key.hasPrefix("#") { out[String(key.dropFirst())] = value }
+        return out
+    }
+
     func followed(_ email: String) {
         authors[email] = min(5, (authors[email] ?? 0) + 1.5)
         scheduleSave()
@@ -178,15 +211,15 @@ actor ReelBrain {
     }
 
     static func tokens(_ r: Reel) -> [String] {
-        var out: [String] = []
+        // Its #tags (the same ones posts, drawings and songs use), then
+        // meaningful words from the caption.
+        var out: [String] = r.tags.prefix(8).map { "#" + $0 }
         for raw in r.caption.lowercased().split(whereSeparator: { $0.isWhitespace || $0 == "," || $0 == "." || $0 == "!" || $0 == "?" }) {
+            guard out.count < 12 else { break }
             let word = String(raw)
-            if word.hasPrefix("#") && word.count > 1 { out.append(word) }
-            else {
-                let clean = word.filter { $0.isLetter }
-                if clean.count >= 4 && !stop.contains(clean) { out.append(clean) }
-            }
-            if out.count >= 12 { break }
+            if word.hasPrefix("#") { continue }
+            let clean = word.filter { $0.isLetter }
+            if clean.count >= 4 && !stop.contains(clean) { out.append(clean) }
         }
         if !r.musicArtist.isEmpty { out.append("artist:" + r.musicArtist.lowercased()) }
         if !r.musicTitle.isEmpty { out.append("sound:" + r.musicTitle.lowercased()) }

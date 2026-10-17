@@ -10,6 +10,12 @@
 //    changed since the last run. rank_score is "how good" plus "how new"
 //    (the hot formula), so older things sink on their own and only changed
 //    ones ever need a new score. It also keeps comment_count.
+// 3. Hashtags, one set for everything: every post, reel, drawing and song
+//    gets a `tags` list (the apps add it when posting; this fills it in for
+//    older things, ones made on the website and edited captions), and the
+//    trending tags of the last few days go to SiteConfig/trending_tags for
+//    every app to read. Only what changed is read, within the same budget,
+//    so it keeps working however big Sugerly gets.
 //
 // Locally: FIREBASE_SERVICE_ACCOUNT="$(cat key.json)" node scripts/rank.mjs
 import { cert, initializeApp } from "firebase-admin/app";
@@ -147,6 +153,31 @@ async function likeRulesLive() {
   }
 }
 
+// ---- Hashtags (shared with section 2) ---------------------------------------
+
+// The same rule as the apps: #word, letters / numbers / _, 2 to 40 long,
+// small letters, no repeats, at most 10.
+const TAG_RE = /#([\p{L}\p{N}_]{2,40})/gu;
+const TAGGED = {
+  CommunityPost: (d) => [d.title, d.description],
+  Reel: (d) => [d.caption],
+  Artwork: (d) => [d.title, d.description],
+  MusicReview: (d) => [d.title, d.description],
+};
+function tagsOf(texts) {
+  const out = [];
+  for (const text of texts) {
+    if (typeof text !== "string") continue;
+    for (const m of text.matchAll(TAG_RE)) {
+      const tag = m[1].toLowerCase();
+      if (!out.includes(tag)) out.push(tag);
+      if (out.length >= 10) return out;
+    }
+  }
+  return out;
+}
+const sameTags = (a, b) => Array.isArray(a) && a.length === b.length && a.every((t, i) => t === b[i]);
+
 // ---- 2. Scores -------------------------------------------------------------
 
 const EPOCH = 1.7e9; // seconds; only shifts every score by the same amount
@@ -196,9 +227,14 @@ async function rescore(coll, extra) {
     const data = snap.data();
     const comments = await commentCount(coll, snap.id);
     const rank = rankScore(data, comments);
-    if (data.rank_score === rank && data.comment_count === comments) return;
+    // An edited caption gets its tags again.
+    const tags = tagsOf(TAGGED[coll](data));
+    const retag = !sameTags(data.tags, tags) && (tags.length > 0 || Array.isArray(data.tags));
+    if (data.rank_score === rank && data.comment_count === comments && !retag) return;
     // Not touching updated_date, so the next run doesn't see it as changed.
-    await snap.ref.update({ rank_score: rank, comment_count: comments, rank_updated: new Date().toISOString() });
+    const patch = { rank_score: rank, comment_count: comments, rank_updated: new Date().toISOString() };
+    if (retag) patch.tags = tags;
+    await snap.ref.update(patch);
     writes += 1;
   };
   // Everything liked, viewed or edited since last time (oldest first).
@@ -225,6 +261,90 @@ async function rescore(coll, extra) {
   console.log(`${coll}: scored ${seen.size} (${reads} reads, ${writes} writes so far)`);
 }
 
+// ---- 3. Hashtags -------------------------------------------------------------
+
+// Tags for older things (in id order, carrying on next run where this one
+// stopped), then for anything created since (made on the website, say).
+async function backfillTags(coll) {
+  const key = `tags_done_${coll}`;
+  const sinceKey = `tags_since_${coll}`;
+  if (!state[sinceKey]) state[sinceKey] = new Date(Date.now() - 3_600_000).toISOString();
+  let written = 0;
+  const tagPage = async (docs) => {
+    const batch = db.batch();
+    let n = 0;
+    for (const snap of docs) {
+      const d = snap.data();
+      if (Array.isArray(d.tags)) continue;
+      const tags = tagsOf(TAGGED[coll](d));
+      // Nothing to find it by: no need to write anything.
+      if (!tags.length) continue;
+      batch.update(snap.ref, { tags });
+      n += 1;
+    }
+    if (n) { await batch.commit(); writes += n; written += n; }
+  };
+  while (state[key] !== "done" && budgetLeft()) {
+    let q = db.collection(coll).orderBy(FieldPath.documentId()).limit(300);
+    if (state[key]) q = q.startAfter(state[key]);
+    const page = await q.get();
+    reads += Math.max(page.size, 1);
+    if (page.empty) { state[key] = "done"; break; }
+    await tagPage(page.docs);
+    state[key] = page.docs[page.docs.length - 1].id;
+    await persist();
+  }
+  while (state[key] === "done" && budgetLeft()) {
+    const page = await db.collection(coll).where("created_date", ">", state[sinceKey]).orderBy("created_date").limit(300).get();
+    reads += Math.max(page.size, 1);
+    if (page.empty) break;
+    await tagPage(page.docs);
+    state[sinceKey] = String(page.docs[page.docs.length - 1].get("created_date"));
+    if (page.size < 300) break;
+  }
+  await persist();
+  console.log(`${coll}: tags ${state[key] === "done" ? "on everything" : `up to ${state[key]}`} (${written} tagged this run)`);
+}
+
+// What's trending: every tag used in the last three days, weighted by how
+// loved each thing is and how new it is (half as much every day), and by
+// how many different people use it, so one person repeating a tag doesn't
+// make it trend. Reads at most the newest 1,500 things of each kind.
+async function trendingTags() {
+  const since = new Date(Date.now() - 3 * 86_400_000).toISOString();
+  const tags = new Map();
+  for (const coll of Object.keys(TAGGED)) {
+    if (!budgetLeft()) break;
+    const snap = await db.collection(coll).where("created_date", ">", since).orderBy("created_date", "desc").limit(1500).get();
+    reads += Math.max(snap.size, 1);
+    snap.forEach((doc) => {
+      const d = doc.data();
+      const list = Array.isArray(d.tags) ? d.tags : tagsOf(TAGGED[coll](d));
+      if (!list.length) return;
+      const likes = typeof d.like_count === "number" ? d.like_count : likersOf(d).length;
+      const hours = Math.max(0, (Date.now() - (Date.parse(d.created_date) || Date.now())) / 3_600_000);
+      const loved = 1 + likes * 0.6 + (Number(d.comment_count) || 0) + (Number(d.views) || 0) * 0.02;
+      const weight = loved * Math.pow(0.5, hours / 24);
+      const who = String(d.user_email || d.created_by || "");
+      for (const tag of list) {
+        const t = tags.get(tag) || { score: 0, uses: 0, people: new Set() };
+        t.score += weight;
+        t.uses += 1;
+        t.people.add(who);
+        tags.set(tag, t);
+      }
+    });
+  }
+  const list = [...tags.entries()]
+    .map(([tag, t]) => ({ tag, score: Math.round(t.score * Math.min(1, t.people.size / 2) * 100) / 100, uses: t.uses, people: t.people.size }))
+    .filter((t) => t.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 40);
+  await db.doc("SiteConfig/trending_tags").set({ key: "trending_tags", tags: list, updated_date: new Date().toISOString() });
+  writes += 1;
+  console.log(`Trending: ${list.slice(0, 8).map((t) => "#" + t.tag).join(" ") || "(none yet)"}`);
+}
+
 if (await likeRulesLive()) {
   for (const coll of LIKED) await moveLikes(coll);
 } else {
@@ -235,4 +355,6 @@ for (const coll of Object.keys(RANKED)) await rescore(coll, commented[coll]);
 // Only move past these comments once every post they touched is scored.
 if (budgetLeft() && commented.until) state.comments_since = commented.until;
 await persist();
+for (const coll of Object.keys(TAGGED)) await backfillTags(coll);
+if (budgetLeft()) await trendingTags();
 console.log(`Done: ${reads} reads, ${writes} writes.`);

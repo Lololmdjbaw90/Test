@@ -520,15 +520,14 @@ struct NitroShopView: View {
         let icon: String
         let title: String
         let text: String
-        let colors: [UInt32]
     }
     private let perks: [Perk] = [
-        Perk(icon: "photo.stack.fill", title: "GIF picture & banner", text: "Bring your profile to life", colors: [0xEE8FAE, 0xD9577F]),
-        Perk(icon: "textformat", title: "Name styles", text: "Gold, Aurora, Neon, Rainbow and Sunset", colors: [0xFFD166, 0xF0A020]),
-        Perk(icon: "sparkles", title: "Profile effects", text: "12 floating effects for your banner", colors: [0xB19CFF, 0x8B5CF6]),
-        Perk(icon: "heart.circle.fill", title: "Premium frames", text: "Rainbow, Hearts and Stars", colors: [0x7CBEFF, 0x2F80E0]),
-        Perk(icon: "rectangle.inset.filled", title: "Plus banner", text: "A dreamy colour banner when you don't add your own", colors: [0x5EC8B8, 0x2E9E8F]),
-        Perk(icon: "checkmark.seal.fill", title: "MimiPlus badge", text: "Next to your name on your profile", colors: [0xF472B6, 0xC084FC]),
+        Perk(icon: "photo.stack.fill", title: "GIF picture & banner", text: "Bring your profile to life"),
+        Perk(icon: "textformat", title: "Name styles", text: "Gold, Aurora, Neon, Rainbow and Sunset"),
+        Perk(icon: "sparkles", title: "Profile effects", text: "12 floating effects for your banner"),
+        Perk(icon: "heart.circle.fill", title: "Premium frames", text: "Rainbow, Hearts and Stars"),
+        Perk(icon: "rectangle.inset.filled", title: "Plus banner", text: "A dreamy colour banner when you don't add your own"),
+        Perk(icon: "checkmark.seal.fill", title: "MimiPlus badge", text: "Next to your name on your profile"),
     ]
 
     var body: some View {
@@ -739,9 +738,9 @@ struct NitroShopView: View {
 
     private func perkRow(_ p: Perk) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: p.icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color(hex: p.colors.last ?? 0))
+            Image(systemName: p.icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(Tone.accent.color)
                 .frame(width: 34, height: 34)
-                .background(Color(hex: p.colors.last ?? 0).opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .background(Tone.accent.soft, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(p.title).font(.jakarta(15, .semibold)).foregroundStyle(Palette.text)
                 Text(p.text).font(.jakarta(12)).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)

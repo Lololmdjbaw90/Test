@@ -78,13 +78,18 @@ extension View {
 private struct PlainToolbar<Leading: View, Trailing: View>: ViewModifier {
     let leading: Leading
     let trailing: Trailing
+    // The app's real light / dark look, read from the page.
+    @Environment(\.colorScheme) private var scheme
 
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
+            // iOS 26 turns the top bar's buttons dark when dark pictures
+            // scroll underneath it, which made the bell and the menu button
+            // go black in light mode. They keep the app's own look instead.
             content.toolbar {
-                ToolbarItem(placement: .topBarLeading) { leading }
+                ToolbarItem(placement: .topBarLeading) { leading.environment(\.colorScheme, scheme) }
                     .sharedBackgroundVisibility(.hidden)
-                ToolbarItem(placement: .topBarTrailing) { trailing }
+                ToolbarItem(placement: .topBarTrailing) { trailing.environment(\.colorScheme, scheme) }
                     .sharedBackgroundVisibility(.hidden)
             }
         } else {
@@ -451,12 +456,13 @@ extension View {
     }
 }
 
-// A row title with a little gradient icon tile (lists, account, settings).
+// A row title with a little icon tile (lists, account, settings). Every row
+// uses your accent unless its colour means something (see Tone).
 struct IconRow: View {
     let title: String
     var detail: String? = nil
     let icon: String
-    var colors: [UInt32] = [0xEE8FAE, 0xD9577F]
+    var tone: Tone = .accent
     var value: String? = nil
     var danger = false
     var chevron = false
@@ -464,12 +470,12 @@ struct IconRow: View {
     var body: some View {
         HStack(spacing: 12) {
             // A soft tile in the row's colour with the symbol in that colour.
-            let tint = Color(hex: colors.last ?? 0xD8668D)
+            let shade = danger ? Tone.danger : tone
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(danger ? Palette.danger : tint)
+                .foregroundStyle(shade.color)
                 .frame(width: 32, height: 32)
-                .background((danger ? Palette.danger : tint).opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .background(shade.soft, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.jakarta(15, .semibold)).foregroundStyle(danger ? Palette.danger : Palette.text)
                 if let detail, !detail.isEmpty {

@@ -21,7 +21,7 @@ struct AccountView: View {
         let title: String
         let detail: String
         let icon: String
-        let colors: [UInt32]
+        var tone: Tone = .accent
         let action: () -> Void
         var id: String { title }
     }
@@ -29,11 +29,11 @@ struct AccountView: View {
     // The places that aren't tabs.
     private var places: [Place] {
         [
-            Place(title: "Music", detail: "Songs from the community", icon: "music.note", colors: [0xFF7AA2, 0xD9577F]) { go(.music) },
-            Place(title: "Servers", detail: "Group chats with channels and voice", icon: "person.3.fill", colors: [0x7CBEFF, 0x2F80E0]) { go(.servers) },
-            Place(title: "People", detail: "Find friends and artists", icon: "person.crop.circle.badge.plus", colors: [0xFFB86B, 0xF0802A]) { go(.people) },
-            Place(title: "Top artists", detail: "This week's most loved", icon: "crown.fill", colors: [0xFFD166, 0xE9A100]) { go(.topArtists) },
-            Place(title: "Commissions", detail: "Order art or sell yours", icon: "storefront.fill", colors: [0x5FD3B0, 0x16A37F]) { go(.commissions) },
+            Place(title: "Music", detail: "Songs from the community", icon: "music.note") { go(.music) },
+            Place(title: "Servers", detail: "Group chats with channels and voice", icon: "person.3.fill") { go(.servers) },
+            Place(title: "People", detail: "Find friends and artists", icon: "person.crop.circle.badge.plus") { go(.people) },
+            Place(title: "Top artists", detail: "This week's most loved", icon: "crown.fill", tone: .gold) { go(.topArtists) },
+            Place(title: "Commissions", detail: "Order art or sell yours", icon: "storefront.fill") { go(.commissions) },
         ]
     }
 
@@ -87,12 +87,12 @@ struct AccountView: View {
             }
             .buttonStyle(RowPressStyle())
             divider
-            row("What's new", "The latest updates", "gift.fill", [0xFF9EC4, 0xE0508A]) { go(.updates) }
+            row("What's new", "The latest updates", "gift.fill") { go(.updates) }
             divider
-            row("Help & support", "Chat with the Sugerly team", "questionmark.bubble.fill", [0x5FD3B0, 0x16A37F]) { go(.support) }
+            row("Help & support", "Chat with the Sugerly team", "questionmark.bubble.fill") { go(.support) }
             if model.me?.isAdmin == true {
                 divider
-                row("Admin", "Manage Sugerly", "shield.lefthalf.filled", [0xFFD166, 0xF0A020]) { go(.admin) }
+                row("Admin", "Manage Sugerly", "shield.lefthalf.filled", .neutral) { go(.admin) }
             }
         }
     }
@@ -101,7 +101,7 @@ struct AccountView: View {
     private var notificationsRow: some View {
         Button { go(.notifications) } label: {
             HStack(spacing: 8) {
-                IconRow(title: "Notifications", detail: "Likes, follows and mentions", icon: "bell.fill", colors: [0xB19CFF, 0x7C5CF0])
+                IconRow(title: "Notifications", detail: "Likes, follows and mentions", icon: "bell.fill")
                 if notes.unread > 0 {
                     Text("\(notes.unread)")
                         .font(.jakarta(12, .heavy)).foregroundStyle(.white)
@@ -120,13 +120,13 @@ struct AccountView: View {
     private var endCard: some View {
         card(nil) {
             Toggle(isOn: darkMode) {
-                IconRow(title: "Dark mode", icon: "moon.fill", colors: [0x9D8CFF, 0x5B47D6])
+                IconRow(title: "Dark mode", icon: "moon.fill")
             }
             .tint(Theme.main)
             .padding(.horizontal, 14).padding(.vertical, 9)
             divider
             Button { confirmLogout = true } label: {
-                IconRow(title: "Log out", icon: "rectangle.portrait.and.arrow.right", colors: [0xF07A8E, 0xD9455F], danger: true)
+                IconRow(title: "Log out", icon: "rectangle.portrait.and.arrow.right", danger: true)
                     .padding(.horizontal, 14).padding(.vertical, 9)
             }
             .buttonStyle(RowPressStyle())
@@ -153,10 +153,10 @@ struct AccountView: View {
             statusButton(me, presence)
             HStack(spacing: 8) {
                 Button { wallet = true } label: {
-                    stat("\(me.coins)", "Coins", "circle.hexagongrid.fill", Color(hex: 0xE09A1A))
+                    stat("\(me.coins)", "Coins", "circle.hexagongrid.fill", Palette.gold)
                 }
                 .buttonStyle(SoftPressStyle())
-                stat("\(me.dailyStreak)", "Day streak", "flame.fill", Color(hex: 0xF08A20))
+                stat("\(me.dailyStreak)", "Day streak", "flame.fill", Palette.gold)
                 stat("\(me.following.count)", "Following", "heart.fill", Theme.main)
             }
         }
@@ -240,7 +240,7 @@ struct AccountView: View {
                 if i > 0 { divider }
                 Button(action: place.action) {
                     HStack(spacing: 8) {
-                        IconRow(title: place.title, detail: place.detail, icon: place.icon, colors: place.colors)
+                        IconRow(title: place.title, detail: place.detail, icon: place.icon, tone: place.tone)
                         chevron
                     }
                     .padding(.horizontal, 14).padding(.vertical, 9)
@@ -257,9 +257,9 @@ struct AccountView: View {
     // Coins and MimiPlus together, with what they are in plain words.
     private var walletCard: some View {
         card("COINS & MIMIPLUS") {
-            row("Wallet", "\(model.me?.coins ?? 0) coins · how to earn more", "circle.hexagongrid.fill", [0xFFD166, 0xE09A1A]) { wallet = true }
+            row("Wallet", "\(model.me?.coins ?? 0) coins · how to earn more", "circle.hexagongrid.fill", .gold) { wallet = true }
             divider
-            row("MimiPlus", model.me?.isNitro == true ? "Active · extra looks for your profile" : "Extra looks for your profile, paid with coins", "sparkles", [0xC084FC, 0x8B5CF6]) { shop = true }
+            row("MimiPlus", model.me?.isNitro == true ? "Active · extra looks for your profile" : "Extra looks for your profile, paid with coins", "sparkles") { shop = true }
         }
         .opacity(shown || reduceMotion ? 1 : 0)
         .offset(y: shown || reduceMotion ? 0 : 12)
@@ -278,14 +278,14 @@ struct AccountView: View {
         }
     }
 
-    private func row(_ title: String, _ detail: String, _ icon: String, _ colors: [UInt32], action: @escaping () -> Void) -> some View {
-        Button(action: action) { rowLabel(title, detail, icon, colors) }
+    private func row(_ title: String, _ detail: String, _ icon: String, _ tone: Tone = .accent, action: @escaping () -> Void) -> some View {
+        Button(action: action) { rowLabel(title, detail, icon, tone) }
             .buttonStyle(RowPressStyle())
     }
 
-    private func rowLabel(_ title: String, _ detail: String, _ icon: String, _ colors: [UInt32]) -> some View {
+    private func rowLabel(_ title: String, _ detail: String, _ icon: String, _ tone: Tone) -> some View {
         HStack(spacing: 8) {
-            IconRow(title: title, detail: detail, icon: icon, colors: colors)
+            IconRow(title: title, detail: detail, icon: icon, tone: tone)
             chevron
         }
         .padding(.horizontal, 14).padding(.vertical, 9)

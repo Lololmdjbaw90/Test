@@ -130,33 +130,6 @@ enum Notify {
     }
 }
 
-// Words that start with # in a caption.
-enum Hashtags {
-    static func find(_ text: String) -> [String] {
-        text.split(whereSeparator: { $0.isWhitespace }).compactMap { word in
-            guard word.hasPrefix("#") else { return nil }
-            let tag = word.dropFirst().filter { $0.isLetter || $0.isNumber || $0 == "_" }.lowercased()
-            return tag.count >= 2 ? tag : nil
-        }
-    }
-
-    // Caption with #tags in the accent colour.
-    static func styled(_ text: String) -> AttributedString {
-        var out = AttributedString()
-        let words = text.split(separator: " ", omittingEmptySubsequences: false)
-        for (i, word) in words.enumerated() {
-            var piece = AttributedString(String(word))
-            if word.hasPrefix("#") && word.count > 1 {
-                piece.foregroundColor = Theme.pink
-                piece.font = Font.jakarta(15, .bold)
-            }
-            out += piece
-            if i < words.count - 1 { out += AttributedString(" ") }
-        }
-        return out
-    }
-}
-
 struct CommunityView: View {
     enum Feed: String, CaseIterable {
         case forYou = "For you", following = "Following", latest = "Latest", top = "Top", saved = "Saved"
@@ -181,13 +154,15 @@ struct CommunityView: View {
     @State private var dismissed = Set<String>()
     @State private var searching = false
     @State private var appeared = false
+    // How much you like each #tag (learned from reels, posts and drawings).
+    @State private var taste: [String: Double] = [:]
     @Namespace private var feedPill
 
     private var visible: [Post] {
         guard let me = model.me else { return [] }
         let blocked = Set(me.blocked + me.ignored)
         var all = store.posts.filter { !blocked.contains($0.authorEmail) }
-        if let tag { all = all.filter { Hashtags.find($0.title + " " + $0.text).contains(tag) } }
+        if let tag { all = all.filter { $0.tags.contains(tag) } }
         let following = Set(me.following)
         switch feed {
         case .forYou:
@@ -207,17 +182,25 @@ struct CommunityView: View {
         }
     }
 
-    // Recent, liked and from people you follow floats up.
+    // Recent, liked, from people you follow and about #tags you like
+    // floats up.
     private func score(_ p: Post, _ following: Set<String>) -> Double {
         let hours = max(0, Date().timeIntervalSince(Dates.parse(p.created) ?? Date()) / 3600)
         let engagement = Double(p.likeTotal) + Double(store.commentCounts[p.id] ?? 0) * 2 + 1
         let boost = following.contains(p.authorEmail) ? 1.6 : 1
-        return engagement * boost / pow(hours + 2, 1.15)
+        // Your taste: up to about twice as likely for tags you love, and less
+        // for ones you keep skipping.
+        let interest = tanh(p.tags.reduce(0) { $0 + (taste[$1] ?? 0) } / 2)
+        return engagement * boost * (1 + 0.8 * interest) / pow(hours + 2, 1.15)
     }
 
+    // Trending across all of Sugerly (worked out on the server); just these
+    // posts until that's loaded.
     private var trending: [String] {
+        let everywhere = TagTrends.shared.items.map(\.tag)
+        if !everywhere.isEmpty { return Array(everywhere.prefix(10)) }
         var counts: [String: Int] = [:]
-        for p in store.posts { for t in Set(Hashtags.find(p.title + " " + p.text)) { counts[t, default: 0] += 1 } }
+        for p in store.posts { for t in Set(p.tags) { counts[t, default: 0] += 1 } }
         return counts.sorted { $0.value > $1.value }.prefix(8).map(\.key)
     }
 
@@ -245,7 +228,7 @@ struct CommunityView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Label("Top creators this week", systemImage: "crown.fill").font(.jakarta(16, .semibold)).foregroundStyle(Palette.text)
-                    .labelStyle(TintedIconLabel(tint: Color(hex: 0xF0A020)))
+                    .labelStyle(TintedIconLabel(tint: Palette.gold))
                 Spacer()
                 Button { path.append(.topArtists) } label: {
                     HStack(spacing: 3) { Text("See all"); Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)) }
@@ -260,13 +243,13 @@ struct CommunityView: View {
                             VStack(spacing: 5) {
                                 Avatar(url: person?.picture ?? "", name: person?.displayName ?? "", size: 54)
                                     .padding(3)
-                                    .overlay(Circle().strokeBorder(i == 0 ? Color(hex: 0xF0A020) : i == 1 ? Color(hex: 0x94A3B8) : i == 2 ? Color(hex: 0xC2773A) : Palette.border, lineWidth: i < 3 ? 2 : 1))
+                                    .overlay(Circle().strokeBorder(i == 0 ? Palette.gold : i == 1 ? Color(hex: 0x94A3B8) : i == 2 ? Color(hex: 0xC2773A) : Palette.border, lineWidth: i < 3 ? 2 : 1))
                                     .overlay(alignment: .bottomTrailing) {
                                         PresenceBadge(online: person?.isOnline ?? false, size: 54).padding(3)
                                     }
                                     .overlay(alignment: .top) {
                                         if i == 0 {
-                                            Image(systemName: "crown.fill").font(.system(size: 15, weight: .bold)).foregroundStyle(Color(hex: 0xF0A020))
+                                            Image(systemName: "crown.fill").font(.system(size: 15, weight: .bold)).foregroundStyle(Palette.gold)
                                                 .offset(y: -13)
                                         }
                                     }
@@ -363,6 +346,10 @@ struct CommunityView: View {
             SearchView { route in path.append(route) }.presentationCornerRadius(34)
         }
         .task { if store.posts.isEmpty { await store.load() } }
+        .task {
+            await TagTrends.shared.refresh()
+            taste = await ReelBrain.shared.tagWeights()
+        }
         // Saved: bring in saved posts that aren't among the loaded pages yet.
         .task(id: feed == .saved ? (model.me?.savedPosts ?? []) : []) {
             guard feed == .saved, let ids = model.me?.savedPosts else { return }
@@ -441,13 +428,27 @@ struct CommunityView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 Image(systemName: "number").font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.main)
-                    .frame(width: 34, height: 34).background(Palette.tile(Palette.blushHex), in: Circle())
-                if let tag, !trending.contains(tag) { tagChip(tag) }
-                ForEach(trending, id: \.self) { t in tagChip(t) }
+                    .frame(width: 34, height: 34).background(Palette.blush, in: Circle())
+                // The challenge filter that's on (tap to clear it).
+                if let tag { tagChip(tag) }
+                ForEach(trending.filter { $0 != tag }, id: \.self) { t in trendChip(t) }
             }
             .padding(.horizontal, 2)
             .padding(.vertical, 2)
         }
+    }
+
+    // A trending tag: opens its page, with every post, reel, drawing and
+    // song that has it.
+    private func trendChip(_ t: String) -> some View {
+        Button { path.append(.hashtag(t)) } label: {
+            Text("#\(t)").font(.jakarta(13, .semibold))
+                .foregroundStyle(Palette.text2)
+                .padding(.horizontal, 14).frame(height: 34)
+                .background(Capsule().fill(Palette.surface).overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1)))
+        }
+        .buttonStyle(BouncyStyle(scale: 0.92))
+        .accessibilityHint("Shows everything tagged #\(t)")
     }
 
     private func tagChip(_ t: String) -> some View {
@@ -1129,7 +1130,7 @@ struct CommentsScreen<Header: View>: View {
                     }
                     .padding(.horizontal, 14).padding(.vertical, 12)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Palette.tile(Palette.creamHex).opacity(0.6), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .background(Palette.blush.opacity(0.6), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .transition(.opacity)
                 }
                 if hasOlder {
@@ -1495,7 +1496,7 @@ struct NewPostView: View {
             let now = FS.nowISO()
             let data: Doc = [
                 "title": title.trimmingCharacters(in: .whitespaces), "description": text.trimmingCharacters(in: .whitespacesAndNewlines),
-                "image_url": imageURL, "user_email": me.email, "user_display_name": me.displayName,
+                "image_url": imageURL, "tags": Hashtags.tags(title, text), "user_email": me.email, "user_display_name": me.displayName,
                 "user_profile_picture": me.picture, "likes": [String](), "created_by": me.email,
                 "created_date": now, "updated_date": now,
             ]

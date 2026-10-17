@@ -239,7 +239,6 @@ struct HomeView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var lastLoad = Date.distantPast
-    @State private var tagSearch: String?
     @State private var wallet = false
     @AppStorage("sugerly.dismissedAnnouncement") private var dismissedAnnouncement = ""
 
@@ -263,7 +262,7 @@ struct HomeView: View {
                 friendsRow.scrollFade()
                 SuggestedPeople(path: $path)
                 freshTracks.scrollFade()
-                TrendingTags(posts: posts.posts, reels: reels) { tagSearch = $0 }
+                TrendingTags(posts: posts.posts, reels: reels) { tag in path.append(.hashtag(String(tag.drop { $0 == "#" }))) }
                 yourServers.scrollFade()
             }
             .padding(.horizontal, sizeClass == .regular ? 24 : 16)
@@ -307,16 +306,7 @@ struct HomeView: View {
             SearchView { route in path.append(route) }
                 .presentationCornerRadius(34)
         }
-        .sheet(item: Binding(get: { tagSearch.map { TagQuery(id: $0) } }, set: { tagSearch = $0?.id })) { tag in
-            SearchView(go: { route in
-                tagSearch = nil
-                path.append(route)
-            }, initial: tag.id)
-            .presentationCornerRadius(34)
-        }
     }
-
-    struct TagQuery: Identifiable { var id: String }
 
     private func load() async {
         guard !loading else { return }
@@ -428,13 +418,12 @@ struct HomeView: View {
     // MARK: shortcuts to the places that aren't tabs
 
     private var shortcuts: some View {
-        // Each place gets one of the palette's colours.
-        let items: [(String, String, Route, UInt32)] = [
-            ("Music", "music.note", .music, Palette.blushHex),
-            ("Servers", "person.3.fill", .servers, Palette.ivoryHex),
-            ("People", "person.crop.circle.badge.plus", .people, Palette.creamHex),
-            ("Top artists", "crown.fill", .topArtists, Palette.pinkHex),
-            ("Commissions", "storefront.fill", .commissions, Palette.roseHex),
+        let items: [(String, String, Route)] = [
+            ("Music", "music.note", .music),
+            ("Servers", "person.3.fill", .servers),
+            ("People", "person.crop.circle.badge.plus", .people),
+            ("Top artists", "crown.fill", .topArtists),
+            ("Commissions", "storefront.fill", .commissions),
         ]
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -449,7 +438,7 @@ struct HomeView: View {
                             Text(item.0).font(.jakarta(14, .semibold)).foregroundStyle(Palette.text)
                         }
                         .padding(.leading, 6).padding(.trailing, 14).frame(height: 40)
-                        .background(Palette.tile(item.3), in: Capsule())
+                        .background(Palette.blush, in: Capsule())
                         .overlay(Capsule().strokeBorder(Palette.rim(0.5), lineWidth: 1))
                     }
                     .buttonStyle(BouncyStyle(scale: 0.92))

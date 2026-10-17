@@ -66,12 +66,6 @@ enum Palette {
     static var heroB: Color { hero(light: mix(0xFFFFFF, Theme.lightHex, 0.55), 0.22) }
     static var heroC: Color { hero(light: Theme.lightHex, 0.34) }
 
-    // One of the palette colours as a soft tile (light mode), or a plum
-    // shade of it in dark mode.
-    static func tile(_ hex: UInt32) -> Color {
-        swatch(hex, 1, mix(0x2A2227, hex, 0.14), 1)
-    }
-
     // The glossy touches (a white rim, a sheen along the top) are for light
     // pages. On dark pages they fade to a faint hairline, so nothing shines
     // like plastic.
@@ -129,6 +123,28 @@ enum Palette {
         }
         return blend(16) | blend(8) | blend(0)
     }
+}
+
+// The few colours icons and tiles use, so colour always means the same
+// thing instead of looking random: your accent for places, settings and
+// actions; gold for rewards (coins, crowns, stars, streaks); green for
+// "ready" and "online"; amber for "needs a look"; red for things that delete
+// or block; a quiet grey for the rest.
+enum Tone {
+    case accent, gold, success, warning, danger, neutral
+
+    var color: Color {
+        switch self {
+        case .accent: return Theme.main
+        case .gold: return Palette.gold
+        case .success: return Palette.success
+        case .warning: return Palette.warning
+        case .danger: return Palette.danger
+        case .neutral: return Palette.muted
+        }
+    }
+    // The soft tile behind an icon in this colour.
+    var soft: Color { color.opacity(0.12) }
 }
 
 // The five accent colours you can pick in Settings (the logo follows along).
@@ -538,7 +554,8 @@ struct LevelInfo {
         let current = Self.ladder[index]
         level = current.level
         title = current.title
-        color = Color(hex: current.color)
+        // Two colours, not a rainbow: your accent, and gold from Master up.
+        color = current.level >= 5 ? Palette.gold : Theme.main
         if index + 1 < Self.ladder.count {
             let next = Self.ladder[index + 1]
             xpInLevel = xp - current.xp

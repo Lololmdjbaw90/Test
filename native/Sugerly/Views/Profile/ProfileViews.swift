@@ -218,9 +218,9 @@ struct ProfileContent: View {
                     .background(info.color.opacity(0.12), in: Capsule())
                     .overlay(Capsule().strokeBorder(info.color.opacity(0.3), lineWidth: 1))
                 if person.dailyStreak > 1 {
-                    Label("\(person.dailyStreak)-day streak", systemImage: "flame.fill").font(.jakarta(12, .bold)).foregroundStyle(Color(hex: 0xF08A20))
+                    Label("\(person.dailyStreak)-day streak", systemImage: "flame.fill").font(.jakarta(12, .bold)).foregroundStyle(Palette.gold)
                         .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(Color(hex: 0xF08A20).opacity(0.12), in: Capsule())
+                        .background(Palette.gold.opacity(0.12), in: Capsule())
                 }
                 if let joined = Dates.parse(person.joined) {
                     Label("Joined \(joined.formatted(.dateTime.month(.abbreviated).year()))", systemImage: "calendar").font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)
@@ -300,17 +300,17 @@ struct ProfileContent: View {
         }
     }
 
-    // Four little tiles, one in each of the palette's colours.
+    // Four little tiles in your blush.
     private var stats: some View {
         HStack(spacing: 8) {
-            stat(posts.count, "Posts", icon: "square.grid.2x2.fill", tint: Palette.creamHex, index: 0)
-            stat(totalLikes, "Likes", icon: "heart.fill", tint: Palette.blushHex, index: 1)
-            stat(followers, "Followers", icon: "person.2.fill", tint: Palette.ivoryHex, index: 2)
-            stat(person.following.count, "Following", icon: "person.crop.circle.badge.checkmark", tint: Palette.pinkHex, index: 3)
+            stat(posts.count, "Posts", icon: "square.grid.2x2.fill", index: 0)
+            stat(totalLikes, "Likes", icon: "heart.fill", index: 1)
+            stat(followers, "Followers", icon: "person.2.fill", index: 2)
+            stat(person.following.count, "Following", icon: "person.crop.circle.badge.checkmark", index: 3)
         }
     }
 
-    private func stat(_ n: Int, _ label: String, icon: String, tint: UInt32, index: Int) -> some View {
+    private func stat(_ n: Int, _ label: String, icon: String, index: Int) -> some View {
         VStack(spacing: 4) {
             Image(systemName: icon).font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.main)
             Text("\(n)").font(.display(24)).foregroundStyle(Palette.text).monospacedDigit()
@@ -322,7 +322,7 @@ struct ProfileContent: View {
         .padding(.vertical, 12)
         .padding(.horizontal, 4)
         .frame(maxWidth: .infinity)
-        .background(Palette.tile(tint), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(Palette.blush, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.rim(0.5), lineWidth: 1))
         .scaleEffect(appeared || Motion.reduced ? 1 : 0.8)
         .opacity(appeared ? 1 : 0)
@@ -1229,7 +1229,7 @@ struct SettingsView: View {
     private var lookGroup: some View {
         Section {
             VStack(alignment: .leading, spacing: 12) {
-                IconRow(title: "Theme", icon: "moon.stars.fill", colors: [0xB19CFF, 0x7C5CF0])
+                IconRow(title: "Theme", icon: "moon.stars.fill")
                 Picker("Theme", selection: themeChoice) {
                     Text("Light").tag("light")
                     Text("Dark").tag("dark")
@@ -1239,7 +1239,7 @@ struct SettingsView: View {
             }
             .padding(.vertical, 4)
             VStack(alignment: .leading, spacing: 12) {
-                IconRow(title: "Colour", detail: "The logo and Mimi change colour to match.", icon: "drop.fill", colors: [0xF27BA3, 0xE8457C])
+                IconRow(title: "Colour", detail: "The logo and Mimi change colour to match.", icon: "drop.fill")
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 6) {
                     ForEach(Accent.allCases) { accent in
                         let picked = model.accent == accent && model.myColors == nil
@@ -1276,13 +1276,13 @@ struct SettingsView: View {
                 Button {
                     if let url = URL(string: UIApplication.openNotificationSettingsURLString) { UIApplication.shared.open(url) }
                 } label: {
-                    IconRow(title: "Notifications are off", detail: "Tap to turn them on in iPhone Settings", icon: "bell.slash.fill", colors: [0xF07A8E, 0xE0526B], chevron: true)
+                    IconRow(title: "Notifications are off", detail: "Tap to turn them on in iPhone Settings", icon: "bell.slash.fill", tone: .warning, chevron: true)
                 }
             }
-            toggle(Alerts.Kind.dms.title, icon: Alerts.Kind.dms.icon, colors: [0x7CBEFF, 0x2F80E0], isOn: $alertDMs)
-            toggle(Alerts.Kind.servers.title, icon: Alerts.Kind.servers.icon, colors: [0xB19CFF, 0x7C5CF0], isOn: $alertServers)
-            toggle(Alerts.Kind.social.title, icon: Alerts.Kind.social.icon, colors: [0xF27BA3, 0xE8457C], isOn: $alertSocial)
-            toggle(Alerts.Kind.reels.title, icon: Alerts.Kind.reels.icon, colors: [0xFFAA80, 0xEE6E40], isOn: $alertReels)
+            toggle(Alerts.Kind.dms.title, icon: Alerts.Kind.dms.icon, isOn: $alertDMs)
+            toggle(Alerts.Kind.servers.title, icon: Alerts.Kind.servers.icon, isOn: $alertServers)
+            toggle(Alerts.Kind.social.title, icon: Alerts.Kind.social.icon, isOn: $alertSocial)
+            toggle(Alerts.Kind.reels.title, icon: Alerts.Kind.reels.icon, isOn: $alertReels)
             CallReadinessRow()
                 .buttonStyle(.borderless)
         } header: { ListHeader(title: "NOTIFICATIONS") }
@@ -1292,18 +1292,18 @@ struct SettingsView: View {
     private var privacyGroup: some View {
         Section {
             Button { statusSheet = true } label: {
-                IconRow(title: "Status", detail: statusLine, icon: "bubble.left.fill", colors: [0x5FD3B0, 0x16A37F], chevron: true)
+                IconRow(title: "Status", detail: statusLine, icon: "bubble.left.fill", chevron: true)
             }
             Toggle(isOn: Binding(
                 get: { model.me?.presence != "invisible" },
                 set: { on in Task { await Privacy.setPresence(on ? .online : .invisible, model: model) } })) {
-                IconRow(title: "Show when I'm online", detail: "Off makes you look offline", icon: "circle.fill", colors: [0x4CC795, 0x17A673])
+                IconRow(title: "Show when I'm online", detail: "Off makes you look offline", icon: "circle.fill", tone: .success)
             }
             Button { peopleList = .blocked } label: {
-                IconRow(title: "Blocked people", icon: "hand.raised.fill", colors: [0xF07A8E, 0xE0526B], value: "\(model.me?.blocked.count ?? 0)", chevron: true)
+                IconRow(title: "Blocked people", icon: "hand.raised.fill", tone: .neutral, value: "\(model.me?.blocked.count ?? 0)", chevron: true)
             }
             Button { peopleList = .ignored } label: {
-                IconRow(title: "Ignored people", icon: "bell.slash.fill", colors: [0xB8A3AE, 0x86707C], value: "\(model.me?.ignored.count ?? 0)", chevron: true)
+                IconRow(title: "Ignored people", icon: "bell.slash.fill", tone: .neutral, value: "\(model.me?.ignored.count ?? 0)", chevron: true)
             }
         } header: {
             ListHeader(title: "PRIVACY & STATUS")
@@ -1315,8 +1315,8 @@ struct SettingsView: View {
 
     private var soundsGroup: some View {
         Section {
-            toggle("Haptics", detail: "Little taps when you like, send and switch tabs", icon: "iphone.radiowaves.left.and.right", colors: [0x7CBEFF, 0x2F80E0], isOn: $haptics)
-            toggle("App sounds", detail: "Soft pops, likes, sends and little chimes (quiet on silent)", icon: "speaker.wave.2.fill", colors: [0xFFAA80, 0xEE6E40], isOn: $clickSounds)
+            toggle("Haptics", detail: "Little taps when you like, send and switch tabs", icon: "iphone.radiowaves.left.and.right", isOn: $haptics)
+            toggle("App sounds", detail: "Soft pops, likes, sends and little chimes (quiet on silent)", icon: "speaker.wave.2.fill", isOn: $clickSounds)
         } header: { ListHeader(title: "SOUNDS & HAPTICS") }
     }
 
@@ -1326,12 +1326,11 @@ struct SettingsView: View {
                 Button { legal = doc } label: {
                     IconRow(title: doc.title,
                             icon: doc == .terms ? "doc.text.fill" : doc == .privacy ? "lock.fill" : "heart.text.square.fill",
-                            colors: doc == .terms ? [0xB19CFF, 0x7C5CF0] : doc == .privacy ? [0x5FD3B0, 0x16A37F] : [0xF27BA3, 0xE8457C],
                             chevron: true)
                 }
             }
             Button { contacting = true } label: {
-                IconRow(title: "Help & support chat", detail: "Chat with the team, follow your reports", icon: "bubble.left.and.bubble.right.fill", colors: [0x7CB2FF, 0x3B82F6], chevron: true)
+                IconRow(title: "Help & support chat", detail: "Chat with the team, follow your reports", icon: "bubble.left.and.bubble.right.fill", chevron: true)
             }
         } header: { ListHeader(title: "HELP & LEGAL") }
     }
@@ -1340,10 +1339,10 @@ struct SettingsView: View {
     private var securityGroup: some View {
         Section {
             Button { approvingLogin = true } label: {
-                IconRow(title: "Log in another device", detail: "Scan the QR code on a new iPhone or iPad", icon: "qrcode.viewfinder", colors: [0xB19CFF, 0x7C5CF0], chevron: true)
+                IconRow(title: "Log in another device", detail: "Scan the QR code on a new iPhone or iPad", icon: "qrcode.viewfinder", chevron: true)
             }
             Button { backupCodes = true } label: {
-                IconRow(title: "Backup codes", detail: "Log in even if you can't get your emails", icon: "key.horizontal.fill", colors: [0xFFC46B, 0xF0A020], chevron: true)
+                IconRow(title: "Backup codes", detail: "Log in even if you can't get your emails", icon: "key.horizontal.fill", chevron: true)
             }
         } header: {
             ListHeader(title: "LOGIN & SECURITY")
@@ -1353,10 +1352,10 @@ struct SettingsView: View {
     private var accountGroup: some View {
         Section {
             Button { confirmLogout = true } label: {
-                IconRow(title: "Log out", icon: "rectangle.portrait.and.arrow.right", colors: [0xB8A3AE, 0x86707C])
+                IconRow(title: "Log out", icon: "rectangle.portrait.and.arrow.right", tone: .neutral)
             }
             Button { confirmDelete = true } label: {
-                IconRow(title: "Delete account", detail: "Removes your profile and everything you posted. This can't be undone.", icon: "trash.fill", colors: [0xF07A8E, 0xE0526B], danger: true)
+                IconRow(title: "Delete account", detail: "Removes your profile and everything you posted. This can't be undone.", icon: "trash.fill", danger: true)
             }
         } header: {
             ListHeader(title: "ACCOUNT")
@@ -1367,9 +1366,9 @@ struct SettingsView: View {
 
     // MARK: building blocks
 
-    private func toggle(_ title: String, detail: String? = nil, icon: String, colors: [UInt32], isOn: Binding<Bool>) -> some View {
+    private func toggle(_ title: String, detail: String? = nil, icon: String, isOn: Binding<Bool>) -> some View {
         Toggle(isOn: isOn) {
-            IconRow(title: title, detail: detail, icon: icon, colors: colors)
+            IconRow(title: title, detail: detail, icon: icon)
         }
         .tint(Theme.main)
         .sensoryFeedback(.selection, trigger: isOn.wrappedValue)

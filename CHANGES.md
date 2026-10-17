@@ -1,5 +1,11 @@
 # Changes
 
+## One set of hashtags for everything, and trending tags (iOS app + ranking job)
+
+- **`tags` on every post, reel, drawing and song**: a list of lowercase tags without the `#` (letters, numbers and `_`, 2–40 long, at most 10, the same rule everywhere). The iOS app saves it when posting; `scripts/rank.mjs` fills it in for older things, things made on the website and edited captions. A tag's page finds everything with one indexed `array-contains` query per kind, a page at a time (indexes in `firestore.indexes.json`).
+- **Trending tags** (`scripts/rank.mjs`, section 3): every run scores the tags of the last three days (how loved each thing is, halving every day, and how many different people use the tag) and writes the top 40 to `SiteConfig/trending_tags` (`{ key: "trending_tags", tags: [{ tag, score, uses, people }], updated_date }`). Apps ignore it once it's two days old. The website's `SiteConfig { key: "global" }` lookups are unaffected.
+- **For You**: the iOS app's on-device taste learns from #tags across reels, posts and drawings, and the reels feed pulls in a few reels for the tags you like most.
+
 ## Comments v2, GIFs, native Liquid Glass tab bar, smoother app (this update)
 
 ### New

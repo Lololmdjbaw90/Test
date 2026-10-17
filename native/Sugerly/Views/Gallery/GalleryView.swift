@@ -790,7 +790,7 @@ struct NewArtworkView: View {
             let now = FS.nowISO()
             let doc: Doc = [
                 "title": title.trimmingCharacters(in: .whitespacesAndNewlines), "description": text.trimmingCharacters(in: .whitespacesAndNewlines),
-                "image_url": url, "medium": medium,
+                "image_url": url, "medium": medium, "tags": Hashtags.tags(title, text),
                 "year": "\(Calendar.current.component(.year, from: Date()))", "is_featured": false,
                 "user_email": me.email, "user_display_name": me.displayName, "user_profile_picture": me.picture,
                 "likes": [String](), "created_by": me.email, "created_date": now, "updated_date": now,

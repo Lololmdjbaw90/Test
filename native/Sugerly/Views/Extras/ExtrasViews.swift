@@ -17,7 +17,7 @@ struct TopArtistsView: View {
 
     struct RankEntry: Hashable { var email: String; var likes: Int; var works: Int }
 
-    static let gold = Color(hex: 0xF0A020)
+    static let gold = Palette.gold
     static let silver = Color(hex: 0x94A3B8)
     static let bronze = Color(hex: 0xC2773A)
 
@@ -306,6 +306,14 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-2.7", icon: "number", title: "Hashtags everywhere", date: "2026-10-17T08:00:00Z", items: [
+            "One set of #hashtags for posts, reels, drawings and songs. Tap any #tag to see everything with it in one place, newest or most loved.",
+            "Trending tags from all of Sugerly on Home and in Community, and search finds hashtags too.",
+            "A smarter For You: what you like in reels, posts and drawings teaches it your favourite tags, and it brings you more of them.",
+            "Calls show iPhone's own call screen with Accept and Decline, your ringtone and vibration, even while the app is open.",
+            "Calmer, tidier colours: one pink for everything, gold only for coins, crowns and stars, green for online and red for delete.",
+            "The bell and menu buttons at the top no longer turn black when you scroll in light mode.",
+        ]),
         AppRelease(id: "ios-2.6", icon: "wand.and.stars", title: "Steadier and comfier", date: "2026-10-16T22:00:00Z", items: [
             "Tapping the camera button quickly during a call no longer freezes the app.",
             "Stickers and GIFs use far less memory, so chats and the editor's sticker picker don't crash any more.",
@@ -455,7 +463,7 @@ struct UpdatesView: View {
                 ForEach(Array(all.enumerated()), id: \.element.id) { i, r in
                     HStack(alignment: .top, spacing: 12) {
                         Image(systemName: r.icon).font(.system(size: 19, weight: .semibold)).foregroundStyle(Theme.main).frame(width: 46, height: 46)
-                            .background(Palette.tile([Palette.blushHex, Palette.creamHex, Palette.ivoryHex, Palette.pinkHex][i % 4]), in: Circle())
+                            .background(Palette.blush, in: Circle())
                             .overlay(Circle().strokeBorder(Palette.rim(0.6), lineWidth: 1))
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
