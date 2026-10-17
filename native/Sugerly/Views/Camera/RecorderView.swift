@@ -78,7 +78,7 @@ struct RecorderView: View {
 
     private var screen: some View {
         GeometryReader { geo in
-            let frame = RecorderFrame(size: geo.size, insets: geo.safeAreaInsets, light: ringLight)
+            let frame = RecorderFrame(size: geo.size, insets: Self.screenInsets(geo.safeAreaInsets), light: ringLight)
             ZStack(alignment: .topLeading) {
                 Color.black
                 if ringLight { FrontLight(tone: lightTone).transition(.opacity) }
@@ -102,6 +102,16 @@ struct RecorderView: View {
         .ignoresSafeArea()
         .preferredColorScheme(.dark)
         .statusBarHidden()
+    }
+
+    // The screen's real safe area (the Dynamic Island or status bar, and the
+    // home bar). This screen reaches the edges, so it measures none itself,
+    // and the buttons ended up under the Dynamic Island.
+    private static func screenInsets(_ measured: EdgeInsets) -> EdgeInsets {
+        let window = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first
+        guard let insets = window?.safeAreaInsets else { return measured }
+        return EdgeInsets(top: max(measured.top, insets.top), leading: max(measured.leading, insets.left),
+                          bottom: max(measured.bottom, insets.bottom), trailing: max(measured.trailing, insets.right))
     }
 
     // Sheets, questions, and keeping the camera in step with the song, the
@@ -662,6 +672,7 @@ struct RecorderView: View {
                     VStack(spacing: 5) {
                         Text(m.rawValue)
                             .font(.jakarta(15, .heavy))
+                            .lineLimit(1)
                             .foregroundStyle(mode == m ? ink : ink.opacity(0.5))
                         Capsule().fill(Theme.gradient)
                             .frame(width: 18, height: 3)

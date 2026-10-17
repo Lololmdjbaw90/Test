@@ -234,11 +234,13 @@ struct RailButton: View {
                         }
                     }
                 if labeled {
+                    // One line, smaller if the name doesn't fit (larger
+                    // text sizes made long names spill or wrap).
                     Text(title)
                         .font(.jakarta(10, .bold)).foregroundStyle(.white)
                         .shadow(color: .black.opacity(0.55), radius: 2, y: 1)
                         .lineLimit(1)
-                        .fixedSize()
+                        .minimumScaleFactor(0.5)
                 }
             }
             .frame(width: 58)
@@ -266,6 +268,8 @@ struct SideTile: View {
                     .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.4), lineWidth: 1.5))
                 Text(title).font(.jakarta(11, .heavy)).foregroundStyle(.white)
+                    .lineLimit(1)
+                    .fixedSize()
             }
         }
         .buttonStyle(BouncyStyle())
@@ -329,13 +333,17 @@ struct LensPicker: View {
             ForEach(lenses) { lens in
                 let on = lens == current
                 Button { pick(lens) } label: {
+                    // Always one line: a long zoom ("2.2×") makes the
+                    // round button a little wider instead of wrapping.
                     Text(on ? readout : lens.label)
-                        .font(.jakarta(on ? 12 : 11, .heavy))
-                        .monospacedDigit()
+                        .font(.system(size: on ? 13 : 12, weight: .bold).monospacedDigit())
+                        .lineLimit(1)
+                        .fixedSize()
                         .foregroundStyle(on ? Color(hex: 0xFFD166) : Color.white)
-                        .frame(width: on ? 38 : 30, height: on ? 38 : 30)
-                        .background(.black.opacity(on ? 0.55 : 0.3), in: Circle())
-                        .frame(width: 42, height: 44)
+                        .padding(.horizontal, on ? 8 : 0)
+                        .frame(minWidth: on ? 38 : 30, minHeight: on ? 38 : 30)
+                        .background(.black.opacity(on ? 0.55 : 0.3), in: Capsule())
+                        .frame(minWidth: 42, minHeight: 44)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(SoftPressStyle())
@@ -372,7 +380,10 @@ struct SpeedPicker: View {
                 Button { pick(value) } label: {
                     Text(Self.label(value))
                         .font(.jakarta(13, .heavy))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                         .foregroundStyle(on ? Color(hex: 0x2A1620) : Color.white)
+                        .padding(.horizontal, 4)
                         .frame(width: 58, height: 34)
                         .background(on ? Color.white : Color.clear, in: Capsule())
                 }

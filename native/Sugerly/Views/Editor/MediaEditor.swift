@@ -305,7 +305,11 @@ struct ToolRail: View {
                                 .frame(width: 40, height: 40)
                                 .background(.black.opacity(0.34), in: Circle())
                                 .overlay(Circle().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+                            // One line, smaller if it doesn't fit ("Stickers"
+                            // wrapped onto two lines with larger text sizes).
                             Text(t.title).font(.jakarta(10, .heavy))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.5)
                         }
                         .foregroundStyle(.white)
                         .shadow(color: .black.opacity(0.55), radius: 3, y: 1)
