@@ -583,7 +583,7 @@ struct TextStickerEditor: View {
                         Button { sticker.font = f } label: {
                             Text(f.rawValue).font(.custom(f.uiName, size: 16))
                                 .foregroundStyle(sticker.font == f ? Color.white : Palette.text)
-                                .padding(.horizontal, 14).frame(height: 36)
+                                .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 14).frame(height: 36)
                                 .background(sticker.font == f ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.surface), in: Capsule())
                         }
                         .buttonStyle(BouncyStyle())

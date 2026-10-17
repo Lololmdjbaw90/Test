@@ -331,7 +331,7 @@ struct ReelsView: View {
                     .font(.jakarta(14, .bold))
             }
             .foregroundStyle(.white)
-            .padding(.horizontal, 14).frame(height: 34)
+            .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 14).frame(height: 34)
             .background(.black.opacity(0.35), in: Capsule())
             .opacity(refreshing ? 1 : Double(progress))
             .scaleEffect(refreshing ? 1 : 0.85 + 0.15 * progress)

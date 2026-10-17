@@ -894,7 +894,7 @@ struct ChatBubble: View {
                         Text(emoji).font(.system(size: 13))
                         if people.count > 1 { Text("\(people.count)").font(.jakarta(11, .semibold)).foregroundStyle(mineToo ? Theme.main : Palette.text2).contentTransition(.numericText()) }
                     }
-                    .padding(.horizontal, 7).frame(height: 24)
+                    .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 7).frame(height: 24)
                     .background(Palette.surface, in: Capsule())
                     .overlay(Capsule().strokeBorder(mineToo ? Theme.main.opacity(0.5) : Palette.border, lineWidth: 1))
                 }
@@ -1014,7 +1014,7 @@ struct CallMessageRow: View {
             }
             Button("Call back", action: onCallBack)
                 .font(.jakarta(12, .heavy)).foregroundStyle(Theme.main)
-                .padding(.horizontal, 12).frame(height: 30)
+                .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 12).frame(height: 30)
                 .background(Theme.soft, in: Capsule())
         }
         .padding(.horizontal, 12).padding(.vertical, 8)

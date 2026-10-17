@@ -504,7 +504,7 @@ struct FlowChips: View {
             ForEach(items, id: \.self) { item in
                 Button { tap(item) } label: {
                     Text(item).font(.jakarta(13, .semibold)).foregroundStyle(Palette.text2)
-                        .padding(.horizontal, 14).frame(height: 34)
+                        .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 14).frame(height: 34)
                         .background(Palette.surface, in: Capsule())
                         .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
                 }

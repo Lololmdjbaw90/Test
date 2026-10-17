@@ -442,7 +442,7 @@ struct ChannelEditor: View {
                                         Circle().fill(role.tint).frame(width: 9, height: 9)
                                         Text(role.name).font(.jakarta(12, .bold)).foregroundStyle(on ? .white : Palette.text2)
                                     }
-                                    .padding(.horizontal, 12).frame(height: 30)
+                                    .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 12).frame(height: 30)
                                     .background(on ? AnyShapeStyle(role.tint) : AnyShapeStyle(Palette.surface), in: Capsule())
                                     .overlay(Capsule().strokeBorder(role.tint.opacity(0.4), lineWidth: 1))
                                 }

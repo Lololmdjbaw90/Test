@@ -306,6 +306,12 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-3.2", icon: "paintpalette.fill", title: "A cleaner, juicier look", date: "2026-10-17T23:30:00Z", items: [
+            "Calmer pages: a clean off-white background with crisp white cards, instead of pink on pink.",
+            "Colourful candy icons for places and actions: music is sky blue, servers mint, people grape, rewards lemon, posts berry and reels peach, everywhere in the app.",
+            "Home is tidier: your coins, level and friends online sit in three even tiles, shortcuts are one neat row that fits the screen, and the \"What are you making today?\" bar has a button for each thing you can make.",
+            "With bigger text turned on in iPhone Settings, words no longer get cut off or pushed off the screen.",
+        ]),
         AppRelease(id: "ios-3.1", icon: "camera.fill", title: "A brand-new camera", date: "2026-10-17T22:00:00Z", items: [
             "The camera has been rebuilt from scratch: it opens faster, and the window is exactly the shape of your reel, so what you see is what you get.",
             "Switch lenses with the .5, 1, 2 and 3 buttons (ultra wide and zoom on iPhones that have them), or pinch.",

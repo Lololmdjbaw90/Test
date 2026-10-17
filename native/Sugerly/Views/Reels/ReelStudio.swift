@@ -932,7 +932,7 @@ struct TrimBar: View {
             Text(ReelTimeline.clock(t)).font(.jakarta(12, .heavy)).monospacedDigit()
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, 10).frame(height: 28)
+        .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 10).frame(height: 28)
         .background(active ? AnyShapeStyle(Theme.main.opacity(0.55)) : AnyShapeStyle(Color.white.opacity(0.12)), in: Capsule())
         .animation(.snappy(duration: 0.2), value: active)
     }

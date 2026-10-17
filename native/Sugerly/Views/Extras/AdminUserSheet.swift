@@ -165,7 +165,7 @@ struct AdminUserSheet: View {
                 .font(.jakarta(13)).foregroundStyle(Palette.text2)
             Button(role: .destructive) { confirmDelete = true } label: {
                 Label("Delete account", systemImage: "trash.fill").font(.jakarta(15, .bold)).foregroundStyle(.white)
-                    .frame(maxWidth: .infinity).frame(height: 44)
+                    .lineLimit(1).minimumScaleFactor(0.85).frame(maxWidth: .infinity).frame(height: 44)
                     .background(Palette.danger, in: Capsule())
             }
             .buttonStyle(BouncyStyle(scale: 0.96))

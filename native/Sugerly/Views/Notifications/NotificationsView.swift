@@ -1128,7 +1128,7 @@ struct AdminView: View {
                 Text("Preview").font(.jakarta(12, .heavy)).tracking(1).foregroundStyle(Palette.muted)
                 HStack(spacing: 10) {
                     Text("Claim reward").font(.jakarta(14, .bold)).foregroundStyle(.white)
-                        .padding(.horizontal, 18).frame(height: 44)
+                        .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 18).frame(height: 44)
                         .background(LinearGradient(colors: [secondary, primary], startPoint: .topLeading, endPoint: .bottomTrailing), in: Capsule())
                         .shadow(color: primary.opacity(0.45), radius: 10, y: 5)
                     Text("Follow").font(.jakarta(14, .bold)).foregroundStyle(primary)

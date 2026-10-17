@@ -183,8 +183,8 @@ enum TabBarLook {
         let bar = UITabBarAppearance()
         bar.configureWithDefaultBackground()
         bar.backgroundEffect = UIBlurEffect(style: .systemThinMaterial)
-        bar.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x1A1418, alpha: 0.82) : UIColor(hex: 0xFFFAF5, alpha: 0.86) }
-        bar.shadowColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x382D33) : UIColor(hex: 0xF7D8E1) }
+        bar.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x1A1418, alpha: 0.82) : UIColor(hex: 0xFBF9F8, alpha: 0.88) }
+        bar.shadowColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x382D33) : UIColor(hex: 0xEEE8E7) }
         for layout in [bar.stackedLayoutAppearance, bar.inlineLayoutAppearance, bar.compactInlineLayoutAppearance] {
             layout.normal.iconColor = muted
             layout.normal.titleTextAttributes = [.foregroundColor: muted, .font: small]
@@ -500,15 +500,30 @@ struct IconRow: View {
     var danger = false
     var chevron = false
 
+    var candy: Candy? = nil
+
+    // Places and things get a candy tile in their own colour (music sky,
+    // people grape, chats mint, rewards lemon…). Warnings, grey and
+    // red rows keep a soft tile in their colour, so they still stand apart.
+    private var tile: Candy? {
+        if let candy { return candy }
+        guard !danger, tone == .accent || tone == .gold else { return nil }
+        return Candy.matching(icon) ?? (tone == .gold ? .lemon : nil)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
-            // A soft tile in the row's colour with the symbol in that colour.
-            let shade = danger ? Tone.danger : tone
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(shade.color)
-                .frame(width: 32, height: 32)
-                .background(shade.soft, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            if let tile {
+                CandyTile(icon: icon, candy: tile, size: 32)
+            } else {
+                // A soft tile in the row's colour with the symbol in that colour.
+                let shade = danger ? Tone.danger : tone
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(shade.color)
+                    .frame(width: 32, height: 32)
+                    .background(shade.soft, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.jakarta(15, .semibold)).foregroundStyle(danger ? Palette.danger : Palette.text)
                 if let detail, !detail.isEmpty {

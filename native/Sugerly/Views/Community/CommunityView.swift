@@ -373,7 +373,7 @@ struct CommunityView: View {
                 }
                 Spacer(minLength: 0)
                 Text("Post").font(.jakarta(13, .bold)).foregroundStyle(.white)
-                    .padding(.horizontal, 16).frame(height: 34)
+                    .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 16).frame(height: 34)
                     .background {
                         Capsule().fill(Theme.candy)
                             .shadow(color: Theme.glow(0.28), radius: 6, y: 3)
@@ -444,7 +444,7 @@ struct CommunityView: View {
         Button { path.append(.hashtag(t)) } label: {
             Text("#\(t)").font(.jakarta(13, .semibold))
                 .foregroundStyle(Palette.text2)
-                .padding(.horizontal, 14).frame(height: 34)
+                .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 14).frame(height: 34)
                 .background(Capsule().fill(Palette.surface).overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1)))
         }
         .buttonStyle(BouncyStyle(scale: 0.92))
@@ -1116,7 +1116,7 @@ struct CommentsScreen<Header: View>: View {
                     Text("Comments").font(.display(24)).foregroundStyle(Palette.text)
                     if !comments.isEmpty {
                         Text("\(comments.count)\(hasOlder ? "+" : "")").font(.jakarta(13, .bold)).foregroundStyle(.white)
-                            .padding(.horizontal, 9).frame(height: 24)
+                            .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 9).frame(height: 24)
                             .background(Theme.candy, in: Capsule())
                             .contentTransition(.numericText())
                             .transition(.pop)
@@ -1140,7 +1140,7 @@ struct CommentsScreen<Header: View>: View {
                             Text("Load earlier comments")
                         }
                         .font(.jakarta(13, .bold)).foregroundStyle(Theme.main)
-                        .padding(.horizontal, 14).frame(height: 36)
+                        .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 14).frame(height: 36)
                         .background(Theme.soft, in: Capsule())
                     }
                     .buttonStyle(BouncyStyle(scale: 0.95))

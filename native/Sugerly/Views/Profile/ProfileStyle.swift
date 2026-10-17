@@ -455,7 +455,7 @@ struct NitroShopView: View {
                     if nitro {
                         Label("Active", systemImage: "checkmark.circle.fill")
                             .font(.jakarta(12, .bold)).foregroundStyle(Palette.success)
-                            .padding(.horizontal, 10).frame(height: 26)
+                            .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 10).frame(height: 26)
                             .background(Palette.success.opacity(0.12), in: Capsule())
                             .transition(.pop)
                     }
@@ -824,7 +824,7 @@ struct ImageCropper: View {
                                 } label: {
                                     Text(c.label).font(.jakarta(13, .heavy))
                                         .foregroundStyle(on ? Color(hex: 0x2A1620) : .white)
-                                        .padding(.horizontal, 14).frame(height: 36)
+                                        .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 14).frame(height: 36)
                                         .background(on ? Color.white : Color.white.opacity(0.14), in: Capsule())
                                 }
                                 .buttonStyle(BouncyStyle())

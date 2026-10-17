@@ -43,13 +43,15 @@ enum Palette {
     static let pinkHex: UInt32 = 0xF6BDCC
     static let roseHex: UInt32 = 0xF9B0C4
 
-    // Pages: a warm cream-white with a breath of your pastel. Cards: near
-    // white. Fields, chips and tracks: your pastel, softened. Text: plum.
-    static var bg: Color { pastel(0xFFF9F2, 0.10, dark: 0x141215, 0.07) }
-    static var surface: Color { pastel(0xFFFFFF, 0.035, dark: 0x1D181C, 0.07) }
-    static var surface2: Color { pastel(0xFFFDF8, 0.30, dark: 0x2A2227, 0.09) }
-    static var border: Color { pastel(0xFFFDF8, 0.36, dark: 0x382D33, 0.10) }
-    static var borderStrong: Color { pastel(0xFFFDF8, 0.60, dark: 0x4A3B43, 0.12) }
+    // Pages: a calm warm off-white with only a breath of your pastel, so
+    // white cards and the candy colours stand out (pink on pink on pink
+    // looked messy). Cards: clean white. Fields, chips and tracks: a soft
+    // warm grey with a hint of your colour. Hairlines: barely there. Text: plum.
+    static var bg: Color { pastel(0xF7F4F3, 0.07, dark: 0x131114, 0.05) }
+    static var surface: Color { pastel(0xFFFFFF, 0.0, dark: 0x1D191C, 0.06) }
+    static var surface2: Color { pastel(0xF4F0EF, 0.12, dark: 0x29232A, 0.07) }
+    static var border: Color { pastel(0xEEE8E7, 0.10, dark: 0x352D33, 0.08) }
+    static var borderStrong: Color { pastel(0xE2DAD9, 0.18, dark: 0x473B43, 0.10) }
     static var text: Color { ink(0x2B1D24, 0.10, dark: 0xFBF1F4, 0.04) }
     static var text2: Color { ink(0x5E4A53, 0.12, dark: 0xD6C3CB, 0.05) }
     static var muted: Color { ink(0x95838B, 0.12, dark: 0x9C8891, 0.06) }
@@ -57,14 +59,15 @@ enum Palette {
     // Cream and ivory for warm touches (coins, rewards, highlights).
     static let cream = Color.dynamic(light: creamHex, dark: 0x3A3023)
     static let ivory = Color.dynamic(light: ivoryHex, dark: 0x2B2D24)
-    // Your blush (the palette's own for rose).
-    static var blush: Color { pastel(0xFFFFFF, 0.55, dark: 0x2A2227, 0.16) }
+    // Your blush: a light tint of your colour, for small highlights.
+    static var blush: Color { pastel(0xFFFFFF, 0.30, dark: 0x2A2227, 0.14) }
 
-    // The three stops of a hero card: cream → blush → your pastel. In dark
-    // mode, deep plum shades of your colour.
-    static var heroA: Color { hero(light: mix(creamHex, Theme.lightHex, 0.08), 0.12) }
-    static var heroB: Color { hero(light: mix(0xFFFFFF, Theme.lightHex, 0.55), 0.22) }
-    static var heroC: Color { hero(light: Theme.lightHex, 0.34) }
+    // The three stops of a hero card: a fresh, clear run from a pale tint of
+    // your pastel into a juicier shade of it. In dark mode, deep plum shades
+    // of your colour.
+    static var heroA: Color { hero(light: mix(0xFFFFFF, Theme.lightHex, 0.22), 0.12) }
+    static var heroB: Color { hero(light: mix(0xFFFFFF, Theme.lightHex, 0.58), 0.22) }
+    static var heroC: Color { hero(light: mix(Theme.lightHex, Theme.mainHex, 0.22), 0.34) }
 
     // The glossy touches (a white rim, a sheen along the top) are for light
     // pages. On dark pages they fade to a faint hairline, so nothing shines
@@ -77,7 +80,7 @@ enum Palette {
     static let success = Color(hex: 0x2E9E6B)
     static let warning = Color(hex: 0xE09A1A)
     static let gold = Color(hex: 0xE9A21F)
-    static let shadow = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor.black.withAlphaComponent(0.4) : UIColor(hex: 0x7A2E4E, alpha: 0.08) })
+    static let shadow = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor.black.withAlphaComponent(0.4) : UIColor(hex: 0x4A2A3A, alpha: 0.07) })
 
     // Reading the accent here makes every view that uses a page colour
     // redraw when you pick another accent.
@@ -145,6 +148,73 @@ enum Tone {
     }
     // The soft tile behind an icon in this colour.
     var soft: Color { color.opacity(0.12) }
+}
+
+// Juicy candy colours for the little icon tiles that take you places (Home's
+// shortcuts, the "new post / reel / drawing / song" buttons, menus). Each
+// place keeps its own colour everywhere: music is always sky, servers mint,
+// people grape, rewards lemon, posts berry, reels peach.
+enum Candy: CaseIterable {
+    case berry, peach, lemon, mint, sky, grape
+
+    private var stops: (UInt32, UInt32) {
+        switch self {
+        case .berry: return (0xFF8DB4, 0xEC4F86)
+        case .peach: return (0xFFB487, 0xF27D45)
+        case .lemon: return (0xFFD46A, 0xF0A92C)
+        case .mint: return (0x7EDFBD, 0x24B386)
+        case .sky: return (0x8DC7FF, 0x3F92EE)
+        case .grape: return (0xC4A6FF, 0x8763EE)
+        }
+    }
+    var color: Color { Color(hex: stops.1) }
+    // Lighter at the top, like a boiled sweet. A touch deeper in dark mode.
+    var gradient: LinearGradient {
+        LinearGradient(colors: [Palette.swatch(stops.0, 1, Palette.mix(stops.0, stops.1, 0.4), 1),
+                                Palette.swatch(stops.1, 1, Palette.mix(stops.1, 0x000000, 0.12), 1)],
+                       startPoint: .top, endPoint: .bottom)
+    }
+    // The colour a symbol gets in lists and menus, so the same kind of
+    // thing always has the same colour.
+    static func matching(_ icon: String) -> Candy? {
+        let rules: [(String, Candy)] = [
+            ("music", .sky), ("bell", .berry), ("heart", .berry), ("drop", .berry),
+            ("person", .grape), ("moon", .grape), ("gearshape", .grape),
+            ("bubble", .mint), ("message", .mint), ("phone", .mint), ("video", .mint),
+            ("crown", .lemon), ("star", .lemon), ("gift", .lemon), ("hexagongrid", .lemon), ("sparkles", .lemon), ("key", .lemon), ("flame", .lemon),
+            ("paint", .peach), ("storefront", .peach), ("photo", .peach), ("play", .peach), ("film", .peach),
+            ("qrcode", .sky), ("lock", .sky), ("eye", .sky), ("globe", .sky), ("doc", .sky), ("info", .sky), ("link", .sky),
+        ]
+        return rules.first { icon.contains($0.0) }?.1
+    }
+    // A pale wash of the colour, for a tile's soft background.
+    var soft: Color { Palette.swatch(Palette.mix(0xFFFFFF, stops.1, 0.14), 1, Palette.mix(0x1D191C, stops.1, 0.22), 1) }
+}
+
+// A rounded candy square with a white icon: a shine on top and a soft
+// coloured glow under it.
+struct CandyTile: View {
+    let icon: String
+    let candy: Candy
+    var size: CGFloat = 44
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: size * 0.32, style: .continuous)
+        Image(systemName: icon)
+            .font(.system(size: size * 0.42, weight: .semibold))
+            .foregroundStyle(.white)
+            .shadow(color: .black.opacity(0.12), radius: 1, y: 1)
+            .frame(width: size, height: size)
+            .background {
+                shape.fill(candy.gradient)
+                    .overlay(alignment: .top) {
+                        shape.fill(LinearGradient(colors: [Palette.rim(0.45), .clear], startPoint: .top, endPoint: .center))
+                            .padding(1)
+                    }
+                    .shadow(color: candy.color.softGlow(0.28), radius: 6, y: 3)
+            }
+            .accessibilityHidden(true)
+    }
 }
 
 // The five accent colours you can pick in Settings (the logo follows along).
@@ -331,11 +401,17 @@ extension Font {
     // smaller than the size asked for (the old fonts ran large). Grows with
     // the text size picked in iPhone Settings.
     static func display(_ size: CGFloat, relativeTo style: Font.TextStyle = .title) -> Font {
-        .system(size: UIFontMetrics(forTextStyle: style.uiKit).scaledValue(for: size * 0.82), weight: .bold)
+        .system(size: grown(size * 0.82, style, limit: 1.12), weight: .bold)
     }
     // Small accents (greetings): the same letters, a touch lighter.
     static func cute(_ size: CGFloat, relativeTo style: Font.TextStyle = .title) -> Font {
-        .system(size: UIFontMetrics(forTextStyle: style.uiKit).scaledValue(for: size * 0.8), weight: .semibold)
+        .system(size: grown(size * 0.8, style, limit: 1.12), weight: .semibold)
+    }
+    // Text grows with the iPhone's text size, but only so far: past that,
+    // labels, chips and buttons got cut off ("45 c…") or pushed off the
+    // screen. Smaller sizes are followed all the way down.
+    static func grown(_ size: CGFloat, _ style: Font.TextStyle, limit: CGFloat = 1.15) -> CGFloat {
+        min(UIFontMetrics(forTextStyle: style.uiKit).scaledValue(for: size), (size * limit).rounded())
     }
     // Everything else: the iPhone's own text font. (Named after the old
     // font so every screen picks it up.) Extra-heavy weights are calmed to
@@ -347,7 +423,7 @@ extension Font {
         case .bold: calm = .semibold
         default: calm = weight
         }
-        return .system(size: UIFontMetrics(forTextStyle: style.uiKit).scaledValue(for: size), weight: calm)
+        return .system(size: grown(size, style), weight: calm)
     }
 }
 
@@ -364,9 +440,10 @@ struct SugarCard: ViewModifier {
             .padding(padding)
             .background {
                 shape.fill(Palette.surface)
-                    .shadow(color: Palette.shadow, radius: 10, y: 4)
+                    .shadow(color: Palette.shadow, radius: 1, y: 1)
+                    .shadow(color: Palette.shadow, radius: 14, y: 6)
             }
-            .overlay(shape.strokeBorder(Palette.border, lineWidth: 1))
+            .overlay(shape.strokeBorder(Palette.border.opacity(0.8), lineWidth: 1))
     }
 }
 
@@ -480,9 +557,10 @@ struct Chip: View {
             HStack(spacing: 6) {
                 if let icon { Image(systemName: icon).font(.system(size: 13, weight: .semibold)) }
                 Text(title).font(.jakarta(14, .semibold))
+                    .lineLimit(1).minimumScaleFactor(0.8)
             }
             .padding(.horizontal, 14)
-            .frame(height: 36)
+            .frame(minHeight: 36)
             .foregroundStyle(active ? Color.white : Palette.text2)
             .background {
                 if active {

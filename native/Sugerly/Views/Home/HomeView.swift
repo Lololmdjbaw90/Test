@@ -47,10 +47,12 @@ struct DailyRewardButton: View {
                 Text(titleText(status.claimed))
                     .font(.jakarta(15, .semibold)).foregroundStyle(Palette.text)
                     .contentTransition(.numericText())
+                    .lineLimit(1).minimumScaleFactor(0.8)
                 HStack(spacing: 4) {
                     Image(systemName: "flame.fill").font(.system(size: 11)).foregroundStyle(Palette.warning)
                     Text(streakText(status))
                         .font(.jakarta(12)).foregroundStyle(Palette.muted)
+                        .lineLimit(1).minimumScaleFactor(0.8)
                 }
             }
             Spacer(minLength: 8)
@@ -93,14 +95,14 @@ struct DailyRewardButton: View {
 
     private func titleText(_ claimed: Bool) -> String {
         guard claimed else { return "Daily reward" }
-        if let got { return "+\(got) coins collected" }
-        return "Daily reward collected"
+        if let got { return "+\(got) coins today" }
+        return "Collected today"
     }
 
     private func streakText(_ status: (claimed: Bool, streak: Int)) -> String {
         guard status.streak > 0 else { return "Start a streak today" }
         let base = "\(status.streak)-day streak"
-        return status.claimed ? base + " · come back tomorrow" : base
+        return status.claimed ? base + " · back tomorrow" : base
     }
 
     private func claim() {
@@ -266,7 +268,7 @@ struct HomeView: View {
             }
             .padding(.horizontal, sizeClass == .regular ? 24 : 16)
             .padding(.top, 8)
-            .padding(.bottom, 32)
+            .padding(.bottom, 48)
             .sideRails(760)
         }
         .scrollIndicators(.hidden)
@@ -377,14 +379,16 @@ struct HomeView: View {
                     MimiBuddy(icon: "sparkles", size: 64)
                         .padding(.top, -6)
                 }
+                // Three even tiles (number on top, a short word under it), so
+                // nothing gets cut off whatever the text size.
                 HStack(spacing: 8) {
-                    chip(value: Self.compact(me?.coins ?? 0), label: "coins", coin: true) { wallet = true }
+                    chip(value: Self.compact(me?.coins ?? 0), label: "Coins", coin: true) { wallet = true }
                         .heroPop(appeared, 0)
                     chip(value: "Lv \(info.level)", label: info.title, dot: info.color) {
                         if let email = me?.email { path.append(.person(email)) }
                     }
                     .heroPop(appeared, 1)
-                    chip(value: "\(online)", label: online == 1 ? "friend online" : "friends online", dot: online > 0 ? Palette.success : nil) {
+                    chip(value: "\(online)", label: "Online", dot: online > 0 ? Palette.success : Palette.muted.opacity(0.5)) {
                         path.append(.people)
                     }
                     .heroPop(appeared, 2)
@@ -396,57 +400,61 @@ struct HomeView: View {
         }
     }
 
-    // A small tappable fact: coins, level, friends online.
+    // A small tappable fact: coins, level, friends online. The number on
+    // top, a short word under it, each tile the same width.
     private func chip(value: String, label: String, coin: Bool = false, dot: Color? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 6) {
-                if coin { CoinIcon(size: 16) }
-                if let dot { Circle().fill(dot).frame(width: 7, height: 7) }
-                Text(value).font(.jakarta(14, .bold)).foregroundStyle(Palette.text).monospacedDigit()
-                    .contentTransition(.numericText())
-                Text(label).font(.jakarta(13)).foregroundStyle(Palette.text2).lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 5) {
+                    if coin { CoinIcon(size: 15) }
+                    if let dot { Circle().fill(dot).frame(width: 8, height: 8) }
+                    Text(value).font(.jakarta(16, .bold)).foregroundStyle(Palette.text).monospacedDigit()
+                        .contentTransition(.numericText())
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                }
+                Text(label).font(.jakarta(12, .medium)).foregroundStyle(Palette.text2)
+                    .lineLimit(1).minimumScaleFactor(0.75)
             }
-            .padding(.horizontal, 12).frame(height: 34)
-            .background(Palette.surface.opacity(0.72), in: Capsule())
-            .overlay(Capsule().strokeBorder(Palette.rim(0.6), lineWidth: 1))
-            .minimumScaleFactor(0.8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12).padding(.vertical, 9)
+            .background(Palette.surface.opacity(0.78), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Palette.rim(0.7), lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-        .buttonStyle(BouncyStyle(scale: 0.92))
+        .buttonStyle(BouncyStyle(scale: 0.94))
     }
 
     // MARK: shortcuts to the places that aren't tabs
 
+    // Five candy tiles in one even row (they always fit the screen, no
+    // sideways scrolling), each place in its own colour.
     private var shortcuts: some View {
-        let items: [(String, String, Route)] = [
-            ("Music", "music.note", .music),
-            ("Servers", "person.3.fill", .servers),
-            ("People", "person.crop.circle.badge.plus", .people),
-            ("Top artists", "crown.fill", .topArtists),
-            ("Commissions", "storefront.fill", .commissions),
+        let items: [(String, String, Candy, Route)] = [
+            ("Music", "music.note", .sky, .music),
+            ("Servers", "bubble.left.and.bubble.right.fill", .mint, .servers),
+            ("People", "person.2.fill", .grape, .people),
+            ("Top artists", "crown.fill", .lemon, .topArtists),
+            ("Commissions", "paintbrush.pointed.fill", .peach, .commissions),
         ]
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(Array(items.enumerated()), id: \.element.0) { i, item in
-                    Button { path.append(item.2) } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: item.1)
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(Theme.main)
-                                .frame(width: 26, height: 26)
-                                .background(Palette.surface.opacity(0.85), in: Circle())
-                            Text(item.0).font(.jakarta(14, .semibold)).foregroundStyle(Palette.text)
-                        }
-                        .padding(.leading, 6).padding(.trailing, 14).frame(height: 40)
-                        .background(Palette.blush, in: Capsule())
-                        .overlay(Capsule().strokeBorder(Palette.rim(0.5), lineWidth: 1))
+        return HStack(alignment: .top, spacing: 4) {
+            ForEach(Array(items.enumerated()), id: \.element.0) { i, item in
+                Button { path.append(item.3) } label: {
+                    VStack(spacing: 7) {
+                        CandyTile(icon: item.1, candy: item.2, size: 50)
+                        Text(item.0).font(.jakarta(11.5, .semibold)).foregroundStyle(Palette.text2)
+                            .lineLimit(1).minimumScaleFactor(0.7)
                     }
-                    .buttonStyle(BouncyStyle(scale: 0.92))
-                    .heroPop(appeared, i + 2)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(BouncyStyle(scale: 0.9))
+                .accessibilityLabel(item.0)
+                .heroPop(appeared, i + 2)
             }
-            .padding(.vertical, 2)
         }
-        .scrollClipDisabled()
+        .padding(.vertical, 12)
+        .padding(.horizontal, 6)
+        .sugarCard(radius: 22)
     }
 
     // MARK: community
@@ -461,7 +469,7 @@ struct HomeView: View {
 
     private var community: some View {
         VStack(alignment: .leading, spacing: 14) {
-            SectionHeader(icon: "flame.fill", title: "For you in the community") { model.tabRequest = .community }
+            SectionHeader(icon: "flame.fill", title: "For you") { model.tabRequest = .community }
             if communityPicks.isEmpty {
                 if loaded {
                     EmptyCard(icon: "photo.on.rectangle.angled", title: "Nothing new yet", text: "Be the first to share something today.", actionTitle: "Share a post", action: { compose(.post) }, compact: true)
@@ -525,7 +533,7 @@ struct HomeView: View {
                                     Text("\(reel.views)")
                                 }
                                 .font(.jakarta(12, .semibold)).foregroundStyle(.white)
-                                .padding(.horizontal, 8).frame(height: 24)
+                                .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 8).frame(height: 24)
                                 .background(.black.opacity(0.3), in: Capsule())
                                 .padding(8)
                             }
@@ -737,7 +745,7 @@ struct TrackRow: View {
             if let onFull {
                 Button(action: onFull) {
                     Text("Full").font(.jakarta(12, .bold)).foregroundStyle(Theme.pink)
-                        .padding(.horizontal, 12).frame(height: 30)
+                        .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 12).frame(height: 30)
                         .background(Theme.pink.opacity(0.12), in: Capsule())
                 }
                 .buttonStyle(BouncyStyle())

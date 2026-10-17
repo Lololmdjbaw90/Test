@@ -608,7 +608,7 @@ private struct SpeedPanel: View {
                     Button { doc.setSpeed(v) } label: {
                         Text(String(format: "%gx", v)).font(.jakarta(14, .heavy))
                             .foregroundStyle(on ? Color(hex: 0x2A1620) : .white)
-                            .frame(maxWidth: .infinity).frame(height: 42)
+                            .lineLimit(1).minimumScaleFactor(0.85).frame(maxWidth: .infinity).frame(height: 42)
                             .background(on ? Color.white : EditorPalette.chip, in: Capsule())
                     }
                     .buttonStyle(BouncyStyle(scale: 0.9))

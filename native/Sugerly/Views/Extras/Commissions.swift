@@ -539,7 +539,7 @@ struct ListingCard: View {
                 if let price = c.fromPrice {
                     Text("from \(Money.format(price, c.currency))")
                         .font(.jakarta(12, .heavy)).foregroundStyle(Theme.main)
-                        .padding(.horizontal, 10).frame(height: 26)
+                        .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 10).frame(height: 26)
                         .background(Palette.surface, in: Capsule())
                         .padding(8)
                 }
@@ -576,7 +576,7 @@ struct StatusPill: View {
             Circle().fill(open ? Palette.success : Palette.muted).frame(width: 7, height: 7)
             Text(open ? "Open" : "Closed").font(.jakarta(11, .heavy)).foregroundStyle(open ? Palette.success : Palette.muted)
         }
-        .padding(.horizontal, 10).frame(height: 26)
+        .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 10).frame(height: 26)
         .background(Palette.surface, in: Capsule())
     }
 }
@@ -895,7 +895,7 @@ struct CommissionDetail: View {
                     FlowLayout(spacing: 6) {
                         ForEach(commission.tags, id: \.self) { t in
                             Text("#\(t)").font(.jakarta(12, .bold)).foregroundStyle(Theme.main)
-                                .padding(.horizontal, 10).frame(height: 28).background(Theme.soft, in: Capsule())
+                                .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 10).frame(height: 28).background(Theme.soft, in: Capsule())
                         }
                     }
                 }
@@ -1884,7 +1884,7 @@ struct NewCommissionView: View {
                     } label: {
                         HStack(spacing: 4) { Text(currency.uppercased()); Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold)) }
                             .font(.jakarta(13, .heavy)).foregroundStyle(Theme.main)
-                            .padding(.horizontal, 12).frame(height: 32)
+                            .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 12).frame(height: 32)
                             .background(Theme.soft, in: Capsule())
                     }
                 }

@@ -121,56 +121,44 @@ struct HomeComposerBar: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Your picture and a soft field to start a post, then one candy
+            // button for each thing you can make.
             Button { compose(.post) } label: {
-                HStack(spacing: 12) {
-                    Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 42)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("What are you making today?")
-                            .font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
-                            .lineLimit(1).minimumScaleFactor(0.85)
-                        Text("Tap to share it with everyone")
-                            .font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 6)
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 38, height: 38)
-                        .background(Theme.gradient, in: Circle())
-                        .shadow(color: Theme.glow(0.28), radius: 6, y: 3)
+                HStack(spacing: 10) {
+                    Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 40)
+                    Text("What are you making today?")
+                        .font(.jakarta(15, .medium)).foregroundStyle(Palette.muted)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                        .padding(.horizontal, 14)
+                        .background(Palette.surface2, in: Capsule())
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
+                .padding(.bottom, 10)
                 .contentShape(Rectangle())
             }
             .buttonStyle(BouncyStyle(scale: 0.98))
-            Rectangle().fill(Palette.border).frame(height: 1).padding(.horizontal, 14)
             HStack(spacing: 0) {
-                action("Post", "text.bubble.fill") { compose(.post) }
-                action("Reel", "play.rectangle.fill") { compose(.reel) }
-                action("Drawing", "paintbrush.pointed.fill") { compose(.artwork) }
-                action("Song", "music.note") { compose(.track) }
+                action("Post", "text.bubble.fill", .berry) { compose(.post) }
+                action("Reel", "play.rectangle.fill", .peach) { compose(.reel) }
+                action("Drawing", "paintbrush.pointed.fill", .grape) { compose(.artwork) }
+                action("Song", "music.note", .sky) { compose(.track) }
             }
             .padding(.horizontal, 6)
-            .padding(.vertical, 6)
+            .padding(.bottom, 10)
         }
-        .sugarCard(radius: 24)
+        .sugarCard(radius: 22)
     }
 
-    private func action(_ title: String, _ icon: String, _ run: @escaping () -> Void) -> some View {
+    private func action(_ title: String, _ icon: String, _ candy: Candy, _ run: @escaping () -> Void) -> some View {
         Button(action: run) {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(Theme.main)
-                    .frame(width: 36, height: 36)
-                    .background(Palette.blush, in: Circle())
-                    .overlay(Circle().strokeBorder(Palette.rim(0.6), lineWidth: 1))
-                Text(title).font(.jakarta(11, .bold)).foregroundStyle(Palette.text2).lineLimit(1)
+            HStack(spacing: 6) {
+                CandyTile(icon: icon, candy: candy, size: 28)
+                Text(title).font(.jakarta(12.5, .semibold)).foregroundStyle(Palette.text2)
+                    .lineLimit(1).minimumScaleFactor(0.7)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, minHeight: 40)
             .contentShape(Rectangle())
         }
         .buttonStyle(BouncyStyle(scale: 0.92))
@@ -221,6 +209,7 @@ struct ArtPromptCard: View {
                     Button { compose(.artwork) } label: {
                         Label("Draw it", systemImage: "paintbrush.pointed.fill").font(.jakarta(13, .heavy))
                             .foregroundStyle(.white)
+                            .lineLimit(1)
                             .padding(.horizontal, 14).frame(height: 36)
                             .background {
                                 Capsule().fill(Theme.candy).shadow(color: Theme.glow(0.28), radius: 6, y: 3)
@@ -229,22 +218,20 @@ struct ArtPromptCard: View {
                     Button { compose(.post) } label: {
                         Label("Share", systemImage: "photo.fill").font(.jakarta(13, .bold))
                             .foregroundStyle(Theme.main)
+                            .lineLimit(1)
                             .padding(.horizontal, 14).frame(height: 36)
-                            .background(Palette.surface.opacity(0.75), in: Capsule())
+                            .background(Theme.soft, in: Capsule())
                     }
                 }
                 .buttonStyle(BouncyStyle(scale: 0.93))
                 .padding(.top, 2)
             }
             Spacer(minLength: 0)
-            Image(systemName: prompt.icon).font(.system(size: 34, weight: .semibold)).foregroundStyle(Theme.main)
+            CandyTile(icon: prompt.icon, candy: .grape, size: 64)
                 .symbolEffect(.bounce, options: .repeat(2), value: float && !reduceMotion)
-                .frame(width: 82, height: 82)
-                .background(Palette.surface.opacity(0.75), in: Circle())
-                .overlay(Circle().strokeBorder(Palette.rim(0.7), lineWidth: 1))
-                .padding(.trailing, 4)
+                .padding(.trailing, 2)
         }
-        .pastelCard(radius: 24, padding: 18)
+        .sugarCard(radius: 22, padding: 18)
         .onAppear { float = true }
         .onDisappear { float = false }
     }
@@ -391,7 +378,7 @@ struct TrendingTags: View {
                             Text(tag.0).font(.jakarta(13, .bold)).foregroundStyle(i < 3 ? Theme.main : Palette.text2)
                             Text("\(tag.1)").font(.jakarta(11, .heavy)).foregroundStyle(Palette.muted)
                         }
-                        .padding(.horizontal, 12).frame(height: 34)
+                        .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 12).frame(height: 34)
                         .background(i < 3 ? Theme.soft : Palette.surface, in: Capsule())
                         .overlay(Capsule().strokeBorder(i < 3 ? Theme.main.opacity(0.25) : Palette.border, lineWidth: 1))
                     }
@@ -432,7 +419,7 @@ struct SuggestedPeople: View {
         let list = people
         if !list.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                SectionHeader(icon: "person.crop.circle.badge.plus", title: "People you might like") { path.append(.people) }
+                SectionHeader(icon: "person.crop.circle.badge.plus", title: "People to follow") { path.append(.people) }
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 12) {
                         ForEach(list, id: \.email) { person in
@@ -534,7 +521,7 @@ struct WeeklyChallengeCard: View {
                 Spacer(minLength: 0)
                 Text(daysLeft == 1 ? "1 day left" : "\(daysLeft) days left")
                     .font(.jakarta(12, .semibold)).foregroundStyle(Theme.main)
-                    .padding(.horizontal, 10).frame(height: 26)
+                    .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 10).frame(height: 26)
                     .background(Theme.soft, in: Capsule())
             }
             HStack(spacing: 8) {

@@ -1083,7 +1083,7 @@ struct MyColorsPicker: View {
                 if mine != nil {
                     Button { Task { await reset() } } label: {
                         Text("Reset").font(.jakarta(14, .bold)).foregroundStyle(Palette.text2)
-                            .padding(.horizontal, 18).frame(height: 42)
+                            .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 18).frame(height: 42)
                             .background(Palette.surface2, in: Capsule())
                     }
                     .buttonStyle(BouncyStyle())

@@ -455,7 +455,7 @@ struct ChannelMessageRow: View {
                                         Text(emoji).font(.system(size: 13))
                                         Text("\(people.count)").font(.jakarta(11, .heavy)).foregroundStyle(mineToo ? Theme.main : Palette.text2)
                                     }
-                                    .padding(.horizontal, 8).frame(height: 26)
+                                    .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 8).frame(height: 26)
                                     .background(mineToo ? Theme.soft : Palette.surface, in: Capsule())
                                     .overlay(Capsule().strokeBorder(mineToo ? Theme.main.opacity(0.4) : Palette.border, lineWidth: 1))
                                 }
@@ -609,7 +609,7 @@ struct MemberSheet: View {
                             Circle().fill(role.tint).frame(width: 9, height: 9)
                             Text(role.name).font(.jakarta(12, .bold)).foregroundStyle(Palette.text2)
                         }
-                        .padding(.horizontal, 10).frame(height: 28)
+                        .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 10).frame(height: 28)
                         .background(role.tint.opacity(0.12), in: Capsule())
                     }
                 }

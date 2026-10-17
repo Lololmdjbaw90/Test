@@ -90,7 +90,8 @@ struct EmptyCard: View {
             if let actionTitle, let action {
                 Button(action: action) {
                     Text(actionTitle).font(.jakarta(14, .bold)).foregroundStyle(.white)
-                        .padding(.horizontal, 18).frame(height: 38)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .padding(.horizontal, 18).frame(minHeight: 38)
                         .background {
                             Capsule().fill(Theme.candy).shadow(color: Theme.glow(0.28), radius: 6, y: 3)
                         }
@@ -102,16 +103,8 @@ struct EmptyCard: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 22)
         .padding(.vertical, compact ? 18 : 26)
-        .background {
-            // A soft wash of the palette: blush into cream.
-            let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
-            shape.fill(Palette.surface)
-                .overlay(shape.fill(LinearGradient(colors: [Palette.blush.opacity(0.5), Palette.cream.opacity(0.4)], startPoint: .top, endPoint: .bottom)))
-                .shadow(color: Palette.shadow, radius: 10, y: 4)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.border, lineWidth: 1)
-        }
+        // A clean white card: Mimi and the button bring the colour.
+        .sugarCard(radius: 22)
     }
 }
 

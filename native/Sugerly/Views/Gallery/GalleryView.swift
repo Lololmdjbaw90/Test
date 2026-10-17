@@ -193,7 +193,7 @@ struct GalleryView: View {
                         .overlay(alignment: .topLeading) {
                             Text(i == 0 ? "Featured" : "Most loved")
                                 .font(.jakarta(12, .semibold)).foregroundStyle(.white)
-                                .padding(.horizontal, 10).frame(height: 26)
+                                .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 10).frame(height: 26)
                                 .background(.ultraThinMaterial.opacity(0.9), in: Capsule())
                                 .environment(\.colorScheme, .dark)
                                 .padding(14)
@@ -560,7 +560,7 @@ struct ArtworkDetailView: View {
                         }
                         .font(.jakarta(15, .semibold))
                         .foregroundStyle(liked ? .white : Palette.text)
-                        .padding(.horizontal, 16).frame(height: 42)
+                        .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 16).frame(height: 42)
                         .background(liked ? Theme.main : Palette.surface2, in: Capsule())
                         .motion(Motion.playful, value: liked)
                     }

@@ -170,27 +170,26 @@ private struct GlowShapes: View {
 }
 
 extension View {
-    // Page background: a soft rosy page with a gentle wash of your colour
-    // at the very top that fades away as it goes down.
+    // Page background: a calm off-white page with just a faint glow of your
+    // colour behind the top bar, so the cards and colours on it stand out.
     func sugarBackground() -> some View { modifier(SugarBackground()) }
 }
 
 private struct SugarBackground: ViewModifier {
     @Environment(\.colorScheme) private var scheme
 
-    // The page: warm cream-white, with the palette washing down from the
-    // top — your pastel, then cream — and fading into the page.
+    // The page: calm warm off-white, with a faint wash of your pastel under
+    // the top bar that's gone well before the first cards.
     func body(content: Content) -> some View {
         let dark = scheme == .dark
         content.background {
             ZStack(alignment: .top) {
                 Palette.bg
                 LinearGradient(stops: [
-                    .init(color: Theme.light.opacity(dark ? 0.16 : 0.42), location: 0),
-                    .init(color: Palette.cream.opacity(dark ? 0.05 : 0.45), location: 0.5),
+                    .init(color: Theme.light.opacity(dark ? 0.10 : 0.22), location: 0),
                     .init(color: Palette.bg.opacity(0), location: 1),
                 ], startPoint: .top, endPoint: .bottom)
-                .frame(height: 380)
+                .frame(height: 220)
             }
             .ignoresSafeArea()
             .animation(Motion.fade, value: Theme.mainHex)

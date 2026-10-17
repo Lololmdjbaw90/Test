@@ -1,5 +1,12 @@
 # Changes
 
+## A cleaner, juicier design (iOS app)
+
+- **Calmer colours**: the page is a warm off-white (`Palette.bg`) with only a faint wash of your pastel under the top bar; cards are clean white with a soft double shadow and a barely-there hairline; chips, fields and tracks are a soft warm grey (`surface2`) instead of pink, and hero cards run from a pale tint into a juicier shade of your colour. Empty-state cards are plain white.
+- **Candy colours** (`Candy`, `CandyTile`): six glossy colours for icon tiles, each meaning the same kind of thing everywhere (music sky, servers and chats mint, people grape, rewards lemon, posts berry, reels and art peach). `IconRow` picks one from the symbol (`Candy.matching`), so the menu and Settings get them too; warning, grey and red rows keep their soft tiles.
+- **Home**: coins, level and friends online are three even tiles; the shortcuts are five candy tiles in one card that always fits (no sideways scroll); the composer is your picture and a soft field, with candy buttons for post, reel, drawing and song; today's prompt is a white card; shorter titles ("For you", "People to follow", "Collected today").
+- **Big text sizes**: Sugerly's text follows iPhone's text size up to 15 % larger (headings 12 %), and iPhone's own text styles stop at XXL (`dynamicTypeSize`), so chips, buttons and labels no longer get cut off or pushed off the screen. Pills with a fixed height stay on one line (shrinking a little if they must).
+
 ## A new camera (iOS app)
 
 - **Rebuilt from scratch** in `native/Sugerly/Views/Camera/` (the old `CameraRecorder.swift` is gone). `CaptureCore` owns the capture session and does all camera work on its own queue (setting up, flipping, zooming, focus, torch, recording), so the screen never waits for the hardware. `CameraEngine` is what the screen reads: clips, lenses, zoom, focus, exposure, filter, recording state.

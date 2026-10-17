@@ -30,10 +30,10 @@ struct AccountView: View {
     private var places: [Place] {
         [
             Place(title: "Music", detail: "Songs from the community", icon: "music.note") { go(.music) },
-            Place(title: "Servers", detail: "Group chats with channels and voice", icon: "person.3.fill") { go(.servers) },
-            Place(title: "People", detail: "Find friends and artists", icon: "person.crop.circle.badge.plus") { go(.people) },
+            Place(title: "Servers", detail: "Group chats with channels and voice", icon: "bubble.left.and.bubble.right.fill") { go(.servers) },
+            Place(title: "People", detail: "Find friends and artists", icon: "person.2.fill") { go(.people) },
             Place(title: "Top artists", detail: "This week's most loved", icon: "crown.fill", tone: .gold) { go(.topArtists) },
-            Place(title: "Commissions", detail: "Order art or sell yours", icon: "storefront.fill") { go(.commissions) },
+            Place(title: "Commissions", detail: "Order art or sell yours", icon: "paintbrush.pointed.fill") { go(.commissions) },
         ]
     }
 

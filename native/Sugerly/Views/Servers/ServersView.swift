@@ -537,7 +537,7 @@ struct ServerCard: View {
                             ProgressView().tint(Theme.main)
                         } else if joined {
                             Text("Open").font(.jakarta(12, .heavy)).foregroundStyle(Theme.main)
-                                .padding(.horizontal, 12).frame(height: 30).background(Theme.soft, in: Capsule())
+                                .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 12).frame(height: 30).background(Theme.soft, in: Capsule())
                                 .transition(.blurSwap)
                         } else {
                             Text("Join").font(.jakarta(12, .heavy)).foregroundStyle(.white)
@@ -801,7 +801,7 @@ struct ServerPanel: View {
                             Text(role.name).font(.jakarta(12, .bold)).foregroundStyle(Palette.text2)
                             Text("\(count)").font(.jakarta(11, .heavy)).foregroundStyle(Palette.muted)
                         }
-                        .padding(.horizontal, 10).frame(height: 28)
+                        .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 10).frame(height: 28)
                         .background(Palette.surface, in: Capsule())
                         .overlay(Capsule().strokeBorder(role.tint.opacity(0.4), lineWidth: 1))
                     }

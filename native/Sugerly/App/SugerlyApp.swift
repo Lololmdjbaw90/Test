@@ -31,19 +31,24 @@ struct SugerlyApp: App {
 
     var body: some Scene {
         WindowGroup {
-            #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("--polish-ui-test") {
-                PolishUITestHost().environment(model).sugarProgress()
-            } else if ProcessInfo.processInfo.arguments.contains("--shell-ui-test") {
-                ShellUITestHost().environment(model).sugarProgress()
-            } else {
-                RootView().environment(model).sugarProgress()
+            // iPhone's own text styles grow only so far (like Sugerly's own
+            // text), so the biggest text sizes can't push things off screen.
+            Group {
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("--polish-ui-test") {
+                    PolishUITestHost().environment(model).sugarProgress()
+                } else if ProcessInfo.processInfo.arguments.contains("--shell-ui-test") {
+                    ShellUITestHost().environment(model).sugarProgress()
+                } else {
+                    RootView().environment(model).sugarProgress()
+                }
+                #else
+                RootView()
+                    .environment(model)
+                    .sugarProgress()
+                #endif
             }
-            #else
-            RootView()
-                .environment(model)
-                .sugarProgress()
-            #endif
+            .dynamicTypeSize(...DynamicTypeSize.xxLarge)
         }
     }
 }

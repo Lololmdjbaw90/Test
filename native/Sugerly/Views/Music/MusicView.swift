@@ -247,7 +247,7 @@ struct MusicView: View {
             } else if !apple.isConnected {
                 Button { Task { await apple.connect() } } label: {
                     Text(apple.state == .connecting ? "…" : "Connect").font(.jakarta(13, .heavy)).foregroundStyle(.white)
-                        .padding(.horizontal, 14).frame(height: 34)
+                        .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 14).frame(height: 34)
                         .background(Color(hex: 0xFA2D48), in: Capsule())
                 }
                 .buttonStyle(BouncyStyle())

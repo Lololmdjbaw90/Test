@@ -308,7 +308,7 @@ struct ReelShareSheet: View {
                     Button { withMotion(Motion.standard) { speed = v } } label: {
                         Text(Self.speedText(v)).font(.jakarta(14, .heavy))
                             .foregroundStyle(speed == v ? Color.white : Palette.text)
-                            .frame(maxWidth: .infinity).frame(height: 38)
+                            .lineLimit(1).minimumScaleFactor(0.85).frame(maxWidth: .infinity).frame(height: 38)
                             .background(speed == v ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.surface), in: Capsule())
                             .overlay(Capsule().strokeBorder(Palette.border, lineWidth: speed == v ? 0 : 1))
                     }

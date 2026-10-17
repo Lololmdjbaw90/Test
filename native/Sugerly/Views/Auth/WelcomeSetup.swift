@@ -172,7 +172,7 @@ struct WelcomeSetupView: View {
                 CoinIcon(size: 22)
                 Text("Finish to get 50 coins").font(.jakarta(14, .bold)).foregroundStyle(Palette.text)
             }
-            .padding(.horizontal, 16).frame(height: 40)
+            .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 16).frame(height: 40)
             .background(Palette.surface, in: Capsule())
             .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
             .scaleEffect(appeared ? 1 : 0.5)
