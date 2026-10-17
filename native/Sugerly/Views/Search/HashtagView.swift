@@ -11,6 +11,7 @@ struct HashtagView: View {
     @Binding var path: [Route]
     @Environment(AppModel.self) private var model
     @Environment(Player.self) private var player
+    @Environment(PostsStore.self) private var store
     @State private var sort: Sort = .top
     @State private var reels: [Reel] = []
     @State private var art: [Artwork] = []
@@ -260,10 +261,16 @@ struct HashtagView: View {
         async let p = Self.fetch("CommunityPost", tag, limit: Self.pageSize)
         async let t = Self.fetch("MusicReview", tag, limit: 12)
         let (reelDocs, artDocs, postDocs, trackDocs) = await (r, a, p, t)
+        // Older posts whose tags the server hasn't saved yet: the ones this
+        // phone has loaded already count too.
+        let found = postDocs.map(Post.init)
+        let ids = Set(found.map(\.id))
+        let loadedHere = store.posts.filter { $0.tags.contains(tag) && !ids.contains($0.id) }
+        let allPosts = (found + loadedHere).sorted { $0.created > $1.created }
         withAnimation(Motion.pick(.smooth(duration: 0.35))) {
             reels = reelDocs.map(Reel.init).filter { !hidden.contains($0.authorEmail) }
             art = artDocs.map(Artwork.init).filter { !hidden.contains($0.authorEmail) }
-            posts = postDocs.map(Post.init).filter { !hidden.contains($0.authorEmail) }
+            posts = allPosts.filter { !hidden.contains($0.authorEmail) }
             tracks = trackDocs.map(Track.init).filter { !hidden.contains($0.authorEmail) }
             postCursor = postDocs.map { $0.str("created_date") }.filter { !$0.isEmpty }.min()
             morePosts = postDocs.count >= Self.pageSize
