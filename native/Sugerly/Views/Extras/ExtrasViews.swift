@@ -306,6 +306,12 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-3.10", icon: "magnifyingglass", title: "One search on every page", date: "2026-10-19T12:00:00Z", items: [
+            "Home, Community, Fan Art, Chats and Servers each have one round search button by the title that grows into the search bar.",
+            "Clothes and accessories now change colour the same way as the bunny's first outfits, keeping their light and shade.",
+            "The bow lives in Accessories now, next to the hats and headphones.",
+            "Community starts straight with the stories and posts.",
+        ]),
         AppRelease(id: "ios-3.9", icon: "textformat", title: "Pretty page titles and a lighter menu", date: "2026-10-19T09:00:00Z", items: [
             "Home, Community, Fan Art, Chats and Servers have big, colourful titles with a little sticker.",
             "The bunny shortcut is now \"Customize bunny\", and the white shirt is now the Áo dài.",

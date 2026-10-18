@@ -162,10 +162,10 @@ struct CommunityView: View {
     @State private var reporting: ReportSheet.Target?
     @State private var dismissed = Set<String>()
     @State private var searching = false
+    @State private var searchText = ""
     @State private var appeared = false
     // How much you like each #tag (learned from reels, posts and drawings).
     @State private var taste: [String: Double] = [:]
-    @State private var bunny = BunnyStore.shared
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Namespace private var feedPill
 
@@ -284,8 +284,8 @@ struct CommunityView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 14, pinnedViews: [.sectionHeaders]) {
-                PageTitle(title: "Community", subtitle: "Art, threads and friends", icon: "person.2.fill", candy: .berry)
-                hero.stagger(appeared, 0)
+                PageTitle(title: "Community", subtitle: "Little updates. Long conversations.", icon: "person.2.fill", candy: .berry,
+                          search: $searchText, prompt: "Search people, posts and tags") { searching = true }
                 if !storyPeople.isEmpty { stories.stagger(appeared, 1) }
                 WeeklyChallengeCard(posts: store.posts, active: tag != nil && tag == DailyContent.challenge?.tag, compose: compose) { t in
                     withAnimation(Motion.pick(.snappy(duration: 0.3))) { tag = tag == t ? nil : t }
@@ -334,11 +334,11 @@ struct CommunityView: View {
         .appearFade()
         .sugarBackground()
         .quietTitle("Community")
-        .rootBar(search: { searching = true })
+        .rootBar()
         .refreshable { await store.load() }
         .sheet(item: $reporting) { target in ReportSheet(target: target) }
         .sheet(isPresented: $searching) {
-            SearchView { route in path.append(route) }.presentationCornerRadius(34)
+            SearchView(go: { route in path.append(route) }, initial: searchText).presentationCornerRadius(34)
         }
         .task { if store.posts.isEmpty { await store.load() } }
         .task {
@@ -355,57 +355,6 @@ struct CommunityView: View {
             withMotion(Motion.standard) { store.posts.append(contentsOf: fresh) }
         }
         .onAppear { appeared = true }
-    }
-
-    private var onlineCount: Int { model.people.values.filter(\.isOnline).count }
-
-    private var postsToday: Int {
-        let start = Dates.iso(Calendar.current.startOfDay(for: Date()))
-        return store.posts.filter { $0.created >= start }.count
-    }
-
-    // A bright hello at the top: what Community is, who's around, a button
-    // to share, and your bunny.
-    private var hero: some View {
-        HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("What's new today").font(.display(25)).foregroundStyle(Palette.text)
-                    .lineLimit(1).minimumScaleFactor(0.75)
-                Text("Little updates. Long conversations.")
-                    .font(.jakarta(13, .medium)).foregroundStyle(Palette.text2)
-                    .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 6) {
-                    heroPill(icon: "circle.fill", text: "\(onlineCount) online", tint: Palette.success)
-                    heroPill(icon: "flame.fill", text: "\(postsToday) today", tint: Palette.warning)
-                }
-                Button(action: compose) {
-                    Label("Share something", systemImage: "square.and.pencil")
-                }
-                .buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
-                .padding(.top, 2)
-            }
-            Spacer(minLength: 0)
-            BunnyOnScene(look: bunny.look, height: 108)
-                .onLongPressGesture { path.append(.bunny) }
-        }
-        .pastelCard(radius: 26, padding: 16)
-        .overlay {
-            ShineSweep(every: 6, strength: 0.28)
-                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-        }
-        .onAppear { bunny.use(model.me?.email ?? "") }
-    }
-
-    private func heroPill(icon: String, text: String, tint: Color) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: icon).font(.system(size: 8, weight: .bold)).foregroundStyle(tint)
-            Text(text).font(.jakarta(12, .semibold)).foregroundStyle(Palette.text2)
-                .contentTransition(.numericText())
-        }
-        .lineLimit(1)
-        .padding(.horizontal, 10).frame(height: 26)
-        .background(Palette.surface.opacity(0.8), in: Capsule())
-        .overlay(Capsule().strokeBorder(Palette.rim(0.6), lineWidth: 1))
     }
 
     // "Start a thread…" at the top of the feed, like a social app.

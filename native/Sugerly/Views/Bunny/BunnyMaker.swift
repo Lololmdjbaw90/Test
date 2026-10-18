@@ -3,7 +3,7 @@ import UIKit
 import Photos
 
 // The bunny maker: your bunny on a little stage at the top, then a row of
-// tabs (fur, face, outfit, accessories, bow, collar, background) and the choices for
+// tabs (fur, face, outfit, accessories, collar, background) and the choices for
 // the one you picked. Changes show straight away; Done keeps them. You can
 // shuffle, save her to Photos, or make her your profile picture.
 struct BunnyMakerView: View {
@@ -21,7 +21,7 @@ struct BunnyMakerView: View {
     @State private var catalog = BunnyCatalog.shared
 
     enum Tab: String, CaseIterable, Identifiable {
-        case fur, face, outfit, accessory, bow, collar, scene
+        case fur, face, outfit, accessory, collar, scene
         var id: String { rawValue }
         var label: String {
             switch self {
@@ -33,7 +33,6 @@ struct BunnyMakerView: View {
         var icon: String {
             switch self {
             case .fur: return "hare.fill"
-            case .bow: return "gift.fill"
             case .collar: return "seal.fill"
             case .outfit: return "tshirt.fill"
             case .face: return "face.smiling.inverse"
@@ -44,8 +43,7 @@ struct BunnyMakerView: View {
         var candy: Candy {
             switch self {
             case .fur: return .berry
-            case .bow: return .peach
-            case .collar: return .grape
+            case .collar: return .peach
             case .outfit: return .sky
             case .face: return .lemon
             case .accessory: return .grape
@@ -55,7 +53,6 @@ struct BunnyMakerView: View {
         var part: BunnyPart? {
             switch self {
             case .fur: return .fur
-            case .bow: return .bow
             case .collar: return .collar
             default: return nil
             }
@@ -177,25 +174,7 @@ struct BunnyMakerView: View {
 
     @ViewBuilder
     private var choices: some View {
-        if tab == .bow && !look.head.isEmpty {
-            VStack(spacing: 12) {
-                EmptyCard(icon: "headphones", title: "Bow hidden", text: "She's wearing an accessory, which takes the bow's place.", compact: true)
-                Button { withAnimation(Motion.playful) { look.head = "" } } label: {
-                    Label("Take the accessory off", systemImage: "xmark.circle")
-                }
-                .buttonStyle(OutlineButtonStyle(fullWidth: true))
-            }
-        } else if tab == .bow {
-            VStack(spacing: 12) {
-                Toggle(isOn: Binding(get: { look.bowOn }, set: { on in withAnimation(Motion.playful) { look.bowOn = on } })) {
-                    Text("Wear a bow").font(.jakarta(15, .semibold)).foregroundStyle(Palette.text)
-                }
-                .tint(Theme.main)
-                .padding(.horizontal, 16).padding(.vertical, 10)
-                .sugarCard(radius: 18)
-                if look.bowOn { swatches(.bow).transition(.opacity.combined(with: .scale(scale: 0.96))) }
-            }
-        } else if tab == .collar && (look.top != .sailor || !look.wear.isEmpty) {
+        if tab == .collar && (look.top != .sailor || !look.wear.isEmpty) {
             EmptyCard(icon: "tshirt.fill", title: "No collar", text: "The collar comes with the sailor top. Pick it under Outfit.", compact: true)
         } else if let part = tab.part {
             swatches(part)
@@ -271,22 +250,59 @@ struct BunnyMakerView: View {
         }
     }
 
-    // Hats, headphones and the like (one at a time, instead of the bow).
+    // One thing on her head at a time: the bow, or a hat, headphones and
+    // the like. Then the colour of whichever she wears.
     private var accessories: some View {
         let heads = catalog.items(.head)
+        let bow = look.head.isEmpty && look.bowOn
         return VStack(alignment: .leading, spacing: 14) {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                clothes("None", pieces: [], on: look.head.isEmpty, index: 0) { look.head = "" }
-                ForEach(Array(heads.enumerated()), id: \.element.id) { i, item in
-                    itemTile(item, on: look.head == item.id, index: i + 1) { look.head = item.id }
+                clothes("None", pieces: [], on: look.head.isEmpty && !look.bowOn, index: 0) {
+                    look.head = ""
+                    look.bowOn = false
                 }
-                if isAdmin { addTile(.head, index: heads.count + 1) }
+                bowTile(on: bow)
+                ForEach(Array(heads.enumerated()), id: \.element.id) { i, item in
+                    itemTile(item, on: look.head == item.id, index: i + 2) { look.head = item.id }
+                }
+                if isAdmin { addTile(.head, index: heads.count + 2) }
             }
-            if !look.head.isEmpty {
+            if bow || !look.head.isEmpty {
                 ListHeader(title: "COLOUR").padding(.leading, 6)
-                swatches(.accessory)
+                swatches(bow ? .bow : .accessory)
             }
         }
+    }
+
+    // The bow, zoomed to where she wears it.
+    private func bowTile(on: Bool) -> some View {
+        Button {
+            withAnimation(Motion.playful) {
+                look.head = ""
+                look.bowOn = true
+            }
+        } label: {
+            VStack(spacing: 6) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous).fill(on ? Theme.soft : Palette.surface2)
+                    BunnyLayer("BunnyBow", look.tint(.bow))
+                        .aspectRatio(BunnyArt.aspect, contentMode: .fit)
+                        .scaleEffect(2.3, anchor: UnitPoint(x: 0.72, y: 0.19))
+                }
+                .frame(height: 84)
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(on ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.border), lineWidth: on ? 3 : 1))
+                .scaleEffect(on ? 1.03 : 1)
+                Text("Bow").font(.jakarta(12, on ? .bold : .medium))
+                    .foregroundStyle(on ? Palette.text : Palette.text2).lineLimit(1)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(BouncyStyle(scale: 0.93))
+        .accessibilityLabel("Bow")
+        .accessibilityAddTraits(on ? .isSelected : [])
+        .modifier(ChoicePop(index: 1))
     }
 
     // A picture item, zoomed to the part she wears.

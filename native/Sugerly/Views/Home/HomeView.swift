@@ -245,6 +245,7 @@ struct HomeView: View {
     @State private var loaded = false
     @State private var appeared = false
     @State private var searching = false
+    @State private var searchText = ""
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var lastLoad = Date.distantPast
@@ -260,7 +261,8 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 28) {
-                PageTitle(title: "Home", subtitle: Date().formatted(.dateTime.weekday(.wide).day().month(.wide)), icon: "house.fill", candy: .peach)
+                PageTitle(title: "Home", subtitle: Date().formatted(.dateTime.weekday(.wide).day().month(.wide)), icon: "house.fill", candy: .peach,
+                          search: $searchText, prompt: "Search people, posts and tags") { searching = true }
                     .padding(.bottom, -14)
                 announcementBanner
                 hero.homeSection(appeared, 0)
@@ -302,7 +304,7 @@ struct HomeView: View {
                     .accessibilityLabel("Sugerly")
             }
         }
-        .rootBar(search: { searching = true })
+        .rootBar()
         .refreshable { if loadContent { await load() } }
         .task {
             guard loadContent else { appeared = true; loaded = true; return }
@@ -323,7 +325,7 @@ struct HomeView: View {
         .dropRemoved($reels)
         .sheet(isPresented: $wallet) { WalletView() }
         .sheet(isPresented: $searching) {
-            SearchView { route in path.append(route) }
+            SearchView(go: { route in path.append(route) }, initial: searchText)
                 .presentationCornerRadius(34)
         }
     }

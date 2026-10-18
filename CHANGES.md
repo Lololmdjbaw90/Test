@@ -1,5 +1,12 @@
 # Changes
 
+## One morphing search, real recolouring, bow in Accessories (iOS app)
+
+- **Recolouring picture items**: clothes and accessories that are pictures are turned from the hue they were painted in to the colour's hue (`hueRotation`), with the colour's strength and lightness, the same way as the bunny's classic pieces (`BunnyPiece`), instead of a colour-blend dye that made them look like one flat colour. Built-in items carry their measured hue (`BunnyItem.hue`); uploaded ones get theirs worked out from the picture when it's loaded (`BunnyRemoteImages.baseHue`, a colourfulness-weighted average hue).
+- **Bow in Accessories**: the Bow tab is gone. Accessories shows None, the Bow (a zoomed tile) and the head items; one at a time, and the colour row below recolours whichever she's wearing.
+- **Community**: the "What's new today" card is removed; the page starts with its title, then stories.
+- **One search per page** (`PageTitle(search:)`): Home, Community, Fan Art, Chats and Servers have a round magnifier next to the big title whose capsule grows into the search bar (`matchedGeometryEffect`) and shrinks back on Cancel. The separate search fields (Fan Art, Chats, Servers' Discover) and the magnifier in the top bar on Home and Community are gone. On Home and Community, Return opens the search-everything sheet with what you typed; the other pages filter in place. Fan Art's share button is the top bar's +.
+
 ## Pretty page titles, Customize bunny, lighter menu (iOS app)
 
 - **Page titles** (`PageTitle`): Home (with today's date), Community, Fan Art, Chats and Servers start with a big title in Lilita One (one of the app's own SIL OFL fonts) filled with the candy gradient, a tilted icon sticker that hops in, and a line about the page. The top bar keeps the name for the back button without showing it twice (`quietTitle`). The five fonts that were sent are personal-use only, so they aren't bundled.

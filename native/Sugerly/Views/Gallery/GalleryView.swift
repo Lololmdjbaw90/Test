@@ -62,11 +62,11 @@ struct GalleryView: View {
     var body: some View {
         let content = ScrollView {
             LazyVStack(alignment: .leading, spacing: 18) {
-                PageTitle(title: "Fan Art", subtitle: "Drawings from the community", icon: "paintpalette.fill", candy: .grape)
+                PageTitle(title: "Fan Art", subtitle: "Drawings from the community", icon: "paintpalette.fill", candy: .grape,
+                          search: $query, prompt: "Search fan art or artists")
                 if query.isEmpty && medium == "all" && sort == .newest && !featuredList.isEmpty {
                     featuredCarousel.stagger(appeared, 0)
                 }
-                searchRow.stagger(appeared, 1)
                 browseTiles.stagger(appeared, 3)
                 if query.isEmpty && topArtists.count > 1 { artistsRow.stagger(appeared, 4) }
                 if !shown.isEmpty {
@@ -147,22 +147,6 @@ struct GalleryView: View {
                 .rootBar()
         } else {
             content.quietTitle("Fan Art")
-        }
-    }
-
-    // No big title: just search and a round + to share, on one line.
-    private var searchRow: some View {
-        HStack(spacing: 10) {
-            SearchField(text: $query, placeholder: "Search fan art or artists…")
-            Button { adding = true } label: {
-                Image(systemName: "plus").font(.system(size: 18, weight: .semibold)).foregroundStyle(.white)
-                    .frame(width: 46, height: 46)
-                    .background {
-                        RoundedRectangle(cornerRadius: 15, style: .continuous).fill(Theme.candy)
-                            .shadow(color: Theme.glow(0.3), radius: 8, y: 4)
-                    }
-            }
-            .buttonStyle(BouncyStyle(scale: 0.9)).accessibilityLabel("Share fan art")
         }
     }
 

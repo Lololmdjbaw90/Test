@@ -164,7 +164,8 @@ struct ServerList: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 14) {
-                PageTitle(title: "Servers", subtitle: "Groups to hang out in", icon: "person.3.fill", candy: .sky)
+                PageTitle(title: "Servers", subtitle: "Groups to hang out in", icon: "person.3.fill", candy: .sky,
+                          search: $query, prompt: "Search servers")
                 HStack {
                     Text("Your servers").font(.display(22)).foregroundStyle(Palette.text)
                     Spacer()
@@ -211,8 +212,6 @@ struct ServerList: View {
                 }
                 .padding(.top, 10)
                 .stagger(appeared, 2)
-                SearchField(text: $query, placeholder: "Search servers…")
-                    .stagger(appeared, 3)
                 if loaded && discover.isEmpty {
                     EmptyCard(icon: "sparkles", title: query.isEmpty ? "You're in them all" : "Nothing found", text: query.isEmpty ? "Make a new one with New." : "Try another name.", compact: true)
                 }

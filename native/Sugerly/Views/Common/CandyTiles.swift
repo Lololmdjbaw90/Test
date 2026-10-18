@@ -144,17 +144,44 @@ struct PageHero: View {
 // The big title at the top of a main page: its name in Lilita One (a round,
 // chunky font that comes with the app) filled with your colour's candy
 // gradient, a little tilted sticker of its icon that hops in, and a line
-// about the page underneath.
+// about the page underneath. With a search, a round button on the right
+// grows into the search bar (and shrinks back on Cancel), the same on every
+// page, so there's only ever one search.
 struct PageTitle: View {
     let title: String
     var subtitle = ""
     let icon: String
     var candy: Candy = .berry
+    var search: Binding<String>? = nil
+    var prompt = "Search"
+    // Return pressed (pages that search everything open the results).
+    var onSubmit: (() -> Void)? = nil
     @State private var shown = false
+    @State private var searching = false
+    @FocusState private var focused: Bool
+    @Namespace private var morph
 
     var body: some View {
+        ZStack {
+            if searching, let search {
+                field(search)
+                    .transition(.opacity)
+            } else {
+                heading
+                    .transition(.opacity)
+            }
+        }
+        .frame(minHeight: 56)
+        .animation(Motion.pick(.spring(response: 0.36, dampingFraction: 0.86)), value: searching)
+        .onAppear {
+            guard !shown else { return }
+            withAnimation(Motion.reduced ? nil : Motion.playful.delay(0.1)) { shown = true }
+        }
+    }
+
+    private var heading: some View {
         let sticker = RoundedRectangle(cornerRadius: 14, style: .continuous)
-        HStack(alignment: .center, spacing: 12) {
+        return HStack(alignment: .center, spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 19, weight: .bold))
                 .foregroundStyle(.white)
@@ -176,15 +203,77 @@ struct PageTitle: View {
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 0)
+            if search != nil {
+                Button(action: open) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(Theme.main)
+                        .frame(width: 44, height: 44)
+                        .background {
+                            Capsule().fill(Palette.surface)
+                                .matchedGeometryEffect(id: "search", in: morph)
+                                .shadow(color: Palette.shadow, radius: 6, y: 2)
+                        }
+                        .overlay(Capsule().strokeBorder(Theme.main.opacity(0.2), lineWidth: 1))
+                }
+                .buttonStyle(BouncyStyle(scale: 0.88))
+                .accessibilityLabel("Search")
+            }
         }
         .padding(.horizontal, 2)
-        .onAppear {
-            guard !shown else { return }
-            withAnimation(Motion.reduced ? nil : Motion.playful.delay(0.1)) { shown = true }
+    }
+
+    private func field(_ text: Binding<String>) -> some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.main)
+                TextField(prompt, text: text)
+                    .font(.jakarta(16))
+                    .focused($focused)
+                    .submitLabel(.search)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .onSubmit { onSubmit?() }
+                if !text.wrappedValue.isEmpty {
+                    Button { text.wrappedValue = "" } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(Palette.muted)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear")
+                }
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 46)
+            .background {
+                Capsule().fill(Palette.surface)
+                    .matchedGeometryEffect(id: "search", in: morph)
+                    .shadow(color: Palette.shadow, radius: 6, y: 2)
+            }
+            .overlay(Capsule().strokeBorder(Theme.main.opacity(0.25), lineWidth: 1))
+            Button("Cancel", action: close)
+                .font(.jakarta(15, .semibold))
+                .foregroundStyle(Theme.main)
+                .buttonStyle(.plain)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
+        .padding(.horizontal, 2)
+    }
+
+    private func open() {
+        searching = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(250))
+            focused = true
+        }
+    }
+
+    private func close() {
+        search?.wrappedValue = ""
+        focused = false
+        searching = false
     }
 }
 

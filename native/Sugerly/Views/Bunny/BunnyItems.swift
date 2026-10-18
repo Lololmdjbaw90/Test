@@ -22,6 +22,8 @@ struct BunnyItem: Identifiable, Equatable {
     // A picture in the app, or an uploaded one.
     var asset = ""
     var url = ""
+    // The hue it was painted in (uploaded ones: worked out from the picture).
+    var hue: Double? = nil
 
     var uploaded: Bool { asset.isEmpty }
 
@@ -30,23 +32,23 @@ struct BunnyItem: Identifiable, Equatable {
     var tileFocus: UnitPoint { slot == .top ? UnitPoint(x: 0.5, y: 0.7) : UnitPoint(x: 0.5, y: 0.3) }
 
     static let builtIn: [BunnyItem] = [
-        BunnyItem(id: "maid", name: "Maid", slot: .top, asset: "BunnyItemMaid"),
-        BunnyItem(id: "frills", name: "Frills", slot: .top, asset: "BunnyItemFrills"),
-        BunnyItem(id: "stripes", name: "Stripes", slot: .top, asset: "BunnyItemStripes"),
-        BunnyItem(id: "shirt", name: "Áo dài", slot: .top, asset: "BunnyItemShirt"),
-        BunnyItem(id: "sweater", name: "Sweater", slot: .top, asset: "BunnyItemSweater"),
-        BunnyItem(id: "collar-top", name: "Peach", slot: .top, asset: "BunnyItemCollarTop"),
-        BunnyItem(id: "bow-top", name: "Bow top", slot: .top, asset: "BunnyItemBowTop"),
-        BunnyItem(id: "suit", name: "Suit", slot: .top, asset: "BunnyItemSuit"),
-        BunnyItem(id: "jacket", name: "Jacket", slot: .top, asset: "BunnyItemJacket"),
-        BunnyItem(id: "clips", name: "Clips", slot: .head, asset: "BunnyItemClips"),
-        BunnyItem(id: "headphones", name: "Headphones", slot: .head, asset: "BunnyItemHeadphones"),
-        BunnyItem(id: "headband", name: "Headband", slot: .head, asset: "BunnyItemHeadband"),
-        BunnyItem(id: "beret", name: "Beret", slot: .head, asset: "BunnyItemBeret"),
-        BunnyItem(id: "beanie", name: "Beanie", slot: .head, asset: "BunnyItemBeanie"),
-        BunnyItem(id: "straw-hat", name: "Straw hat", slot: .head, asset: "BunnyItemStrawHat"),
-        BunnyItem(id: "hood", name: "Hood", slot: .head, asset: "BunnyItemHood"),
-        BunnyItem(id: "paper-bag", name: "Paper bag", slot: .head, asset: "BunnyItemPaperBag"),
+        BunnyItem(id: "maid", name: "Maid", slot: .top, asset: "BunnyItemMaid", hue: 245),
+        BunnyItem(id: "frills", name: "Frills", slot: .top, asset: "BunnyItemFrills", hue: 194),
+        BunnyItem(id: "stripes", name: "Stripes", slot: .top, asset: "BunnyItemStripes", hue: 236),
+        BunnyItem(id: "shirt", name: "Áo dài", slot: .top, asset: "BunnyItemShirt", hue: 265),
+        BunnyItem(id: "sweater", name: "Sweater", slot: .top, asset: "BunnyItemSweater", hue: 20),
+        BunnyItem(id: "collar-top", name: "Peach", slot: .top, asset: "BunnyItemCollarTop", hue: 5),
+        BunnyItem(id: "bow-top", name: "Bow top", slot: .top, asset: "BunnyItemBowTop", hue: 227),
+        BunnyItem(id: "suit", name: "Suit", slot: .top, asset: "BunnyItemSuit", hue: 355),
+        BunnyItem(id: "jacket", name: "Jacket", slot: .top, asset: "BunnyItemJacket", hue: 209),
+        BunnyItem(id: "clips", name: "Clips", slot: .head, asset: "BunnyItemClips", hue: 265),
+        BunnyItem(id: "headphones", name: "Headphones", slot: .head, asset: "BunnyItemHeadphones", hue: 237),
+        BunnyItem(id: "headband", name: "Headband", slot: .head, asset: "BunnyItemHeadband", hue: 230),
+        BunnyItem(id: "beret", name: "Beret", slot: .head, asset: "BunnyItemBeret", hue: 6),
+        BunnyItem(id: "beanie", name: "Beanie", slot: .head, asset: "BunnyItemBeanie", hue: 19),
+        BunnyItem(id: "straw-hat", name: "Straw hat", slot: .head, asset: "BunnyItemStrawHat", hue: 17),
+        BunnyItem(id: "hood", name: "Hood", slot: .head, asset: "BunnyItemHood", hue: 347),
+        BunnyItem(id: "paper-bag", name: "Paper bag", slot: .head, asset: "BunnyItemPaperBag", hue: 15),
     ]
 }
 
@@ -105,6 +107,8 @@ final class BunnyCatalog {
 final class BunnyRemoteImages {
     static let shared = BunnyRemoteImages()
     private(set) var images: [String: UIImage] = [:]
+    // The hue each uploaded picture was painted in.
+    private(set) var hues: [String: Double] = [:]
     @ObservationIgnored private var loading: Set<String> = []
 
     private static let folder: URL = {
@@ -129,34 +133,67 @@ final class BunnyRemoteImages {
             try? fresh.write(to: file, options: .atomic)
         }
         guard let data else { return }
-        let image = await Task.detached(priority: .utility) { () -> UIImage? in
+        let made = await Task.detached(priority: .utility) { () -> (UIImage, Double)? in
             guard let full = UIImage(data: data) else { return nil }
-            return full.preparingThumbnail(of: CGSize(width: 653, height: 900)) ?? full
+            let image = full.preparingThumbnail(of: CGSize(width: 653, height: 900)) ?? full
+            return (image, BunnyRemoteImages.baseHue(image))
         }.value
-        if let image { images[url] = image }
+        if let made {
+            hues[url] = made.1
+            images[url] = made.0
+        }
+    }
+
+    // The main hue of a picture's coloured parts (weighted by how colourful
+    // they are), in degrees.
+    nonisolated static func baseHue(_ image: UIImage) -> Double {
+        guard let cg = image.cgImage else { return 0 }
+        let w = 66, h = 90
+        var pixels = [UInt8](repeating: 0, count: w * h * 4)
+        guard let context = CGContext(data: &pixels, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                      space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return 0 }
+        context.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        var x = 0.0, y = 0.0
+        for i in stride(from: 0, to: pixels.count, by: 4) where pixels[i + 3] > 128 {
+            let a = Double(pixels[i + 3]) / 255
+            let r = Double(pixels[i]) / 255 / a, g = Double(pixels[i + 1]) / 255 / a, b = Double(pixels[i + 2]) / 255 / a
+            let hi = max(r, g, b), lo = min(r, g, b)
+            guard hi > 0.2, hi - lo > 0.2 * hi else { continue }
+            var hue: Double
+            if hi == r { hue = (g - b) / (hi - lo) } else if hi == g { hue = 2 + (b - r) / (hi - lo) } else { hue = 4 + (r - g) / (hi - lo) }
+            hue = hue * 60 * .pi / 180
+            let weight = (hi - lo) / hi
+            x += cos(hue) * weight
+            y += sin(hue) * weight
+        }
+        guard x != 0 || y != 0 else { return 0 }
+        let degrees = atan2(y, x) * 180 / .pi
+        return degrees < 0 ? degrees + 360 : degrees
     }
 }
 
-// One item drawn on the canvas, dyed with a colour when one is picked: the
-// colour's hue and strength over the picture's own light and shade, so
-// lines and shading stay (and black stays black).
+// One item drawn on the canvas, recoloured the same way as the bunny's own
+// clothes: turned from the hue it was painted in to the colour's hue (see
+// BunnyPiece), with the colour's strength and lightness.
 struct BunnyItemLayer: View {
     let item: BunnyItem
     // nil or "Original": as it was painted.
     var tint: BunnyTint? = nil
 
     var body: some View {
-        if let tint, !tint.hue.isNaN {
-            picture
-                .overlay {
-                    Color(hex: tint.swatch)
-                        .blendMode(.color)
-                        .mask { picture }
-                }
-                .compositingGroup()
-        } else {
-            picture
-        }
+        picture
+            .hueRotation(.degrees(turn))
+            .saturation(tint?.saturation ?? 1)
+            .brightness(tint?.brightness ?? 0)
+    }
+
+    private var turn: Double {
+        guard let tint, !tint.hue.isNaN else { return 0 }
+        let base = item.hue ?? BunnyRemoteImages.shared.hues[item.url] ?? 0
+        var d = (tint.hue - base).truncatingRemainder(dividingBy: 360)
+        if d > 180 { d -= 360 }
+        if d < -180 { d += 360 }
+        return d
     }
 
     @ViewBuilder
