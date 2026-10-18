@@ -260,6 +260,8 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 28) {
+                PageTitle(title: "Home", subtitle: Date().formatted(.dateTime.weekday(.wide).day().month(.wide)), icon: "house.fill", candy: .peach)
+                    .padding(.bottom, -14)
                 announcementBanner
                 hero.homeSection(appeared, 0)
                 HomeComposerBar(compose: compose).homeSection(appeared, 1)
@@ -460,7 +462,7 @@ struct HomeView: View {
             .init(title: "People", icon: "person.2.fill", candy: .grape, route: .people),
             .init(title: "Top artists", icon: "crown.fill", candy: .lemon, route: .topArtists),
             .init(title: "Commissions", icon: "paintbrush.pointed.fill", candy: .peach, route: .commissions),
-            .init(title: "Bunny", icon: "hare.fill", candy: .berry, route: .bunny),
+            .init(title: "Customize bunny", icon: "hare.fill", candy: .berry, route: .bunny),
         ], shown: appeared) { route in path.append(route) }
     }
 

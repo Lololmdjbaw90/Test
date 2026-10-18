@@ -47,13 +47,17 @@ struct CandyShortcutGrid: View {
                 .frame(width: 38, height: 38)
                 .background(.white.opacity(0.24), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             Spacer(minLength: 12)
+            // Room for two lines on every tile (so "Customize bunny" fits and
+            // the tiles stay the same height).
             Text(item.title)
                 .font(.jakarta(13, .bold)).foregroundStyle(.white)
-                .lineLimit(1).minimumScaleFactor(0.75)
+                .lineLimit(2).minimumScaleFactor(0.8)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, minHeight: 34, alignment: .bottomLeading)
                 .shadow(color: .black.opacity(0.12), radius: 1, y: 1)
         }
         .padding(12)
-        .frame(maxWidth: .infinity, minHeight: 96, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
         .background {
             shape.fill(item.candy.gradient)
                 .overlay {
@@ -134,5 +138,80 @@ struct PageHero: View {
                 .shadow(color: candy.color.softGlow(0.35), radius: 14, y: 6)
         }
         .onAppear { shown = true }
+    }
+}
+
+// The big title at the top of a main page: its name in Lilita One (a round,
+// chunky font that comes with the app) filled with your colour's candy
+// gradient, a little tilted sticker of its icon that hops in, and a line
+// about the page underneath.
+struct PageTitle: View {
+    let title: String
+    var subtitle = ""
+    let icon: String
+    var candy: Candy = .berry
+    @State private var shown = false
+
+    var body: some View {
+        let sticker = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 19, weight: .bold))
+                .foregroundStyle(.white)
+                .symbolEffect(.bounce, value: shown)
+                .frame(width: 44, height: 44)
+                .background(candy.gradient, in: sticker)
+                .overlay(sticker.strokeBorder(.white.opacity(0.4), lineWidth: 1.5))
+                .shadow(color: candy.color.softGlow(0.35), radius: 6, y: 3)
+                .rotationEffect(.degrees(shown ? -7 : 0))
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title)
+                    .font(.custom("LilitaOne", size: 34, relativeTo: .largeTitle))
+                    .foregroundStyle(Theme.candy)
+                    .shadow(color: Theme.glow(0.22), radius: 8, y: 3)
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 2)
+        .onAppear {
+            guard !shown else { return }
+            withAnimation(Motion.reduced ? nil : Motion.playful.delay(0.1)) { shown = true }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+extension View {
+    /// A page that shows a big PageTitle: the top bar keeps the name (for the
+    /// back button and VoiceOver) without showing it a second time.
+    func quietTitle(_ title: String) -> some View {
+        modifier(QuietTitle(title: title))
+    }
+}
+
+private struct QuietTitle: ViewModifier {
+    let title: String
+
+    func body(content: Content) -> some View {
+        let page = content
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+        if #available(iOS 26.0, *) {
+            page.toolbar {
+                ToolbarItem(placement: .principal) { Color.clear.frame(width: 1, height: 1).accessibilityHidden(true) }
+                    .sharedBackgroundVisibility(.hidden)
+            }
+        } else {
+            page.toolbar {
+                ToolbarItem(placement: .principal) { Color.clear.frame(width: 1, height: 1).accessibilityHidden(true) }
+            }
+        }
     }
 }

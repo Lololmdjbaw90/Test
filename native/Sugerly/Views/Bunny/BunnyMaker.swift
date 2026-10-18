@@ -80,7 +80,7 @@ struct BunnyMakerView: View {
         }
         .scrollIndicators(.hidden)
         .sugarBackground()
-        .navigationTitle("Bunny maker")
+        .navigationTitle("Customize bunny")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             guard !loaded else { return }

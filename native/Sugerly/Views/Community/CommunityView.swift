@@ -284,6 +284,7 @@ struct CommunityView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 14, pinnedViews: [.sectionHeaders]) {
+                PageTitle(title: "Community", subtitle: "Art, threads and friends", icon: "person.2.fill", candy: .berry)
                 hero.stagger(appeared, 0)
                 if !storyPeople.isEmpty { stories.stagger(appeared, 1) }
                 WeeklyChallengeCard(posts: store.posts, active: tag != nil && tag == DailyContent.challenge?.tag, compose: compose) { t in
@@ -332,7 +333,7 @@ struct CommunityView: View {
         }
         .appearFade()
         .sugarBackground()
-        .roundTitle("Community")
+        .quietTitle("Community")
         .rootBar(search: { searching = true })
         .refreshable { await store.load() }
         .sheet(item: $reporting) { target in ReportSheet(target: target) }

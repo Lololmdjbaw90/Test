@@ -62,6 +62,7 @@ struct GalleryView: View {
     var body: some View {
         let content = ScrollView {
             LazyVStack(alignment: .leading, spacing: 18) {
+                PageTitle(title: "Fan Art", subtitle: "Drawings from the community", icon: "paintpalette.fill", candy: .grape)
                 if query.isEmpty && medium == "all" && sort == .newest && !featuredList.isEmpty {
                     featuredCarousel.stagger(appeared, 0)
                 }
@@ -142,10 +143,10 @@ struct GalleryView: View {
 
         if isRoot {
             content
-                .roundTitle("Fan Art")
+                .quietTitle("Fan Art")
                 .rootBar()
         } else {
-            content.navigationTitle("Fan Art").navigationBarTitleDisplayMode(.inline)
+            content.quietTitle("Fan Art")
         }
     }
 

@@ -786,8 +786,13 @@ struct MenuDrawer: View {
             }
             .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.38, dampingFraction: 0.88), value: open)
         }
-        // The page behind holds still while the menu is open.
-        .onChange(of: open) { _, now in AmbientPause.shared.on = now }
+        // The page behind holds still while the menu is open (from just after
+        // it has slid in, so nothing changes during the slide itself).
+        .task(id: open) {
+            guard open else { AmbientPause.shared.on = false; return }
+            try? await Task.sleep(for: .milliseconds(420))
+            if !Task.isCancelled { AmbientPause.shared.on = true }
+        }
     }
 
     // Dragging to the left closes it.

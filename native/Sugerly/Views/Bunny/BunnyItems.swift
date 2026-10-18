@@ -33,7 +33,7 @@ struct BunnyItem: Identifiable, Equatable {
         BunnyItem(id: "maid", name: "Maid", slot: .top, asset: "BunnyItemMaid"),
         BunnyItem(id: "frills", name: "Frills", slot: .top, asset: "BunnyItemFrills"),
         BunnyItem(id: "stripes", name: "Stripes", slot: .top, asset: "BunnyItemStripes"),
-        BunnyItem(id: "shirt", name: "Shirt", slot: .top, asset: "BunnyItemShirt"),
+        BunnyItem(id: "shirt", name: "Áo dài", slot: .top, asset: "BunnyItemShirt"),
         BunnyItem(id: "sweater", name: "Sweater", slot: .top, asset: "BunnyItemSweater"),
         BunnyItem(id: "collar-top", name: "Peach", slot: .top, asset: "BunnyItemCollarTop"),
         BunnyItem(id: "bow-top", name: "Bow top", slot: .top, asset: "BunnyItemBowTop"),

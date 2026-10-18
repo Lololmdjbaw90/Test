@@ -248,6 +248,7 @@ final class BunnyStore {
             look = saved
             made = true
             BunnyImages.warmUp(saved)
+            BunnySnapshots.warm(saved)
         } else {
             look = BunnyLook()
             made = false
@@ -448,17 +449,98 @@ struct BunnyOnScene: View {
     var lively = true
 
     var body: some View {
-        let tile = RoundedRectangle(cornerRadius: height * 0.24, style: .continuous)
         ZStack(alignment: .bottom) {
             BunnySceneView(scene: look.scene, animated: false)
                 .allowsHitTesting(false)
             BunnyBuddy(look: look, height: height * 0.8, lively: lively)
                 .padding(.bottom, height * 0.04)
         }
+        .modifier(BunnyTileFrame(height: height))
+    }
+}
+
+// The tile's shape, edge and shadow.
+private struct BunnyTileFrame: ViewModifier {
+    let height: CGFloat
+
+    func body(content: Content) -> some View {
+        let tile = RoundedRectangle(cornerRadius: height * 0.24, style: .continuous)
+        content
+            .frame(width: height * 0.9, height: height)
+            .clipShape(tile)
+            .overlay(tile.strokeBorder(.white.opacity(0.75), lineWidth: 2))
+            .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
+    }
+}
+
+// The same tile as one still picture, made once per look and size and kept
+// (the menu shows this: one picture is far lighter than her layers while it
+// slides and scrolls). Until it's ready, just her background shows.
+struct BunnyStillTile: View {
+    var look: BunnyLook
+    var height: CGFloat = 76
+    @Environment(\.displayScale) private var scale
+    @State private var made: (key: String, image: UIImage)?
+
+    var body: some View {
+        let key = BunnySnapshots.key(look, height)
+        let image = made?.key == key ? made?.image : BunnySnapshots.cached(key)
+        Group {
+            if let image {
+                Image(uiImage: image).resizable()
+            } else {
+                BunnySceneView(scene: look.scene, animated: false)
+            }
+        }
+        .modifier(BunnyTileFrame(height: height))
+        .task(id: key) {
+            BunnySnapshots.scale = scale
+            guard BunnySnapshots.cached(key) == nil else { return }
+            // After the menu has slid in.
+            try? await Task.sleep(for: .milliseconds(450))
+            guard !Task.isCancelled, let fresh = BunnySnapshots.make(look, height) else { return }
+            made = (key, fresh)
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+@MainActor
+enum BunnySnapshots {
+    static var scale: CGFloat = 3
+    private static var cache: [String: UIImage] = [:]
+
+    static func key(_ look: BunnyLook, _ height: CGFloat) -> String {
+        let data = (try? JSONEncoder().encode(look)) ?? Data()
+        // Uploaded items count once their picture has arrived.
+        return "\(Int(height))-\(BunnyRemoteImages.shared.images.count)-" + data.base64EncodedString()
+    }
+
+    static func cached(_ key: String) -> UIImage? { cache[key] }
+
+    @discardableResult
+    static func make(_ look: BunnyLook, _ height: CGFloat) -> UIImage? {
+        let key = key(look, height)
+        if let hit = cache[key] { return hit }
+        let art = ZStack(alignment: .bottom) {
+            BunnySceneView(scene: look.scene, animated: false)
+            BunnyFigure(look: look).frame(height: height * 0.8).padding(.bottom, height * 0.04)
+        }
         .frame(width: height * 0.9, height: height)
-        .clipShape(tile)
-        .overlay(tile.strokeBorder(.white.opacity(0.75), lineWidth: 2))
-        .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
+        let renderer = ImageRenderer(content: art)
+        renderer.scale = scale
+        guard let image = renderer.uiImage else { return nil }
+        if cache.count > 16 { cache.removeAll() }
+        cache[key] = image
+        return image
+    }
+
+    // Made a little after Home shows, so the menu has it ready.
+    static func warm(_ look: BunnyLook) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            make(look, 76)
+        }
     }
 }
 

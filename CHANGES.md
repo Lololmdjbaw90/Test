@@ -1,5 +1,11 @@
 # Changes
 
+## Pretty page titles, Customize bunny, lighter menu (iOS app)
+
+- **Page titles** (`PageTitle`): Home (with today's date), Community, Fan Art, Chats and Servers start with a big title in Lilita One (one of the app's own SIL OFL fonts) filled with the candy gradient, a tilted icon sticker that hops in, and a line about the page. The top bar keeps the name for the back button without showing it twice (`quietTitle`). The five fonts that were sent are personal-use only, so they aren't bundled.
+- **Customize bunny**: the bunny shortcut on Home and in the menu is "Customize bunny" (shortcut tiles now have room for two lines), and so is the maker's title. The white shirt item is now the Áo dài.
+- **Menu**: your bunny is one cached still picture there (`BunnyStillTile` / `BunnySnapshots`, made a moment after Home shows) instead of her live layers; sections rise without fading (fading shadowed cards was costly mid-slide); the page behind pauses its own animations only once the menu has slid in. The profile card puts your name (with an arrow) and your level on separate lines, so neither is cut off.
+
 ## Bunny items, team roles, picture checks and a stronger filter (iOS app)
 
 - **Bunny items** (`BunnyItems.swift`): clothes and accessories that are whole pictures on the bunny's 878×1210 canvas. Fifteen come with the app (eight outfits, seven for the head or face); clothes replace the top, an accessory replaces the bow. Admins add more from the bunny maker (an "Add item" tile: a transparent PNG of the bunny's shape, a name and where it goes), stored as `BunnyItem` records with the picture in Storage, cached on the phone (`BunnyRemoteImages`) and shown to everyone (`BunnyCatalog`); long-press an uploaded one to delete it. The look keeps `wear` and `head` item ids. An admin-panel card links to the maker.

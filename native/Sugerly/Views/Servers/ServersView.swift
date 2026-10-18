@@ -164,6 +164,7 @@ struct ServerList: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 14) {
+                PageTitle(title: "Servers", subtitle: "Groups to hang out in", icon: "person.3.fill", candy: .sky)
                 HStack {
                     Text("Your servers").font(.display(22)).foregroundStyle(Palette.text)
                     Spacer()

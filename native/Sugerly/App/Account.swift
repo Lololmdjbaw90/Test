@@ -37,7 +37,7 @@ struct AccountView: View, Equatable {
             .init(title: "People", icon: "person.2.fill", candy: .grape, route: .people),
             .init(title: "Top artists", icon: "crown.fill", candy: .lemon, route: .topArtists),
             .init(title: "Commissions", icon: "paintbrush.pointed.fill", candy: .peach, route: .commissions),
-            .init(title: "Bunny", icon: "hare.fill", candy: .berry, route: .bunny),
+            .init(title: "Customize bunny", icon: "hare.fill", candy: .berry, route: .bunny),
         ]
     }
 
@@ -169,11 +169,14 @@ struct AccountView: View, Equatable {
         let info = LevelInfo(xp: me.xp)
         let presence = Presence(rawValue: me.presence) ?? .online
         return VStack(spacing: 14) {
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .center, spacing: 10) {
                 profileButton(me, info, presence)
-                // Your bunny on her background (tap her; hold to dress her up).
-                BunnyOnScene(look: bunny.look, height: 88)
-                    .onLongPressGesture { go(.bunny) }
+                // Your bunny on her background, as one still picture (much
+                // lighter than her layers while the menu slides and
+                // scrolls). Tap her to dress her up.
+                Button { go(.bunny) } label: { BunnyStillTile(look: bunny.look, height: 76) }
+                    .buttonStyle(BouncyStyle(scale: 0.94))
+                    .accessibilityLabel("Customize your bunny")
             }
             XPBar(info: info)
             statusButton(me, presence)
@@ -192,26 +195,25 @@ struct AccountView: View, Equatable {
 
     private func profileButton(_ me: UserProfile, _ info: LevelInfo, _ presence: Presence) -> some View {
         Button { go(.person(me.email)) } label: {
-            HStack(spacing: 14) {
-                Avatar(url: me.picture, name: me.displayName, size: 64, nitro: me.isNitro, presence: presence)
+            // Name with an arrow (it opens your profile), the level under it,
+            // each on its own line so neither gets cut off.
+            HStack(spacing: 12) {
+                Avatar(url: me.picture, name: me.displayName, size: 54, nitro: me.isNitro, presence: presence)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(me.displayName)
-                        .font(.display(26)).foregroundStyle(Palette.text)
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                    HStack(spacing: 6) {
-                        Text("Lv. \(info.level) · \(info.title)")
-                            .font(.jakarta(12, .heavy)).foregroundStyle(info.color)
-                            .lineLimit(1).minimumScaleFactor(0.8)
-                            .padding(.horizontal, 9).padding(.vertical, 4)
-                            .background(Palette.surface.opacity(0.85), in: Capsule())
-                        HStack(spacing: 2) {
-                            Text("Profile")
-                            Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold))
-                        }
-                        .font(.jakarta(12, .bold)).foregroundStyle(Theme.main)
-                        .lineLimit(1)
+                    HStack(spacing: 4) {
+                        Text(me.displayName)
+                            .font(.display(24)).foregroundStyle(Palette.text)
+                            .lineLimit(1).minimumScaleFactor(0.6)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.main)
                     }
+                    Text("Lv. \(info.level) · \(info.title)")
+                        .font(.jakarta(12, .heavy)).foregroundStyle(info.color)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .padding(.horizontal, 9).padding(.vertical, 4)
+                        .background(Palette.surface.opacity(0.85), in: Capsule())
                 }
+                .layoutPriority(1)
                 Spacer(minLength: 0)
             }
             .contentShape(Rectangle())
@@ -363,7 +365,8 @@ struct AccountView: View, Equatable {
     }
 }
 
-// A menu section rising into place after the ones above it.
+// A menu section rising into place after the ones above it. Only moved,
+// never faded (fading a card with shadows is costly while the menu slides).
 private struct MenuRise: ViewModifier {
     let shown: Bool
     let index: Int
@@ -371,8 +374,7 @@ private struct MenuRise: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .opacity(shown || reduceMotion ? 1 : 0)
-            .offset(x: shown || reduceMotion ? 0 : -18, y: shown || reduceMotion ? 0 : 10)
+            .offset(y: shown || reduceMotion ? 0 : 16)
             .animation(reduceMotion ? nil : Motion.settle.delay(0.05 + Double(index) * 0.05), value: shown)
     }
 }

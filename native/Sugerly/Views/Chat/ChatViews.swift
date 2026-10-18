@@ -287,6 +287,10 @@ struct ChatListView: View {
 
     private var chats: some View {
         List {
+            PageTitle(title: "Chats", subtitle: "Friends and group chats", icon: "bubble.left.and.bubble.right.fill", candy: .mint)
+                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 0, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             SearchField(text: $search, placeholder: "Search chats")
                 .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                 .listRowBackground(Color.clear)

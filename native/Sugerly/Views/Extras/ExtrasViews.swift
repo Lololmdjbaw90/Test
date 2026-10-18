@@ -306,6 +306,11 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-3.9", icon: "textformat", title: "Pretty page titles and a lighter menu", date: "2026-10-19T09:00:00Z", items: [
+            "Home, Community, Fan Art, Chats and Servers have big, colourful titles with a little sticker.",
+            "The bunny shortcut is now \"Customize bunny\", and the white shirt is now the Áo dài.",
+            "The menu opens and scrolls more smoothly, and your name and level always fit in it.",
+        ]),
         AppRelease(id: "ios-3.8", icon: "tshirt.fill", title: "New bunny clothes, team roles and safer pictures", date: "2026-10-18T23:00:00Z", items: [
             "Eight new outfits (maid, frills, stripes, shirt, sweater, peach, bow top, suit) and seven accessories (clips, headphones, headband, beret, straw hat, hood, paper bag) in the bunny maker.",
             "The team can add new clothes and accessories for everyone, right from the bunny maker.",
