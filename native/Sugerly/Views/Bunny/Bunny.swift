@@ -1,10 +1,10 @@
 import SwiftUI
 import UIKit
 
-// Your bunny: the Sugerly bunny drawn in layers (fur, outfit, collar, bow,
-// outlines and eyes, cut from the artwork by scripts/bunny-layers.py), so
-// each part can take its own colour. On top: faces, little extras and a
-// scene behind her. She bobs, blinks and jumps when you tap her.
+// Your bunny, drawn from the artist's own layers (fur, outline, clothes,
+// faces; the bow cut from the finished picture; see scripts/bunny-layers.py).
+// Each part can take its own colour; faces, clothes, little extras and a
+// scene can be swapped. She bobs, blinks and jumps when you tap her.
 
 // MARK: - The look
 
@@ -24,17 +24,8 @@ enum BunnyPart: String, CaseIterable, Identifiable {
 
     var label: String { rawValue.capitalized }
 
-    var icon: String {
-        switch self {
-        case .fur: return "hare.fill"
-        case .bow: return "gift.fill"
-        case .collar: return "seal.fill"
-        case .outfit: return "tshirt.fill"
-        }
-    }
-
     // Worked out from the artwork's own colours (pink fur, pink bow,
-    // berry collar, navy sailor dress).
+    // berry collar).
     var tints: [BunnyTint] {
         switch self {
         case .fur:
@@ -71,43 +62,98 @@ enum BunnyPart: String, CaseIterable, Identifiable {
                 BunnyTint(name: "Stone", hue: 0, saturation: 0.1, brightness: 0.05, swatch: 0x7F727A),
             ]
         case .outfit:
+            // Clothes are made of differently coloured pieces, so an outfit
+            // colour is a target hue each piece is turned to (see BunnyPiece).
             return [
-                BunnyTint(name: "Navy", hue: 0, saturation: 1, brightness: 0, swatch: 0x1F3A8A),
-                BunnyTint(name: "Berry", hue: 135, saturation: 1, brightness: 0, swatch: 0x862715),
-                BunnyTint(name: "Forest", hue: -65, saturation: 1, brightness: 0, swatch: 0x005243),
-                BunnyTint(name: "Grape", hue: 50, saturation: 1, brightness: 0, swatch: 0x662682),
-                BunnyTint(name: "Toffee", hue: 170, saturation: 1, brightness: 0.02, swatch: 0x683B05),
-                BunnyTint(name: "Mono", hue: 0, saturation: 0, brightness: 0, swatch: 0x3A3A3A),
+                BunnyTint(name: "Original", hue: .nan, saturation: 1, brightness: 0, swatch: 0x3A5BB0),
+                BunnyTint(name: "Berry", hue: 340, saturation: 1, brightness: 0, swatch: 0xC8466E),
+                BunnyTint(name: "Toffee", hue: 18, saturation: 1, brightness: 0, swatch: 0xC07A4A),
+                BunnyTint(name: "Lemon", hue: 50, saturation: 1.1, brightness: 0.03, swatch: 0xD9B43C),
+                BunnyTint(name: "Mint", hue: 155, saturation: 1, brightness: 0, swatch: 0x45B98C),
+                BunnyTint(name: "Teal", hue: 190, saturation: 1, brightness: 0, swatch: 0x3AA6B8),
+                BunnyTint(name: "Grape", hue: 270, saturation: 1, brightness: 0, swatch: 0x8A5BD6),
+                BunnyTint(name: "Mono", hue: 0, saturation: 0, brightness: 0, swatch: 0x4A4A55),
             ]
         }
     }
 }
 
-enum BunnyFace: String, CaseIterable, Codable, Identifiable {
-    case open, happy, wink, sleepy, love, starry
+// The clothes, each its own layer (with the hue it was painted in).
+enum BunnyPiece: String {
+    case skirt = "BunnySkirt", pinafore = "BunnyPinafore", bloomers = "BunnyBloomers", sailor = "BunnySailor"
+
+    var baseHue: Double {
+        switch self {
+        case .skirt: return 196
+        case .pinafore: return 222
+        case .bloomers: return 29
+        case .sailor: return 252
+        }
+    }
+
+    // How far to turn this piece for an outfit colour.
+    func turn(to tint: BunnyTint) -> Double {
+        guard !tint.hue.isNaN else { return 0 }
+        var d = (tint.hue - baseHue).truncatingRemainder(dividingBy: 360)
+        if d > 180 { d -= 360 }
+        if d < -180 { d += 360 }
+        return d
+    }
+}
+
+enum BunnyTop: String, CaseIterable, Codable, Identifiable {
+    case none, sailor
+    var id: String { rawValue }
+    var label: String { self == .none ? "None" : "Sailor top" }
+    var pieces: [BunnyPiece] { self == .none ? [] : [.sailor] }
+}
+
+enum BunnyBottom: String, CaseIterable, Codable, Identifiable {
+    case none, skirt, pinafore, bloomers, both
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .open: return "Wow"
-        case .happy: return "Happy"
-        case .wink: return "Wink"
-        case .sleepy: return "Sleepy"
-        case .love: return "Love"
-        case .starry: return "Starry"
+        case .none: return "None"
+        case .skirt: return "Skirt"
+        case .pinafore: return "Pinafore"
+        case .bloomers: return "Bloomers"
+        case .both: return "Layered"
         }
     }
-    var icon: String {
+    // Back to front.
+    var pieces: [BunnyPiece] {
         switch self {
-        case .open: return "eyes"
-        case .happy: return "face.smiling"
-        case .wink: return "hand.wave.fill"
-        case .sleepy: return "moon.zzz.fill"
-        case .love: return "heart.fill"
-        case .starry: return "sparkles"
+        case .none: return []
+        case .skirt: return [.skirt]
+        case .pinafore: return [.pinafore]
+        case .bloomers: return [.bloomers]
+        case .both: return [.bloomers, .pinafore]
         }
     }
-    // Eyes that are open blink now and then.
-    var blinks: Bool { self == .open || self == .love || self == .starry || self == .wink }
+}
+
+enum BunnyFace: String, CaseIterable, Codable, Identifiable {
+    case cute, happy, silly, shy, smug, worried, dreamy, meh, grumpy
+    var id: String { rawValue }
+    var label: String { rawValue.capitalized }
+    var image: String { "BunnyFace" + rawValue.capitalized }
+    var eyes: String { image + "Eyes" }
+    // Where the eyes sit (they squeeze shut around this line to blink).
+    var eyeLine: CGFloat {
+        switch self {
+        case .cute: return 0.394
+        case .happy: return 0.374
+        case .silly: return 0.385
+        case .shy: return 0.376
+        case .smug: return 0.376
+        case .worried: return 0.377
+        case .dreamy: return 0.41
+        case .meh: return 0.381
+        case .grumpy: return 0.38
+        }
+    }
+    // Faces with open eyes blink now and then.
+    var blinks: Bool { self != .dreamy && self != .meh }
 }
 
 enum BunnyExtra: String, CaseIterable, Codable, Identifiable {
@@ -164,23 +210,19 @@ enum BunnyScene: String, CaseIterable, Codable, Identifiable {
 
 struct BunnyLook: Codable, Equatable {
     var fur = 0
+    var bowOn = true
     var bow = 0
     var collar = 0
     var outfit = 0
-    var face = BunnyFace.open
+    var top = BunnyTop.sailor
+    var bottom = BunnyBottom.both
+    var face = BunnyFace.cute
     var extra = BunnyExtra.none
     var scene = BunnyScene.candy
 
     func tint(_ part: BunnyPart) -> BunnyTint {
         let list = part.tints
-        let index: Int
-        switch part {
-        case .fur: index = fur
-        case .bow: index = bow
-        case .collar: index = collar
-        case .outfit: index = outfit
-        }
-        return list[max(0, min(list.count - 1, index))]
+        return list[max(0, min(list.count - 1, index(part)))]
     }
 
     func index(_ part: BunnyPart) -> Int {
@@ -204,10 +246,31 @@ struct BunnyLook: Codable, Equatable {
     static func random() -> BunnyLook {
         var look = BunnyLook()
         for part in BunnyPart.allCases { look.set(part, Int.random(in: 0..<part.tints.count)) }
-        look.face = BunnyFace.allCases.randomElement() ?? BunnyFace.open
+        look.bowOn = Int.random(in: 0..<5) > 0
+        look.top = BunnyTop.allCases.randomElement() ?? BunnyTop.sailor
+        look.bottom = BunnyBottom.allCases.randomElement() ?? BunnyBottom.both
+        look.face = BunnyFace.allCases.randomElement() ?? BunnyFace.cute
         look.extra = BunnyExtra.allCases.randomElement() ?? BunnyExtra.none
         look.scene = BunnyScene.allCases.randomElement() ?? BunnyScene.candy
         return look
+    }
+}
+
+extension BunnyLook {
+    // Anything missing or unknown (an older bunny) keeps its default.
+    init(from decoder: Decoder) throws {
+        self.init()
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        fur = (try? c.decodeIfPresent(Int.self, forKey: .fur)) ?? fur
+        bowOn = (try? c.decodeIfPresent(Bool.self, forKey: .bowOn)) ?? bowOn
+        bow = (try? c.decodeIfPresent(Int.self, forKey: .bow)) ?? bow
+        collar = (try? c.decodeIfPresent(Int.self, forKey: .collar)) ?? collar
+        outfit = (try? c.decodeIfPresent(Int.self, forKey: .outfit)) ?? outfit
+        top = (try? c.decodeIfPresent(BunnyTop.self, forKey: .top)) ?? top
+        bottom = (try? c.decodeIfPresent(BunnyBottom.self, forKey: .bottom)) ?? bottom
+        face = (try? c.decodeIfPresent(BunnyFace.self, forKey: .face)) ?? face
+        extra = (try? c.decodeIfPresent(BunnyExtra.self, forKey: .extra)) ?? extra
+        scene = (try? c.decodeIfPresent(BunnyScene.self, forKey: .scene)) ?? scene
     }
 }
 
@@ -247,11 +310,36 @@ final class BunnyStore {
 enum BunnyArt {
     // The artwork's canvas (all layers share it).
     static let aspect: CGFloat = 878.0 / 1210.0
-    // Where the eyes sit, as parts of the canvas.
+    // Roughly where the eyes sit (for the heart specs).
     static let leftEye = CGRect(x: 0.2711, y: 0.3372, width: 0.1834, height: 0.1091)
     static let rightEye = CGRect(x: 0.5456, y: 0.3372, width: 0.1845, height: 0.1091)
     // The outline colour of the drawing.
     static let ink = Color(hex: 0x2A0812)
+}
+
+// One layer of the drawing in a colour.
+struct BunnyLayer: View {
+    let name: String
+    var hue: Double = 0
+    var saturation: Double = 1
+    var brightness: Double = 0
+
+    var body: some View {
+        Image(name).resizable().interpolation(.high)
+            .hueRotation(.degrees(hue))
+            .saturation(saturation)
+            .brightness(brightness)
+    }
+}
+
+extension BunnyLayer {
+    init(_ name: String, _ tint: BunnyTint) {
+        self.init(name: name, hue: tint.hue, saturation: tint.saturation, brightness: tint.brightness)
+    }
+
+    init(_ piece: BunnyPiece, _ tint: BunnyTint) {
+        self.init(name: piece.rawValue, hue: piece.turn(to: tint), saturation: tint.saturation, brightness: tint.brightness)
+    }
 }
 
 // The bunny, standing still. Equatable, so moving her around never redraws
@@ -265,98 +353,28 @@ struct BunnyFigure: View, Equatable {
     }
 
     var body: some View {
+        let outfit = look.tint(.outfit)
         ZStack {
-            if look.extra == .halo { BunnyExtraArt(extra: .halo, behind: true) }
-            layer("BunnyBody", look.tint(.fur))
-            layer("BunnyOutfit", look.tint(.outfit))
-            layer("BunnyCollar", look.tint(.collar))
-            layer("BunnyBow", look.tint(.bow))
-            Image("BunnyLines").resizable().interpolation(.high)
-            eyes
-            BunnyFaceArt(face: look.face, blinking: blinking)
-            if look.extra != .none && look.extra != .halo { BunnyExtraArt(extra: look.extra, behind: false) }
+            if look.extra == .halo { BunnyExtraArt(extra: .halo) }
+            BunnyLayer("BunnyFur", look.tint(.fur))
+            Image("BunnyOutline").resizable().interpolation(.high)
+            ForEach(look.bottom.pieces + look.top.pieces, id: \.self) { piece in
+                BunnyLayer(piece, outfit)
+            }
+            if look.top == .sailor { BunnyLayer("BunnyCollar", look.tint(.collar)) }
+            Image(look.face.image).resizable().interpolation(.high)
+            Image(look.face.eyes).resizable().interpolation(.high)
+                .scaleEffect(x: 1, y: blinking && look.face.blinks ? 0.1 : 1, anchor: UnitPoint(x: 0.5, y: look.face.eyeLine))
+            if look.bowOn { BunnyLayer("BunnyBow", look.tint(.bow)) }
+            if look.extra != .none && look.extra != .halo { BunnyExtraArt(extra: look.extra) }
         }
         .aspectRatio(BunnyArt.aspect, contentMode: .fit)
         .drawingGroup()
         .accessibilityHidden(true)
     }
-
-    private func layer(_ name: String, _ tint: BunnyTint) -> some View {
-        Image(name).resizable().interpolation(.high)
-            .hueRotation(.degrees(tint.hue))
-            .saturation(tint.saturation)
-            .brightness(tint.brightness)
-    }
-
-    // The drawn eyes, where the face keeps them open.
-    @ViewBuilder
-    private var eyes: some View {
-        let showLeft = !blinking && look.face != .happy && look.face != .sleepy
-        let showRight = showLeft && look.face != .wink
-        if showLeft {
-            Image("BunnyEyes").resizable().interpolation(.high)
-                .mask {
-                    GeometryReader { geo in
-                        // The wink keeps only the left eye.
-                        Rectangle().frame(width: showRight ? geo.size.width : geo.size.width * 0.5)
-                    }
-                }
-                .opacity(look.face == .love ? 0 : 1)
-        }
-    }
 }
 
-// Faces drawn over the fur: closed eyes, hearts, sparkles.
-private struct BunnyFaceArt: View {
-    let face: BunnyFace
-    let blinking: Bool
-
-    var body: some View {
-        Canvas { ctx, size in
-            let width = size.width
-            let line = width * 0.026
-            for (i, box) in [BunnyArt.leftEye, BunnyArt.rightEye].enumerated() {
-                let r = CGRect(x: box.minX * size.width, y: box.minY * size.height, width: box.width * size.width, height: box.height * size.height)
-                let center = CGPoint(x: r.midX, y: r.midY)
-                let closed = blinking || face == .sleepy
-                if closed {
-                    stroke(&ctx, Self.closed(r), line)
-                } else if face == .happy || (face == .wink && i == 1) {
-                    stroke(&ctx, Self.arch(r), line)
-                } else if face == .love {
-                    let heart = Self.heart(in: CGRect(x: center.x - r.width * 0.42, y: center.y - r.width * 0.36, width: r.width * 0.84, height: r.width * 0.76))
-                    ctx.fill(heart, with: .color(BunnyArt.ink))
-                    ctx.fill(Path(ellipseIn: CGRect(x: center.x - r.width * 0.24, y: center.y - r.width * 0.2, width: r.width * 0.16, height: r.width * 0.16)), with: .color(.white))
-                } else if face == .starry {
-                    let star = r.width * 0.15
-                    ctx.fill(FourPointStar().path(in: CGRect(x: center.x + r.width * 0.06, y: center.y - r.height * 0.05, width: star * 2, height: star * 2)), with: .color(.white))
-                    ctx.fill(FourPointStar().path(in: CGRect(x: center.x - r.width * 0.3, y: center.y + r.height * 0.08, width: star, height: star)), with: .color(.white.opacity(0.9)))
-                }
-            }
-        }
-        .allowsHitTesting(false)
-    }
-
-    private func stroke(_ ctx: inout GraphicsContext, _ path: Path, _ width: CGFloat) {
-        ctx.stroke(path, with: .color(BunnyArt.ink), style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
-    }
-
-    // ^ : a happy, squeezed-shut eye.
-    static func arch(_ r: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: r.midX - r.width * 0.34, y: r.midY + r.height * 0.18))
-        p.addQuadCurve(to: CGPoint(x: r.midX + r.width * 0.34, y: r.midY + r.height * 0.18), control: CGPoint(x: r.midX, y: r.midY - r.height * 0.62))
-        return p
-    }
-
-    // ‿ : a calm, closed eye.
-    static func closed(_ r: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: r.midX - r.width * 0.34, y: r.midY - r.height * 0.02))
-        p.addQuadCurve(to: CGPoint(x: r.midX + r.width * 0.34, y: r.midY - r.height * 0.02), control: CGPoint(x: r.midX, y: r.midY + r.height * 0.5))
-        return p
-    }
-
+enum BunnyShapes {
     static func heart(in r: CGRect) -> Path {
         var p = Path()
         p.move(to: CGPoint(x: r.midX, y: r.maxY))
@@ -373,7 +391,6 @@ private struct BunnyFaceArt: View {
 // outline, and a white shine.
 private struct BunnyExtraArt: View {
     let extra: BunnyExtra
-    let behind: Bool
 
     var body: some View {
         Canvas { ctx, size in
@@ -414,7 +431,7 @@ private struct BunnyExtraArt: View {
             case .glasses:
                 for box in [BunnyArt.leftEye, BunnyArt.rightEye] {
                     let r = CGRect(x: box.minX * w, y: box.minY * h, width: box.width * w, height: box.height * h)
-                    let heart = BunnyFaceArt.heart(in: CGRect(x: r.midX - r.width * 0.62, y: r.midY - r.width * 0.5, width: r.width * 1.24, height: r.width * 1.06))
+                    let heart = BunnyShapes.heart(in: CGRect(x: r.midX - r.width * 0.62, y: r.midY - r.width * 0.5, width: r.width * 1.24, height: r.width * 1.06))
                     ctx.fill(heart, with: .color(Color(hex: 0xFF5C9A).opacity(0.72)))
                     ctx.stroke(heart, with: .color(BunnyArt.ink), style: StrokeStyle(lineWidth: line * 1.1, lineJoin: .round))
                     ctx.fill(Path(ellipseIn: CGRect(x: r.midX - r.width * 0.36, y: r.midY - r.width * 0.28, width: r.width * 0.2, height: r.width * 0.13)), with: .color(.white.opacity(0.75)))
@@ -569,7 +586,7 @@ struct HeartPuff: View {
                     var c = ctx
                     c.opacity = max(0, 1 - t / 1.1)
                     c.translateBy(x: x + CGFloat(sin(t * 6 + seed)) * 6, y: y)
-                    c.fill(BunnyFaceArt.heart(in: CGRect(x: -r, y: -r, width: r * 2, height: r * 1.8)), with: .color(colors[i % colors.count]))
+                    c.fill(BunnyShapes.heart(in: CGRect(x: -r, y: -r, width: r * 2, height: r * 1.8)), with: .color(colors[i % colors.count]))
                 }
             }
         }
@@ -654,7 +671,7 @@ struct BunnySceneView: View {
                 let y = h + 30 - CGFloat((t * speed + seed * 40).truncatingRemainder(dividingBy: Double(h + 60)))
                 let x = w * CGFloat(0.08 + 0.105 * Double(i)) + CGFloat(sin(t + seed)) * 8
                 let s = w * 0.05
-                ctx.fill(BunnyFaceArt.heart(in: CGRect(x: x, y: y, width: s, height: s * 0.9)), with: .color(.white.opacity(0.55)))
+                ctx.fill(BunnyShapes.heart(in: CGRect(x: x, y: y, width: s, height: s * 0.9)), with: .color(.white.opacity(0.55)))
             }
         case .lilac:
             let band = w / 6

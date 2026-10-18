@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "BunnyFaceHappyEyes.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

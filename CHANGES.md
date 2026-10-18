@@ -1,5 +1,13 @@
 # Changes
 
+## The real bunny, brighter menu and Community (iOS app)
+
+- **Bunny from the artist's layers**: fur, outline, skirt, pinafore, bloomers and sailor top, and nine faces, all on the same 878×1210 canvas. `scripts/bunny-layers.py` now prepares them: it splits the sailor top's collar off by colour (so it keeps its own colour), splits each face into its eyes and the rest (the eyes squeeze shut around their own line to blink; dreamy and meh don't blink), and cuts the bow, with its outline, out of the finished picture (the part the body layers don't explain). Clothes are a top (none / sailor) and a bottom (none / skirt / pinafore / bloomers / layered); an outfit colour turns every piece to the same target hue from the hue it was painted in (`BunnyPiece.turn`). The bow can be switched off. Older saved bunnies keep their colours (`BunnyLook` decodes field by field).
+- **Bunny maker**: faces shown on your bunny's own fur, clothes shown as the pieces themselves in your outfit colour, the collar tab explains it comes with the sailor top.
+- **Menu**: your bunny next to your name (hold her to dress her up), candy stat tiles, Wallet and MimiPlus as two bright cards, and the places as the same candy tiles as Home (`CandyShortcutGrid`, now shared).
+- **Community**: a bright hello card (what's new today, people online, posts today, Share something, your bunny), feed tabs in one bar that always fits (the chosen tab is a candy pill with its name, the others just their coloured icon; the bar used to run off the screen), the empty state under the "start a thread" box, the stories row only when someone posted lately, a quiet dashed admin card for adding challenges, colourful hashtag chips, candy rings on suggestions and stories, likes in berry and saves in lemon.
+- **Create (+)** choices are candy cards with a passing shine; **Chats** starts with the friends who are online now, one tap from a chat.
+
 ## Bunny maker, colour and motion (iOS app)
 
 - **Bunny maker** (`native/Sugerly/Views/Bunny/`): the bunny artwork is cut into layers (fur, outfit, collar, bow, eyes, outlines; `scripts/bunny-layers.py` finds the parts by colour and by the outlines between them, and paints fur under the eyes so faces can be swapped). Each colour layer is recoloured with a hue / saturation / brightness tint, so the drawing's shading and texture stay. Faces (wow, happy, wink, sleepy, love, starry), extras (crown, daisy, star clip, heart specs, halo, sparkles) and scenes (candy, clouds, mint, sunset, night, picnic, with drifting patterns) are drawn on top. The look is kept per account on the phone (`BunnyStore`). Save to Photos, or upload as your profile picture. Reached from a Home tile, a Home invite (until you've made one) and the menu (`Route.bunny`).

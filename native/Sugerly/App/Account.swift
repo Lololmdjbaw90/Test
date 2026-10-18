@@ -1,9 +1,10 @@
 import SwiftUI
 
 // The menu: opens from your picture in the top left corner of every main
-// page. You at the top (profile, level, status, coins), your wallet and
-// MimiPlus, the places that aren't tabs as a tidy list, then Settings and
-// help, and dark mode and Log out at the bottom. Swipe down or tap Done to close it.
+// page. You at the top (your bunny, level, status, coins), your wallet and
+// MimiPlus as two bright cards, the places that aren't tabs as candy tiles,
+// then Settings and help, and dark mode and Log out at the bottom. Swipe down
+// or tap Done to close it.
 struct AccountView: View {
     // Closes the menu and opens a page on the tab you're on.
     var go: (Route) -> Void
@@ -16,25 +17,17 @@ struct AccountView: View {
     @State private var status = false
     @State private var confirmLogout = false
     @State private var shown = false
-
-    private struct Place: Identifiable {
-        let title: String
-        let detail: String
-        let icon: String
-        var tone: Tone = .accent
-        let action: () -> Void
-        var id: String { title }
-    }
+    @State private var bunny = BunnyStore.shared
 
     // The places that aren't tabs.
-    private var places: [Place] {
+    private var places: [CandyShortcutGrid.Item] {
         [
-            Place(title: "Music", detail: "Songs from the community", icon: "music.note") { go(.music) },
-            Place(title: "Servers", detail: "Group chats with channels and voice", icon: "bubble.left.and.bubble.right.fill") { go(.servers) },
-            Place(title: "People", detail: "Find friends and artists", icon: "person.2.fill") { go(.people) },
-            Place(title: "Top artists", detail: "This week's most loved", icon: "crown.fill", tone: .gold) { go(.topArtists) },
-            Place(title: "Commissions", detail: "Order art or sell yours", icon: "paintbrush.pointed.fill") { go(.commissions) },
-            Place(title: "Bunny maker", detail: "Dress up your own bunny", icon: "hare.fill") { go(.bunny) },
+            .init(title: "Music", icon: "music.note", candy: .sky, route: .music),
+            .init(title: "Servers", icon: "bubble.left.and.bubble.right.fill", candy: .mint, route: .servers),
+            .init(title: "People", icon: "person.2.fill", candy: .grape, route: .people),
+            .init(title: "Top artists", icon: "crown.fill", candy: .lemon, route: .topArtists),
+            .init(title: "Commissions", icon: "paintbrush.pointed.fill", candy: .peach, route: .commissions),
+            .init(title: "Bunny", icon: "hare.fill", candy: .berry, route: .bunny),
         ]
     }
 
@@ -149,22 +142,40 @@ struct AccountView: View {
         let info = LevelInfo(xp: me.xp)
         let presence = Presence(rawValue: me.presence) ?? .online
         return VStack(spacing: 14) {
-            profileButton(me, info, presence)
+            HStack(alignment: .top, spacing: 8) {
+                profileButton(me, info, presence)
+                // Your bunny says hi (tap her; hold to dress her up).
+                BunnyBuddy(look: bunny.look, height: 92)
+                    .padding(.top, -12)
+                    .padding(.trailing, -4)
+                    .onLongPressGesture { go(.bunny) }
+            }
             XPBar(info: info)
             statusButton(me, presence)
             HStack(spacing: 8) {
                 Button { wallet = true } label: {
-                    stat("\(me.coins)", "Coins", "circle.hexagongrid.fill", Palette.gold)
+                    stat("\(me.coins)", "Coins", "circle.hexagongrid.fill", .lemon)
                 }
                 .buttonStyle(SoftPressStyle())
-                stat("\(me.dailyStreak)", "Day streak", "flame.fill", Palette.gold)
-                stat("\(me.following.count)", "Following", "heart.fill", Theme.main)
+                stat("\(me.dailyStreak)", "Day streak", "flame.fill", .peach)
+                stat("\(me.following.count)", "Following", "heart.fill", .berry)
             }
         }
-        .pastelCard(radius: 24, padding: 16)
+        .pastelCard(radius: 26, padding: 16)
+        .overlay {
+            SparkleEmitter(colors: [.white, UIColor(Theme.main), UIColor(hex: 0xFFC53D)], rate: 1)
+                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                .opacity(0.8)
+                .allowsHitTesting(false)
+        }
+        .overlay {
+            ShineSweep(every: 6, strength: 0.28)
+                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        }
         .opacity(shown || reduceMotion ? 1 : 0)
         .scaleEffect(shown || reduceMotion ? 1 : 0.96, anchor: .top)
         .animation(reduceMotion ? nil : Motion.settle, value: shown)
+        .onAppear { bunny.use(me.email) }
     }
 
     private func profileButton(_ me: UserProfile, _ info: LevelInfo, _ presence: Presence) -> some View {
@@ -175,17 +186,21 @@ struct AccountView: View {
                     Text(me.displayName)
                         .font(.display(26)).foregroundStyle(Palette.text)
                         .lineLimit(1).minimumScaleFactor(0.7)
-                    Text("Lv. \(info.level) · \(info.title)")
-                        .font(.jakarta(12, .heavy)).foregroundStyle(info.color)
-                        .padding(.horizontal, 9).padding(.vertical, 4)
-                        .background(Palette.surface.opacity(0.8), in: Capsule())
+                    HStack(spacing: 6) {
+                        Text("Lv. \(info.level) · \(info.title)")
+                            .font(.jakarta(12, .heavy)).foregroundStyle(info.color)
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                            .padding(.horizontal, 9).padding(.vertical, 4)
+                            .background(Palette.surface.opacity(0.85), in: Capsule())
+                        HStack(spacing: 2) {
+                            Text("Profile")
+                            Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold))
+                        }
+                        .font(.jakarta(12, .bold)).foregroundStyle(Theme.main)
+                        .lineLimit(1)
+                    }
                 }
-                Spacer(minLength: 6)
-                HStack(spacing: 3) {
-                    Text("Profile").font(.jakarta(13, .bold))
-                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold))
-                }
-                .foregroundStyle(Theme.main)
+                Spacer(minLength: 0)
             }
             .contentShape(Rectangle())
         }
@@ -217,54 +232,81 @@ struct AccountView: View {
         .accessibilityValue(me.activeStatus.isEmpty ? presence.label : me.activeStatus)
     }
 
-    private func stat(_ value: String, _ label: String, _ icon: String, _ color: Color) -> some View {
-        VStack(spacing: 3) {
-            HStack(spacing: 4) {
-                Image(systemName: icon).font(.system(size: 11, weight: .bold)).foregroundStyle(color)
+    private func stat(_ value: String, _ label: String, _ icon: String, _ candy: Candy) -> some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 6) {
+                CandyTile(icon: icon, candy: candy, size: 22)
                 Text(value).font(.jakarta(16, .heavy)).foregroundStyle(Palette.text).lineLimit(1).minimumScaleFactor(0.7)
+                    .contentTransition(.numericText())
             }
-            Text(label).font(.jakarta(11, .semibold)).foregroundStyle(Palette.muted).lineLimit(1)
+            Text(label).font(.jakarta(11, .semibold)).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
-        .background(Palette.surface.opacity(0.72), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(Palette.surface.opacity(0.78), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.rim(0.6), lineWidth: 1))
         .accessibilityElement(children: .combine)
     }
 
     // MARK: places
 
-    // The places that aren't tabs, as a tidy list.
+    // The places that aren't tabs, as candy tiles (like Home).
     private var placesGrid: some View {
-        card("EXPLORE") {
-            ForEach(Array(places.enumerated()), id: \.element.id) { i, place in
-                if i > 0 { divider }
-                Button(action: place.action) {
-                    HStack(spacing: 8) {
-                        IconRow(title: place.title, detail: place.detail, icon: place.icon, tone: place.tone)
-                        chevron
-                    }
-                    .padding(.horizontal, 14).padding(.vertical, 9)
-                }
-                .buttonStyle(RowPressStyle())
-                .accessibilityLabel(place.title)
-            }
+        VStack(alignment: .leading, spacing: 10) {
+            ListHeader(title: "EXPLORE").padding(.leading, 6)
+            CandyShortcutGrid(items: places, shown: shown) { route in go(route) }
         }
         .opacity(shown || reduceMotion ? 1 : 0)
         .offset(y: shown || reduceMotion ? 0 : 12)
         .animation(reduceMotion ? nil : Motion.enter.delay(0.06), value: shown)
     }
 
-    // Coins and MimiPlus together, with what they are in plain words.
+    // Coins and MimiPlus as two bright cards side by side.
     private var walletCard: some View {
-        card("COINS & MIMIPLUS") {
-            row("Wallet", "\(model.me?.coins ?? 0) coins · how to earn more", "circle.hexagongrid.fill", .gold) { wallet = true }
-            divider
-            row("MimiPlus", model.me?.isNitro == true ? "Active · extra looks for your profile" : "Extra looks for your profile, paid with coins", "sparkles") { shop = true }
+        HStack(spacing: 10) {
+            Button { wallet = true } label: {
+                brightCard(.lemon, icon: "circle.hexagongrid.fill", title: "Wallet", value: "\(model.me?.coins ?? 0) coins")
+            }
+            .buttonStyle(BouncyStyle(scale: 0.95))
+            .accessibilityLabel("Wallet, \(model.me?.coins ?? 0) coins")
+            Button { shop = true } label: {
+                brightCard(.grape, icon: "sparkles", title: "MimiPlus", value: model.me?.isNitro == true ? "Active" : "Extra looks")
+            }
+            .buttonStyle(BouncyStyle(scale: 0.95))
+            .accessibilityLabel("MimiPlus")
         }
         .opacity(shown || reduceMotion ? 1 : 0)
         .offset(y: shown || reduceMotion ? 0 : 12)
-        .animation(reduceMotion ? nil : Motion.enter.delay(0.1), value: shown)
+        .animation(reduceMotion ? nil : Motion.enter.delay(0.03), value: shown)
+    }
+
+    private func brightCard(_ candy: Candy, icon: String, title: String, value: String) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+        return HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
+                .frame(width: 38, height: 38)
+                .background(.white.opacity(0.24), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.jakarta(15, .bold)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.8)
+                Text(value).font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.88)).lineLimit(1).minimumScaleFactor(0.75)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 66)
+        .background {
+            shape.fill(candy.gradient)
+                .overlay {
+                    GeometryReader { geo in
+                        Circle().fill(.white.opacity(0.16)).frame(width: geo.size.height * 1.4)
+                            .offset(x: geo.size.width * 0.62, y: -geo.size.height * 0.3)
+                    }
+                    .clipShape(shape)
+                }
+                .overlay { ShineSweep(every: 5, strength: 0.3).clipShape(shape) }
+                .shadow(color: candy.color.softGlow(0.35), radius: 8, y: 4)
+        }
     }
 
     // MARK: lists

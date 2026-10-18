@@ -306,6 +306,13 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-3.4", icon: "wand.and.stars", title: "The real bunny, a brighter menu and Community", date: "2026-10-18T10:00:00Z", items: [
+            "Your bunny is now drawn from the artist's own layers: crisp outlines, nine faces (cute, happy, silly, shy, smug, worried, dreamy, meh, grumpy) that blink, and clothes you mix and match: a sailor top, a skirt, a pinafore, bloomers, or both layered.",
+            "The bow can come off, and every piece of clothing changes colour together.",
+            "A brighter menu: your bunny says hi next to your name, your wallet and MimiPlus are colourful cards, and places are big candy tiles.",
+            "Community has a bright hello card with who's online and how many posts there were today, feed tabs that always fit the screen (the chosen one shows its name), colourful hashtags, and likes and saves in colour.",
+            "The + menu's choices are bright candy cards, and Chats shows the friends who are online right now.",
+        ]),
         AppRelease(id: "ios-3.3", icon: "hare.fill", title: "Your own bunny, and a livelier app", date: "2026-10-18T02:00:00Z", items: [
             "Bunny maker: dress up your own bunny. Pick her fur, bow, collar and outfit colours, her face (wink, sleepy, love eyes…), a little extra (crown, daisy, heart specs, halo…) and a scene. Save her to Photos or make her your profile picture.",
             "Your bunny lives on Home: she bobs, blinks, and jumps with a puff of hearts when you tap her. Hold her to dress her up.",

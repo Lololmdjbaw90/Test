@@ -490,10 +490,21 @@ struct WeeklyChallengeCard: View {
             if let c = DailyContent.challenge {
                 card(c)
             } else if model.me?.isAdmin == true {
+                // Only admins see this: a quiet dashed card, not a big button.
                 Button { editing = true } label: {
-                    Label("Add weekly challenges", systemImage: "plus.circle.fill").font(.jakarta(14, .bold)).foregroundStyle(Theme.main)
-                        .frame(maxWidth: .infinity).frame(height: 50)
-                        .background(Theme.soft, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    HStack(spacing: 10) {
+                        CandyTile(icon: "flag.checkered", candy: .peach, size: 32)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Add a weekly challenge").font(.jakarta(14, .bold)).foregroundStyle(Palette.text)
+                            Text("Only admins see this").font(.jakarta(11, .medium)).foregroundStyle(Palette.muted)
+                        }
+                        .lineLimit(1)
+                        Spacer(minLength: 0)
+                        Image(systemName: "plus").font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.main)
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .background(Palette.surface.opacity(0.7), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.main.opacity(0.35), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5])))
                 }
                 .buttonStyle(BouncyStyle(scale: 0.97))
             }

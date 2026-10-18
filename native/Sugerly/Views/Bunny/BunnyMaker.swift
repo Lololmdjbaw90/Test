@@ -18,7 +18,7 @@ struct BunnyMakerView: View {
     @State private var shuffles = 0
 
     enum Tab: String, CaseIterable, Identifiable {
-        case fur, bow, collar, outfit, face, extras, scene
+        case fur, face, outfit, bow, collar, extras, scene
         var id: String { rawValue }
         var label: String { rawValue.capitalized }
         var icon: String {
@@ -48,7 +48,6 @@ struct BunnyMakerView: View {
             case .fur: return .fur
             case .bow: return .bow
             case .collar: return .collar
-            case .outfit: return .outfit
             default: return nil
             }
         }
@@ -162,12 +161,24 @@ struct BunnyMakerView: View {
 
     @ViewBuilder
     private var choices: some View {
-        if let part = tab.part {
+        if tab == .bow {
+            VStack(spacing: 12) {
+                Toggle(isOn: Binding(get: { look.bowOn }, set: { on in withAnimation(Motion.playful) { look.bowOn = on } })) {
+                    Text("Wear a bow").font(.jakarta(15, .semibold)).foregroundStyle(Palette.text)
+                }
+                .tint(Theme.main)
+                .padding(.horizontal, 16).padding(.vertical, 10)
+                .sugarCard(radius: 18)
+                if look.bowOn { swatches(.bow).transition(.opacity.combined(with: .scale(scale: 0.96))) }
+            }
+        } else if tab == .collar && look.top != .sailor {
+            EmptyCard(icon: "tshirt.fill", title: "No collar", text: "The collar comes with the sailor top. Pick it under Outfit.", compact: true)
+        } else if let part = tab.part {
             swatches(part)
         } else if tab == .face {
-            tiles(BunnyFace.allCases.map { ($0.id, $0.label, $0.icon) }, selected: look.face.id) { id in
-                if let face = BunnyFace(rawValue: id) { look.face = face }
-            }
+            faces
+        } else if tab == .outfit {
+            outfits
         } else if tab == .extras {
             tiles(BunnyExtra.allCases.map { ($0.id, $0.label, $0.icon) }, selected: look.extra.id) { id in
                 if let extra = BunnyExtra(rawValue: id) { look.extra = extra }
@@ -175,6 +186,99 @@ struct BunnyMakerView: View {
         } else {
             scenes
         }
+    }
+
+    // Each face shown on your bunny's own fur.
+    private var faces: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 12) {
+            ForEach(Array(BunnyFace.allCases.enumerated()), id: \.element.id) { i, face in
+                let on = look.face == face
+                Button {
+                    withAnimation(Motion.playful) { look.face = face }
+                } label: {
+                    VStack(spacing: 6) {
+                        ZStack {
+                            BunnyLayer("BunnyFur", look.tint(.fur))
+                            Image(face.image).resizable()
+                            Image(face.eyes).resizable()
+                        }
+                        .aspectRatio(BunnyArt.aspect, contentMode: .fit)
+                        .scaleEffect(2.6, anchor: UnitPoint(x: 0.5, y: 0.42))
+                        .frame(width: 78, height: 78)
+                        .clipShape(Circle())
+                        .overlay(Circle().strokeBorder(on ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.border), lineWidth: on ? 3 : 1))
+                        .scaleEffect(on ? 1.06 : 1)
+                        .shadow(color: on ? Theme.glow(0.3) : .clear, radius: 8, y: 3)
+                        Text(face.label).font(.jakarta(12, on ? .bold : .medium))
+                            .foregroundStyle(on ? Palette.text : Palette.text2).lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(BouncyStyle(scale: 0.9))
+                .accessibilityLabel("Face: \(face.label)")
+                .accessibilityAddTraits(on ? .isSelected : [])
+                .modifier(ChoicePop(index: i))
+            }
+        }
+        .padding(14)
+        .sugarCard(radius: 24)
+    }
+
+    // Top and bottom, each shown as the piece itself, then the colour.
+    private var outfits: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ListHeader(title: "TOP").padding(.leading, 6)
+            HStack(spacing: 10) {
+                ForEach(Array(BunnyTop.allCases.enumerated()), id: \.element.id) { i, top in
+                    clothes(top.label, pieces: top.pieces, on: look.top == top, index: i) { look.top = top }
+                }
+            }
+            ListHeader(title: "BOTTOM").padding(.leading, 6)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+                ForEach(Array(BunnyBottom.allCases.enumerated()), id: \.element.id) { i, bottom in
+                    clothes(bottom.label, pieces: bottom.pieces, on: look.bottom == bottom, index: i + 2) { look.bottom = bottom }
+                }
+            }
+            if look.top != .none || look.bottom != .none {
+                ListHeader(title: "COLOUR").padding(.leading, 6)
+                swatches(.outfit)
+            }
+        }
+    }
+
+    private func clothes(_ title: String, pieces: [BunnyPiece], on: Bool, index: Int, pick: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(Motion.playful) { pick() }
+        } label: {
+            VStack(spacing: 6) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous).fill(on ? Theme.soft : Palette.surface2)
+                    if pieces.isEmpty {
+                        Image(systemName: "circle.slash").font(.system(size: 22, weight: .semibold)).foregroundStyle(Palette.muted)
+                    } else {
+                        ZStack {
+                            ForEach(pieces, id: \.self) { piece in BunnyLayer(piece, look.tint(.outfit)) }
+                            if pieces.contains(.sailor) { BunnyLayer("BunnyCollar", look.tint(.collar)) }
+                        }
+                        .aspectRatio(BunnyArt.aspect, contentMode: .fit)
+                        .scaleEffect(2.4, anchor: UnitPoint(x: 0.5, y: 0.68))
+                    }
+                }
+                .frame(height: 84)
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(on ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.border), lineWidth: on ? 3 : 1))
+                .scaleEffect(on ? 1.03 : 1)
+                Text(title).font(.jakarta(12, on ? .bold : .medium))
+                    .foregroundStyle(on ? Palette.text : Palette.text2).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(BouncyStyle(scale: 0.93))
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(on ? .isSelected : [])
+        .modifier(ChoicePop(index: index))
     }
 
     private func swatches(_ part: BunnyPart) -> some View {

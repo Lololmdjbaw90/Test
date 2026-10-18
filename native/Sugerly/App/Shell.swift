@@ -746,10 +746,10 @@ struct CreateSheet: View {
                 }
                 .padding(.top, 22)
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                    tile(0, .reel, "Reel", "Film or pick a video", "video.fill")
-                    tile(1, .artwork, "Fan art", "Hang a drawing on the wall", "paintpalette.fill")
-                    tile(2, .post, "Post", "Share with the community", "text.bubble.fill")
-                    tile(3, .track, "Track", "Share your music", "music.note")
+                    tile(0, .reel, "Reel", "Film or pick a video", "video.fill", .peach)
+                    tile(1, .artwork, "Fan art", "Hang a drawing on the wall", "paintpalette.fill", .grape)
+                    tile(2, .post, "Post", "Share with the community", "text.bubble.fill", .berry)
+                    tile(3, .track, "Track", "Share your music", "music.note", .sky)
                 }
             }
             .padding(.horizontal, 20)
@@ -761,31 +761,45 @@ struct CreateSheet: View {
         .onAppear { shown = true }
     }
 
-    // The four tiles pop in one after another.
-    private func tile(_ index: Int, _ kind: Composer, _ title: String, _ sub: String, _ icon: String) -> some View {
+    // The four tiles pop in one after another, each a bright candy card.
+    private func tile(_ index: Int, _ kind: Composer, _ title: String, _ sub: String, _ icon: String, _ candy: Candy) -> some View {
         let visible = shown || reduceMotion
+        let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
         return Button { onPick(kind) } label: {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 12) {
                 Image(systemName: icon)
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(width: 50, height: 50)
-                    .background(Theme.candy, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .shadow(color: Theme.glow(0.3), radius: 10, y: 5)
+                    .background(.white.opacity(0.24), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.jakarta(16, .heavy)).foregroundStyle(Palette.text)
-                    Text(sub).font(.jakarta(12, .medium)).foregroundStyle(Palette.muted)
+                    Text(title).font(.jakarta(17, .heavy)).foregroundStyle(.white)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                    Text(sub).font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.9))
                         .lineLimit(2, reservesSpace: true)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .sugarCard(radius: 24, padding: 16)
+            .padding(16)
+            .background {
+                shape.fill(candy.gradient)
+                    .overlay {
+                        GeometryReader { geo in
+                            Circle().fill(.white.opacity(0.15)).frame(width: geo.size.width * 0.8)
+                                .offset(x: geo.size.width * 0.5, y: -geo.size.width * 0.3)
+                        }
+                        .clipShape(shape)
+                    }
+                    .overlay(shape.fill(LinearGradient(colors: [Palette.rim(0.35), .clear], startPoint: .top, endPoint: .center)).padding(1))
+                    .overlay { ShineSweep(every: 4 + Double(index) * 0.7, strength: 0.3).clipShape(shape) }
+                    .shadow(color: candy.color.softGlow(0.35), radius: 10, y: 5)
+            }
         }
         .buttonStyle(BouncyStyle(scale: 0.95))
-        .scaleEffect(visible ? 1 : 0.92)
+        .scaleEffect(visible ? 1 : 0.85)
         .opacity(visible ? 1 : 0)
-        .animation(reduceMotion ? nil : Motion.enter.delay(0.03 + Double(index) * Motion.staggerStep), value: shown)
+        .animation(reduceMotion ? nil : Motion.playful.delay(0.05 + Double(index) * 0.06), value: shown)
         .accessibilityLabel(title)
         .accessibilityHint(sub)
     }

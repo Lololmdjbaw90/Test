@@ -142,6 +142,15 @@ struct CommunityView: View {
             case .saved: return "bookmark.fill"
             }
         }
+        var candy: Candy {
+            switch self {
+            case .forYou: return .berry
+            case .following: return .grape
+            case .latest: return .sky
+            case .top: return .peach
+            case .saved: return .lemon
+            }
+        }
     }
 
     @Binding var path: [Route]
@@ -156,6 +165,7 @@ struct CommunityView: View {
     @State private var appeared = false
     // How much you like each #tag (learned from reels, posts and drawings).
     @State private var taste: [String: Double] = [:]
+    @State private var bunny = BunnyStore.shared
     @Namespace private var feedPill
 
     private var visible: [Post] {
@@ -226,15 +236,7 @@ struct CommunityView: View {
 
     private var creatorsRow: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label("Top creators this week", systemImage: "crown.fill").font(.jakarta(16, .semibold)).foregroundStyle(Palette.text)
-                    .labelStyle(TintedIconLabel(tint: Palette.gold))
-                Spacer()
-                Button { path.append(.topArtists) } label: {
-                    HStack(spacing: 3) { Text("See all"); Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)) }
-                        .font(.jakarta(13, .medium)).foregroundStyle(Theme.main)
-                }
-            }
+            SectionHeader(icon: "crown.fill", title: "Top creators") { path.append(.topArtists) }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
                     ForEach(Array(topCreators.enumerated()), id: \.element.0) { i, entry in
@@ -281,11 +283,8 @@ struct CommunityView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 14, pinnedViews: [.sectionHeaders]) {
-                Text("Little updates. Long conversations.")
-                    .font(.jakarta(13, .medium)).foregroundStyle(Palette.muted)
-                    .padding(.horizontal, 4)
-                    .stagger(appeared, 0)
-                stories.stagger(appeared, 1)
+                hero.stagger(appeared, 0)
+                if !storyPeople.isEmpty { stories.stagger(appeared, 1) }
                 WeeklyChallengeCard(posts: store.posts, active: tag != nil && tag == DailyContent.challenge?.tag, compose: compose) { t in
                     withAnimation(Motion.pick(.snappy(duration: 0.3))) { tag = tag == t ? nil : t }
                 }
@@ -296,11 +295,6 @@ struct CommunityView: View {
 
                     if store.loading && store.posts.isEmpty {
                         ForEach(0..<3, id: \.self) { i in SkeletonCard(media: i != 1) }
-                    } else if visible.isEmpty {
-                        EmptyCard(icon: feed == .saved ? "bookmark.fill" : "photo.on.rectangle.angled",
-                                  title: feed == .saved ? "No saved posts" : feed == .following ? "It's quiet over here" : "Nothing here yet",
-                                  text: feed == .saved ? "Tap the bookmark on a post and it'll wait for you here." : feed == .following ? "The people you follow haven't posted yet. Follow a few more artists?" : "No posts yet. Yours could be the first!",
-                                  actionTitle: feed == .saved ? nil : "Share a post", action: feed == .saved ? nil : compose)
                     }
 
                     // One sheet of conversation: a slim composer on top, then
@@ -327,6 +321,15 @@ struct CommunityView: View {
                     .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
                     .id(feed.rawValue + (tag ?? ""))
                     .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 14)), removal: .opacity.animation(Motion.exit)))
+
+                    // Nothing in this feed: say so under the "start a thread" box.
+                    if visible.isEmpty && !(store.loading && store.posts.isEmpty) {
+                        EmptyCard(icon: feed == .saved ? "bookmark.fill" : "photo.on.rectangle.angled",
+                                  title: feed == .saved ? "No saved posts" : feed == .following ? "It's quiet over here" : "Nothing here yet",
+                                  text: feed == .saved ? "Tap the bookmark on a post and it'll wait for you here." : feed == .following ? "The people you follow haven't posted yet. Follow a few more artists?" : "No posts yet. Yours could be the first!",
+                                  actionTitle: feed == .saved ? nil : "Share a post", action: feed == .saved ? nil : compose, compact: true)
+                            .transition(.opacity)
+                    }
                 } header: {
                     feedBar
                 }
@@ -362,6 +365,63 @@ struct CommunityView: View {
         .onAppear { appeared = true }
     }
 
+    private var onlineCount: Int { model.people.values.filter(\.isOnline).count }
+
+    private var postsToday: Int {
+        let start = Dates.iso(Calendar.current.startOfDay(for: Date()))
+        return store.posts.filter { $0.created >= start }.count
+    }
+
+    // A bright hello at the top: what Community is, who's around, a button
+    // to share, and your bunny.
+    private var hero: some View {
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("What's new today").font(.display(25)).foregroundStyle(Palette.text)
+                    .lineLimit(1).minimumScaleFactor(0.75)
+                Text("Little updates. Long conversations.")
+                    .font(.jakarta(13, .medium)).foregroundStyle(Palette.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 6) {
+                    heroPill(icon: "circle.fill", text: "\(onlineCount) online", tint: Palette.success)
+                    heroPill(icon: "flame.fill", text: "\(postsToday) today", tint: Palette.warning)
+                }
+                Button(action: compose) {
+                    Label("Share something", systemImage: "square.and.pencil")
+                }
+                .buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
+                .padding(.top, 2)
+            }
+            Spacer(minLength: 0)
+            BunnyBuddy(look: bunny.look, height: 112)
+                .onLongPressGesture { path.append(.bunny) }
+        }
+        .pastelCard(radius: 26, padding: 16)
+        .overlay {
+            SparkleEmitter(colors: [.white, UIColor(Theme.main), UIColor(hex: 0xFFC53D)], rate: 1)
+                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                .opacity(0.8)
+                .allowsHitTesting(false)
+        }
+        .overlay {
+            ShineSweep(every: 6, strength: 0.28)
+                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        }
+        .onAppear { bunny.use(model.me?.email ?? "") }
+    }
+
+    private func heroPill(icon: String, text: String, tint: Color) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon).font(.system(size: 8, weight: .bold)).foregroundStyle(tint)
+            Text(text).font(.jakarta(12, .semibold)).foregroundStyle(Palette.text2)
+                .contentTransition(.numericText())
+        }
+        .lineLimit(1)
+        .padding(.horizontal, 10).frame(height: 26)
+        .background(Palette.surface.opacity(0.8), in: Capsule())
+        .overlay(Capsule().strokeBorder(Palette.rim(0.6), lineWidth: 1))
+    }
+
     // "Start a thread…" at the top of the feed, like a social app.
     private var startThread: some View {
         Button(action: compose) {
@@ -386,39 +446,54 @@ struct CommunityView: View {
         .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1).allowsHitTesting(false) }
     }
 
-    // Feed tabs as soft pills; the chosen one slides over.
+    // Feed tabs in one bar that always fits the screen: the chosen one is a
+    // candy pill with its name, the others show just their icon (each in its
+    // own colour). The pill slides over to the one you tap.
     private var feedBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(Feed.allCases, id: \.self) { f in
-                    let on = feed == f
-                    Button {
-                        guard feed != f else { return }
-                        withAnimation(Motion.pick(.snappy(duration: 0.32))) { feed = f }
-                    } label: {
-                        Label(f.rawValue, systemImage: f.icon)
-                            .font(.jakarta(13, on ? .bold : .semibold))
-                            .foregroundStyle(on ? .white : Palette.text2)
-                            .padding(.horizontal, 14).frame(height: 36)
-                            .background {
-                                if on {
-                                    Capsule().fill(Theme.candy)
-                                        .shadow(color: Theme.glow(0.25), radius: 5, y: 2)
-                                        .matchedGeometryEffect(id: "feed", in: feedPill)
-                                }
-                            }
-                            .contentShape(Capsule())
+        HStack(spacing: 4) {
+            ForEach(Feed.allCases, id: \.self) { f in
+                let on = feed == f
+                Button {
+                    guard feed != f else { return }
+                    withAnimation(Motion.pick(.snappy(duration: 0.32))) { feed = f }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: f.icon)
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(on ? Color.white : f.candy.color)
+                            .symbolEffect(.bounce, value: on)
+                        if on {
+                            Text(f.rawValue)
+                                .font(.jakarta(13, .bold))
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                                .fixedSize()
+                                .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .leading)))
+                        }
                     }
-                    .buttonStyle(BouncyStyle(scale: 0.94))
+                    .padding(.horizontal, on ? 14 : 0)
+                    .frame(maxWidth: on ? nil : .infinity)
+                    .frame(height: 38)
+                    .background {
+                        if on {
+                            Capsule().fill(f.candy.gradient)
+                                .shadow(color: f.candy.color.softGlow(0.3), radius: 5, y: 2)
+                                .matchedGeometryEffect(id: "feed", in: feedPill)
+                        }
+                    }
+                    .contentShape(Capsule())
                 }
+                .buttonStyle(BouncyStyle(scale: 0.94))
+                .accessibilityLabel(f.rawValue)
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
-            .padding(4)
-            .background(Palette.surface, in: Capsule())
-            .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
-            .sensoryFeedback(.selection, trigger: feed)
-            .padding(.vertical, 8)
         }
-        .scrollClipDisabled()
+        .padding(4)
+        .background(Palette.surface, in: Capsule())
+        .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
+        .shadow(color: Palette.shadow, radius: 8, y: 3)
+        .sensoryFeedback(.selection, trigger: feed)
+        .padding(.vertical, 8)
         // When it sticks to the top, its strip reaches the screen edges so
         // posts don't peek out beside it.
         .background { Rectangle().fill(Palette.bg.opacity(0.97)).padding(.horizontal, -14) }
@@ -427,11 +502,12 @@ struct CommunityView: View {
     private var trendingRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                Image(systemName: "number").font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.main)
-                    .frame(width: 34, height: 34).background(Palette.blush, in: Circle())
+                CandyTile(icon: "number", candy: .berry, size: 34)
                 // The challenge filter that's on (tap to clear it).
                 if let tag { tagChip(tag) }
-                ForEach(trending.filter { $0 != tag }, id: \.self) { t in trendChip(t) }
+                ForEach(Array(trending.filter { $0 != tag }.enumerated()), id: \.element) { i, t in
+                    trendChip(t, candy: Candy.allCases[i % Candy.allCases.count])
+                }
             }
             .padding(.horizontal, 2)
             .padding(.vertical, 2)
@@ -440,12 +516,12 @@ struct CommunityView: View {
 
     // A trending tag: opens its page, with every post, reel, drawing and
     // song that has it.
-    private func trendChip(_ t: String) -> some View {
+    private func trendChip(_ t: String, candy: Candy) -> some View {
         Button { path.append(.hashtag(t)) } label: {
-            Text("#\(t)").font(.jakarta(13, .semibold))
-                .foregroundStyle(Palette.text2)
+            Text("#\(t)").font(.jakarta(13, .bold))
+                .foregroundStyle(candy.color)
                 .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 14).frame(height: 34)
-                .background(Capsule().fill(Palette.surface).overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1)))
+                .background(Capsule().fill(candy.soft).overlay(Capsule().strokeBorder(candy.color.opacity(0.25), lineWidth: 1)))
         }
         .buttonStyle(BouncyStyle(scale: 0.92))
         .accessibilityHint("Shows everything tagged #\(t)")
@@ -496,7 +572,7 @@ struct CommunityView: View {
                             // A ring in the palette for people who posted lately.
                             Avatar(url: person?.picture ?? "", name: person?.displayName ?? email, size: 58, online: person?.isOnline ?? false)
                                 .padding(3)
-                                .overlay(Circle().strokeBorder(AngularGradient(colors: [Theme.main, Theme.light, Palette.cream, Theme.light, Theme.main], center: .center), lineWidth: 2.5))
+                                .overlay(Circle().strokeBorder(AngularGradient(colors: [Theme.main, Theme.partner, Candy.peach.color, Candy.lemon.color, Theme.main], center: .center), lineWidth: 3))
                             Text(person?.displayName ?? "").font(.jakarta(12, .semibold)).foregroundStyle(Palette.text).lineLimit(1).frame(width: 70)
                         }
                     }
@@ -513,17 +589,16 @@ struct CommunityView: View {
 
     private var suggested: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("Suggested for you").font(.display(20)).foregroundStyle(Palette.text)
-                Spacer()
-                Button("See all") { path.append(.people) }.font(.jakarta(14, .medium)).foregroundStyle(Theme.main)
-            }
+            SectionHeader(icon: "person.crop.circle.badge.plus", title: "Suggested for you") { path.append(.people) }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    ForEach(suggestions) { person in
+                    ForEach(Array(suggestions.enumerated()), id: \.element.id) { i, person in
+                        let candy = Candy.allCases[i % Candy.allCases.count]
                         let reason = person.following.contains(model.me?.email ?? "") ? "Follows you" : person.isOnline ? "Recently active" : "New on Sugerly"
                         VStack(spacing: 6) {
                             Avatar(url: person.picture, name: person.displayName, size: 76, online: person.isOnline)
+                                .padding(3)
+                                .overlay(Circle().strokeBorder(candy.gradient, lineWidth: 3))
                                 .padding(.top, 6)
                             Text(person.displayName).font(.jakarta(15, .semibold)).foregroundStyle(Palette.text).lineLimit(1)
                             Text(reason).font(.jakarta(13)).foregroundStyle(Palette.muted)
@@ -532,7 +607,8 @@ struct CommunityView: View {
                         }
                         .frame(width: 150)
                         .padding(.vertical, 16)
-                        .background(LinearGradient(colors: [Palette.blush.opacity(0.6), Palette.cream.opacity(0.7)], startPoint: .top, endPoint: .bottom), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .background(LinearGradient(colors: [candy.soft, Palette.surface], startPoint: .top, endPoint: .bottom), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(candy.color.opacity(0.2), lineWidth: 1))
                         .overlay(alignment: .topTrailing) {
                             Button { withMotion(Motion.standard) { _ = dismissed.insert(person.email) } } label: {
                                 Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.muted).frame(width: 34, height: 34)
@@ -746,7 +822,7 @@ struct PostCard: View {
                         if !liked { burstLike() }
                         store.toggleLike(post, me: model.me)
                     } label: {
-                        iconCount(liked ? "heart.fill" : "heart", post.likeTotal, on: liked)
+                        iconCount(liked ? "heart.fill" : "heart", post.likeTotal, on: liked, tint: Candy.berry.color)
                             .overlay(alignment: .leading) {
                                 if let likeBurst { HeartPop().id(likeBurst).offset(x: 8) }
                             }
@@ -762,7 +838,7 @@ struct PostCard: View {
                     }
                     .accessibilityLabel("Share")
                     Spacer(minLength: 0)
-                    Button { toggleSave() } label: { iconCount(saved ? "bookmark.fill" : "bookmark", nil, on: saved) }
+                    Button { toggleSave() } label: { iconCount(saved ? "bookmark.fill" : "bookmark", nil, on: saved, tint: Candy.lemon.color) }
                         .sensoryFeedback(.impact(weight: .light), trigger: saved)
                         .accessibilityLabel(saved ? "Remove from saved" : "Save")
                 }
@@ -809,7 +885,7 @@ struct PostCard: View {
         return parts.joined(separator: " · ")
     }
 
-    private func iconCount(_ icon: String, _ count: Int?, on: Bool) -> some View {
+    private func iconCount(_ icon: String, _ count: Int?, on: Bool, tint: Color? = nil) -> some View {
         HStack(spacing: 5) {
             Image(systemName: icon).font(.system(size: 17, weight: .semibold))
                 .symbolEffect(.bounce, value: on)
@@ -817,7 +893,7 @@ struct PostCard: View {
                 Text("\(count)").font(.jakarta(13, .semibold)).contentTransition(.numericText())
             }
         }
-        .foregroundStyle(on ? AnyShapeStyle(Theme.main) : AnyShapeStyle(Palette.text2))
+        .foregroundStyle(on ? AnyShapeStyle(tint ?? Theme.main) : AnyShapeStyle(Palette.text2))
         .motion(Motion.playful, value: count)
         .frame(minWidth: 30, minHeight: 36, alignment: .leading)
         .contentShape(Rectangle())

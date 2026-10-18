@@ -394,9 +394,8 @@ struct HomeView: View {
                     }
                     Spacer(minLength: 0)
                     // Your bunny (tap her!). Long press to dress her up.
-                    BunnyBuddy(look: bunny.look, height: 92)
-                        .padding(.top, -14)
-                        .padding(.bottom, -8)
+                    BunnyBuddy(look: bunny.look, height: 104)
+                        .padding(.top, -10)
                         .onLongPressGesture { path.append(.bunny) }
                 }
                 // Three even tiles (number on top, a short word under it), so
@@ -461,14 +460,14 @@ struct HomeView: View {
     // colour, with room for its whole name. Now and then one of the icons
     // gives a little hop.
     private var shortcuts: some View {
-        ShortcutGrid(appeared: appeared, items: [
+        CandyShortcutGrid(items: [
             .init(title: "Music", icon: "music.note", candy: .sky, route: .music),
             .init(title: "Servers", icon: "bubble.left.and.bubble.right.fill", candy: .mint, route: .servers),
             .init(title: "People", icon: "person.2.fill", candy: .grape, route: .people),
             .init(title: "Top artists", icon: "crown.fill", candy: .lemon, route: .topArtists),
             .init(title: "Commissions", icon: "paintbrush.pointed.fill", candy: .peach, route: .commissions),
             .init(title: "Bunny", icon: "hare.fill", candy: .berry, route: .bunny),
-        ]) { route in path.append(route) }
+        ], shown: appeared) { route in path.append(route) }
     }
 
     // Until you've made your own bunny: an invite to the bunny maker.
@@ -518,7 +517,7 @@ struct HomeView: View {
         .accessibilityLabel("Make your bunny")
     }
 
-    private static let inviteLook = BunnyLook(fur: 0, bow: 4, collar: 0, outfit: 0, face: .happy, extra: .none, scene: .candy)
+    private static let inviteLook = BunnyLook(bow: 4, face: .happy)
 
     // MARK: community
 
@@ -874,74 +873,6 @@ private struct HeroPop: ViewModifier {
             .opacity(visible ? 1 : 0)
             .scaleEffect(visible ? 1 : 0.7)
             .animation(reduceMotion ? nil : Motion.playful.delay(0.18 + Double(min(index, 8)) * 0.05), value: shown)
-    }
-}
-
-// Home's shortcuts: candy tiles with a white icon and the place's name.
-private struct ShortcutGrid: View {
-    struct Item {
-        let title: String
-        let icon: String
-        let candy: Candy
-        let route: Route
-    }
-    let appeared: Bool
-    let items: [Item]
-    var open: (Route) -> Void
-    @State private var hops: [Int] = Array(repeating: 0, count: 8)
-
-    var body: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-            ForEach(Array(items.enumerated()), id: \.element.title) { i, item in
-                Button { open(item.route) } label: { tile(item, hop: hops[i % hops.count]) }
-                    .buttonStyle(BouncyStyle(scale: 0.92))
-                    .accessibilityLabel(item.title)
-                    .heroPop(appeared, i + 2)
-            }
-        }
-        .task {
-            // Every few seconds one icon hops, so Home never sits still.
-            guard Motion.ambient, !Motion.reduced, !items.isEmpty else { return }
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(2.4))
-                guard !Task.isCancelled else { return }
-                hops[Int.random(in: 0..<items.count)] += 1
-            }
-        }
-    }
-
-    private func tile(_ item: Item, hop: Int) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
-        return VStack(alignment: .leading, spacing: 0) {
-            Image(systemName: item.icon)
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(.white)
-                .symbolEffect(.bounce, value: hop)
-                .frame(width: 38, height: 38)
-                .background(.white.opacity(0.24), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            Spacer(minLength: 12)
-            Text(item.title)
-                .font(.jakarta(13, .bold)).foregroundStyle(.white)
-                .lineLimit(1).minimumScaleFactor(0.75)
-                .shadow(color: .black.opacity(0.12), radius: 1, y: 1)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, minHeight: 96, alignment: .leading)
-        .background {
-            shape.fill(item.candy.gradient)
-                .overlay {
-                    // A soft bubble in the corner and a shine along the top.
-                    GeometryReader { geo in
-                        Circle().fill(.white.opacity(0.16))
-                            .frame(width: geo.size.width * 0.7)
-                            .offset(x: geo.size.width * 0.5, y: geo.size.height * 0.35)
-                    }
-                    .clipShape(shape)
-                }
-                .overlay(shape.fill(LinearGradient(colors: [Palette.rim(0.35), .clear], startPoint: .top, endPoint: .center)).padding(1))
-                .shadow(color: item.candy.color.softGlow(0.35), radius: 8, y: 4)
-        }
-        .contentShape(shape)
     }
 }
 

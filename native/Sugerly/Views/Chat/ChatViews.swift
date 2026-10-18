@@ -192,6 +192,56 @@ struct ChatListView: View {
         return visible.filter { !tucked.contains($0.id) }
     }
 
+    // Friends (you follow each other) who are online right now.
+    private var onlineFriends: [String] {
+        guard let me = model.me else { return [] }
+        let blocked = Set(me.blocked)
+        return me.following.filter { email in
+            guard !blocked.contains(email), let person = model.person(email) else { return false }
+            return person.isOnline && person.following.contains(me.email)
+        }
+    }
+
+    // A row of friends who are online, each a tap away from a chat.
+    private var onlineStrip: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Circle().fill(Palette.success).frame(width: 8, height: 8)
+                Text("Online now").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 14) {
+                    ForEach(Array(onlineFriends.enumerated()), id: \.element) { i, email in
+                        let person = model.person(email)
+                        Button { openChat(with: email) } label: {
+                            VStack(spacing: 5) {
+                                Avatar(url: person?.picture ?? "", name: person?.displayName ?? email, size: 54, online: true)
+                                    .padding(3)
+                                    .overlay(Circle().strokeBorder(Candy.allCases[i % Candy.allCases.count].gradient, lineWidth: 2.5))
+                                Text(person?.displayName ?? "").font(.jakarta(11, .semibold)).foregroundStyle(Palette.text2)
+                                    .lineLimit(1).frame(width: 64)
+                            }
+                        }
+                        .buttonStyle(BouncyStyle(scale: 0.9))
+                        .accessibilityLabel("Chat with \(person?.displayName ?? email)")
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+            .scrollClipDisabled()
+        }
+        .padding(12)
+        .sugarCard(radius: 20)
+    }
+
+    private func openChat(with email: String) {
+        guard let me = model.me?.email else { return }
+        let id = Social.dmId(me, email)
+        let existing = store.conversations.first { $0.id == id }
+        let c = existing ?? Conversation(id: id, members: [me, email.lowercased()], isGroup: false, groupName: "", last: nil, unread: 0)
+        path.append(.chat(c))
+    }
+
     var body: some View {
         Group {
             // The two sides slide in from their own side of the switch.
@@ -241,6 +291,13 @@ struct ChatListView: View {
                 .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
+
+            if search.isEmpty && !onlineFriends.isEmpty {
+                onlineStrip
+                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
 
             if store.loading && store.conversations.isEmpty {
                 ForEach(0..<6, id: \.self) { _ in
