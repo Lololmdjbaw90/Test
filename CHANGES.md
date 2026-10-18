@@ -1,5 +1,10 @@
 # Changes
 
+## A smoother menu (iOS app)
+
+- **Close button**: the menu had a page stack inside it whose top bar was pushed up under the clock (the drawer ignored the safe area) and clipped by its rounded corner, so the x was hard to hit. The menu no longer has a page stack: it draws its own header (the title and a 48 pt round x) inside the safe area, and Settings opens on the tab like the other places (`Route.settings`).
+- **No lag when it opens**: the shadow and rounded clip were on the whole menu, so every frame of the slide (and of every sparkle, shine and bob inside it) re-rendered all of it off screen. They're now on a plain shape behind it (`DrawerBackdrop`), the drifting colour glows are replaced by a still wash, the menu isn't rebuilt while it's dragged (`AccountView` is `Equatable`), the tiles rise with their section instead of popping one by one, and the twinkles, shines and the bunny's bob start only once it has slid in (`lively`; she hops hello then).
+
 ## Pin board Community, slide-in menu, neater sparkles (iOS app)
 
 - **Community as a pin board** (`PinGrid`, `PinCard`): posts go into two columns (three on iPad), each to whichever column is shortest by a fixed guess of its height (so cards never hop columns while pictures load). Pictures show at their own shape (`ArtImage`, clamped); posts with only words are candy quote cards, the colour picked from the post id. Each card: save button, double-tap to like with a heart pop, author and likes underneath, and a long-press menu (like, save, comments, send, share, copy, report, delete). More posts load near the end of either column. The "start a thread" box and suggestions sit above the board.

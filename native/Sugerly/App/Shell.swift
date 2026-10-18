@@ -25,6 +25,7 @@ enum Route: Hashable {
     // A #tag's page: everything with it.
     case hashtag(String)
     case bunny
+    case settings
 }
 
 enum AppTab: Hashable {
@@ -104,6 +105,7 @@ struct RouteView: View {
         case .notifications: NotificationsPage(path: $path)
         case .hashtag(let tag): HashtagView(tag: tag, path: $path)
         case .bunny: BunnyMakerView()
+        case .settings: SettingsView()
         }
     }
 }
@@ -739,7 +741,9 @@ extension MainShell {
 // MARK: - The + menu
 
 // The menu as a drawer: it springs in from the left edge over a dimmed
-// page. Tap the page or swipe it back to the left to close it.
+// page. Tap the page or swipe it back to the left to close it. The rounded
+// edge and its shadow are drawn on a plain shape behind the menu (not on the
+// menu itself), so sliding it moves one layer and nothing is redrawn.
 struct MenuDrawer: View {
     @Binding var open: Bool
     var go: (Route) -> Void
@@ -748,44 +752,68 @@ struct MenuDrawer: View {
 
     var body: some View {
         GeometryReader { geo in
-            let width = min(geo.size.width * 0.9, 420)
+            let width = min(geo.size.width * 0.86, 400)
             ZStack(alignment: .leading) {
                 if open {
                     Color.black
                         .opacity(0.3 * Double(1 - min(1, drag / max(width, 1))))
                         .ignoresSafeArea()
+                        .contentShape(Rectangle())
                         .onTapGesture { open = false }
                         .transition(.opacity)
                         .accessibilityLabel("Close menu")
                         .accessibilityAddTraits(.isButton)
                     AccountView(go: go, close: { open = false })
+                        .equatable()
                         .frame(width: width)
                         .frame(maxHeight: .infinity)
-                        .background(Palette.bg.ignoresSafeArea())
-                        .clipShape(UnevenRoundedRectangle(bottomTrailingRadius: 32, topTrailingRadius: 32, style: .continuous))
-                        .shadow(color: .black.opacity(0.2), radius: 24, x: 8)
-                        .ignoresSafeArea(edges: .vertical)
+                        .background { DrawerBackdrop() }
                         .offset(x: -drag)
                         .simultaneousGesture(
-                            DragGesture(minimumDistance: 16)
+                            DragGesture(minimumDistance: 20)
                                 .onChanged { value in
                                     // Only sideways drags to the left move it.
-                                    guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                                    guard drag > 0 || abs(value.translation.width) > abs(value.translation.height) * 1.4 else { return }
                                     drag = max(0, -value.translation.width)
                                 }
                                 .onEnded { value in
-                                    if drag > width * 0.3 || value.predictedEndTranslation.width < -width * 0.5 {
+                                    if drag > width * 0.3 || (drag > 0 && value.predictedEndTranslation.width < -width * 0.5) {
                                         open = false
                                     }
                                     withAnimation(Motion.release) { drag = 0 }
                                 }
                         )
+                        .accessibilityAddTraits(.isModal)
                         .transition(.move(edge: .leading))
                         .zIndex(1)
                 }
             }
-            .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.42, dampingFraction: 0.86), value: open)
+            .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.38, dampingFraction: 0.88), value: open)
         }
+    }
+}
+
+// Behind the menu: the page colour with a soft wash of your colour at the
+// top and a lilac glow at the bottom, a rounded right edge and a shadow.
+private struct DrawerBackdrop: View {
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let shape = UnevenRoundedRectangle(bottomTrailingRadius: 32, topTrailingRadius: 32, style: .continuous)
+        let dark = scheme == .dark
+        shape.fill(Palette.bg)
+            .shadow(color: .black.opacity(0.18), radius: 20, x: 6)
+            .overlay {
+                shape.fill(LinearGradient(stops: [
+                    .init(color: Theme.light.opacity(dark ? 0.14 : 0.36), location: 0),
+                    .init(color: Theme.light.opacity(0), location: 0.42),
+                ], startPoint: .top, endPoint: .bottom))
+            }
+            .overlay {
+                shape.fill(RadialGradient(colors: [Candy.grape.color.opacity(dark ? 0.12 : 0.16), .clear],
+                                          center: .bottomLeading, startRadius: 0, endRadius: 340))
+            }
+            .ignoresSafeArea()
     }
 }
 

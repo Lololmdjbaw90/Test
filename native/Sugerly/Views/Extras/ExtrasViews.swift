@@ -306,6 +306,11 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-3.6", icon: "sidebar.leading", title: "A smoother menu", date: "2026-10-18T18:00:00Z", items: [
+            "The menu slides in smoothly now, without the lag, and its sparkles and shine start once it's in.",
+            "The round x at the top of the menu always works, and sits clear of the clock and the screen's corner.",
+            "Settings opens like the other places in the menu, with a back arrow.",
+        ]),
         AppRelease(id: "ios-3.5", icon: "square.grid.2x2.fill", title: "A pin board Community and a slide-in menu", date: "2026-10-18T14:00:00Z", items: [
             "Community is laid out like a pin board: two columns of cards (three on iPad), pictures at their own shape and words as colourful quote cards. Double-tap a card to like it, tap the bookmark to save it, and hold it for more.",
             "The menu now slides in from the left, smoothly, with everything rising into place, and your bunny hops hello. Swipe it back or tap outside to close it.",

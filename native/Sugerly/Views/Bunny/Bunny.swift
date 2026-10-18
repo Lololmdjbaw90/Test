@@ -569,9 +569,10 @@ struct BunnyBuddy: View {
                 onTap?()
             }
             .sensoryFeedback(.impact(weight: .light), trigger: hops)
-            .task {
+            // (Also when she starts moving later, e.g. once the menu has slid in.)
+            .task(id: moving) {
                 guard greet, moving else { return }
-                try? await Task.sleep(for: .milliseconds(520))
+                try? await Task.sleep(for: .milliseconds(400))
                 hops += 1
             }
             .task(id: look.face.blinks && moving) {

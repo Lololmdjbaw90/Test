@@ -1,11 +1,16 @@
 import SwiftUI
 
-// The menu: opens from your picture in the top left corner of every main
-// page. You at the top (your bunny, level, status, coins), your wallet and
-// MimiPlus as two bright cards, the places that aren't tabs as candy tiles,
-// then Settings and help, and dark mode and Log out at the bottom. Swipe down
-// or tap Done to close it.
-struct AccountView: View {
+// The menu: slides in from the left over every main page (opened from your
+// picture in the top left corner). You at the top (your bunny, level,
+// status, coins), your wallet and MimiPlus as two bright cards, the places
+// that aren't tabs as candy tiles, then Settings and help, and dark mode and
+// Log out at the bottom. The round x at the top, a tap on the page beside it
+// or a swipe to the left closes it.
+//
+// It's kept light so it slides smoothly: no page stack inside it (Settings
+// opens on the tab like the other places), and the twinkles, shine and the
+// bunny's bobbing only start once it has slid in.
+struct AccountView: View, Equatable {
     // Closes the menu and opens a page on the tab you're on.
     var go: (Route) -> Void
     // Closes the menu.
@@ -18,7 +23,13 @@ struct AccountView: View {
     @State private var status = false
     @State private var confirmLogout = false
     @State private var shown = false
+    // On once the menu has finished sliding in.
+    @State private var lively = false
     @State private var bunny = BunnyStore.shared
+
+    // The closures never change what's drawn, so the menu isn't redrawn
+    // while it's dragged.
+    nonisolated static func == (lhs: AccountView, rhs: AccountView) -> Bool { true }
 
     // The places that aren't tabs.
     private var places: [CandyShortcutGrid.Item] {
@@ -33,39 +44,23 @@ struct AccountView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            header
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    if let me = model.me { profileCard(me) }
-                    walletCard
-                    placesGrid
+                    if let me = model.me { profileCard(me).modifier(MenuRise(shown: shown, index: 0)) }
+                    walletCard.modifier(MenuRise(shown: shown, index: 1))
+                    placesGrid.modifier(MenuRise(shown: shown, index: 2))
                     youCard.modifier(MenuRise(shown: shown, index: 3))
                     endCard.modifier(MenuRise(shown: shown, index: 4))
                     footer.modifier(MenuRise(shown: shown, index: 5))
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 6)
+                .padding(.top, 4)
                 .padding(.bottom, 28)
-                .frame(maxWidth: 640)
-                .frame(maxWidth: .infinity)
             }
             .scrollBounceBehavior(.basedOnSize)
-            .sugarBackground()
-            .roundTitle("Menu")
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(action: close) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(Palette.text2)
-                            .frame(width: 32, height: 32)
-                            .background(Palette.surface, in: Circle())
-                            .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
-                    }
-                    .buttonStyle(BouncyStyle(scale: 0.88))
-                    .accessibilityLabel("Close menu")
-                }
-            }
+            .scrollIndicators(.hidden)
         }
         .tint(Theme.main)
         .sheet(isPresented: $shop) { NitroShopView() }
@@ -75,9 +70,41 @@ struct AccountView: View {
             Button("Log out", role: .destructive) { model.signOut() }
         }
         .onAppear {
-            // Sections rise in one after another once the menu has slid in.
-            withAnimation(reduceMotion ? nil : Motion.settle.delay(0.08)) { shown = true }
+            // Sections rise in one after another as the menu slides in.
+            withAnimation(reduceMotion ? nil : Motion.settle.delay(0.06)) { shown = true }
         }
+        .task {
+            try? await Task.sleep(for: .milliseconds(450))
+            lively = true
+        }
+    }
+
+    // The title and a big round x, inside the screen's safe area so it's
+    // always easy to reach.
+    private var header: some View {
+        HStack(spacing: 12) {
+            Text("Menu")
+                .font(.display(28)).foregroundStyle(Palette.text)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 0)
+            Button(action: close) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Palette.text2)
+                    .frame(width: 38, height: 38)
+                    .background(Palette.surface, in: Circle())
+                    .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
+                    .shadow(color: Palette.shadow, radius: 6, y: 2)
+                    .frame(width: 48, height: 48)
+                    .contentShape(Rectangle())
+            }
+            // (No click: the menu closing makes its own sound.)
+            .buttonStyle(BouncyStyle(scale: 0.86, sound: false))
+            .accessibilityLabel("Close menu")
+        }
+        .padding(.leading, 20)
+        .padding(.trailing, 10)
+        .padding(.top, 2)
     }
 
     // Notifications, Settings, what's new and help.
@@ -85,12 +112,7 @@ struct AccountView: View {
         card("YOU") {
             notificationsRow
             divider
-            NavigationLink {
-                SettingsView()
-            } label: {
-                rowLabel("Settings", "Account, privacy and colours", "gearshape.fill", .accent)
-            }
-            .buttonStyle(RowPressStyle())
+            row("Settings", "Account, privacy and colours", "gearshape.fill") { go(.settings) }
             divider
             row("What's new", "The latest updates", "gift.fill") { go(.updates) }
             divider
@@ -156,7 +178,7 @@ struct AccountView: View {
             HStack(alignment: .top, spacing: 8) {
                 profileButton(me, info, presence)
                 // Your bunny says hi (tap her; hold to dress her up).
-                BunnyBuddy(look: bunny.look, height: 92, greet: true)
+                BunnyBuddy(look: bunny.look, height: 92, lively: lively, greet: true)
                     .padding(.top, -12)
                     .padding(.trailing, -4)
                     .onLongPressGesture { go(.bunny) }
@@ -174,18 +196,18 @@ struct AccountView: View {
         }
         .pastelCard(radius: 26, padding: 16)
         .overlay {
-            TwinkleField(colors: [UIColor(hex: 0xFFC53D), .white, UIColor(Theme.main)])
+            if lively {
+                ZStack {
+                    TwinkleField(colors: [UIColor(hex: 0xFFC53D), .white, UIColor(Theme.main)])
+                        .opacity(0.8)
+                    ShineSweep(every: 6, strength: 0.28)
+                }
                 .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-                .opacity(0.8)
                 .allowsHitTesting(false)
+                .transition(.opacity)
+            }
         }
-        .overlay {
-            ShineSweep(every: 6, strength: 0.28)
-                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-        }
-        .opacity(shown || reduceMotion ? 1 : 0)
-        .scaleEffect(shown || reduceMotion ? 1 : 0.96, anchor: .top)
-        .animation(reduceMotion ? nil : Motion.settle, value: shown)
+        .animation(Motion.fade, value: lively)
         .onAppear { bunny.use(me.email) }
     }
 
@@ -265,11 +287,9 @@ struct AccountView: View {
     private var placesGrid: some View {
         VStack(alignment: .leading, spacing: 10) {
             ListHeader(title: "EXPLORE").padding(.leading, 6)
-            CandyShortcutGrid(items: places, shown: shown) { route in go(route) }
+            // (The tiles rise with the section rather than popping one by one.)
+            CandyShortcutGrid(items: places) { route in go(route) }
         }
-        .opacity(shown || reduceMotion ? 1 : 0)
-        .offset(y: shown || reduceMotion ? 0 : 12)
-        .animation(reduceMotion ? nil : Motion.enter.delay(0.06), value: shown)
     }
 
     // Coins and MimiPlus as two bright cards side by side.
@@ -286,9 +306,6 @@ struct AccountView: View {
             .buttonStyle(BouncyStyle(scale: 0.95))
             .accessibilityLabel("MimiPlus")
         }
-        .opacity(shown || reduceMotion ? 1 : 0)
-        .offset(y: shown || reduceMotion ? 0 : 12)
-        .animation(reduceMotion ? nil : Motion.enter.delay(0.03), value: shown)
     }
 
     private func brightCard(_ candy: Candy, icon: String, title: String, value: String) -> some View {
@@ -315,7 +332,7 @@ struct AccountView: View {
                     }
                     .clipShape(shape)
                 }
-                .overlay { ShineSweep(every: 5, strength: 0.3).clipShape(shape) }
+                .overlay { if lively { ShineSweep(every: 5, strength: 0.3).clipShape(shape) } }
                 .shadow(color: candy.color.softGlow(0.35), radius: 8, y: 4)
         }
     }
