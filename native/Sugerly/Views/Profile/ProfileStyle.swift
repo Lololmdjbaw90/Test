@@ -42,6 +42,8 @@ struct NameText: View {
     var color: Color = Palette.text
     // Their chosen name colour (hex), used by the plain styles.
     var tint = ""
+    // Aurora holds still (pickers showing every style at once).
+    var still = false
 
     private var own: Color { ProfileColors.color(tint) ?? color }
 
@@ -77,7 +79,7 @@ struct NameText: View {
             base.foregroundStyle(LinearGradient(colors: [Color(hex: 0xF5C04A), Color(hex: 0xE6A31C)], startPoint: .top, endPoint: .bottom))
                 .shadow(color: Color(hex: 0xF0A020).opacity(0.55), radius: size * 0.32)
         case "aurora":
-            AuroraName(text: base)
+            AuroraName(text: base, still: still)
         case "neon":
             base.foregroundStyle(.white)
                 .shadow(color: .white.opacity(0.9), radius: 1)
@@ -96,10 +98,11 @@ struct NameText: View {
 // Slowly sliding pink → lilac → sky gradient text.
 private struct AuroraName: View {
     let text: Text
+    var still = false
     var body: some View {
         // 12 updates a second is plenty for a slow 5-second slide (many of
         // these can be on screen at once in a feed).
-        TimelineView(.animation(minimumInterval: 1 / 12)) { timeline in
+        TimelineView(.animation(minimumInterval: 1 / 12, paused: still)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             let phase = CGFloat(t.truncatingRemainder(dividingBy: 5) / 5)
             text.foregroundStyle(LinearGradient(

@@ -52,7 +52,7 @@ struct AccentCard<Art: View>: View {
                         .transition(.scale(scale: 0.4).combined(with: .opacity))
                 }
             }
-            .shadow(color: main.opacity(picked ? 0.28 : 0), radius: 10, y: 5)
+            .softShadow(main.opacity(picked ? 0.28 : 0), radius: 10, y: 5)
 
             Text(title)
                 .font(.jakarta(12, .heavy))

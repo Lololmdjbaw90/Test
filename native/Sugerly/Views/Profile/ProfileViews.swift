@@ -694,14 +694,21 @@ struct EditProfileView: View {
             field("Interests") { SugarField(placeholder: "anime, watercolor, cats", text: $interests) }
             field("Website") { SugarField(placeholder: "yoursite.com", text: $website) }
 
-            lookPreview
-            styleSection
-            colorSection("Name colour", selection: $nameColor)
-            colorSection("Banner colour", selection: $bannerColor)
-            colorSection("Profile colour (buttons and accents)", selection: $profileColor)
+            // Each part is its own little view, so typing in a field above
+            // only redraws what shows that field (the preview and the name
+            // styles), not every swatch and picker.
+            ProfileLookPreview(name: name, picture: model.me?.picture ?? "", nameStyle: nameStyle, nameColor: nameColor,
+                               bannerColor: bannerColor, profileColor: profileColor, pattern: pattern,
+                               effect: effect, effectColor: effectColor, effectAmount: effectAmount, nitro: nitro)
+            NameStyleRow(name: name, selection: $nameStyle, nitro: nitro, shop: $shop)
+            ProfileSwatchRow(title: "Name colour", selection: $nameColor)
+            ProfileSwatchRow(title: "Banner colour", selection: $bannerColor)
+            ProfileSwatchRow(title: "Profile colour (buttons and accents)", selection: $profileColor)
             patternSection
-            effectSection
+            ProfileEffectPicker(effect: $effect, color: $effectColor, amount: $effectAmount, nitro: nitro, shop: $shop)
         }
+        // The flat look: no soft shadows to redraw while it scrolls.
+        .environment(\.flat, true)
         .onAppear(perform: fill)
         .photosPicker(isPresented: $showPicker, selection: $pickerItem, matching: .images)
         .onChange(of: pickerItem) { _, item in
@@ -744,9 +751,10 @@ struct EditProfileView: View {
                 Button { nitroOnly { gifFor = false } } label: { Label(nitro ? "Choose a GIF" : "Choose a GIF (MimiPlus)", systemImage: "photo.stack") }
                 if hasBanner { Button(role: .destructive) { withMotion { banner = nil; removeBanner = true } } label: { Label("Remove banner", systemImage: "trash") } }
             } label: {
+                // (The effect shows in the preview below; one moving effect
+                // on the page is enough.)
                 ZStack {
                     bannerPreview
-                    if nitro && !effect.isEmpty { ProfileEffectLayer(effect: effect) }
                     Label("Change banner", systemImage: "camera.fill").font(.jakarta(13, .bold)).foregroundStyle(.white)
                         .padding(.horizontal, 12).padding(.vertical, 7).background(.black.opacity(0.35), in: Capsule())
                 }
@@ -849,122 +857,6 @@ struct EditProfileView: View {
             .background(NitroStyle.gradient, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
         .buttonStyle(BouncyStyle(scale: 0.97))
-    }
-
-    private var styleSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Name style").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(NameStyles.all) { style in
-                        let locked = style.premium && !nitro
-                        Button {
-                            if locked { shop = true } else { withMotion(Motion.standard) { nameStyle = style.id } }
-                        } label: {
-                            VStack(spacing: 6) {
-                                NameText(name: name.isEmpty ? "Name" : name, style: style.id, size: 18, display: true, nitro: true)
-                                    .lineLimit(1)
-                                    .frame(maxWidth: 130)
-                                    .padding(.vertical, 12).padding(.horizontal, 14)
-                                    .background(style.id == "neon" ? Color(hex: 0x2A1830) : Palette.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                                HStack(spacing: 4) {
-                                    if style.premium { Image(systemName: locked ? "lock.fill" : "sparkles").font(.system(size: 9, weight: .bold)) }
-                                    Text(style.label).font(.jakarta(11, .bold))
-                                }
-                                .foregroundStyle(style.premium ? Color(hex: 0xA67CF7) : Palette.muted)
-                            }
-                            .padding(6)
-                            .background(nameStyle == style.id ? Theme.soft : Color.clear, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(nameStyle == style.id ? Theme.main.opacity(0.5) : Palette.border, lineWidth: 1.2))
-                            .opacity(locked ? 0.6 : 1)
-                        }
-                        .buttonStyle(BouncyStyle(scale: 0.95))
-                    }
-                }
-                .padding(.vertical, 2)
-            }
-        }
-    }
-
-    private func colorSection(_ title: String, selection: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    Button { withMotion(Motion.standard) { selection.wrappedValue = "" } } label: {
-                        Image(systemName: "circle.slash").font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.muted)
-                            .frame(width: 38, height: 38).background(Palette.surface2, in: Circle())
-                            .overlay(Circle().strokeBorder(selection.wrappedValue.isEmpty ? Theme.main : Palette.border, lineWidth: 2))
-                    }
-                    ForEach(ProfileColors.swatches.indices, id: \.self) { i in
-                        let swatch = ProfileColors.swatches[i]
-                        let on = selection.wrappedValue.lowercased() == swatch.0
-                        Button { withMotion(Motion.standard) { selection.wrappedValue = swatch.0 } } label: {
-                            Circle().fill(Color(hex: swatch.1)).frame(width: 38, height: 38)
-                                .overlay { if on { Image(systemName: "checkmark").font(.system(size: 14, weight: .bold)).foregroundStyle(.white) } }
-                                .overlay(Circle().strokeBorder(.white, lineWidth: on ? 3 : 0))
-                                .shadow(color: Color(hex: swatch.1).opacity(on ? 0.5 : 0.2), radius: on ? 6 : 3, y: 2)
-                                .scaleEffect(on ? 1.08 : 1)
-                        }
-                        .buttonStyle(BouncyStyle())
-                    }
-                }
-                .padding(4)
-            }
-        }
-    }
-
-    private var effectSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Text("Profile effect").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
-                if !nitro { NitroBadge(compact: true) }
-            }
-            FlowLayout(spacing: 8) {
-                ForEach(ProfileEffect.all) { item in
-                    Chip(title: item.label, icon: item.icon, active: effect == item.id) {
-                        if nitro || item.id.isEmpty { withMotion(Motion.standard) { effect = item.id } } else { shop = true }
-                    }
-                }
-            }
-            if !effect.isEmpty {
-                colorSection("Effect colour", selection: $effectColor)
-                Text("How many").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
-                HStack(spacing: 8) {
-                    ForEach(ProfileEffect.amounts, id: \.0) { amount, label in
-                        Chip(title: label, active: effectAmount == amount) { withMotion(Motion.standard) { effectAmount = amount } }
-                    }
-                }
-            }
-        }
-    }
-
-    // What your profile top will look like, as you change things.
-    private var lookPreview: some View {
-        let bannerTint = ProfileColors.color(bannerColor)
-        let accentTint = ProfileColors.color(profileColor)
-        return VStack(alignment: .leading, spacing: 8) {
-            Text("Preview").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
-            ZStack(alignment: .bottomLeading) {
-                ZStack {
-                    LinearGradient(colors: [bannerTint ?? Theme.light, accentTint ?? Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    if !pattern.isEmpty { BannerPatternView(pattern: pattern) }
-                    if !effect.isEmpty && nitro { ProfileEffectLayer(effect: effect, color: effectColor, amount: effectAmount) }
-                }
-                .frame(height: 110)
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                HStack(alignment: .bottom, spacing: 10) {
-                    Avatar(url: model.me?.picture ?? "", name: name, size: 58)
-                        .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
-                    NameText(name: name.isEmpty ? "Your name" : name, style: nameStyle, size: 20, display: true, nitro: nitro, tint: nameColor)
-                        .lineLimit(1)
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(Palette.surface, in: Capsule())
-                }
-                .offset(x: 12, y: 30)
-            }
-            .padding(.bottom, 30)
-        }
     }
 
     private var patternSection: some View {
@@ -1135,6 +1027,165 @@ struct MyColorsPicker: View {
 }
 
 
+// MARK: - Edit profile parts
+
+// The name styles side by side, each showing your name (still: one moving
+// aurora preview is enough, in the preview card).
+private struct NameStyleRow: View {
+    let name: String
+    @Binding var selection: String
+    let nitro: Bool
+    @Binding var shop: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Name style").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(NameStyles.all) { style in tile(style) }
+                }
+                .padding(.vertical, 2)
+            }
+        }
+    }
+
+    private func tile(_ style: NameStyles.Style) -> some View {
+        let locked = style.premium && !nitro
+        let on = selection == style.id
+        return Button {
+            if locked { shop = true } else { withMotion(Motion.standard) { selection = style.id } }
+        } label: {
+            VStack(spacing: 6) {
+                NameText(name: name.isEmpty ? "Name" : name, style: style.id, size: 18, display: true, nitro: true, still: true)
+                    .lineLimit(1)
+                    .frame(maxWidth: 130)
+                    .padding(.vertical, 12).padding(.horizontal, 14)
+                    .background(style.id == "neon" ? Color(hex: 0x2A1830) : Palette.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                HStack(spacing: 4) {
+                    if style.premium { Image(systemName: locked ? "lock.fill" : "sparkles").font(.system(size: 9, weight: .bold)) }
+                    Text(style.label).font(.jakarta(11, .bold))
+                }
+                .foregroundStyle(style.premium ? Color(hex: 0xA67CF7) : Palette.muted)
+            }
+            .padding(6)
+            .background(on ? Theme.soft : Color.clear, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(on ? Theme.main.opacity(0.5) : Palette.border, lineWidth: 1.2))
+            .opacity(locked ? 0.6 : 1)
+        }
+        .buttonStyle(BouncyStyle(scale: 0.95))
+    }
+}
+
+// A row of colour dots (and "none") for one colour choice.
+private struct ProfileSwatchRow: View {
+    let title: String
+    @Binding var selection: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    Button { withMotion(Motion.standard) { selection = "" } } label: {
+                        Image(systemName: "circle.slash").font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.muted)
+                            .frame(width: 38, height: 38).background(Palette.surface2, in: Circle())
+                            .overlay(Circle().strokeBorder(selection.isEmpty ? Theme.main : Palette.border, lineWidth: 2))
+                    }
+                    ForEach(ProfileColors.swatches.indices, id: \.self) { i in dot(ProfileColors.swatches[i]) }
+                }
+                .padding(4)
+            }
+        }
+    }
+
+    private func dot(_ swatch: (String, UInt32)) -> some View {
+        let on = selection.lowercased() == swatch.0
+        return Button { withMotion(Motion.standard) { selection = swatch.0 } } label: {
+            Circle().fill(Color(hex: swatch.1)).frame(width: 38, height: 38)
+                .overlay { if on { Image(systemName: "checkmark").font(.system(size: 14, weight: .bold)).foregroundStyle(.white) } }
+                .overlay(Circle().strokeBorder(.white, lineWidth: on ? 3 : 0))
+                .overlay(Circle().strokeBorder(Color(hex: swatch.1).opacity(on ? 0.6 : 0), lineWidth: 2).padding(-3))
+                .scaleEffect(on ? 1.08 : 1)
+        }
+        .buttonStyle(BouncyStyle())
+    }
+}
+
+// The floating effect, its colour and how many.
+private struct ProfileEffectPicker: View {
+    @Binding var effect: String
+    @Binding var color: String
+    @Binding var amount: Int
+    let nitro: Bool
+    @Binding var shop: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("Profile effect").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+                if !nitro { NitroBadge(compact: true) }
+            }
+            FlowLayout(spacing: 8) {
+                ForEach(ProfileEffect.all) { item in
+                    Chip(title: item.label, icon: item.icon, active: effect == item.id) {
+                        if nitro || item.id.isEmpty { withMotion(Motion.standard) { effect = item.id } } else { shop = true }
+                    }
+                }
+            }
+            if !effect.isEmpty {
+                ProfileSwatchRow(title: "Effect colour", selection: $color)
+                Text("How many").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+                HStack(spacing: 8) {
+                    ForEach(ProfileEffect.amounts, id: \.0) { value, label in
+                        Chip(title: label, active: amount == value) { withMotion(Motion.standard) { amount = value } }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// What your profile top will look like, as you change things.
+private struct ProfileLookPreview: View {
+    let name: String
+    let picture: String
+    let nameStyle: String
+    let nameColor: String
+    let bannerColor: String
+    let profileColor: String
+    let pattern: String
+    let effect: String
+    let effectColor: String
+    let effectAmount: Int
+    let nitro: Bool
+
+    var body: some View {
+        let bannerTint = ProfileColors.color(bannerColor)
+        let accentTint = ProfileColors.color(profileColor)
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Preview").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+            ZStack(alignment: .bottomLeading) {
+                ZStack {
+                    LinearGradient(colors: [bannerTint ?? Theme.light, accentTint ?? Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    if !pattern.isEmpty { BannerPatternView(pattern: pattern) }
+                    if !effect.isEmpty && nitro { ProfileEffectLayer(effect: effect, color: effectColor, amount: effectAmount) }
+                }
+                .frame(height: 110)
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                HStack(alignment: .bottom, spacing: 10) {
+                    Avatar(url: picture, name: name, size: 58)
+                    NameText(name: name.isEmpty ? "Your name" : name, style: nameStyle, size: 20, display: true, nitro: nitro, tint: nameColor)
+                        .lineLimit(1)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Palette.surface, in: Capsule())
+                }
+                .offset(x: 12, y: 30)
+            }
+            .padding(.bottom, 30)
+        }
+    }
+}
+
 // Settings: your profile card, then iPhone-style groups of rows (a coloured
 // icon, a title, and a switch or an arrow). Inside your account it's a page
 // you go back from; opened from your profile it has a Done button.
@@ -1164,7 +1215,6 @@ struct SettingsView: View {
     @AppStorage(SensitiveCover.showKey) private var showSensitive = false
     @State private var peopleList: PeopleListSheet.Kind?
     @State private var editing = false
-    @State private var ownColours = false
     private var alerts: Alerts { Alerts.shared }
 
     var body: some View {
@@ -1182,7 +1232,9 @@ struct SettingsView: View {
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
             }
-            lookGroup
+            // Its own view, so flipping a switch below doesn't redraw the
+            // colour cards and background previews.
+            AppearanceSettings()
             alertsGroup
             privacyGroup
             safetyGroup
@@ -1226,7 +1278,6 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) { deletePassword = "" }
         } message: { Text("Enter your password to confirm. Your profile, posts, reels, comments and messages will be deleted. This can't be undone.") }
         .disabled(deleting)
-        .onAppear { ownColours = model.myColors != nil }
     }
 
     // MARK: top
@@ -1237,7 +1288,6 @@ struct SettingsView: View {
             HStack(spacing: 14) {
                 Avatar(url: me.picture, name: me.displayName, size: 64)
                     .overlay(Circle().strokeBorder(.white, lineWidth: 3))
-                    .shadow(color: Palette.shadow, radius: 8, y: 3)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(me.displayName).font(.display(24)).foregroundStyle(Palette.text).lineLimit(1)
                     Text(me.email).font(.jakarta(13, .medium)).foregroundStyle(Palette.text2).lineLimit(1)
@@ -1273,64 +1323,6 @@ struct SettingsView: View {
 
     // MARK: groups
 
-    private var themeChoice: Binding<String> {
-        Binding(get: {
-            let theme = model.me?.theme ?? ""
-            return theme.isEmpty ? "light" : theme
-        }, set: { value in
-            Task { try? await model.updateMe(["theme": value]) }
-        })
-    }
-
-    private var lookGroup: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 12) {
-                IconRow(title: "Theme", icon: "moon.stars.fill")
-                Picker("Theme", selection: themeChoice) {
-                    Text("Light").tag("light")
-                    Text("Dark").tag("dark")
-                    Text("Auto").tag("system")
-                }
-                .pickerStyle(.segmented)
-            }
-            .padding(.vertical, 4)
-            VStack(alignment: .leading, spacing: 12) {
-                IconRow(title: "Colour", detail: "The logo and Mimi change colour to match.", icon: "drop.fill")
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 6) {
-                    ForEach(Accent.allCases) { accent in
-                        let picked = model.accent == accent && model.myColors == nil
-                        Button {
-                            ownColours = false
-                            Task { try? await model.updateMe(["accent": accent.rawValue, "accent_main": "", "accent_sub": ""]) }
-                        } label: {
-                            AccentCard(accent: accent, picked: picked, height: 84)
-                        }
-                        .buttonStyle(BouncyStyle(scale: 0.94))
-                        .sensoryFeedback(.selection, trigger: picked)
-                        .accessibilityLabel(accent.label)
-                        .accessibilityAddTraits(picked ? .isSelected : [])
-                    }
-                    Button { withMotion(Motion.standard) { ownColours.toggle() } } label: {
-                        ownColourCard
-                    }
-                    .buttonStyle(BouncyStyle(scale: 0.94))
-                    .accessibilityLabel("Your own colours")
-                }
-                if ownColours {
-                    MyColorsPicker()
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-            }
-            .padding(.vertical, 4)
-            .buttonStyle(.borderless)
-            VStack(alignment: .leading, spacing: 12) {
-                IconRow(title: "Background", detail: "A moving pattern at the top of Home.", icon: "sparkles")
-                BackgroundPicker()
-            }
-            .padding(.vertical, 4)
-            .buttonStyle(.borderless)
-        } header: { ListHeader(title: "APPEARANCE") }
-    }
 
     private var alertsGroup: some View {
         Section {
@@ -1460,23 +1452,6 @@ struct SettingsView: View {
         .onChange(of: isOn.wrappedValue) { _, on in TapSound.play(on ? .toggle : .toggleOff) }
     }
 
-    // The last colour card: Mimi in your own colours once you've made them,
-    // a little paint palette before that.
-    private var ownColourCard: some View {
-        let own = model.myColors != nil
-        return AccentCard(title: "Your own", main: own ? Theme.main : Color(hex: 0xB19CFF),
-                          light: own ? Theme.light : Color(hex: 0xFFB3CB), picked: own, height: 84) {
-            if own {
-                AccentMimi(name: "MimiRose", picked: true).tintShift(Theme.tint)
-            } else {
-                Image(systemName: "paintpalette.fill")
-                    .font(.system(size: 30, weight: .bold))
-                    .foregroundStyle(AngularGradient(colors: [Color(hex: 0xFF7AA2), Color(hex: 0xFFD166), Color(hex: 0x5FD3B0), Color(hex: 0x7CBEFF), Color(hex: 0xB19CFF), Color(hex: 0xFF7AA2)], center: .center))
-                    .frame(maxHeight: .infinity)
-            }
-        }
-    }
-
     private var statusLine: String {
         guard let me = model.me else { return "" }
         let presence = Presence(rawValue: me.presence) ?? .online
@@ -1494,6 +1469,95 @@ struct SettingsView: View {
             try await model.deleteAccount(password: password)
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+}
+
+// Settings → Appearance: theme, colour cards (with your own colours) and
+// the Home background.
+private struct AppearanceSettings: View {
+    @Environment(AppModel.self) private var model
+    @State private var ownColours = false
+    @State private var seeded = false
+
+    private var themeChoice: Binding<String> {
+        Binding(get: {
+            let theme = model.me?.theme ?? ""
+            return theme.isEmpty ? "light" : theme
+        }, set: { value in
+            Task { try? await model.updateMe(["theme": value]) }
+        })
+    }
+
+    var body: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 12) {
+                IconRow(title: "Theme", icon: "moon.stars.fill")
+                Picker("Theme", selection: themeChoice) {
+                    Text("Light").tag("light")
+                    Text("Dark").tag("dark")
+                    Text("Auto").tag("system")
+                }
+                .pickerStyle(.segmented)
+            }
+            .padding(.vertical, 4)
+            VStack(alignment: .leading, spacing: 12) {
+                IconRow(title: "Colour", detail: "The logo and Mimi change colour to match.", icon: "drop.fill")
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 6) {
+                    ForEach(Accent.allCases) { accent in
+                        let picked = model.accent == accent && model.myColors == nil
+                        Button {
+                            ownColours = false
+                            Task { try? await model.updateMe(["accent": accent.rawValue, "accent_main": "", "accent_sub": ""]) }
+                        } label: {
+                            AccentCard(accent: accent, picked: picked, height: 84)
+                        }
+                        .buttonStyle(BouncyStyle(scale: 0.94))
+                        .sensoryFeedback(.selection, trigger: picked)
+                        .accessibilityLabel(accent.label)
+                        .accessibilityAddTraits(picked ? .isSelected : [])
+                    }
+                    Button { withMotion(Motion.standard) { ownColours.toggle() } } label: {
+                        ownColourCard
+                    }
+                    .buttonStyle(BouncyStyle(scale: 0.94))
+                    .accessibilityLabel("Your own colours")
+                }
+                if ownColours {
+                    MyColorsPicker()
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+            .padding(.vertical, 4)
+            .buttonStyle(.borderless)
+            VStack(alignment: .leading, spacing: 12) {
+                IconRow(title: "Background", detail: "A moving pattern at the top of Home.", icon: "sparkles")
+                BackgroundPicker()
+            }
+            .padding(.vertical, 4)
+            .buttonStyle(.borderless)
+        } header: { ListHeader(title: "APPEARANCE") }
+        .onAppear {
+            guard !seeded else { return }
+            seeded = true
+            ownColours = model.myColors != nil
+        }
+    }
+
+    // The last colour card: Mimi in your own colours once you've made them,
+    // a little paint palette before that.
+    private var ownColourCard: some View {
+        let own = model.myColors != nil
+        return AccentCard(title: "Your own", main: own ? Theme.main : Color(hex: 0xB19CFF),
+                          light: own ? Theme.light : Color(hex: 0xFFB3CB), picked: own, height: 84) {
+            if own {
+                AccentMimi(name: "MimiRose", picked: true).tintShift(Theme.tint)
+            } else {
+                Image(systemName: "paintpalette.fill")
+                    .font(.system(size: 30, weight: .bold))
+                    .foregroundStyle(AngularGradient(colors: [Color(hex: 0xFF7AA2), Color(hex: 0xFFD166), Color(hex: 0x5FD3B0), Color(hex: 0x7CBEFF), Color(hex: 0xB19CFF), Color(hex: 0xFF7AA2)], center: .center))
+                    .frame(maxHeight: .infinity)
+            }
         }
     }
 }

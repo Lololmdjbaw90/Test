@@ -794,6 +794,35 @@ enum CloudArt {
 @MainActor
 private enum BackgroundPreviews {
     static var drawn: [String: [AppBackground: UIImage]] = [:]
+
+    // Also kept on the phone, so after the first time Settings shows them
+    // at once instead of drawing nine pictures while you scroll.
+    private static var folder: URL {
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("BackgroundPreviews", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    private static func file(_ key: String, _ kind: AppBackground) -> URL {
+        folder.appendingPathComponent("v2-\(key)-\(kind.rawValue).png")
+    }
+
+    static func load(_ key: String) -> [AppBackground: UIImage]? {
+        var found: [AppBackground: UIImage] = [:]
+        for kind in AppBackground.allCases where kind != .off {
+            guard let image = UIImage(contentsOfFile: file(key, kind).path) else { return nil }
+            found[kind] = image
+        }
+        return found
+    }
+
+    static func save(_ images: [AppBackground: UIImage], _ key: String) {
+        let files = images.map { (file(key, $0.key), $0.value) }
+        DispatchQueue.global(qos: .utility).async {
+            for (url, image) in files { try? image.pngData()?.write(to: url, options: .atomic) }
+        }
+    }
 }
 
 // The picker in Settings: small live previews of each background.
@@ -852,6 +881,11 @@ struct BackgroundPicker: View {
     private func drawPreviews() async {
         let key = previewKey
         if let ready = BackgroundPreviews.drawn[key] { previews = ready; return }
+        if let saved = BackgroundPreviews.load(key) {
+            BackgroundPreviews.drawn[key] = saved
+            previews = saved
+            return
+        }
         previews = [:]
         try? await Task.sleep(for: .milliseconds(450))
         var drawn: [AppBackground: UIImage] = [:]
@@ -866,6 +900,7 @@ struct BackgroundPicker: View {
             try? await Task.sleep(for: .milliseconds(16))
         }
         BackgroundPreviews.drawn[key] = drawn
+        BackgroundPreviews.save(drawn, key)
     }
 }
 

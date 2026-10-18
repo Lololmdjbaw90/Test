@@ -481,11 +481,14 @@ struct TitleSwitch: View {
 // MARK: - Lists in Sugerly's colours
 
 extension View {
-    /// A native grouped list on the blush background with white cards.
+    /// A native grouped list on the blush background with white cards, in
+    /// the flat look (no soft shadows under every row's icon, which made
+    /// long lists like Settings stutter).
     func sugarList() -> some View {
         self
             .scrollContentBackground(.hidden)
             .sugarBackground()
+            .environment(\.flat, true)
     }
 }
 
