@@ -4,6 +4,7 @@
 
 - **Page titles** (`PageTitle`): Home (with today's date), Community, Fan Art, Chats and Servers start with a big title in Lilita One (one of the app's own SIL OFL fonts) filled with the candy gradient, a tilted icon sticker that hops in, and a line about the page. The top bar keeps the name for the back button without showing it twice (`quietTitle`). The five fonts that were sent are personal-use only, so they aren't bundled.
 - **Customize bunny**: the bunny shortcut on Home and in the menu is "Customize bunny" (shortcut tiles now have room for two lines), and so is the maker's title. The white shirt item is now the Áo dài.
+- **Recolourable picture clothes**: picture clothes take the outfit colour and accessories a new accessory colour (`BunnyPart.accessory`, saved as `accessory`), dyed with the swatch in the colour blend mode (hue and strength from the colour, light and shade from the drawing, so lines stay and black stays black); "Original" leaves them as painted. The team's uploaded items are recolourable the same way. New Jacket (clothes) and Beanie (accessory).
 - **Menu**: your bunny is one cached still picture there (`BunnyStillTile` / `BunnySnapshots`, made a moment after Home shows) instead of her live layers; sections rise without fading (fading shadowed cards was costly mid-slide); the page behind pauses its own animations only once the menu has slid in. The profile card puts your name (with an arrow) and your level on separate lines, so neither is cut off.
 
 ## Bunny items, team roles, picture checks and a stronger filter (iOS app)

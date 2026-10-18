@@ -264,7 +264,7 @@ struct BunnyMakerView: View {
                 }
                 if isAdmin { addTile(.top, index: BunnyTop.allCases.count + tops.count) }
             }
-            if look.wear.isEmpty && look.top != .none {
+            if !look.wear.isEmpty || look.top != .none {
                 ListHeader(title: "COLOUR").padding(.leading, 6)
                 swatches(.outfit)
             }
@@ -274,12 +274,18 @@ struct BunnyMakerView: View {
     // Hats, headphones and the like (one at a time, instead of the bow).
     private var accessories: some View {
         let heads = catalog.items(.head)
-        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-            clothes("None", pieces: [], on: look.head.isEmpty, index: 0) { look.head = "" }
-            ForEach(Array(heads.enumerated()), id: \.element.id) { i, item in
-                itemTile(item, on: look.head == item.id, index: i + 1) { look.head = item.id }
+        return VStack(alignment: .leading, spacing: 14) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+                clothes("None", pieces: [], on: look.head.isEmpty, index: 0) { look.head = "" }
+                ForEach(Array(heads.enumerated()), id: \.element.id) { i, item in
+                    itemTile(item, on: look.head == item.id, index: i + 1) { look.head = item.id }
+                }
+                if isAdmin { addTile(.head, index: heads.count + 1) }
             }
-            if isAdmin { addTile(.head, index: heads.count + 1) }
+            if !look.head.isEmpty {
+                ListHeader(title: "COLOUR").padding(.leading, 6)
+                swatches(.accessory)
+            }
         }
     }
 
@@ -291,7 +297,7 @@ struct BunnyMakerView: View {
             VStack(spacing: 6) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 18, style: .continuous).fill(on ? Theme.soft : Palette.surface2)
-                    BunnyItemLayer(item: item)
+                    BunnyItemLayer(item: item, tint: look.tint(item.slot == .top ? .outfit : .accessory))
                         .aspectRatio(BunnyArt.aspect, contentMode: .fit)
                         .scaleEffect(item.tileZoom, anchor: item.tileFocus)
                 }

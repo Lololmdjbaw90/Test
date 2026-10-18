@@ -19,7 +19,7 @@ struct BunnyTint: Identifiable, Equatable {
 }
 
 enum BunnyPart: String, CaseIterable, Identifiable {
-    case fur, bow, collar, outfit
+    case fur, bow, collar, outfit, accessory
     var id: String { rawValue }
 
     var label: String { rawValue.capitalized }
@@ -61,9 +61,11 @@ enum BunnyPart: String, CaseIterable, Identifiable {
                 BunnyTint(name: "Violet", hue: -70, saturation: 1, brightness: 0, swatch: 0x5A62D7),
                 BunnyTint(name: "Stone", hue: 0, saturation: 0.1, brightness: 0.05, swatch: 0x7F727A),
             ]
-        case .outfit:
+        case .outfit, .accessory:
             // Clothes are made of differently coloured pieces, so an outfit
             // colour is a target hue each piece is turned to (see BunnyPiece).
+            // Picture clothes and accessories are dyed with the swatch
+            // instead (see BunnyItemLayer).
             return [
                 BunnyTint(name: "Original", hue: .nan, saturation: 1, brightness: 0, swatch: 0x3A5BB0),
                 BunnyTint(name: "Berry", hue: 340, saturation: 1, brightness: 0, swatch: 0xC8466E),
@@ -171,6 +173,8 @@ struct BunnyLook: Codable, Equatable {
     // (instead of the bow); ids from BunnyCatalog, empty for none.
     var wear = ""
     var head = ""
+    // The accessory's colour (picture clothes use the outfit colour).
+    var accessory = 0
 
     func tint(_ part: BunnyPart) -> BunnyTint {
         let list = part.tints
@@ -183,6 +187,7 @@ struct BunnyLook: Codable, Equatable {
         case .bow: return bow
         case .collar: return collar
         case .outfit: return outfit
+        case .accessory: return accessory
         }
     }
 
@@ -192,6 +197,7 @@ struct BunnyLook: Codable, Equatable {
         case .bow: bow = value
         case .collar: collar = value
         case .outfit: outfit = value
+        case .accessory: accessory = value
         }
     }
 
@@ -224,6 +230,7 @@ extension BunnyLook {
         scene = (try? c.decodeIfPresent(BunnyScene.self, forKey: .scene)) ?? scene
         wear = (try? c.decodeIfPresent(String.self, forKey: .wear)) ?? wear
         head = (try? c.decodeIfPresent(String.self, forKey: .head)) ?? head
+        accessory = (try? c.decodeIfPresent(Int.self, forKey: .accessory)) ?? accessory
     }
 }
 
@@ -353,7 +360,7 @@ struct BunnyFigure: View, Equatable {
             BunnyLayer("BunnyFur", look.tint(.fur))
             BunnyImages.image("BunnyOutline").resizable().interpolation(.high)
             if let item = BunnyCatalog.shared.item(look.wear) {
-                BunnyItemLayer(item: item)
+                BunnyItemLayer(item: item, tint: outfit)
             } else {
                 if let piece = look.top.piece { BunnyLayer(piece, outfit) }
                 if look.top == .sailor { BunnyLayer("BunnyCollar", look.tint(.collar)) }
@@ -362,7 +369,7 @@ struct BunnyFigure: View, Equatable {
             BunnyImages.image(look.face.eyes).resizable().interpolation(.high)
             // A hat or accessory takes the bow's place.
             if let item = BunnyCatalog.shared.item(look.head) {
-                BunnyItemLayer(item: item)
+                BunnyItemLayer(item: item, tint: look.tint(.accessory))
             } else if look.bowOn {
                 BunnyLayer("BunnyBow", look.tint(.bow))
             }

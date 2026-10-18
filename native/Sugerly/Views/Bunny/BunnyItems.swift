@@ -38,10 +38,12 @@ struct BunnyItem: Identifiable, Equatable {
         BunnyItem(id: "collar-top", name: "Peach", slot: .top, asset: "BunnyItemCollarTop"),
         BunnyItem(id: "bow-top", name: "Bow top", slot: .top, asset: "BunnyItemBowTop"),
         BunnyItem(id: "suit", name: "Suit", slot: .top, asset: "BunnyItemSuit"),
+        BunnyItem(id: "jacket", name: "Jacket", slot: .top, asset: "BunnyItemJacket"),
         BunnyItem(id: "clips", name: "Clips", slot: .head, asset: "BunnyItemClips"),
         BunnyItem(id: "headphones", name: "Headphones", slot: .head, asset: "BunnyItemHeadphones"),
         BunnyItem(id: "headband", name: "Headband", slot: .head, asset: "BunnyItemHeadband"),
         BunnyItem(id: "beret", name: "Beret", slot: .head, asset: "BunnyItemBeret"),
+        BunnyItem(id: "beanie", name: "Beanie", slot: .head, asset: "BunnyItemBeanie"),
         BunnyItem(id: "straw-hat", name: "Straw hat", slot: .head, asset: "BunnyItemStrawHat"),
         BunnyItem(id: "hood", name: "Hood", slot: .head, asset: "BunnyItemHood"),
         BunnyItem(id: "paper-bag", name: "Paper bag", slot: .head, asset: "BunnyItemPaperBag"),
@@ -135,11 +137,30 @@ final class BunnyRemoteImages {
     }
 }
 
-// One item drawn on the canvas.
+// One item drawn on the canvas, dyed with a colour when one is picked: the
+// colour's hue and strength over the picture's own light and shade, so
+// lines and shading stay (and black stays black).
 struct BunnyItemLayer: View {
     let item: BunnyItem
+    // nil or "Original": as it was painted.
+    var tint: BunnyTint? = nil
 
     var body: some View {
+        if let tint, !tint.hue.isNaN {
+            picture
+                .overlay {
+                    Color(hex: tint.swatch)
+                        .blendMode(.color)
+                        .mask { picture }
+                }
+                .compositingGroup()
+        } else {
+            picture
+        }
+    }
+
+    @ViewBuilder
+    private var picture: some View {
         if !item.asset.isEmpty {
             BunnyImages.image(item.asset).resizable().interpolation(.high)
         } else {
