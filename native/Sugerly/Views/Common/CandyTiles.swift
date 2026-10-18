@@ -32,7 +32,7 @@ struct CandyShortcutGrid: View {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2.4))
                 guard !Task.isCancelled else { return }
-                hops[Int.random(in: 0..<items.count)] += 1
+                if !Motion.paused { hops[Int.random(in: 0..<items.count)] += 1 }
             }
         }
     }

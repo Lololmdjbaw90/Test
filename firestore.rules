@@ -3,11 +3,18 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function userDoc() { return get(/databases/$(database)/documents/User/$(request.auth.uid)); }
-    // Site owners (keep in sync with src/lib/admin.js) are always admins and
-    // are the only ones who can make or remove admins.
+    // Site owners (keep in sync with src/lib/admin.js) are above everyone.
+    // Below them, by the User "role": co_owner, admin, moderator, user.
+    // You can give people below you any role below your own (owner: any;
+    // co-owner: admin or moderator; admin: moderator). Moderators look after
+    // posts, comments and reports; admins and up run everything else.
     function siteOwners() { return ['paologionfriddo90@gmail.com']; }
     function isSiteOwner() { return signedIn() && request.auth.token.email in siteOwners(); }
-    function isAdmin() { return signedIn() && (isSiteOwner() || userDoc().data.role == 'admin'); }
+    function roleRank(r) { return r == 'co_owner' ? 3 : (r == 'admin' ? 2 : (r == 'moderator' ? 1 : 0)); }
+    function myRank() { return isSiteOwner() ? 4 : roleRank(userDoc().data.get('role', 'user')); }
+    function isAdmin() { return signedIn() && myRank() >= 2; }
+    function isModerator() { return signedIn() && myRank() >= 1; }
+    function rankOf(data) { return data.email in siteOwners() ? 4 : roleRank(data.get('role', 'user')); }
     function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
     function ownEmail() { return request.auth.token.email; }
     function ownsResource() {
@@ -105,11 +112,13 @@ service cloud.firestore {
       allow create: if isSelf(uid)
         && request.resource.data.email == ownEmail()
         && (request.resource.data.role == 'user' || isSiteOwner());
-      // Owners can change anything, including who is an admin. Other admins
-      // can edit people but not roles, and can't touch an owner's profile.
+      // Owners can change anything. Co-owners and admins edit people below
+      // them and give them a role below their own.
       allow update: if isSiteOwner()
-        || (isAdmin() && !(resource.data.email in siteOwners())
-            && request.resource.data.get('role', 'user') == resource.data.get('role', 'user'))
+        || (isAdmin() && rankOf(resource.data) < myRank()
+            && request.resource.data.email == resource.data.email
+            && request.resource.data.get('role', 'user') in ['user', 'moderator', 'admin', 'co_owner']
+            && roleRank(request.resource.data.get('role', 'user')) < myRank())
         || (isSelf(uid)
             && request.resource.data.email == resource.data.email
             && request.resource.data.role == resource.data.role
@@ -137,14 +146,14 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if ownsIncomingData() && freshCounters() && !mutedNow();
       allow update: if isAdmin() || ownerEdit() || likeWrite('Artwork', id);
-      allow delete: if isAdmin() || ownsResource();
+      allow delete: if isModerator() || ownsResource();
     }
 
     match /CommunityPost/{id} {
       allow read: if signedIn();
       allow create: if ownsIncomingData() && freshCounters() && !mutedNow();
       allow update: if isAdmin() || ownerEdit() || likeWrite('CommunityPost', id);
-      allow delete: if isAdmin() || ownsResource();
+      allow delete: if isModerator() || ownsResource();
     }
 
     match /MusicReview/{id} {
@@ -153,7 +162,7 @@ service cloud.firestore {
       // Anyone may like, or bump the play counter by exactly one.
       allow update: if isAdmin() || ownerEdit() || likeWrite('MusicReview', id)
         || (signedIn() && onlyChanged(['plays', 'updated_date', 'updated_at']) && request.resource.data.plays == resource.data.get('plays', 0) + 1);
-      allow delete: if isAdmin() || ownsResource();
+      allow delete: if isModerator() || ownsResource();
     }
 
     // Reels: short videos / photos. Anyone signed in can like, and bump the
@@ -163,7 +172,7 @@ service cloud.firestore {
       allow create: if signedIn() && request.resource.data.user_email == ownEmail() && freshCounters() && !mutedNow();
       allow update: if isAdmin() || ownerEdit() || likeWrite('Reel', id)
         || (signedIn() && onlyChanged(['views', 'updated_date', 'updated_at']) && request.resource.data.views == resource.data.get('views', 0) + 1);
-      allow delete: if isAdmin() || ownsResource();
+      allow delete: if isModerator() || ownsResource();
     }
 
     // "What's new" notes written by admins, readable by everyone signed in.
@@ -177,7 +186,7 @@ service cloud.firestore {
       allow create: if ownsIncomingData() && !mutedNow();
       // Anyone signed in can like a comment (only the likes change).
       allow update: if isAdmin() || ownsResource() || (signedIn() && onlyChanged(['likes', 'updated_date', 'updated_at']) && onlySelfInLikes());
-      allow delete: if isAdmin() || ownsResource();
+      allow delete: if isModerator() || ownsResource();
     }
 
     // Comments on reels have post_id "reel_<reel id>".
@@ -196,7 +205,7 @@ service cloud.firestore {
       allow update: if isAdmin() || ownsResource() || (signedIn() && onlyChanged(['likes', 'updated_date', 'updated_at']) && onlySelfInLikes());
       // Profile owners moderate their message board (post_id "profile_<email>");
       // reel creators can remove comments on their reels.
-      allow delete: if isAdmin() || ownsResource()
+      allow delete: if isModerator() || ownsResource()
         || (signedIn() && resource.data.post_id == 'profile_' + ownEmail())
         || (signedIn() && isReelComment(resource.data) && reelOf(resource.data.post_id).data.user_email == ownEmail());
     }
@@ -333,7 +342,7 @@ service cloud.firestore {
         || hasServerPerm(resource.data.community_id, 'manage_messages')
         || (onlyChanged(['is_pinned', 'updated_date', 'updated_at']) && hasServerPerm(resource.data.community_id, 'pin_messages'))
         || onlyChanged(['reactions', 'thread_count', 'updated_date', 'updated_at']);
-      allow delete: if isAdmin() || resource.data.user_email == ownEmail() || hasServerPerm(resource.data.community_id, 'manage_messages');
+      allow delete: if isModerator() || resource.data.user_email == ownEmail() || hasServerPerm(resource.data.community_id, 'manage_messages');
     }
 
     match /Friendship/{id} {
@@ -416,8 +425,8 @@ service cloud.firestore {
     match /Report/{id} {
       allow create: if signedIn() && request.resource.data.reporter_email == ownEmail();
       // You can follow your own reports (My reports); only the team sees the rest.
-      allow read: if isAdmin() || (signedIn() && resource.data.reporter_email == ownEmail());
-      allow update, delete: if isAdmin();
+      allow read: if isModerator() || (signedIn() && resource.data.reporter_email == ownEmail());
+      allow update, delete: if isModerator();
     }
 
     // Help & support chat: one conversation per person (id = their email),
@@ -446,6 +455,13 @@ service cloud.firestore {
       allow update: if signedIn() && resource.data.inviter_email == ownEmail() && resource.data.claimed == false
         && request.resource.data.claimed == true && onlyChanged(['claimed', 'claimed_date']);
       allow delete: if isAdmin();
+    }
+
+    // Clothes and accessories for the bunny, added by the team; everyone
+    // signed in sees them.
+    match /BunnyItem/{id} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
     }
 
     match /{document=**} {

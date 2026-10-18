@@ -306,6 +306,14 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-3.8", icon: "tshirt.fill", title: "New bunny clothes, team roles and safer pictures", date: "2026-10-18T23:00:00Z", items: [
+            "Eight new outfits (maid, frills, stripes, shirt, sweater, peach, bow top, suit) and seven accessories (clips, headphones, headband, beret, straw hat, hood, paper bag) in the bunny maker.",
+            "The team can add new clothes and accessories for everyone, right from the bunny maker.",
+            "Roles: the owner can make people co-owners, admins or moderators. Moderators look after posts, comments and reports.",
+            "Every picture and video is checked when it's posted. Nudity and sexual content are refused, and sensitive ones are blurred until you tap them.",
+            "A stronger message filter: hurtful messages and comments from others are hidden, you can add your own hidden words, and unsafe requests (like asking for photos or to keep secrets) are caught. See Settings → Safety.",
+            "Your bunny sits neatly inside her background, with no sparkles around her, and the menu scrolls smoothly.",
+        ]),
         AppRelease(id: "ios-3.7", icon: "hare.fill", title: "A calmer bunny and clearer buttons", date: "2026-10-18T20:00:00Z", items: [
             "Your bunny is calmer: no more blinking, just a slow little float, and a small hop when you tap her.",
             "The background you pick for her in the bunny maker now shows behind her on Home, in Community and in the menu.",

@@ -222,7 +222,7 @@ struct ProfileContent: View {
             }
             FlowLayout(spacing: 6, centered: true) {
                 if person.isNitro { NitroBadge() }
-                if person.isAdmin { chip("Admin", icon: "shield.fill", color: Theme.pink) }
+                if person.siteRole.rank > 0 { chip(person.siteRole.label, icon: person.siteRole.icon, color: Theme.pink) }
                 if person.dailyStreak > 1 { chip("\(person.dailyStreak)-day streak", icon: "flame.fill", color: Palette.gold) }
                 if let joined = Dates.parse(person.joined) {
                     chip("Joined \(joined.formatted(.dateTime.month(.abbreviated).year()))", icon: "calendar", color: Palette.muted)
@@ -1159,6 +1159,9 @@ struct SettingsView: View {
     @AppStorage(Alerts.Kind.social.key) private var alertSocial = true
     @AppStorage(Alerts.Kind.reels.key) private var alertReels = true
     @State private var statusSheet = false
+    @AppStorage(IncomingFilter.levelKey) private var incomingLevel = IncomingFilter.Level.standard.rawValue
+    @AppStorage(IncomingFilter.wordsKey) private var hiddenWords = ""
+    @AppStorage(SensitiveCover.showKey) private var showSensitive = false
     @State private var peopleList: PeopleListSheet.Kind?
     @State private var editing = false
     @State private var ownColours = false
@@ -1182,6 +1185,7 @@ struct SettingsView: View {
             lookGroup
             alertsGroup
             privacyGroup
+            safetyGroup
             soundsGroup
             helpGroup
             securityGroup
@@ -1371,6 +1375,29 @@ struct SettingsView: View {
         }
     }
 
+    // What you see from other people.
+    private var safetyGroup: some View {
+        Section {
+            Picker(selection: $incomingLevel) {
+                ForEach(IncomingFilter.Level.allCases) { Text($0.label).tag($0.rawValue) }
+            } label: {
+                IconRow(title: "Message filter", detail: "Hides hurtful messages and comments from others", icon: "line.3.horizontal.decrease.circle.fill")
+            }
+            NavigationLink {
+                HiddenWordsView()
+            } label: {
+                IconRow(title: "Hidden words", detail: "Hide messages and comments with these words",
+                        icon: "eye.slash.fill", tone: .neutral, value: "\(IncomingFilter.words(hiddenWords).count)")
+            }
+            toggle("Show sensitive pictures", detail: "Off: they stay blurred until you tap them", icon: "photo.fill", isOn: $showSensitive)
+        } header: {
+            ListHeader(title: "SAFETY")
+        } footer: {
+            Text("Every picture and video is checked when it's posted: nudity and sexual content are refused, and sensitive ones are blurred for everyone.")
+                .font(.jakarta(12)).foregroundStyle(Palette.muted)
+        }
+    }
+
     private var soundsGroup: some View {
         Section {
             toggle("Haptics", detail: "Little taps when you like, send and switch tabs", icon: "iphone.radiowaves.left.and.right", isOn: $haptics)
@@ -1468,5 +1495,55 @@ struct SettingsView: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+// Your own list of words: messages and comments from others that use one
+// are hidden (Settings → Safety → Hidden words).
+struct HiddenWordsView: View {
+    @AppStorage(IncomingFilter.wordsKey) private var stored = ""
+    @State private var draft = ""
+
+    private var words: [String] { IncomingFilter.words(stored) }
+
+    var body: some View {
+        List {
+            Section {
+                HStack(spacing: 10) {
+                    TextField("Add a word or phrase", text: $draft)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .onSubmit(add)
+                    Button("Add", action: add)
+                        .font(.jakarta(14, .bold))
+                        .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            } footer: {
+                Text("Tricks like spaces, dots or numbers for letters are caught too. Your own messages are never hidden.")
+                    .font(.jakarta(12)).foregroundStyle(Palette.muted)
+            }
+            if !words.isEmpty {
+                Section {
+                    ForEach(words, id: \.self) { word in
+                        Text(word).font(.jakarta(15)).foregroundStyle(Palette.text)
+                    }
+                    .onDelete { offsets in
+                        var next = words
+                        next.remove(atOffsets: offsets)
+                        stored = next.joined(separator: "\n")
+                    }
+                } header: { ListHeader(title: "HIDDEN") }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .sugarList()
+        .roundTitle("Hidden words")
+    }
+
+    private func add() {
+        let word = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !word.isEmpty, !words.contains(where: { $0.caseInsensitiveCompare(word) == .orderedSame }) else { draft = ""; return }
+        stored = (words + [word]).joined(separator: "\n")
+        draft = ""
     }
 }

@@ -238,7 +238,7 @@ struct PinCard: View {
         if post.authorEmail != me {
             Button { reporting = ReportSheet.Target(id: post.id, type: "post", ownerEmail: post.authorEmail, preview: snippet, link: "/Community?post=\(post.id)") } label: { Label("Report", systemImage: "flag") }
         }
-        if post.authorEmail == me || model.me?.isAdmin == true {
+        if post.authorEmail == me || model.me?.isModerator == true {
             Button(role: .destructive) { confirmDelete = true } label: { Label("Delete", systemImage: "trash") }
         }
     }

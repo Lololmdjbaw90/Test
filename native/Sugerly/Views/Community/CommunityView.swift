@@ -389,12 +389,6 @@ struct CommunityView: View {
         }
         .pastelCard(radius: 26, padding: 16)
         .overlay {
-            TwinkleField(colors: [UIColor(hex: 0xFFC53D), .white, UIColor(Theme.main)])
-                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-                .opacity(0.8)
-                .allowsHitTesting(false)
-        }
-        .overlay {
             ShineSweep(every: 6, strength: 0.28)
                 .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
         }
@@ -897,7 +891,7 @@ struct PostCard: View {
             if post.authorEmail != me {
                 Button { reporting = ReportSheet.Target(id: post.id, type: "post", ownerEmail: post.authorEmail, preview: post.title.isEmpty ? post.text : post.title, link: "/Community?post=\(post.id)") } label: { Label("Report", systemImage: "flag") }
             }
-            if post.authorEmail == me || model.me?.isAdmin == true {
+            if post.authorEmail == me || model.me?.isModerator == true {
                 Button(role: .destructive) { confirmDelete = true } label: { Label("Delete", systemImage: "trash") }
             }
         } label: {
@@ -940,7 +934,7 @@ struct PostCard: View {
                 if post.authorEmail != me {
                     Button { reporting = ReportSheet.Target(id: post.id, type: "post", ownerEmail: post.authorEmail, preview: post.title.isEmpty ? post.text : post.title, link: "/Community?post=\(post.id)") } label: { Label("Report", systemImage: "flag") }
                 }
-                if post.authorEmail == me || model.me?.isAdmin == true {
+                if post.authorEmail == me || model.me?.isModerator == true {
                     Button(role: .destructive) { confirmDelete = true } label: { Label("Delete", systemImage: "trash") }
                 }
             } label: {
@@ -1408,7 +1402,10 @@ struct CommentRow: View {
                             .lineLimit(1)
                         Text(Dates.ago(comment.created)).font(.jakarta(11, .medium)).foregroundStyle(Palette.muted).lineLimit(1)
                     }
-                    if !comment.text.isEmpty { Text(comment.text).font(.jakarta(15)).foregroundStyle(Palette.text) }
+                    if !comment.text.isEmpty {
+                        Text(comment.text).font(.jakarta(15)).foregroundStyle(Palette.text)
+                            .modifier(IncomingFilterCover(text: comment.text, mine: comment.authorEmail == me))
+                    }
                     if !comment.gifURL.isEmpty {
                         // GIFs play, stickers show without a frame (same as chats).
                         MessageMedia(url: comment.gifURL, width: 180)
@@ -1453,7 +1450,7 @@ struct CommentRow: View {
         .contextMenu {
             if !comment.text.isEmpty { Button { UIPasteboard.general.string = comment.text } label: { Label("Copy", systemImage: "doc.on.doc") } }
             if comment.authorEmail != me { Button(action: onReport) { Label("Report", systemImage: "flag") } }
-            if comment.authorEmail == me || model.me?.isAdmin == true { Button(role: .destructive, action: onDelete) { Label("Delete", systemImage: "trash") } }
+            if comment.authorEmail == me || model.me?.isModerator == true { Button(role: .destructive, action: onDelete) { Label("Delete", systemImage: "trash") } }
         }
     }
 }

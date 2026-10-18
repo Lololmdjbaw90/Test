@@ -167,6 +167,10 @@ struct BunnyLook: Codable, Equatable {
     var top = BunnyTop.sailor
     var face = BunnyFace.cute
     var scene = BunnyScene.candy
+    // A picture item worn instead of the top, and one on her head or face
+    // (instead of the bow); ids from BunnyCatalog, empty for none.
+    var wear = ""
+    var head = ""
 
     func tint(_ part: BunnyPart) -> BunnyTint {
         let list = part.tints
@@ -198,6 +202,9 @@ struct BunnyLook: Codable, Equatable {
         look.top = BunnyTop.allCases.randomElement() ?? BunnyTop.sailor
         look.face = BunnyFace.allCases.randomElement() ?? BunnyFace.cute
         look.scene = BunnyScene.allCases.randomElement() ?? BunnyScene.candy
+        // Sometimes one of the picture clothes, sometimes something on her head.
+        if Bool.random() { look.wear = BunnyItem.builtIn.filter { $0.slot == .top }.randomElement()?.id ?? "" }
+        if Int.random(in: 0..<3) == 0 { look.head = BunnyItem.builtIn.filter { $0.slot == .head }.randomElement()?.id ?? "" }
         return look
     }
 }
@@ -215,6 +222,8 @@ extension BunnyLook {
         top = (try? c.decodeIfPresent(BunnyTop.self, forKey: .top)) ?? top
         face = (try? c.decodeIfPresent(BunnyFace.self, forKey: .face)) ?? face
         scene = (try? c.decodeIfPresent(BunnyScene.self, forKey: .scene)) ?? scene
+        wear = (try? c.decodeIfPresent(String.self, forKey: .wear)) ?? wear
+        head = (try? c.decodeIfPresent(String.self, forKey: .head)) ?? head
     }
 }
 
@@ -233,6 +242,8 @@ final class BunnyStore {
     func use(_ email: String) {
         guard email != self.email else { return }
         self.email = email
+        // The team's clothes and accessories, in case she wears one.
+        Task { await BunnyCatalog.shared.load() }
         if let data = UserDefaults.standard.data(forKey: key), let saved = try? JSONDecoder().decode(BunnyLook.self, from: data) {
             look = saved
             made = true
@@ -285,6 +296,9 @@ enum BunnyImages {
     static func warmUp(_ look: BunnyLook = BunnyLook()) {
         var names = ["BunnyFur", "BunnyOutline", "BunnyBow", "BunnyCollar", look.face.image, look.face.eyes]
         if let piece = look.top.piece { names.append(piece.rawValue) }
+        for id in [look.wear, look.head] {
+            if let asset = BunnyItem.builtIn.first(where: { $0.id == id })?.asset { names.append(asset) }
+        }
         let missing = names.filter { cache[$0] == nil }
         guard !missing.isEmpty else { return }
         Task.detached(priority: .utility) {
@@ -337,11 +351,20 @@ struct BunnyFigure: View, Equatable {
         ZStack {
             BunnyLayer("BunnyFur", look.tint(.fur))
             BunnyImages.image("BunnyOutline").resizable().interpolation(.high)
-            if let piece = look.top.piece { BunnyLayer(piece, outfit) }
-            if look.top == .sailor { BunnyLayer("BunnyCollar", look.tint(.collar)) }
+            if let item = BunnyCatalog.shared.item(look.wear) {
+                BunnyItemLayer(item: item)
+            } else {
+                if let piece = look.top.piece { BunnyLayer(piece, outfit) }
+                if look.top == .sailor { BunnyLayer("BunnyCollar", look.tint(.collar)) }
+            }
             BunnyImages.image(look.face.image).resizable().interpolation(.high)
             BunnyImages.image(look.face.eyes).resizable().interpolation(.high)
-            if look.bowOn { BunnyLayer("BunnyBow", look.tint(.bow)) }
+            // A hat or accessory takes the bow's place.
+            if let item = BunnyCatalog.shared.item(look.head) {
+                BunnyItemLayer(item: item)
+            } else if look.bowOn {
+                BunnyLayer("BunnyBow", look.tint(.bow))
+            }
         }
         .aspectRatio(BunnyArt.aspect, contentMode: .fit)
         .drawingGroup()
@@ -377,7 +400,7 @@ struct BunnyBuddy: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        let moving = lively && !reduceMotion && Motion.ambient
+        let moving = lively && !reduceMotion && Motion.ambient && !Motion.paused
         BunnyFigure(look: look)
             .equatable()
             .frame(height: height)
@@ -415,25 +438,27 @@ struct BunnyBuddy: View {
     }
 }
 
-// Your bunny standing on the background you picked for her in the maker (a
-// soft rounded tile she pops out of), so it shows wherever she does.
+// Your bunny inside a rounded tile of the background you picked for her in
+// the maker, so it shows wherever she does. She stays inside the tile (with
+// room above her ears for a hop).
 struct BunnyOnScene: View {
     var look: BunnyLook
+    // The tile's height.
     var height: CGFloat = 104
     var lively = true
 
     var body: some View {
         let tile = RoundedRectangle(cornerRadius: height * 0.24, style: .continuous)
-        BunnyBuddy(look: look, height: height, lively: lively)
-            .padding(.horizontal, height * 0.07)
-            .background(alignment: .bottom) {
-                BunnySceneView(scene: look.scene, animated: false)
-                    .frame(width: height * 0.86, height: height * 0.78)
-                    .clipShape(tile)
-                    .overlay(tile.strokeBorder(.white.opacity(0.75), lineWidth: 2))
-                    .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
-                    .allowsHitTesting(false)
-            }
+        ZStack(alignment: .bottom) {
+            BunnySceneView(scene: look.scene, animated: false)
+                .allowsHitTesting(false)
+            BunnyBuddy(look: look, height: height * 0.8, lively: lively)
+                .padding(.bottom, height * 0.04)
+        }
+        .frame(width: height * 0.9, height: height)
+        .clipShape(tile)
+        .overlay(tile.strokeBorder(.white.opacity(0.75), lineWidth: 2))
+        .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
     }
 }
 

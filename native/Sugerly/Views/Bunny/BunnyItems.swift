@@ -1,0 +1,279 @@
+import SwiftUI
+import UIKit
+import PhotosUI
+
+// Clothes and accessories that are whole pictures on the bunny's canvas
+// (878 × 1210, see BunnyArt), drawn as they were painted. Some come with the
+// app; the team can add more from the bunny maker (they're kept in the
+// BunnyItem table and the picture in Storage), and everyone sees them.
+
+// Where an item goes: clothes (instead of a top) or on her head and face
+// (instead of the bow).
+enum BunnySlot: String, CaseIterable, Identifiable {
+    case top, head
+    var id: String { rawValue }
+    var label: String { self == .top ? "Clothes" : "Accessory" }
+}
+
+struct BunnyItem: Identifiable, Equatable {
+    let id: String
+    var name: String
+    var slot: BunnySlot
+    // A picture in the app, or an uploaded one.
+    var asset = ""
+    var url = ""
+
+    var uploaded: Bool { asset.isEmpty }
+
+    // How a choice tile zooms into the picture (the part she wears).
+    var tileZoom: CGFloat { slot == .top ? 2.2 : 1.35 }
+    var tileFocus: UnitPoint { slot == .top ? UnitPoint(x: 0.5, y: 0.7) : UnitPoint(x: 0.5, y: 0.3) }
+
+    static let builtIn: [BunnyItem] = [
+        BunnyItem(id: "maid", name: "Maid", slot: .top, asset: "BunnyItemMaid"),
+        BunnyItem(id: "frills", name: "Frills", slot: .top, asset: "BunnyItemFrills"),
+        BunnyItem(id: "stripes", name: "Stripes", slot: .top, asset: "BunnyItemStripes"),
+        BunnyItem(id: "shirt", name: "Shirt", slot: .top, asset: "BunnyItemShirt"),
+        BunnyItem(id: "sweater", name: "Sweater", slot: .top, asset: "BunnyItemSweater"),
+        BunnyItem(id: "collar-top", name: "Peach", slot: .top, asset: "BunnyItemCollarTop"),
+        BunnyItem(id: "bow-top", name: "Bow top", slot: .top, asset: "BunnyItemBowTop"),
+        BunnyItem(id: "suit", name: "Suit", slot: .top, asset: "BunnyItemSuit"),
+        BunnyItem(id: "clips", name: "Clips", slot: .head, asset: "BunnyItemClips"),
+        BunnyItem(id: "headphones", name: "Headphones", slot: .head, asset: "BunnyItemHeadphones"),
+        BunnyItem(id: "headband", name: "Headband", slot: .head, asset: "BunnyItemHeadband"),
+        BunnyItem(id: "beret", name: "Beret", slot: .head, asset: "BunnyItemBeret"),
+        BunnyItem(id: "straw-hat", name: "Straw hat", slot: .head, asset: "BunnyItemStrawHat"),
+        BunnyItem(id: "hood", name: "Hood", slot: .head, asset: "BunnyItemHood"),
+        BunnyItem(id: "paper-bag", name: "Paper bag", slot: .head, asset: "BunnyItemPaperBag"),
+    ]
+}
+
+extension BunnyItem {
+    init?(doc: Doc) {
+        let id = doc.str("id")
+        let url = doc.str("image_url")
+        guard !id.isEmpty, !url.isEmpty, let slot = BunnySlot(rawValue: doc.str("slot")) else { return nil }
+        self.init(id: id, name: doc.str("name").isEmpty ? "Item" : doc.str("name"), slot: slot, url: url)
+    }
+}
+
+// Every item: ours, then the team's (loaded now and then).
+@MainActor
+@Observable
+final class BunnyCatalog {
+    static let shared = BunnyCatalog()
+    private(set) var uploaded: [BunnyItem] = []
+    @ObservationIgnored private var loadedAt = Date.distantPast
+
+    var all: [BunnyItem] { BunnyItem.builtIn + uploaded }
+
+    func items(_ slot: BunnySlot) -> [BunnyItem] { all.filter { $0.slot == slot } }
+
+    func item(_ id: String) -> BunnyItem? {
+        id.isEmpty ? nil : all.first { $0.id == id }
+    }
+
+    func load(force: Bool = false) async {
+        guard force || Date().timeIntervalSince(loadedAt) > 300 else { return }
+        guard let docs = try? await FS.query("BunnyItem", [], orderBy: "created_date", descending: false, limit: 300) else { return }
+        uploaded = docs.compactMap(BunnyItem.init(doc:))
+        loadedAt = Date()
+    }
+
+    // The team adds a picture for everyone.
+    func add(name: String, slot: BunnySlot, png: Data, by email: String) async throws {
+        let url = try await StorageClient.upload(png, contentType: "image/png", fileExtension: "png")
+        let doc = try await FS.create("BunnyItem", [
+            "name": name, "slot": slot.rawValue, "image_url": url,
+            "created_by": email, "created_date": FS.nowISO(),
+        ])
+        if let item = BunnyItem(doc: doc) { uploaded.append(item) } else { await load(force: true) }
+    }
+
+    func remove(_ item: BunnyItem) async throws {
+        try await FS.delete("BunnyItem", item.id)
+        uploaded.removeAll { $0.id == item.id }
+    }
+}
+
+// Uploaded item pictures: fetched once, kept on the phone, decoded at the
+// same size as the app's own layers.
+@MainActor
+@Observable
+final class BunnyRemoteImages {
+    static let shared = BunnyRemoteImages()
+    private(set) var images: [String: UIImage] = [:]
+    @ObservationIgnored private var loading: Set<String> = []
+
+    private static let folder: URL = {
+        let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("bunny-items", isDirectory: true)
+        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        return base
+    }()
+
+    private static func file(_ url: String) -> URL {
+        let name = url.unicodeScalars.reduce(UInt64(1469598103934665603)) { ($0 ^ UInt64($1.value)) &* 1099511628211 }
+        return folder.appendingPathComponent("\(name).png")
+    }
+
+    func fetch(_ url: String) async {
+        guard !url.isEmpty, images[url] == nil, !loading.contains(url) else { return }
+        loading.insert(url)
+        defer { loading.remove(url) }
+        let file = Self.file(url)
+        var data = try? Data(contentsOf: file)
+        if data == nil, let link = URL(string: url), let fresh = try? await URLSession.shared.data(from: link).0 {
+            data = fresh
+            try? fresh.write(to: file, options: .atomic)
+        }
+        guard let data else { return }
+        let image = await Task.detached(priority: .utility) { () -> UIImage? in
+            guard let full = UIImage(data: data) else { return nil }
+            return full.preparingThumbnail(of: CGSize(width: 653, height: 900)) ?? full
+        }.value
+        if let image { images[url] = image }
+    }
+}
+
+// One item drawn on the canvas.
+struct BunnyItemLayer: View {
+    let item: BunnyItem
+
+    var body: some View {
+        if !item.asset.isEmpty {
+            BunnyImages.image(item.asset).resizable().interpolation(.high)
+        } else {
+            ZStack {
+                if let image = BunnyRemoteImages.shared.images[item.url] {
+                    Image(uiImage: image).resizable().interpolation(.high)
+                } else {
+                    Color.clear
+                }
+            }
+            .task(id: item.url) { await BunnyRemoteImages.shared.fetch(item.url) }
+        }
+    }
+}
+
+// MARK: - Adding an item (the team)
+
+struct BunnyItemUploader: View {
+    var slot: BunnySlot
+    var look: BunnyLook
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var pick: PhotosPickerItem?
+    @State private var png: Data?
+    @State private var preview: UIImage?
+    @State private var name = ""
+    @State private var chosenSlot: BunnySlot = .top
+    @State private var problem: String?
+    @State private var busy = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Draw the item on a transparent PNG the same size as the bunny (878 × 1210), in the same place you'd see it on her. It shows for everyone straight away.")
+                        .font(.jakarta(13, .medium)).foregroundStyle(Palette.text2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    stage
+                    PhotosPicker(selection: $pick, matching: .images) {
+                        Label(png == nil ? "Choose the picture" : "Choose another", systemImage: "photo.on.rectangle.angled")
+                    }
+                    .buttonStyle(OutlineButtonStyle(fullWidth: true))
+                    if let problem {
+                        Label(problem, systemImage: "exclamationmark.triangle.fill")
+                            .font(.jakarta(13, .semibold)).foregroundStyle(Palette.danger)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Name").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+                        SugarField(placeholder: "Like \"Witch hat\"", text: $name)
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Where it goes").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+                        Picker("Where it goes", selection: $chosenSlot) {
+                            Text("Clothes").tag(BunnySlot.top)
+                            Text("Head or face").tag(BunnySlot.head)
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                    Button { Task { await upload() } } label: {
+                        HStack(spacing: 8) {
+                            if busy { ProgressView().tint(.white) } else { Image(systemName: "icloud.and.arrow.up.fill") }
+                            Text("Add for everyone")
+                        }
+                    }
+                    .buttonStyle(GradientButtonStyle(height: 50))
+                    .disabled(busy || png == nil || name.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                .padding(18)
+            }
+            .sugarBackground()
+            .navigationTitle("New bunny item")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            }
+        }
+        .onAppear { chosenSlot = slot }
+        .onChange(of: pick) { _, next in Task { await load(next) } }
+    }
+
+    // Her with the new item on, as she'd wear it.
+    private var stage: some View {
+        var base = look
+        if chosenSlot == .top { base.top = .none; base.wear = "" } else { base.head = ""; base.bowOn = false }
+        return ZStack {
+            BunnySceneView(scene: look.scene, animated: false)
+            ZStack {
+                BunnyFigure(look: base)
+                if let preview { Image(uiImage: preview).resizable().interpolation(.high) }
+            }
+            .aspectRatio(BunnyArt.aspect, contentMode: .fit)
+            .padding(.vertical, 14)
+        }
+        .frame(height: 260)
+        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(Palette.rim(0.7), lineWidth: 1.5))
+    }
+
+    private func load(_ item: PhotosPickerItem?) async {
+        guard let item, let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) else {
+            if item != nil { problem = "Couldn't open that picture." }
+            return
+        }
+        let ratio = image.size.width / max(image.size.height, 1)
+        guard abs(ratio - BunnyArt.aspect) < 0.02 else {
+            problem = "It needs the bunny's shape: 878 × 1210 (or the same shape, bigger)."
+            png = nil
+            preview = nil
+            return
+        }
+        guard let cg = image.cgImage, [.first, .last, .premultipliedFirst, .premultipliedLast].contains(cg.alphaInfo) else {
+            problem = "It needs a see-through background (a PNG with transparency)."
+            png = nil
+            preview = nil
+            return
+        }
+        problem = nil
+        // Kept at the app's own layer size, as a PNG (keeps the see-through parts).
+        let fitted = image.size.width > 878 ? (image.preparingThumbnail(of: CGSize(width: 878, height: 1210)) ?? image) : image
+        png = fitted.pngData()
+        preview = fitted
+    }
+
+    private func upload() async {
+        guard let png, let me = model.me else { return }
+        busy = true
+        defer { busy = false }
+        do {
+            try await BunnyCatalog.shared.add(name: name.trimmingCharacters(in: .whitespaces), slot: chosenSlot, png: png, by: me.email)
+            model.showToast("Added for everyone", icon: "hare.fill")
+            dismiss()
+        } catch {
+            problem = error.localizedDescription
+        }
+    }
+}

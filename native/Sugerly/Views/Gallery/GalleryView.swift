@@ -575,7 +575,7 @@ struct ArtworkDetailView: View {
                         if artwork.authorEmail != me {
                             Button { reporting = ReportSheet.Target(id: artwork.id, type: "artwork", ownerEmail: artwork.authorEmail, preview: artwork.title, link: "/Gallery?art=\(artwork.id)") } label: { Label("Report", systemImage: "flag") }
                         }
-                        if artwork.authorEmail == me || model.me?.isAdmin == true {
+                        if artwork.authorEmail == me || model.me?.isModerator == true {
                             Button(role: .destructive) {
                                 Task {
                                     do {

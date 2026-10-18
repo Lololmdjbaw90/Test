@@ -3,7 +3,7 @@ import UIKit
 import Photos
 
 // The bunny maker: your bunny on a little stage at the top, then a row of
-// tabs (fur, face, outfit, bow, collar, background) and the choices for
+// tabs (fur, face, outfit, accessories, bow, collar, background) and the choices for
 // the one you picked. Changes show straight away; Done keeps them. You can
 // shuffle, save her to Photos, or make her your profile picture.
 struct BunnyMakerView: View {
@@ -16,11 +16,20 @@ struct BunnyMakerView: View {
     @State private var busy = false
     @State private var cheer = 0
     @State private var shuffles = 0
+    // The team adding a new item (clothes or an accessory).
+    @State private var adding: BunnySlot?
+    @State private var catalog = BunnyCatalog.shared
 
     enum Tab: String, CaseIterable, Identifiable {
-        case fur, face, outfit, bow, collar, scene
+        case fur, face, outfit, accessory, bow, collar, scene
         var id: String { rawValue }
-        var label: String { self == .scene ? "Background" : rawValue.capitalized }
+        var label: String {
+            switch self {
+            case .scene: return "Background"
+            case .accessory: return "Accessories"
+            default: return rawValue.capitalized
+            }
+        }
         var icon: String {
             switch self {
             case .fur: return "hare.fill"
@@ -28,6 +37,7 @@ struct BunnyMakerView: View {
             case .collar: return "seal.fill"
             case .outfit: return "tshirt.fill"
             case .face: return "face.smiling.inverse"
+            case .accessory: return "headphones"
             case .scene: return "photo.fill"
             }
         }
@@ -38,6 +48,7 @@ struct BunnyMakerView: View {
             case .collar: return .grape
             case .outfit: return .sky
             case .face: return .lemon
+            case .accessory: return .grape
             case .scene: return .mint
             }
         }
@@ -80,7 +91,14 @@ struct BunnyMakerView: View {
         .onChange(of: look) { _, next in if loaded { store.save(next) } }
         .sensoryFeedback(.selection, trigger: look)
         .sensoryFeedback(.success, trigger: cheer)
+        .task { await catalog.load() }
+        .sheet(item: $adding) { slot in
+            BunnyItemUploader(slot: slot, look: look)
+                .presentationCornerRadius(30)
+        }
     }
+
+    private var isAdmin: Bool { model.me?.isAdmin == true }
 
     // MARK: stage
 
@@ -159,7 +177,15 @@ struct BunnyMakerView: View {
 
     @ViewBuilder
     private var choices: some View {
-        if tab == .bow {
+        if tab == .bow && !look.head.isEmpty {
+            VStack(spacing: 12) {
+                EmptyCard(icon: "headphones", title: "Bow hidden", text: "She's wearing an accessory, which takes the bow's place.", compact: true)
+                Button { withAnimation(Motion.playful) { look.head = "" } } label: {
+                    Label("Take the accessory off", systemImage: "xmark.circle")
+                }
+                .buttonStyle(OutlineButtonStyle(fullWidth: true))
+            }
+        } else if tab == .bow {
             VStack(spacing: 12) {
                 Toggle(isOn: Binding(get: { look.bowOn }, set: { on in withAnimation(Motion.playful) { look.bowOn = on } })) {
                     Text("Wear a bow").font(.jakarta(15, .semibold)).foregroundStyle(Palette.text)
@@ -169,7 +195,7 @@ struct BunnyMakerView: View {
                 .sugarCard(radius: 18)
                 if look.bowOn { swatches(.bow).transition(.opacity.combined(with: .scale(scale: 0.96))) }
             }
-        } else if tab == .collar && look.top != .sailor {
+        } else if tab == .collar && (look.top != .sailor || !look.wear.isEmpty) {
             EmptyCard(icon: "tshirt.fill", title: "No collar", text: "The collar comes with the sailor top. Pick it under Outfit.", compact: true)
         } else if let part = tab.part {
             swatches(part)
@@ -177,6 +203,8 @@ struct BunnyMakerView: View {
             faces
         } else if tab == .outfit {
             outfits
+        } else if tab == .accessory {
+            accessories
         } else {
             scenes
         }
@@ -219,18 +247,98 @@ struct BunnyMakerView: View {
         .sugarCard(radius: 24)
     }
 
-    // Her top (one at a time), each shown as the piece itself, then the colour.
+    // Her top (one at a time), each shown as the piece itself, then the
+    // picture clothes; the colour works on the first ones.
     private var outfits: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        let tops = catalog.items(.top)
+        return VStack(alignment: .leading, spacing: 14) {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
                 ForEach(Array(BunnyTop.allCases.enumerated()), id: \.element.id) { i, top in
-                    clothes(top.label, pieces: top.piece.map { [$0] } ?? [], on: look.top == top, index: i) { look.top = top }
+                    clothes(top.label, pieces: top.piece.map { [$0] } ?? [], on: look.wear.isEmpty && look.top == top, index: i) {
+                        look.top = top
+                        look.wear = ""
+                    }
                 }
+                ForEach(Array(tops.enumerated()), id: \.element.id) { i, item in
+                    itemTile(item, on: look.wear == item.id, index: BunnyTop.allCases.count + i) { look.wear = item.id }
+                }
+                if isAdmin { addTile(.top, index: BunnyTop.allCases.count + tops.count) }
             }
-            if look.top != .none {
+            if look.wear.isEmpty && look.top != .none {
                 ListHeader(title: "COLOUR").padding(.leading, 6)
                 swatches(.outfit)
             }
+        }
+    }
+
+    // Hats, headphones and the like (one at a time, instead of the bow).
+    private var accessories: some View {
+        let heads = catalog.items(.head)
+        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+            clothes("None", pieces: [], on: look.head.isEmpty, index: 0) { look.head = "" }
+            ForEach(Array(heads.enumerated()), id: \.element.id) { i, item in
+                itemTile(item, on: look.head == item.id, index: i + 1) { look.head = item.id }
+            }
+            if isAdmin { addTile(.head, index: heads.count + 1) }
+        }
+    }
+
+    // A picture item, zoomed to the part she wears.
+    private func itemTile(_ item: BunnyItem, on: Bool, index: Int, pick: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(Motion.playful) { pick() }
+        } label: {
+            VStack(spacing: 6) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous).fill(on ? Theme.soft : Palette.surface2)
+                    BunnyItemLayer(item: item)
+                        .aspectRatio(BunnyArt.aspect, contentMode: .fit)
+                        .scaleEffect(item.tileZoom, anchor: item.tileFocus)
+                }
+                .frame(height: 84)
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(on ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.border), lineWidth: on ? 3 : 1))
+                .scaleEffect(on ? 1.03 : 1)
+                Text(item.name).font(.jakarta(12, on ? .bold : .medium))
+                    .foregroundStyle(on ? Palette.text : Palette.text2).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(BouncyStyle(scale: 0.93))
+        .accessibilityLabel(item.name)
+        .accessibilityAddTraits(on ? .isSelected : [])
+        .modifier(ChoicePop(index: index))
+        .modifier(TeamDelete(enabled: isAdmin && item.uploaded) { Task { await remove(item) } })
+    }
+
+    // The team adds a new item here.
+    private func addTile(_ slot: BunnySlot, index: Int) -> some View {
+        Button { adding = slot } label: {
+            VStack(spacing: 6) {
+                Image(systemName: "plus")
+                    .font(.system(size: 22, weight: .bold)).foregroundStyle(Theme.main)
+                    .frame(height: 84)
+                    .frame(maxWidth: .infinity)
+                    .background(Theme.soft, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.main.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5])))
+                Text("Add item").font(.jakarta(12, .bold)).foregroundStyle(Theme.main).lineLimit(1)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(BouncyStyle(scale: 0.93))
+        .accessibilityLabel("Add a new \(slot == .top ? "clothes" : "accessory") item for everyone")
+        .modifier(ChoicePop(index: index))
+    }
+
+    private func remove(_ item: BunnyItem) async {
+        do {
+            try await catalog.remove(item)
+            if look.wear == item.id { look.wear = "" }
+            if look.head == item.id { look.head = "" }
+            model.showToast("Item deleted", icon: "trash.fill")
+        } catch {
+            model.showToast("Couldn't delete it — \(error.localizedDescription)", error: true)
         }
     }
 
@@ -376,7 +484,7 @@ struct BunnyMakerView: View {
         busy = true
         defer { busy = false }
         do {
-            let url = try await StorageClient.upload(data, contentType: "image/png", fileExtension: "png")
+            let url = try await StorageClient.upload(data, contentType: "image/png", fileExtension: "png", screen: false)
             try await model.updateMe(["profile_picture": url])
             cheer += 1
             model.showToast("Your bunny is your profile picture now", icon: "hare.fill")
@@ -418,5 +526,21 @@ private struct ChoicePop: ViewModifier {
                 guard !reduceMotion else { return }
                 withAnimation(Motion.playful.delay(Double(min(index, 10)) * 0.035)) { shown = true }
             }
+    }
+}
+
+// Long-press an uploaded item to delete it (the team only).
+private struct TeamDelete: ViewModifier {
+    let enabled: Bool
+    let action: () -> Void
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.contextMenu {
+                Button(role: .destructive, action: action) { Label("Delete item", systemImage: "trash") }
+            }
+        } else {
+            content
+        }
     }
 }

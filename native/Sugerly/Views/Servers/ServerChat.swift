@@ -153,7 +153,7 @@ struct ChannelChatView: View {
         if access.can(.pin_messages) || access.can(.manage_messages) {
             Button { pin(message) } label: { Label(message.pinned ? "Unpin" : "Pin", systemImage: message.pinned ? "pin.slash" : "pin") }
         }
-        if message.authorEmail == me || access.can(.manage_messages) || model.me?.isAdmin == true {
+        if message.authorEmail == me || access.can(.manage_messages) || model.me?.isModerator == true {
             Button(role: .destructive) { confirmDelete = message } label: { Label("Delete message", systemImage: "trash") }
         }
         if message.authorEmail != me {
@@ -441,6 +441,7 @@ struct ChannelMessageRow: View {
                     if !message.text.isEmpty {
                         (Text(message.text).font(.jakarta(15)).foregroundColor(Palette.text)
                          + Text(message.edited ? "  (edited)" : "").font(.jakarta(11)).foregroundColor(Palette.muted))
+                            .modifier(IncomingFilterCover(text: message.text, mine: mine))
                     }
                     if !message.imageURL.isEmpty {
                         MessageMedia(url: message.imageURL, width: 260, widest: 1.8)

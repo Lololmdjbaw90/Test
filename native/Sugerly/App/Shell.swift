@@ -760,6 +760,7 @@ struct MenuDrawer: View {
                         .ignoresSafeArea()
                         .contentShape(Rectangle())
                         .onTapGesture { open = false }
+                        .gesture(closeDrag(width))
                         .transition(.opacity)
                         .accessibilityLabel("Close menu")
                         .accessibilityAddTraits(.isButton)
@@ -768,21 +769,16 @@ struct MenuDrawer: View {
                         .frame(width: width)
                         .frame(maxHeight: .infinity)
                         .background { DrawerBackdrop() }
+                        // A strip along the right edge to swipe it shut (not
+                        // over the menu itself, so scrolling it stays smooth).
+                        .overlay(alignment: .trailing) {
+                            Color.clear
+                                .frame(width: 30)
+                                .contentShape(Rectangle())
+                                .offset(x: 15)
+                                .gesture(closeDrag(width))
+                        }
                         .offset(x: -drag)
-                        .simultaneousGesture(
-                            DragGesture(minimumDistance: 20)
-                                .onChanged { value in
-                                    // Only sideways drags to the left move it.
-                                    guard drag > 0 || abs(value.translation.width) > abs(value.translation.height) * 1.4 else { return }
-                                    drag = max(0, -value.translation.width)
-                                }
-                                .onEnded { value in
-                                    if drag > width * 0.3 || (drag > 0 && value.predictedEndTranslation.width < -width * 0.5) {
-                                        open = false
-                                    }
-                                    withAnimation(Motion.release) { drag = 0 }
-                                }
-                        )
                         .accessibilityAddTraits(.isModal)
                         .transition(.move(edge: .leading))
                         .zIndex(1)
@@ -790,6 +786,20 @@ struct MenuDrawer: View {
             }
             .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.38, dampingFraction: 0.88), value: open)
         }
+        // The page behind holds still while the menu is open.
+        .onChange(of: open) { _, now in AmbientPause.shared.on = now }
+    }
+
+    // Dragging to the left closes it.
+    private func closeDrag(_ width: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { value in drag = max(0, -value.translation.width) }
+            .onEnded { value in
+                if drag > width * 0.3 || value.predictedEndTranslation.width < -width * 0.5 {
+                    open = false
+                }
+                withAnimation(Motion.release) { drag = 0 }
+            }
     }
 }
 

@@ -172,7 +172,11 @@ struct RootView: View {
         }
         .animation(.smooth(duration: 0.35), value: model.phase)
         .animation(.smooth(duration: 0.5), value: model.needsSetup)
-        .task { await model.start() }
+        .task {
+            // Uploads that break the picture rules add strike points to you.
+            MediaGuard.app = model
+            await model.start()
+        }
         .task { await site.load() }
     }
 }

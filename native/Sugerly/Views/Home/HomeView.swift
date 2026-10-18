@@ -415,13 +415,8 @@ struct HomeView: View {
             }
             .pastelCard(radius: 24, padding: 16)
             .overlay {
-                // Sparkles rising through the hello, and a shine sweeping by.
-                TwinkleField(colors: [UIColor(hex: 0xFFC53D), .white, UIColor(Theme.main)])
-                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    .opacity(0.85)
-                    .allowsHitTesting(false)
-            }
-            .overlay {
+                // A shine sweeping by (no sparkles: the bunny's tile is the
+                // card's sparkle).
                 ShineSweep(every: 5.5, strength: 0.32)
                     .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             }

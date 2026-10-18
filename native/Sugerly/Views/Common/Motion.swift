@@ -48,6 +48,11 @@ enum Motion {
     /// automatic UI tests (which wait for the screen to be still).
     static let ambient: Bool = !ProcessInfo.processInfo.arguments.contains { $0.hasSuffix("-ui-test") }
 
+    /// True while the menu covers the page: the page's own little
+    /// animations (the bunny's float, shines, hopping icons) pause, so
+    /// scrolling what's on top stays smooth.
+    @MainActor static var paused: Bool { AmbientPause.shared.on }
+
     /// The animation to use, or a short fade with Reduce Motion on.
     static func pick(_ animation: Animation) -> Animation { reduced ? fade : animation }
 
@@ -124,4 +129,13 @@ private struct MotionAnimation<V: Equatable>: ViewModifier {
     func body(content: Content) -> some View {
         content.animation(reduceMotion ? Motion.fade : animation, value: value)
     }
+}
+
+// See Motion.paused. Only the small views that animate on their own read
+// it, so switching it redraws just those.
+@MainActor
+@Observable
+final class AmbientPause {
+    static let shared = AmbientPause()
+    var on = false
 }

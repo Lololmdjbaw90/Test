@@ -1,5 +1,6 @@
 import Foundation
 import NaturalLanguage
+import SwiftUI
 
 // Sugerly's moderation for everything people write, the same steps as the
 // website (src/lib/modEngine.js + src/lib/moderation.js) on the same word
@@ -268,6 +269,7 @@ enum ModEngine {
             add(phrase.cat, phrase.w, phrase.key.trimmingCharacters(in: .whitespaces))
         }
         for (re, w) in patterns["threat"] ?? [] where matches(re, p) { add("threat", w, "threat") }
+        for (re, w) in patterns["grooming"] ?? [] where matches(re, p) { add("sexual", w, "unsafe contact") }
         let support = (patterns["selfHarm"] ?? []).contains { matches($0.0, p) }
 
         // Aimed at someone?
@@ -594,6 +596,14 @@ enum TextGuard {
         return true
     }
 
+    /// A picture or video that wasn't allowed adds strike points too.
+    static func penalize(_ points: Int, model: AppModel) {
+        guard let me = model.me, points > 0 else { return }
+        var state = load(me.email)
+        _ = addStrike(points, state: &state, model: model, now: Date().timeIntervalSince1970)
+        save(state, me.email)
+    }
+
     /// The post didn't go through (no internet, the upload failed): that try
     /// doesn't count, so trying again isn't met with "Slow down!".
     static func forget(_ kind: ModKind, model: AppModel) {
@@ -629,5 +639,90 @@ enum TextGuard {
             Task { try? await model.updateMe(patch) }
         }
         return until
+    }
+}
+
+// MARK: - What you see from others
+
+// Messages and comments from other people that contain one of your hidden
+// words, or that the filter finds hurtful (Standard) or rude (Strict), are
+// folded away behind "Hidden · Tap to show". Your own are never hidden.
+// Settings → Safety picks the level and the words.
+@MainActor
+enum IncomingFilter {
+    enum Level: String, CaseIterable, Identifiable {
+        case off, standard, strict
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .off: return "Off"
+            case .standard: return "Standard"
+            case .strict: return "Strict"
+            }
+        }
+    }
+
+    static let levelKey = "sugerly.safety.filter"
+    static let wordsKey = "sugerly.safety.hiddenWords"
+
+    private static let hurtful: Set<String> = ["hate", "threat", "sexual", "harassment", "scam"]
+    private static var cache: [String: String] = [:]
+
+    static func words(_ stored: String) -> [String] {
+        stored.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+
+    /// Why it's hidden, or nil to show it.
+    static func reason(_ text: String, level: String, words stored: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let key = "\(level)|\(stored.hashValue)|\(trimmed)"
+        if let hit = cache[key] { return hit.isEmpty ? nil : hit }
+        let found = decide(trimmed, level: Level(rawValue: level) ?? .standard, words: words(stored))
+        if cache.count > 3000 { cache.removeAll() }
+        cache[key] = found ?? ""
+        return found
+    }
+
+    private static func decide(_ text: String, level: Level, words: [String]) -> String? {
+        let said = " " + ModEngine.tokenize(text).joined(separator: " ") + " "
+        for word in words {
+            let wanted = ModEngine.tokenize(word).joined(separator: " ")
+            if !wanted.isEmpty && said.contains(" \(wanted) ") { return "a word you hid" }
+        }
+        guard level != .off else { return nil }
+        let result = ModEngine.analyze(text, kind: .comment)
+        let category = result.category ?? ""
+        if result.blocked && hurtful.contains(category) { return "may be hurtful" }
+        if level == .strict && result.score >= 0.4 && (hurtful.contains(category) || category == "profanity") { return "may be rude" }
+        return nil
+    }
+}
+
+// Folds a message or comment away when IncomingFilter says so.
+struct IncomingFilterCover: ViewModifier {
+    let text: String
+    var mine = false
+    @AppStorage(IncomingFilter.levelKey) private var level = IncomingFilter.Level.standard.rawValue
+    @AppStorage(IncomingFilter.wordsKey) private var words = ""
+    @State private var shown = false
+
+    func body(content: Content) -> some View {
+        if !mine, !shown, let why = IncomingFilter.reason(text, level: level, words: words) {
+            Button { withAnimation(Motion.fade) { shown = true } } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "eye.slash.fill").font(.system(size: 12, weight: .bold))
+                    Text("Hidden, \(why) · Tap to show").font(.jakarta(13, .semibold)).lineLimit(2)
+                }
+                .foregroundStyle(Palette.muted)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(Palette.surface2, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Hidden message, \(why)")
+            .accessibilityHint("Shows it")
+        } else {
+            content
+        }
     }
 }

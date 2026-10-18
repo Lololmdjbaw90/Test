@@ -34,6 +34,7 @@ struct Avatar: View {
                 }
             }
             .frame(width: size, height: size)
+            .modifier(SensitiveCover(url: url, compact: true))
             .clipShape(Circle())
 
             PresenceBadge(presence: presence, online: online, size: size)
@@ -207,6 +208,7 @@ struct RemoteImage: View {
                 }
             }
         }
+        .modifier(SensitiveCover(url: url))
         .task(id: url) {
             guard !url.isEmpty else { return }
             if animated {
@@ -258,6 +260,7 @@ struct ArtImage: View {
                 }
             }
             .clipped()
+            .modifier(SensitiveCover(url: url))
             .task(id: url) {
                 guard !url.isEmpty, image == nil else { return }
                 if AnimatedImages.looksAnimated(url) {
@@ -514,5 +517,50 @@ enum Moderation {
     static func hasLink(_ text: String) -> Bool {
         let pattern = #"(https?://|www\.)\S+|\b[a-z0-9-]+\.(com|net|org|io|co|gg|ly|me|app|xyz|link|shop|site)\b"#
         return text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+}
+
+// Pictures the upload check marked sensitive (saved as "sensitive-…", see
+// MediaGuard) are blurred with a note until tapped, unless you chose to see
+// them in Settings → Safety. Small ones (profile pictures) just stay blurred.
+struct SensitiveCover: ViewModifier {
+    let url: String
+    var compact = false
+    @AppStorage(SensitiveCover.showKey) private var showAll = false
+    @State private var revealed = false
+
+    static let showKey = "sugerly.safety.showSensitive"
+
+    static func isSensitive(_ url: String) -> Bool {
+        url.contains("sensitive") && (url.removingPercentEncoding ?? url).contains("/sensitive-")
+    }
+
+    func body(content: Content) -> some View {
+        if Self.isSensitive(url) && !showAll && !revealed {
+            if compact {
+                content.blur(radius: 6, opaque: true)
+            } else {
+                content
+                    .blur(radius: 28, opaque: true)
+                    .overlay {
+                        VStack(spacing: 6) {
+                            Image(systemName: "eye.slash.fill").font(.system(size: 20, weight: .bold))
+                            Text("Sensitive content").font(.jakarta(13, .bold))
+                            Text("Tap to show").font(.jakarta(11, .semibold)).opacity(0.85)
+                        }
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.35), radius: 4)
+                        .padding(8)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { withAnimation(Motion.fade) { revealed = true } }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Sensitive content")
+                    .accessibilityHint("Shows the picture")
+                    .accessibilityAddTraits(.isButton)
+            }
+        } else {
+            content
+        }
     }
 }

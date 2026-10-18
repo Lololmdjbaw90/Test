@@ -175,7 +175,19 @@ struct UserProfile: Identifiable, Hashable {
         return until > Date()
     }
 
-    var isAdmin: Bool { role == "admin" || FirebaseConfig.siteOwners.contains(email) }
+    // Site-wide role (owner, co-owner, admin, moderator or member).
+    var siteRole: SiteRole { FirebaseConfig.siteOwners.contains(email) ? .owner : SiteRole(rawValue: role) ?? .member }
+    // Admins and up run the site; moderators and up look after posts and reports.
+    var isAdmin: Bool { siteRole.rank >= SiteRole.admin.rank }
+    var isModerator: Bool { siteRole.rank >= SiteRole.moderator.rank }
+
+    // Whether you can give `next` to `other`: only to people below you, and
+    // only roles below yours (the owner can give any, co-owners admin and
+    // moderator, admins moderator). Same rule as the database's.
+    func canSetRole(_ next: SiteRole, on other: UserProfile) -> Bool {
+        email != other.email && next != .owner
+            && other.siteRole.rank < siteRole.rank && next.rank < siteRole.rank
+    }
 
     // What others see: invisible (or away from the app) shows as offline.
     // Online = seen in the last couple of minutes (the app checks in every
@@ -640,5 +652,49 @@ struct ReelText: Hashable, Identifiable {
     static func isLight(_ v: UInt32) -> Bool {
         let r = Double((v >> 16) & 0xFF), g = Double((v >> 8) & 0xFF), b = Double(v & 0xFF)
         return (r * 299 + g * 587 + b * 114) / 1000 > 150
+    }
+}
+
+// Site-wide roles, highest first (kept in the User table's "role"; the owner
+// is set in FirebaseConfig.siteOwners, not by role).
+enum SiteRole: String, CaseIterable, Identifiable {
+    case owner, coOwner = "co_owner", admin, moderator, member = "user"
+
+    var id: String { rawValue }
+    var rank: Int {
+        switch self {
+        case .owner: return 4
+        case .coOwner: return 3
+        case .admin: return 2
+        case .moderator: return 1
+        case .member: return 0
+        }
+    }
+    var label: String {
+        switch self {
+        case .owner: return "Owner"
+        case .coOwner: return "Co-owner"
+        case .admin: return "Admin"
+        case .moderator: return "Moderator"
+        case .member: return "Member"
+        }
+    }
+    var icon: String {
+        switch self {
+        case .owner: return "crown.fill"
+        case .coOwner: return "star.circle.fill"
+        case .admin: return "shield.lefthalf.filled"
+        case .moderator: return "hammer.fill"
+        case .member: return "person.fill"
+        }
+    }
+    var detail: String {
+        switch self {
+        case .owner: return "Runs Sugerly"
+        case .coOwner: return "Everything an admin can do, and can make admins"
+        case .admin: return "Runs the site, people and settings; can make moderators"
+        case .moderator: return "Looks after posts, comments and reports"
+        case .member: return "No team powers"
+        }
     }
 }

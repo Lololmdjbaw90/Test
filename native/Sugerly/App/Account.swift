@@ -7,9 +7,9 @@ import SwiftUI
 // Log out at the bottom. The round x at the top, a tap on the page beside it
 // or a swipe to the left closes it.
 //
-// It's kept light so it slides smoothly: no page stack inside it (Settings
-// opens on the tab like the other places), and the twinkles, shine and the
-// bunny's float only start once it has slid in.
+// It's kept light so it slides and scrolls smoothly: no page stack inside it
+// (Settings opens on the tab like the other places), no sparkles or shines,
+// and everything that moves on its own holds still while it's open.
 struct AccountView: View, Equatable {
     // Closes the menu and opens a page on the tab you're on.
     var go: (Route) -> Void
@@ -23,8 +23,6 @@ struct AccountView: View, Equatable {
     @State private var status = false
     @State private var confirmLogout = false
     @State private var shown = false
-    // On once the menu has finished sliding in.
-    @State private var lively = false
     @State private var bunny = BunnyStore.shared
 
     // The closures never change what's drawn, so the menu isn't redrawn
@@ -73,10 +71,6 @@ struct AccountView: View, Equatable {
             // Sections rise in one after another as the menu slides in.
             withAnimation(reduceMotion ? nil : Motion.settle.delay(0.06)) { shown = true }
         }
-        .task {
-            try? await Task.sleep(for: .milliseconds(450))
-            lively = true
-        }
     }
 
     // The title and a big round x, inside the screen's safe area so it's
@@ -117,7 +111,7 @@ struct AccountView: View, Equatable {
             row("What's new", "The latest updates", "gift.fill") { go(.updates) }
             divider
             row("Help & support", "Chat with the Sugerly team", "questionmark.bubble.fill") { go(.support) }
-            if model.me?.isAdmin == true {
+            if model.me?.isModerator == true {
                 divider
                 row("Admin", "Manage Sugerly", "shield.lefthalf.filled", .neutral) { go(.admin) }
             }
@@ -178,7 +172,7 @@ struct AccountView: View, Equatable {
             HStack(alignment: .top, spacing: 8) {
                 profileButton(me, info, presence)
                 // Your bunny on her background (tap her; hold to dress her up).
-                BunnyOnScene(look: bunny.look, height: 88, lively: lively)
+                BunnyOnScene(look: bunny.look, height: 88)
                     .onLongPressGesture { go(.bunny) }
             }
             XPBar(info: info)
@@ -193,19 +187,6 @@ struct AccountView: View, Equatable {
             }
         }
         .pastelCard(radius: 26, padding: 16)
-        .overlay {
-            if lively {
-                ZStack {
-                    TwinkleField(colors: [UIColor(hex: 0xFFC53D), .white, UIColor(Theme.main)])
-                        .opacity(0.8)
-                    ShineSweep(every: 6, strength: 0.28)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-                .allowsHitTesting(false)
-                .transition(.opacity)
-            }
-        }
-        .animation(Motion.fade, value: lively)
         .onAppear { bunny.use(me.email) }
     }
 
@@ -330,7 +311,6 @@ struct AccountView: View, Equatable {
                     }
                     .clipShape(shape)
                 }
-                .overlay { if lively { ShineSweep(every: 5, strength: 0.3).clipShape(shape) } }
                 .shadow(color: candy.color.softGlow(0.35), radius: 8, y: 4)
         }
     }

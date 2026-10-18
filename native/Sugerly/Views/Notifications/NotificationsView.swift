@@ -518,7 +518,6 @@ struct AdminView: View {
     @State private var search = ""
     @State private var contentType = "All"
     @State private var confirmDelete: AdminItem?
-    @State private var confirmRole: UserProfile?
     @State private var managing: String?
     @State private var announcement = ""
     @State private var announcementOn = false
@@ -536,6 +535,9 @@ struct AdminView: View {
     @State private var saving = false
     @State private var saved = false
     @State private var error: String?
+
+    // Moderators look after reports and posts; admins and up see it all.
+    private var tabs: [Tab] { model.me?.isAdmin == true ? Tab.allCases : [.reports, .content] }
 
     private let presets: [(String, UInt32, UInt32)] = [
         ("Bubblegum", 0xD9577F, 0xEE8FAE), ("Candy", 0xFF4D8D, 0xFFB3D1), ("Lilac", 0x7C5CF0, 0xB19CFF),
@@ -556,7 +558,7 @@ struct AdminView: View {
                 }
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(Tab.allCases, id: \.self) { t in
+                        ForEach(tabs, id: \.self) { t in
                             Chip(title: t.rawValue, icon: t.icon, active: tab == t) { withMotion(Motion.standard) { tab = t; search = "" } }
                         }
                     }
@@ -583,6 +585,7 @@ struct AdminView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await data.load(); await loadReports() }
         .task {
+            if model.me?.isAdmin != true { tab = .reports }
             async let everything: Void = data.load()
             await loadReports()
             await SiteTheme.shared.load()
@@ -602,12 +605,6 @@ struct AdminView: View {
                 if let item = confirmDelete { Task { await remove(item) } }
             }
         }
-        .confirmationDialog(confirmRole?.role == "admin" ? "Remove admin from \(confirmRole?.displayName ?? "")?" : "Make \(confirmRole?.displayName ?? "") an admin?",
-                            isPresented: Binding(get: { confirmRole != nil }, set: { if !$0 { confirmRole = nil } }), titleVisibility: .visible) {
-            Button("Confirm", role: confirmRole?.role == "admin" ? .destructive : nil) {
-                if let u = confirmRole { Task { await setRole(u) } }
-            }
-        }
     }
 
     // MARK: overview
@@ -617,6 +614,22 @@ struct AdminView: View {
         let people = Array(model.people.values)
         let online = people.filter(\.isOnline).count
         return VStack(alignment: .leading, spacing: 14) {
+            // Clothes and accessories for everyone's bunny are added in the
+            // bunny maker (an "Add item" tile shows there for the team).
+            NavigationLink(value: Route.bunny) {
+                HStack(spacing: 12) {
+                    CandyTile(icon: "hare.fill", candy: .berry, size: 40)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Bunny items").font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
+                        Text("Add clothes and accessories for everyone's bunny").font(.jakarta(12)).foregroundStyle(Palette.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.muted)
+                }
+                .sugarCard(radius: 20, padding: 14)
+            }
+            .buttonStyle(SoftPressStyle())
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                 statCard("person.2.fill", "Members", "\(people.count)", "\(online) online")
                 statCard("photo.stack.fill", "Posts & art", "\(data.posts.count + data.art.count)", "+\(data.items.filter { $0.date > weekAgo && ($0.label == "Post" || $0.label == "Artwork") }.count) this week")
@@ -685,11 +698,10 @@ struct AdminView: View {
     // MARK: users
 
     private var users: some View {
-        let rank: (UserProfile) -> Int = { u in FirebaseConfig.siteOwners.contains(u.email) ? 0 : (u.role == "admin" ? 1 : 2) }
         let list = model.people.values
             .filter { search.isEmpty || $0.displayName.localizedCaseInsensitiveContains(search) || $0.email.localizedCaseInsensitiveContains(search) }
-            .sorted { rank($0) != rank($1) ? rank($0) < rank($1) : $0.displayName.lowercased() < $1.displayName.lowercased() }
-        let owner = FirebaseConfig.siteOwners.contains(model.me?.email ?? "")
+            .sorted { $0.siteRole.rank != $1.siteRole.rank ? $0.siteRole.rank > $1.siteRole.rank : $0.displayName.lowercased() < $1.displayName.lowercased() }
+        let team = model.people.values.filter { $0.siteRole.rank > 0 }.count
         return VStack(alignment: .leading, spacing: 10) {
             SearchField(text: $search, placeholder: "Search users…")
                 .task(id: search) {
@@ -703,8 +715,9 @@ struct AdminView: View {
                         model.people = map
                     }
                 }
-            Text("\(model.people.values.filter { rank($0) < 2 }.count) admins · Tap a name to give coins, MimiPlus or ban. \(owner ? "The shield makes or removes admins." : "")")
+            Text("\(team) on the team · Tap a name to give coins, MimiPlus or ban. The shield gives a role (co-owner, admin, moderator) to people below you.")
                 .font(.jakarta(12)).foregroundStyle(Palette.muted)
+                .fixedSize(horizontal: false, vertical: true)
             ForEach(Array(list.prefix(200))) { u in
                 HStack(spacing: 12) {
                     NavigationLink(value: Route.person(u.email)) {
@@ -725,17 +738,28 @@ struct AdminView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(SoftPressStyle())
-                    Text(FirebaseConfig.siteOwners.contains(u.email) ? "owner" : (u.role.isEmpty ? "user" : u.role))
-                        .font(.jakarta(10, .heavy)).foregroundStyle(rank(u) < 2 ? Theme.main : Palette.muted)
+                    let staff = u.siteRole.rank > 0
+                    Text(u.siteRole.label.lowercased())
+                        .font(.jakarta(10, .heavy)).foregroundStyle(staff ? Theme.main : Palette.muted)
                         .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(rank(u) < 2 ? Theme.soft : Palette.surface2, in: Capsule())
-                    if owner && u.email != model.me?.email && !FirebaseConfig.siteOwners.contains(u.email) {
-                        Button { confirmRole = u } label: {
-                            Image(systemName: u.role == "admin" ? "shield.slash.fill" : "checkmark.shield.fill")
-                                .foregroundStyle(u.role == "admin" ? Palette.danger : Palette.success)
-                                .frame(width: 34, height: 34)
+                        .background(staff ? Theme.soft : Palette.surface2, in: Capsule())
+                    if let me = model.me {
+                        let options = SiteRole.allCases.filter { $0 != u.siteRole && me.canSetRole($0, on: u) }
+                        if !options.isEmpty {
+                            Menu {
+                                Section("Make \(u.displayName)…") {
+                                    ForEach(options) { r in
+                                        Button { Task { await setRole(u, r) } } label: { Label(r.label, systemImage: r.icon) }
+                                    }
+                                }
+                            } label: {
+                                Image(systemName: "shield.lefthalf.filled")
+                                    .foregroundStyle(Theme.main)
+                                    .frame(width: 34, height: 34)
+                                    .background(Theme.soft, in: Circle())
+                            }
+                            .accessibilityLabel("Give \(u.displayName) a role")
                         }
-                        .buttonStyle(BouncyStyle())
                     }
                 }
                 .sugarCard(radius: 18, padding: 10)
@@ -748,13 +772,12 @@ struct AdminView: View {
 
     struct ManagedUser: Identifiable { var id: String }
 
-    private func setRole(_ u: UserProfile) async {
-        let next = u.role == "admin" ? "user" : "admin"
+    private func setRole(_ u: UserProfile, _ next: SiteRole) async {
         do {
-            try await FS.update("User", u.id, ["role": next, "updated_date": FS.nowISO()])
-            _ = try? await FS.create("Log", ["action": "role_change", "details": "\(u.email) → \(next)", "user_email": model.me?.email ?? ""])
+            try await FS.update("User", u.id, ["role": next.rawValue, "updated_date": FS.nowISO()])
+            _ = try? await FS.create("Log", ["action": "role_change", "details": "\(u.email) → \(next.rawValue)", "user_email": model.me?.email ?? ""])
             await model.loadPeople()
-            model.showToast("Role updated", icon: "shield.fill")
+            model.showToast(next == .member ? "\(u.displayName) is a member again" : "\(u.displayName) is now \(next.label.lowercased())", icon: next.icon)
         } catch {
             model.showToast("Couldn't change role — \(error.localizedDescription)", error: true)
         }

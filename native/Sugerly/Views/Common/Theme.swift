@@ -672,7 +672,7 @@ struct ShineSweep: View {
     var strength: Double = 0.38
 
     var body: some View {
-        if Motion.ambient && !Motion.reduced {
+        if Motion.ambient && !Motion.reduced && !Motion.paused {
             GeometryReader { geo in
                 LinearGradient(colors: [.clear, .white.opacity(strength), .clear], startPoint: .leading, endPoint: .trailing)
                     .frame(width: max(36, geo.size.width * 0.32), height: geo.size.height * 2)
@@ -699,13 +699,13 @@ struct TwinkleField: UIViewRepresentable {
         let x: CGFloat, y: CGFloat, size: CGFloat, delay: Double
     }
     var colors: [UIColor] = [.white]
-    // Where they sit, as parts of the area (top-right cluster, bottom-left pair).
+    // Where they sit, as parts of the area: one neat little triangle in the
+    // top-right corner (a big star with two small ones under it), twinkling
+    // in turn.
     var spots: [Spot] = [
-        Spot(x: 0.93, y: 0.13, size: 16, delay: 0),
-        Spot(x: 0.85, y: 0.06, size: 9, delay: 0.5),
-        Spot(x: 0.975, y: 0.3, size: 7, delay: 1.0),
-        Spot(x: 0.05, y: 0.84, size: 11, delay: 0.75),
-        Spot(x: 0.11, y: 0.94, size: 6, delay: 1.25),
+        Spot(x: 0.925, y: 0.1, size: 13, delay: 0),
+        Spot(x: 0.875, y: 0.22, size: 7, delay: 0.6),
+        Spot(x: 0.975, y: 0.22, size: 7, delay: 1.2),
     ]
 
     func makeUIView(context: Context) -> FieldView { FieldView(colors: colors, spots: spots) }

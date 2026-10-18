@@ -375,6 +375,26 @@ enum ModerationLexicon {
             (#"\b(beat|smash|punch)\s+(you|u|ya)\s+up\b"#, 0.9),
             (#"\bshoot\s+(you|u|ya)\s+(dead|in the)\b"#, 1.0),
         ],
+        // Unsafe contact: asking for photos, to keep secrets, to move to
+        // another app, or where someone is. Strong ones are blocked; the rest
+        // get a closer (AI) look. Scored as "sexual" (grooming).
+        "grooming": [
+            (#"\b(send|show)\s+(me\s+)?(your|ur|yo)\s+(body|feet|legs|chest|boobs|tits|butt|ass|underwear|bra)\b"#, 1.0),
+            (#"\b(send|show)\s+(me\s+)?(a\s+|some\s+)?(nude|naked|sexy|hot|spicy|private)\s+(pic|pics|photo|photos|picture|pictures|selfie|selfies|vid|video)s?\b"#, 1.0),
+            (#"\bdon'?t\s+tell\s+(your|ur|yo)\s+(mom|mum|mommy|dad|daddy|parents|teacher|friends)\b"#, 0.9),
+            (#"\b(keep\s+(this|it)\s+(a\s+)?secret|our\s+little\s+secret|just\s+between\s+(us|you\s+and\s+me))\b"#, 0.6),
+            (#"\b(send|show)\s+(me\s+)?(a\s+)?(pic|pics|photo|photos|picture|pictures|selfie|selfies)\s+(of\s+)?(you|u|yourself|urself)\b"#, 0.6),
+            (#"\b(are|r)\s+(you|u)\s+(home\s+)?alone\b"#, 0.5),
+            (#"\b(what'?s|whats|wats|wat\s+is|what\s+is)\s+(your|ur)\s+(snap|snapchat|sc|insta|ig|kik|telegram|whatsapp|wa|number|phone|address)\b"#, 0.45),
+            (#"\b(let'?s|lets|we\s+should|can\s+we)\s+(move|talk|chat|continue|go)\s+(to|on|over\s+to)\s+(snap|snapchat|telegram|whatsapp|kik|discord|insta|ig|dms?)\b"#, 0.5),
+            (#"\bwhere\s+do\s+(you|u)\s+live\b"#, 0.45),
+            (#"\bmandami\s+(una\s+)?(foto|selfie)\s+(tua|di\s+te|nud[ao])\b"#, 0.7),
+            (#"\bnon\s+dirlo\s+(ai\s+tuoi|a\s+nessuno|a\s+tua\s+madre|a\s+tuo\s+padre)\b"#, 0.9),
+            (#"\bsei\s+sol[ao]\s+(a\s+casa)?\b"#, 0.45),
+            (#"\bdove\s+abiti\b"#, 0.45),
+            (#"\bm[aá]ndame\s+(una\s+)?(foto|selfie)\b"#, 0.6),
+            (#"\bno\s+le\s+digas\s+a\s+(nadie|tus\s+padres|tu\s+mam[aá])\b"#, 0.9),
+        ],
         "selfHarm": [
             (#"\bi\s+(want|wanna)\s+to\s+die\b"#, 1.0),
             (#"\bi\s+wanna\s+die\b"#, 1.0),

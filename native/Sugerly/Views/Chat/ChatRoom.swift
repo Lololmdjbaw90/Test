@@ -866,6 +866,7 @@ struct ChatBubble: View {
                         .font(.jakarta(15.5))
                         .foregroundStyle(Palette.text)
                         .padding(.leading, 8).padding(.top, 4).padding(.bottom, 6)
+                        .modifier(IncomingFilterCover(text: message.displayText, mine: mine))
                     meta.fixedSize().padding(.trailing, 7)
                 }
             } else {

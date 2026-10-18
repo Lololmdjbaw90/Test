@@ -517,11 +517,29 @@ enum FS {
 // MARK: - Storage (uploads go to uploads/<uid>/…, like the website)
 
 enum StorageClient {
+    // Pictures and videos are checked first (MediaGuard) unless `screen` is
+    // off (the app's own renders): ones that aren't allowed are refused, and
+    // sensitive ones are saved as "sensitive-…" so they show blurred.
     @MainActor
-    static func upload(_ data: Data, contentType: String, fileExtension: String) async throws -> String {
+    static func upload(_ data: Data, contentType: String, fileExtension: String, screen: Bool = true) async throws -> String {
         guard let uid = AuthClient.shared.uid else { throw APIError(message: "Please log in again.") }
+        var prefix = ""
+        if screen {
+            switch await MediaGuard.check(data, contentType: contentType) {
+            case .block(let reason):
+                if let app = MediaGuard.app {
+                    TextGuard.penalize(2, model: app)
+                    app.showToast(reason, error: true)
+                }
+                throw APIError(message: reason, code: "blocked")
+            case .sensitive:
+                prefix = "sensitive-"
+            case .allow:
+                break
+            }
+        }
         let token = try await AuthClient.shared.token()
-        let name = "uploads/\(uid)/\(Int(Date().timeIntervalSince1970 * 1000))-ios.\(fileExtension)"
+        let name = "uploads/\(uid)/\(prefix)\(Int(Date().timeIntervalSince1970 * 1000))-ios.\(fileExtension)"
         var comps = URLComponents(string: "https://firebasestorage.googleapis.com/v0/b/\(FirebaseConfig.storageBucket)/o")!
         comps.queryItems = [URLQueryItem(name: "uploadType", value: "media"), URLQueryItem(name: "name", value: name)]
         var request = URLRequest(url: comps.url!)
