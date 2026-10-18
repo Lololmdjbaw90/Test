@@ -306,6 +306,13 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-3.7", icon: "hare.fill", title: "A calmer bunny and clearer buttons", date: "2026-10-18T20:00:00Z", items: [
+            "Your bunny is calmer: no more blinking, just a slow little float, and a small hop when you tap her.",
+            "The background you pick for her in the bunny maker now shows behind her on Home, in Community and in the menu.",
+            "The extras (crowns, glasses and so on) are gone from the bunny maker.",
+            "Edit profile and the buttons next to it are easy to see, and so are the other white buttons around the app.",
+            "Your bunny isn't cut off at the top of the menu any more.",
+        ]),
         AppRelease(id: "ios-3.6", icon: "sidebar.leading", title: "A smoother menu", date: "2026-10-18T18:00:00Z", items: [
             "The menu slides in smoothly now, without the lag, and its sparkles and shine start once it's in.",
             "The round x at the top of the menu always works, and sits clear of the clock and the screen's corner.",

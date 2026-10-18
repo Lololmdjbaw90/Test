@@ -3,8 +3,8 @@ import UIKit
 
 // Your bunny, drawn from the artist's own layers (fur, outline, clothes,
 // faces; the bow cut from the finished picture; see scripts/bunny-layers.py).
-// Each part can take its own colour; faces, clothes, little extras and a
-// scene can be swapped. She bobs, blinks and jumps when you tap her.
+// Each part can take its own colour; faces, clothes and a scene can be
+// swapped. She floats gently and jumps when you tap her.
 
 // MARK: - The look
 
@@ -131,49 +131,6 @@ enum BunnyFace: String, CaseIterable, Codable, Identifiable {
     var label: String { rawValue.capitalized }
     var image: String { "BunnyFace" + rawValue.capitalized }
     var eyes: String { image + "Eyes" }
-    // Where the eyes sit (they squeeze shut around this line to blink).
-    var eyeLine: CGFloat {
-        switch self {
-        case .cute: return 0.394
-        case .happy: return 0.374
-        case .silly: return 0.385
-        case .shy: return 0.376
-        case .smug: return 0.376
-        case .worried: return 0.377
-        case .dreamy: return 0.41
-        case .meh: return 0.381
-        case .grumpy: return 0.38
-        }
-    }
-    // Faces with open eyes blink now and then.
-    var blinks: Bool { self != .dreamy && self != .meh }
-}
-
-enum BunnyExtra: String, CaseIterable, Codable, Identifiable {
-    case none, crown, flower, star, glasses, halo, sparkles
-    var id: String { rawValue }
-    var label: String {
-        switch self {
-        case .none: return "None"
-        case .crown: return "Crown"
-        case .flower: return "Daisy"
-        case .star: return "Star clip"
-        case .glasses: return "Heart specs"
-        case .halo: return "Halo"
-        case .sparkles: return "Sparkles"
-        }
-    }
-    var icon: String {
-        switch self {
-        case .none: return "circle.slash"
-        case .crown: return "crown.fill"
-        case .flower: return "camera.macro"
-        case .star: return "star.fill"
-        case .glasses: return "eyeglasses"
-        case .halo: return "circle.dashed"
-        case .sparkles: return "sparkles"
-        }
-    }
 }
 
 enum BunnyScene: String, CaseIterable, Codable, Identifiable {
@@ -209,7 +166,6 @@ struct BunnyLook: Codable, Equatable {
     var outfit = 0
     var top = BunnyTop.sailor
     var face = BunnyFace.cute
-    var extra = BunnyExtra.none
     var scene = BunnyScene.candy
 
     func tint(_ part: BunnyPart) -> BunnyTint {
@@ -241,7 +197,6 @@ struct BunnyLook: Codable, Equatable {
         look.bowOn = Int.random(in: 0..<5) > 0
         look.top = BunnyTop.allCases.randomElement() ?? BunnyTop.sailor
         look.face = BunnyFace.allCases.randomElement() ?? BunnyFace.cute
-        look.extra = BunnyExtra.allCases.randomElement() ?? BunnyExtra.none
         look.scene = BunnyScene.allCases.randomElement() ?? BunnyScene.candy
         return look
     }
@@ -259,7 +214,6 @@ extension BunnyLook {
         outfit = (try? c.decodeIfPresent(Int.self, forKey: .outfit)) ?? outfit
         top = (try? c.decodeIfPresent(BunnyTop.self, forKey: .top)) ?? top
         face = (try? c.decodeIfPresent(BunnyFace.self, forKey: .face)) ?? face
-        extra = (try? c.decodeIfPresent(BunnyExtra.self, forKey: .extra)) ?? extra
         scene = (try? c.decodeIfPresent(BunnyScene.self, forKey: .scene)) ?? scene
     }
 }
@@ -373,25 +327,21 @@ extension BunnyLayer {
 // the layers.
 struct BunnyFigure: View, Equatable {
     var look: BunnyLook
-    var blinking = false
 
     nonisolated static func == (a: BunnyFigure, b: BunnyFigure) -> Bool {
-        a.look == b.look && a.blinking == b.blinking
+        a.look == b.look
     }
 
     var body: some View {
         let outfit = look.tint(.outfit)
         ZStack {
-            if look.extra == .halo { BunnyExtraArt(extra: .halo) }
             BunnyLayer("BunnyFur", look.tint(.fur))
             BunnyImages.image("BunnyOutline").resizable().interpolation(.high)
             if let piece = look.top.piece { BunnyLayer(piece, outfit) }
             if look.top == .sailor { BunnyLayer("BunnyCollar", look.tint(.collar)) }
             BunnyImages.image(look.face.image).resizable().interpolation(.high)
             BunnyImages.image(look.face.eyes).resizable().interpolation(.high)
-                .scaleEffect(x: 1, y: blinking && look.face.blinks ? 0.1 : 1, anchor: UnitPoint(x: 0.5, y: look.face.eyeLine))
             if look.bowOn { BunnyLayer("BunnyBow", look.tint(.bow)) }
-            if look.extra != .none && look.extra != .halo { BunnyExtraArt(extra: look.extra) }
         }
         .aspectRatio(BunnyArt.aspect, contentMode: .fit)
         .drawingGroup()
@@ -412,153 +362,43 @@ enum BunnyShapes {
     }
 }
 
-// The little extras, drawn in the artwork's style: a fill, a thick dark
-// outline, and a white shine.
-private struct BunnyExtraArt: View {
-    let extra: BunnyExtra
-
-    var body: some View {
-        Canvas { ctx, size in
-            let w = size.width, h = size.height
-            let line = w * 0.02
-            func outline(_ path: Path, _ fill: GraphicsContext.Shading) {
-                ctx.fill(path, with: fill)
-                ctx.stroke(path, with: .color(BunnyArt.ink), style: StrokeStyle(lineWidth: line, lineJoin: .round))
-            }
-            switch extra {
-            case .crown:
-                let r = CGRect(x: w * 0.17, y: h * 0.1, width: w * 0.26, height: h * 0.13)
-                var c = ctx
-                c.translateBy(x: r.midX, y: r.midY)
-                c.rotate(by: .degrees(-16))
-                let local = CGRect(x: -r.width / 2, y: -r.height / 2, width: r.width, height: r.height)
-                let path = Self.crown(local)
-                c.fill(path, with: .linearGradient(Gradient(colors: [Color(hex: 0xFFE27A), Color(hex: 0xF5A623)]), startPoint: CGPoint(x: 0, y: local.minY), endPoint: CGPoint(x: 0, y: local.maxY)))
-                c.stroke(path, with: .color(BunnyArt.ink), style: StrokeStyle(lineWidth: line, lineJoin: .round))
-                for x in [-0.28, 0.0, 0.28] {
-                    let gem = CGRect(x: local.width * x - w * 0.016, y: local.maxY - local.height * 0.34, width: w * 0.032, height: w * 0.032)
-                    c.fill(Path(ellipseIn: gem), with: .color(Color(hex: 0xFF6FA5)))
-                }
-            case .flower:
-                let center = CGPoint(x: w * 0.33, y: h * 0.13)
-                let petal = w * 0.06
-                for i in 0..<5 {
-                    let angle = Double(i) / 5 * 2 * .pi - .pi / 2
-                    let p = CGPoint(x: center.x + CGFloat(cos(angle)) * petal * 1.05, y: center.y + CGFloat(sin(angle)) * petal * 1.05)
-                    outline(Path(ellipseIn: CGRect(x: p.x - petal * 0.75, y: p.y - petal * 0.75, width: petal * 1.5, height: petal * 1.5)), .color(.white))
-                }
-                outline(Path(ellipseIn: CGRect(x: center.x - petal * 0.62, y: center.y - petal * 0.62, width: petal * 1.24, height: petal * 1.24)), .color(Color(hex: 0xFFD45E)))
-            case .star:
-                let r = CGRect(x: w * 0.14, y: h * 0.16, width: w * 0.17, height: w * 0.17)
-                let star = Self.star(r)
-                outline(star, .linearGradient(Gradient(colors: [Color(hex: 0xFFF19A), Color(hex: 0xFFC53D)]), startPoint: CGPoint(x: r.midX, y: r.minY), endPoint: CGPoint(x: r.midX, y: r.maxY)))
-                ctx.fill(Path(ellipseIn: CGRect(x: r.midX - w * 0.022, y: r.minY + r.height * 0.3, width: w * 0.026, height: w * 0.018)), with: .color(.white.opacity(0.85)))
-            case .glasses:
-                for box in [BunnyArt.leftEye, BunnyArt.rightEye] {
-                    let r = CGRect(x: box.minX * w, y: box.minY * h, width: box.width * w, height: box.height * h)
-                    let heart = BunnyShapes.heart(in: CGRect(x: r.midX - r.width * 0.62, y: r.midY - r.width * 0.5, width: r.width * 1.24, height: r.width * 1.06))
-                    ctx.fill(heart, with: .color(Color(hex: 0xFF5C9A).opacity(0.72)))
-                    ctx.stroke(heart, with: .color(BunnyArt.ink), style: StrokeStyle(lineWidth: line * 1.1, lineJoin: .round))
-                    ctx.fill(Path(ellipseIn: CGRect(x: r.midX - r.width * 0.36, y: r.midY - r.width * 0.28, width: r.width * 0.2, height: r.width * 0.13)), with: .color(.white.opacity(0.75)))
-                }
-                var bridge = Path()
-                bridge.move(to: CGPoint(x: BunnyArt.leftEye.maxX * w + w * 0.02, y: BunnyArt.leftEye.midY * h - h * 0.008))
-                bridge.addQuadCurve(to: CGPoint(x: BunnyArt.rightEye.minX * w - w * 0.02, y: BunnyArt.rightEye.midY * h - h * 0.008),
-                                    control: CGPoint(x: w * 0.5, y: BunnyArt.leftEye.midY * h - h * 0.03))
-                ctx.stroke(bridge, with: .color(BunnyArt.ink), style: StrokeStyle(lineWidth: line * 1.1, lineCap: .round))
-            case .halo:
-                let r = CGRect(x: w * 0.2, y: h * 0.015, width: w * 0.46, height: h * 0.075)
-                ctx.stroke(Path(ellipseIn: r), with: .color(BunnyArt.ink), style: StrokeStyle(lineWidth: line * 2.6))
-                ctx.stroke(Path(ellipseIn: r), with: .linearGradient(Gradient(colors: [Color(hex: 0xFFF3A6), Color(hex: 0xFFC53D)]), startPoint: CGPoint(x: r.minX, y: r.minY), endPoint: CGPoint(x: r.maxX, y: r.maxY)), style: StrokeStyle(lineWidth: line * 1.3))
-            case .sparkles:
-                let spots: [(CGFloat, CGFloat, CGFloat)] = [(0.1, 0.24, 0.08), (0.88, 0.5, 0.07), (0.12, 0.62, 0.05), (0.9, 0.06, 0.05)]
-                for s in spots {
-                    let r = CGRect(x: s.0 * w - s.2 * w / 2, y: s.1 * h - s.2 * w / 2, width: s.2 * w, height: s.2 * w)
-                    outline(FourPointStar().path(in: r), .color(Color(hex: 0xFFE27A)))
-                }
-            case .none:
-                break
-            }
-        }
-        .allowsHitTesting(false)
-    }
-
-    static func crown(_ r: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: r.minX, y: r.maxY))
-        p.addLine(to: CGPoint(x: r.minX, y: r.minY + r.height * 0.25))
-        p.addLine(to: CGPoint(x: r.minX + r.width * 0.25, y: r.midY))
-        p.addLine(to: CGPoint(x: r.midX, y: r.minY))
-        p.addLine(to: CGPoint(x: r.maxX - r.width * 0.25, y: r.midY))
-        p.addLine(to: CGPoint(x: r.maxX, y: r.minY + r.height * 0.25))
-        p.addLine(to: CGPoint(x: r.maxX, y: r.maxY))
-        p.closeSubpath()
-        return p
-    }
-
-    static func star(_ r: CGRect) -> Path {
-        var p = Path()
-        let c = CGPoint(x: r.midX, y: r.midY)
-        for i in 0..<10 {
-            let angle = Double(i) * .pi / 5 - .pi / 2
-            let radius = (i.isMultiple(of: 2) ? 0.5 : 0.24) * r.width
-            let point = CGPoint(x: c.x + CGFloat(cos(angle)) * radius, y: c.y + CGFloat(sin(angle)) * radius)
-            if i == 0 { p.move(to: point) } else { p.addLine(to: point) }
-        }
-        p.closeSubpath()
-        return p
-    }
-}
-
 // MARK: - The living bunny
 
-// Your bunny, alive: she bobs gently, blinks now and then, and jumps with
-// a puff of hearts when you tap her.
+// Your bunny, alive but calm: she floats up and down a touch, slowly, and
+// jumps with a puff of hearts when you tap her.
 struct BunnyBuddy: View {
     var look: BunnyLook
     var height: CGFloat = 120
     var lively = true
     // Off inside buttons (the button gets the tap).
     var tappable = true
-    // A little hop hello when she appears.
-    var greet = false
     var onTap: (() -> Void)? = nil
-    @State private var blinking = false
     @State private var hops = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let moving = lively && !reduceMotion && Motion.ambient
-        BunnyFigure(look: look, blinking: blinking)
+        BunnyFigure(look: look)
             .equatable()
             .frame(height: height)
+            // Only moved, never stretched, so she stays crisp.
             .phaseAnimator(moving ? [false, true] : [false]) { content, up in
-                content
-                    .scaleEffect(x: up ? 0.985 : 1.015, y: up ? 1.02 : 0.98, anchor: .bottom)
-                    .offset(y: up ? -height * 0.025 : 0)
-            } animation: { _ in .easeInOut(duration: 0.9) }
+                content.offset(y: up ? -height * 0.015 : 0)
+            } animation: { _ in .easeInOut(duration: 2.2) }
             .keyframeAnimator(initialValue: BunnyHop(), trigger: hops) { content, hop in
                 content
                     .scaleEffect(x: hop.squash, y: 2 - hop.squash, anchor: .bottom)
-                    .rotationEffect(.degrees(hop.tilt), anchor: .bottom)
                     .offset(y: hop.lift)
             } keyframes: { _ in
                 KeyframeTrack(\.squash) {
-                    SpringKeyframe(1.12, duration: 0.1)
-                    SpringKeyframe(0.9, duration: 0.18)
-                    SpringKeyframe(1.06, duration: 0.14)
+                    SpringKeyframe(1.06, duration: 0.1)
+                    SpringKeyframe(0.96, duration: 0.18)
                     SpringKeyframe(1, duration: 0.25)
                 }
                 KeyframeTrack(\.lift) {
                     LinearKeyframe(0, duration: 0.1)
-                    SpringKeyframe(-height * 0.22, duration: 0.22)
-                    SpringKeyframe(0, duration: 0.22)
-                }
-                KeyframeTrack(\.tilt) {
-                    LinearKeyframe(0, duration: 0.1)
-                    SpringKeyframe(-6, duration: 0.15)
-                    SpringKeyframe(4, duration: 0.15)
-                    SpringKeyframe(0, duration: 0.2)
+                    SpringKeyframe(-height * 0.12, duration: 0.22)
+                    SpringKeyframe(0, duration: 0.26)
                 }
             }
             .overlay { HeartPuff(trigger: hops).frame(width: height * 1.1, height: height * 1.1) }
@@ -569,32 +409,37 @@ struct BunnyBuddy: View {
                 onTap?()
             }
             .sensoryFeedback(.impact(weight: .light), trigger: hops)
-            // (Also when she starts moving later, e.g. once the menu has slid in.)
-            .task(id: moving) {
-                guard greet, moving else { return }
-                try? await Task.sleep(for: .milliseconds(400))
-                hops += 1
-            }
-            .task(id: look.face.blinks && moving) {
-                guard look.face.blinks, moving else { blinking = false; return }
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .seconds(Double.random(in: 2.2...4.6)))
-                    guard !Task.isCancelled else { return }
-                    blinking = true
-                    try? await Task.sleep(for: .milliseconds(140))
-                    blinking = false
-                }
-            }
             .accessibilityElement()
             .accessibilityLabel("Your bunny")
             .accessibilityAddTraits(.isButton)
     }
 }
 
+// Your bunny standing on the background you picked for her in the maker (a
+// soft rounded tile she pops out of), so it shows wherever she does.
+struct BunnyOnScene: View {
+    var look: BunnyLook
+    var height: CGFloat = 104
+    var lively = true
+
+    var body: some View {
+        let tile = RoundedRectangle(cornerRadius: height * 0.24, style: .continuous)
+        BunnyBuddy(look: look, height: height, lively: lively)
+            .padding(.horizontal, height * 0.07)
+            .background(alignment: .bottom) {
+                BunnySceneView(scene: look.scene, animated: false)
+                    .frame(width: height * 0.86, height: height * 0.78)
+                    .clipShape(tile)
+                    .overlay(tile.strokeBorder(.white.opacity(0.75), lineWidth: 2))
+                    .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
+                    .allowsHitTesting(false)
+            }
+    }
+}
+
 struct BunnyHop {
     var squash: CGFloat = 1
     var lift: CGFloat = 0
-    var tilt: Double = 0
 }
 
 // A puff of little hearts floating up (clock-driven, plays on each tap).

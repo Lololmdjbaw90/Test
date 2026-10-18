@@ -9,7 +9,7 @@ import SwiftUI
 //
 // It's kept light so it slides smoothly: no page stack inside it (Settings
 // opens on the tab like the other places), and the twinkles, shine and the
-// bunny's bobbing only start once it has slid in.
+// bunny's float only start once it has slid in.
 struct AccountView: View, Equatable {
     // Closes the menu and opens a page on the tab you're on.
     var go: (Route) -> Void
@@ -177,10 +177,8 @@ struct AccountView: View, Equatable {
         return VStack(spacing: 14) {
             HStack(alignment: .top, spacing: 8) {
                 profileButton(me, info, presence)
-                // Your bunny says hi (tap her; hold to dress her up).
-                BunnyBuddy(look: bunny.look, height: 92, lively: lively, greet: true)
-                    .padding(.top, -12)
-                    .padding(.trailing, -4)
+                // Your bunny on her background (tap her; hold to dress her up).
+                BunnyOnScene(look: bunny.look, height: 88, lively: lively)
                     .onLongPressGesture { go(.bunny) }
             }
             XPBar(info: info)

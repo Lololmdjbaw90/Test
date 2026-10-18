@@ -384,7 +384,7 @@ struct CommunityView: View {
                 .padding(.top, 2)
             }
             Spacer(minLength: 0)
-            BunnyBuddy(look: bunny.look, height: 112)
+            BunnyOnScene(look: bunny.look, height: 108)
                 .onLongPressGesture { path.append(.bunny) }
         }
         .pastelCard(radius: 26, padding: 16)

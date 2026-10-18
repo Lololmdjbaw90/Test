@@ -3,7 +3,7 @@ import UIKit
 import Photos
 
 // The bunny maker: your bunny on a little stage at the top, then a row of
-// tabs (fur, bow, collar, outfit, face, extras, scene) and the choices for
+// tabs (fur, face, outfit, bow, collar, background) and the choices for
 // the one you picked. Changes show straight away; Done keeps them. You can
 // shuffle, save her to Photos, or make her your profile picture.
 struct BunnyMakerView: View {
@@ -18,9 +18,9 @@ struct BunnyMakerView: View {
     @State private var shuffles = 0
 
     enum Tab: String, CaseIterable, Identifiable {
-        case fur, face, outfit, bow, collar, extras, scene
+        case fur, face, outfit, bow, collar, scene
         var id: String { rawValue }
-        var label: String { rawValue.capitalized }
+        var label: String { self == .scene ? "Background" : rawValue.capitalized }
         var icon: String {
             switch self {
             case .fur: return "hare.fill"
@@ -28,7 +28,6 @@ struct BunnyMakerView: View {
             case .collar: return "seal.fill"
             case .outfit: return "tshirt.fill"
             case .face: return "face.smiling.inverse"
-            case .extras: return "crown.fill"
             case .scene: return "photo.fill"
             }
         }
@@ -39,7 +38,6 @@ struct BunnyMakerView: View {
             case .collar: return .grape
             case .outfit: return .sky
             case .face: return .lemon
-            case .extras: return .lemon
             case .scene: return .mint
             }
         }
@@ -179,10 +177,6 @@ struct BunnyMakerView: View {
             faces
         } else if tab == .outfit {
             outfits
-        } else if tab == .extras {
-            tiles(BunnyExtra.allCases.map { ($0.id, $0.label, $0.icon) }, selected: look.extra.id) { id in
-                if let extra = BunnyExtra(rawValue: id) { look.extra = extra }
-            }
         } else {
             scenes
         }
@@ -315,45 +309,6 @@ struct BunnyMakerView: View {
         .sugarCard(radius: 24)
     }
 
-    private func tiles(_ items: [(String, String, String)], selected: String, pick: @escaping (String) -> Void) -> some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-            ForEach(Array(items.enumerated()), id: \.element.0) { i, item in
-                let on = selected == item.0
-                Button {
-                    withAnimation(Motion.playful) { pick(item.0) }
-                } label: {
-                    VStack(spacing: 8) {
-                        Image(systemName: item.2)
-                            .font(.system(size: 22, weight: .semibold))
-                            .foregroundStyle(on ? .white : Theme.main)
-                            .symbolEffect(.bounce, value: on)
-                            .frame(width: 50, height: 50)
-                            .background {
-                                if on {
-                                    Circle().fill(Theme.candy).shadow(color: Theme.glow(0.3), radius: 6, y: 3)
-                                } else {
-                                    Circle().fill(Theme.soft)
-                                }
-                            }
-                        Text(item.1).font(.jakarta(13, .semibold))
-                            .foregroundStyle(on ? Palette.text : Palette.text2)
-                            .lineLimit(1).minimumScaleFactor(0.75)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(on ? Theme.soft : Color.clear, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                }
-                .buttonStyle(BouncyStyle(scale: 0.92))
-                .accessibilityLabel(item.1)
-                .accessibilityAddTraits(on ? .isSelected : [])
-                .modifier(ChoicePop(index: i))
-            }
-        }
-        .padding(12)
-        .sugarCard(radius: 24)
-    }
-
     private var scenes: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 12) {
             ForEach(Array(BunnyScene.allCases.enumerated()), id: \.element.id) { i, scene in
@@ -376,9 +331,11 @@ struct BunnyMakerView: View {
                         Text(scene.label).font(.jakarta(12, on ? .bold : .medium))
                             .foregroundStyle(on ? Palette.text : Palette.text2).lineLimit(1)
                     }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(BouncyStyle(scale: 0.93))
-                .accessibilityLabel("Scene: \(scene.label)")
+                .accessibilityLabel("Background: \(scene.label)")
                 .accessibilityAddTraits(on ? .isSelected : [])
                 .modifier(ChoicePop(index: i))
             }

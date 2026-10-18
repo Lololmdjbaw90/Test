@@ -566,8 +566,13 @@ struct OutlineButtonStyle: ButtonStyle {
             .minimumScaleFactor(0.75)
             .padding(.horizontal, 16)
             .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: min(height, 46))
-            .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+            // White with a soft shadow and a hint of your colour on the
+            // edge, so it stands out on tinted pages too.
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Palette.surface)
+                    .shadow(color: Palette.shadow, radius: 6, y: 2)
+            }
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.main.opacity(0.2), lineWidth: 1))
             .opacity(configuration.isPressed ? 0.8 : 1)
             .scaleEffect(configuration.isPressed && !Motion.reduced ? 0.97 : 1)
             .animation(configuration.isPressed ? Motion.press : Motion.release, value: configuration.isPressed)

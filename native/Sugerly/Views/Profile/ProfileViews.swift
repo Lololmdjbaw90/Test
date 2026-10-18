@@ -275,12 +275,12 @@ struct ProfileContent: View {
         HStack(spacing: 10) {
             if isMe {
                 Button { editing = true } label: { Label("Edit profile", systemImage: "pencil") }
-                    .buttonStyle(OutlineButtonStyle(fullWidth: true))
-                Button { shop = true } label: { Image(systemName: "sparkles").font(.system(size: 17, weight: .bold)) }
-                    .buttonStyle(OutlineButtonStyle())
+                    .buttonStyle(GradientButtonStyle(height: 46))
+                Button { shop = true } label: { Image(systemName: "sparkles") }
+                    .buttonStyle(ProfileIconStyle(candy: .grape))
                     .accessibilityLabel("MimiPlus")
-                Button { settings = true } label: { Image(systemName: "gearshape.fill").font(.system(size: 17, weight: .bold)) }
-                    .buttonStyle(OutlineButtonStyle())
+                Button { settings = true } label: { Image(systemName: "gearshape.fill") }
+                    .buttonStyle(ProfileIconStyle())
                     .accessibilityLabel("Settings")
             } else {
                 MorphPill(on: following, offTitle: "Follow", onTitle: "Following", offIcon: "person.badge.plus",
@@ -595,6 +595,31 @@ struct ProfileContent: View {
         guard let me = model.me?.email else { return }
         let c = Conversation(id: Social.dmId(me, person.email), members: [me, person.email], isGroup: false, groupName: "", last: nil, unread: 0)
         path.append(.chat(c))
+    }
+}
+
+// A square icon button next to Edit profile: a candy fill, or white with
+// your colour.
+private struct ProfileIconStyle: ButtonStyle {
+    var candy: Candy? = nil
+
+    func makeBody(configuration: Configuration) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        configuration.label
+            .font(.system(size: 17, weight: .bold))
+            .foregroundStyle(candy == nil ? AnyShapeStyle(Theme.main) : AnyShapeStyle(Color.white))
+            .frame(width: 46, height: 46)
+            .background {
+                if let candy {
+                    shape.fill(candy.gradient).shadow(color: candy.color.softGlow(0.35), radius: 6, y: 3)
+                } else {
+                    shape.fill(Palette.surface).shadow(color: Palette.shadow, radius: 6, y: 2)
+                }
+            }
+            .overlay(shape.strokeBorder(candy == nil ? Theme.main.opacity(0.2) : Color.white.opacity(0.35), lineWidth: 1))
+            .contentShape(shape)
+            .scaleEffect(configuration.isPressed && !Motion.reduced ? 0.92 : 1)
+            .animation(configuration.isPressed ? Motion.press : Motion.release, value: configuration.isPressed)
     }
 }
 

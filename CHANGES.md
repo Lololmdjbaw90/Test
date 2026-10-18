@@ -1,5 +1,13 @@
 # Changes
 
+## Calmer bunny, her background everywhere, clearer buttons (iOS app)
+
+- **Bunny**: no blinking (the eyes squeezing shut looked broken) and no squash-and-stretch bob; she floats a touch (offset only, so she stays crisp) and does a smaller hop when tapped. No hello hop in the menu.
+- **Her background shows** (`BunnyOnScene`): on Home, Community and the menu she stands on a rounded tile of the background picked in the maker, so that choice does something outside the maker. The maker's Scene tab is now called Background, and its tiles take taps anywhere.
+- **Extras removed**: the crown, daisy, star clip, heart specs, halo and sparkles (drawn on top of the art) are gone; older saved bunnies just ignore the field.
+- **Menu**: the bunny no longer sits 12 pt above her card, where the scroll view cut off her ears.
+- **Buttons**: `OutlineButtonStyle` is white with a soft shadow and a hint of your colour on the edge (it was a pale grey that disappeared on tinted pages). On your profile, Edit profile is the gradient button, MimiPlus a grape candy square and Settings a white square.
+
 ## A smoother menu (iOS app)
 
 - **Close button**: the menu had a page stack inside it whose top bar was pushed up under the clock (the drawer ignored the safe area) and clipped by its rounded corner, so the x was hard to hit. The menu no longer has a page stack: it draws its own header (the title and a 48 pt round x) inside the safe area, and Settings opens on the tab like the other places (`Route.settings`).

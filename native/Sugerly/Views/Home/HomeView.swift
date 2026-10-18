@@ -394,8 +394,7 @@ struct HomeView: View {
                     }
                     Spacer(minLength: 0)
                     // Your bunny (tap her!). Long press to dress her up.
-                    BunnyBuddy(look: bunny.look, height: 104)
-                        .padding(.top, -10)
+                    BunnyOnScene(look: bunny.look, height: 100)
                         .onLongPressGesture { path.append(.bunny) }
                 }
                 // Three even tiles (number on top, a short word under it), so
