@@ -269,26 +269,41 @@ struct StreakWatch: ViewModifier {
         conversation.isGroup ? nil : ChatStreaks.shared.streak(conversation.id)
     }
 
+    // (Kept in small pieces: written as one expression it was too much for
+    // the compiler to check in time.)
     func body(content: Content) -> some View {
         content
-            .overlay(alignment: .top) {
-                if let cheer {
-                    StreakCheer(days: cheer)
-                        .padding(.top, 8)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
-            }
-            .sensoryFeedback(.success, trigger: cheer) { _, new in new != nil }
-            .onChange(of: messages.count) { old, new in
-                ChatStreaks.shared.note(old == 0 || new - old > 20 ? messages : Array(messages.suffix(20)), me: me)
-            }
-            .onChange(of: streak) { old, new in celebrate(old, new) }
-            .task {
-                guard enabled, !conversation.isGroup else { return }
-                try? await Task.sleep(for: .seconds(3))
-                settled = true
-                await ChatStreaks.shared.deepen(conversation, me: me)
-            }
+            .overlay(alignment: .top) { cheerView }
+            .sensoryFeedback(.success, trigger: cheer, condition: cheered)
+            .onChange(of: messages.count, noteNew)
+            .onChange(of: streak, celebrate)
+            .task { await watch() }
+    }
+
+    @ViewBuilder
+    private var cheerView: some View {
+        if let cheer {
+            StreakCheer(days: cheer)
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
+    private func cheered(_ old: Int?, _ new: Int?) -> Bool {
+        new != nil
+    }
+
+    private func noteNew(_ old: Int, _ new: Int) {
+        let everything: Bool = old == 0 || new - old > 20
+        let fresh: [Message] = everything ? messages : Array(messages.suffix(20))
+        ChatStreaks.shared.note(fresh, me: me)
+    }
+
+    private func watch() async {
+        guard enabled, !conversation.isGroup else { return }
+        try? await Task.sleep(for: .seconds(3))
+        settled = true
+        await ChatStreaks.shared.deepen(conversation, me: me)
     }
 
     private func celebrate(_ old: ChatStreaks.Streak?, _ new: ChatStreaks.Streak?) {
