@@ -199,8 +199,8 @@ struct BunnyMakerView: View {
                     VStack(spacing: 6) {
                         ZStack {
                             BunnyLayer("BunnyFur", look.tint(.fur))
-                            Image(face.image).resizable()
-                            Image(face.eyes).resizable()
+                            BunnyImages.image(face.image).resizable()
+                            BunnyImages.image(face.eyes).resizable()
                         }
                         .aspectRatio(BunnyArt.aspect, contentMode: .fit)
                         .scaleEffect(2.6, anchor: UnitPoint(x: 0.5, y: 0.42))
@@ -225,22 +225,15 @@ struct BunnyMakerView: View {
         .sugarCard(radius: 24)
     }
 
-    // Top and bottom, each shown as the piece itself, then the colour.
+    // Her top (one at a time), each shown as the piece itself, then the colour.
     private var outfits: some View {
         VStack(alignment: .leading, spacing: 14) {
-            ListHeader(title: "TOP").padding(.leading, 6)
-            HStack(spacing: 10) {
-                ForEach(Array(BunnyTop.allCases.enumerated()), id: \.element.id) { i, top in
-                    clothes(top.label, pieces: top.pieces, on: look.top == top, index: i) { look.top = top }
-                }
-            }
-            ListHeader(title: "BOTTOM").padding(.leading, 6)
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                ForEach(Array(BunnyBottom.allCases.enumerated()), id: \.element.id) { i, bottom in
-                    clothes(bottom.label, pieces: bottom.pieces, on: look.bottom == bottom, index: i + 2) { look.bottom = bottom }
+                ForEach(Array(BunnyTop.allCases.enumerated()), id: \.element.id) { i, top in
+                    clothes(top.label, pieces: top.piece.map { [$0] } ?? [], on: look.top == top, index: i) { look.top = top }
                 }
             }
-            if look.top != .none || look.bottom != .none {
+            if look.top != .none {
                 ListHeader(title: "COLOUR").padding(.leading, 6)
                 swatches(.outfit)
             }

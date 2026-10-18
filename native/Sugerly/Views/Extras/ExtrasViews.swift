@@ -306,6 +306,13 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-3.5", icon: "square.grid.2x2.fill", title: "A pin board Community and a slide-in menu", date: "2026-10-18T14:00:00Z", items: [
+            "Community is laid out like a pin board: two columns of cards (three on iPad), pictures at their own shape and words as colourful quote cards. Double-tap a card to like it, tap the bookmark to save it, and hold it for more.",
+            "The menu now slides in from the left, smoothly, with everything rising into place, and your bunny hops hello. Swipe it back or tap outside to close it.",
+            "The bunny's bow is whole again, and her clothes are tops you pick one at a time: Sailor, T-shirt, Hoodie or Ruffles.",
+            "Neater sparkles: a few little stars that twinkle in place, instead of floating everywhere.",
+            "Notifications has a bright banner at the top.",
+        ]),
         AppRelease(id: "ios-3.4", icon: "wand.and.stars", title: "The real bunny, a brighter menu and Community", date: "2026-10-18T10:00:00Z", items: [
             "Your bunny is now drawn from the artist's own layers: crisp outlines, nine faces (cute, happy, silly, shy, smug, worried, dreamy, meh, grumpy) that blink, and clothes you mix and match: a sailor top, a skirt, a pinafore, bloomers, or both layered.",
             "The bow can come off, and every piece of clothing changes colour together.",

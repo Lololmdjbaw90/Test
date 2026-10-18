@@ -685,79 +685,107 @@ struct ShineSweep: View {
     }
 }
 
-// Little sparkles that float up and fade (Core Animation particles, so
-// they cost almost nothing). Hidden with Reduce Motion on.
-struct SparkleEmitter: UIViewRepresentable {
+// Neat sparkles: a few four-pointed stars in fixed spots (a little cluster
+// in the top corner and one in the opposite bottom corner), each softly
+// twinkling in turn. Core Animation does the twinkling, so it costs almost
+// nothing; with Reduce Motion they just sit still.
+struct TwinkleField: UIViewRepresentable {
+    struct Spot {
+        let x: CGFloat, y: CGFloat, size: CGFloat, delay: Double
+    }
     var colors: [UIColor] = [.white]
-    var rate: Float = 1.2
+    // Where they sit, as parts of the area (top-right cluster, bottom-left pair).
+    var spots: [Spot] = [
+        Spot(x: 0.93, y: 0.13, size: 16, delay: 0),
+        Spot(x: 0.85, y: 0.06, size: 9, delay: 0.5),
+        Spot(x: 0.975, y: 0.3, size: 7, delay: 1.0),
+        Spot(x: 0.05, y: 0.84, size: 11, delay: 0.75),
+        Spot(x: 0.11, y: 0.94, size: 6, delay: 1.25),
+    ]
 
-    func makeUIView(context: Context) -> EmitterView { EmitterView(colors: colors, rate: rate) }
-    func updateUIView(_ view: EmitterView, context: Context) {}
+    func makeUIView(context: Context) -> FieldView { FieldView(colors: colors, spots: spots) }
+    func updateUIView(_ view: FieldView, context: Context) {}
 
-    final class EmitterView: UIView {
-        private let emitter = CAEmitterLayer()
-        private let on: Bool
+    final class FieldView: UIView {
+        private var stars: [(CALayer, Spot)] = []
+        private let moving: Bool
 
-        init(colors: [UIColor], rate: Float) {
-            on = Motion.ambient && !UIAccessibility.isReduceMotionEnabled
+        init(colors: [UIColor], spots: [Spot]) {
+            moving = Motion.ambient && !UIAccessibility.isReduceMotionEnabled
             super.init(frame: .zero)
             isUserInteractionEnabled = false
-            clipsToBounds = true
-            emitter.emitterShape = .line
-            emitter.emitterCells = colors.map { color in
-                let cell = CAEmitterCell()
-                cell.contents = Self.sparkle
-                cell.birthRate = rate / Float(max(colors.count, 1))
-                cell.lifetime = 5
-                cell.velocity = 26
-                cell.velocityRange = 12
-                cell.emissionLongitude = -.pi / 2
-                cell.emissionRange = 0.6
-                cell.scale = 0.32
-                cell.scaleRange = 0.18
-                cell.alphaRange = 0.3
-                cell.alphaSpeed = -0.18
-                cell.spin = 0.5
-                cell.spinRange = 1.4
-                cell.color = color.cgColor
-                return cell
+            for (i, spot) in spots.enumerated() {
+                let star = CALayer()
+                let color = colors.isEmpty ? UIColor.white : colors[i % colors.count]
+                star.contents = Self.sparkle(color)
+                star.contentsGravity = .resizeAspect
+                star.shadowColor = color.cgColor
+                star.shadowOpacity = 0.6
+                star.shadowRadius = 3
+                star.shadowOffset = .zero
+                layer.addSublayer(star)
+                stars.append((star, spot))
             }
-            layer.addSublayer(emitter)
         }
 
         required init?(coder: NSCoder) { nil }
 
         override func layoutSubviews() {
             super.layoutSubviews()
-            emitter.frame = bounds
-            emitter.emitterPosition = CGPoint(x: bounds.midX, y: bounds.maxY + 4)
-            emitter.emitterSize = CGSize(width: bounds.width, height: 1)
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            for (star, spot) in stars {
+                star.bounds = CGRect(x: 0, y: 0, width: spot.size, height: spot.size)
+                star.position = CGPoint(x: bounds.width * spot.x, y: bounds.height * spot.y)
+            }
+            CATransaction.commit()
         }
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
-            emitter.birthRate = window != nil && on ? 1 : 0
-            if window != nil { emitter.beginTime = CACurrentMediaTime() }
+            for (star, spot) in stars {
+                star.removeAllAnimations()
+                guard window != nil, moving else { continue }
+                let twinkle = CAKeyframeAnimation(keyPath: "transform")
+                twinkle.values = [
+                    NSValue(caTransform3D: CATransform3DMakeScale(0.55, 0.55, 1)),
+                    NSValue(caTransform3D: CATransform3DConcat(CATransform3DMakeScale(1.1, 1.1, 1), CATransform3DMakeRotation(.pi / 8, 0, 0, 1))),
+                    NSValue(caTransform3D: CATransform3DMakeScale(0.55, 0.55, 1)),
+                ]
+                let glow = CAKeyframeAnimation(keyPath: "opacity")
+                glow.values = [0.35, 1, 0.35]
+                let group = CAAnimationGroup()
+                group.animations = [twinkle, glow]
+                group.duration = 2.6
+                group.repeatCount = .infinity
+                group.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                group.beginTime = CACurrentMediaTime() + spot.delay
+                group.fillMode = .backwards
+                group.isRemovedOnCompletion = false
+                star.add(group, forKey: "twinkle")
+            }
         }
 
-        // A soft four-pointed sparkle, drawn once.
-        static let sparkle: CGImage? = {
-            let size = CGSize(width: 28, height: 28)
+        // A soft four-pointed sparkle in a colour, drawn once per colour.
+        private static var drawn: [UIColor: CGImage] = [:]
+        static func sparkle(_ color: UIColor) -> CGImage? {
+            if let hit = drawn[color] { return hit }
+            let size = CGSize(width: 40, height: 40)
             let image = UIGraphicsImageRenderer(size: size).image { _ in
                 let path = UIBezierPath()
-                let c = CGPoint(x: 14, y: 14)
-                for i in 0..<8 {
-                    let angle = CGFloat(i) * .pi / 4 - .pi / 2
-                    let r: CGFloat = i.isMultiple(of: 2) ? 13 : 3.6
-                    let p = CGPoint(x: c.x + r * cos(angle), y: c.y + r * sin(angle))
-                    if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
-                }
+                let c = CGPoint(x: 20, y: 20)
+                path.move(to: CGPoint(x: c.x, y: 1))
+                path.addQuadCurve(to: CGPoint(x: 39, y: c.y), controlPoint: c)
+                path.addQuadCurve(to: CGPoint(x: c.x, y: 39), controlPoint: c)
+                path.addQuadCurve(to: CGPoint(x: 1, y: c.y), controlPoint: c)
+                path.addQuadCurve(to: CGPoint(x: c.x, y: 1), controlPoint: c)
                 path.close()
-                UIColor.white.setFill()
+                color.setFill()
                 path.fill()
-            }
-            return image.cgImage
-        }()
+            }.cgImage
+            drawn[color] = image
+            return image
+        }
     }
 }
 

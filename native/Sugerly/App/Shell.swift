@@ -506,10 +506,16 @@ struct MainShell: View {
                         .zIndex(30)
                 }
             }
-            .sheet(isPresented: accountShown, onDismiss: openPending) {
-                AccountView { route in
+            // The menu slides in from the left over everything (lighter and
+            // quicker than a full-height sheet), with a dimmed page behind.
+            .overlay {
+                MenuDrawer(open: accountShown) { route in
                     pendingRoute = route
-                    Task { @MainActor in model.showMenu = false }
+                    model.showMenu = false
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(330))
+                        openPending()
+                    }
                 }
             }
             .sheet(isPresented: createShown, onDismiss: {
@@ -535,7 +541,7 @@ struct MainShell: View {
             }
     }
 
-    // A page picked in your account opens once the sheet has slid away.
+    // A page picked in your account opens once the menu has slid away.
     private func openPending() {
         guard let route = pendingRoute else { return }
         pendingRoute = nil
@@ -731,6 +737,57 @@ extension MainShell {
 }
 
 // MARK: - The + menu
+
+// The menu as a drawer: it springs in from the left edge over a dimmed
+// page. Tap the page or swipe it back to the left to close it.
+struct MenuDrawer: View {
+    @Binding var open: Bool
+    var go: (Route) -> Void
+    @State private var drag: CGFloat = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        GeometryReader { geo in
+            let width = min(geo.size.width * 0.9, 420)
+            ZStack(alignment: .leading) {
+                if open {
+                    Color.black
+                        .opacity(0.3 * Double(1 - min(1, drag / max(width, 1))))
+                        .ignoresSafeArea()
+                        .onTapGesture { open = false }
+                        .transition(.opacity)
+                        .accessibilityLabel("Close menu")
+                        .accessibilityAddTraits(.isButton)
+                    AccountView(go: go, close: { open = false })
+                        .frame(width: width)
+                        .frame(maxHeight: .infinity)
+                        .background(Palette.bg.ignoresSafeArea())
+                        .clipShape(UnevenRoundedRectangle(bottomTrailingRadius: 32, topTrailingRadius: 32, style: .continuous))
+                        .shadow(color: .black.opacity(0.2), radius: 24, x: 8)
+                        .ignoresSafeArea(edges: .vertical)
+                        .offset(x: -drag)
+                        .simultaneousGesture(
+                            DragGesture(minimumDistance: 16)
+                                .onChanged { value in
+                                    // Only sideways drags to the left move it.
+                                    guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                                    drag = max(0, -value.translation.width)
+                                }
+                                .onEnded { value in
+                                    if drag > width * 0.3 || value.predictedEndTranslation.width < -width * 0.5 {
+                                        open = false
+                                    }
+                                    withAnimation(Motion.release) { drag = 0 }
+                                }
+                        )
+                        .transition(.move(edge: .leading))
+                        .zIndex(1)
+                }
+            }
+            .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.42, dampingFraction: 0.86), value: open)
+        }
+    }
+}
 
 struct CreateSheet: View {
     var onPick: (Composer) -> Void

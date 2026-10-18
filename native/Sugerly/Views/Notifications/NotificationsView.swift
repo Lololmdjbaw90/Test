@@ -79,6 +79,7 @@ struct NotificationsPage: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 18) {
+                PageHero(title: "Your updates", subtitle: notes.unread > 0 ? "\(notes.unread) new since you last looked" : "Likes, follows, comments and mentions", icon: "bell.badge.fill", candy: .berry)
                 filterChips
                 content
             }

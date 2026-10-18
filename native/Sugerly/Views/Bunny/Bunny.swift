@@ -101,33 +101,26 @@ enum BunnyPiece: String {
     }
 }
 
+// Clothes: one top at a time.
 enum BunnyTop: String, CaseIterable, Codable, Identifiable {
-    case none, sailor
-    var id: String { rawValue }
-    var label: String { self == .none ? "None" : "Sailor top" }
-    var pieces: [BunnyPiece] { self == .none ? [] : [.sailor] }
-}
-
-enum BunnyBottom: String, CaseIterable, Codable, Identifiable {
-    case none, skirt, pinafore, bloomers, both
+    case none, sailor, tee, hoodie, ruffle
     var id: String { rawValue }
     var label: String {
         switch self {
         case .none: return "None"
-        case .skirt: return "Skirt"
-        case .pinafore: return "Pinafore"
-        case .bloomers: return "Bloomers"
-        case .both: return "Layered"
+        case .sailor: return "Sailor"
+        case .tee: return "T-shirt"
+        case .hoodie: return "Hoodie"
+        case .ruffle: return "Ruffles"
         }
     }
-    // Back to front.
-    var pieces: [BunnyPiece] {
+    var piece: BunnyPiece? {
         switch self {
-        case .none: return []
-        case .skirt: return [.skirt]
-        case .pinafore: return [.pinafore]
-        case .bloomers: return [.bloomers]
-        case .both: return [.bloomers, .pinafore]
+        case .none: return nil
+        case .sailor: return .sailor
+        case .tee: return .skirt
+        case .hoodie: return .pinafore
+        case .ruffle: return .bloomers
         }
     }
 }
@@ -215,7 +208,6 @@ struct BunnyLook: Codable, Equatable {
     var collar = 0
     var outfit = 0
     var top = BunnyTop.sailor
-    var bottom = BunnyBottom.both
     var face = BunnyFace.cute
     var extra = BunnyExtra.none
     var scene = BunnyScene.candy
@@ -248,7 +240,6 @@ struct BunnyLook: Codable, Equatable {
         for part in BunnyPart.allCases { look.set(part, Int.random(in: 0..<part.tints.count)) }
         look.bowOn = Int.random(in: 0..<5) > 0
         look.top = BunnyTop.allCases.randomElement() ?? BunnyTop.sailor
-        look.bottom = BunnyBottom.allCases.randomElement() ?? BunnyBottom.both
         look.face = BunnyFace.allCases.randomElement() ?? BunnyFace.cute
         look.extra = BunnyExtra.allCases.randomElement() ?? BunnyExtra.none
         look.scene = BunnyScene.allCases.randomElement() ?? BunnyScene.candy
@@ -267,7 +258,6 @@ extension BunnyLook {
         collar = (try? c.decodeIfPresent(Int.self, forKey: .collar)) ?? collar
         outfit = (try? c.decodeIfPresent(Int.self, forKey: .outfit)) ?? outfit
         top = (try? c.decodeIfPresent(BunnyTop.self, forKey: .top)) ?? top
-        bottom = (try? c.decodeIfPresent(BunnyBottom.self, forKey: .bottom)) ?? bottom
         face = (try? c.decodeIfPresent(BunnyFace.self, forKey: .face)) ?? face
         extra = (try? c.decodeIfPresent(BunnyExtra.self, forKey: .extra)) ?? extra
         scene = (try? c.decodeIfPresent(BunnyScene.self, forKey: .scene)) ?? scene
@@ -292,6 +282,7 @@ final class BunnyStore {
         if let data = UserDefaults.standard.data(forKey: key), let saved = try? JSONDecoder().decode(BunnyLook.self, from: data) {
             look = saved
             made = true
+            BunnyImages.warmUp(saved)
         } else {
             look = BunnyLook()
             made = false
@@ -317,6 +308,42 @@ enum BunnyArt {
     static let ink = Color(hex: 0x2A0812)
 }
 
+// The layers, decoded once at a size that's sharp on screen (the drawings
+// are big; decoding them while a page opened made it stutter). The usual
+// bunny's layers are decoded in the background when the app starts.
+@MainActor
+enum BunnyImages {
+    private static var cache: [String: UIImage] = [:]
+    private static let pixels = CGSize(width: 653, height: 900)
+
+    static func image(_ name: String) -> Image {
+        if let hit = cache[name] { return Image(uiImage: hit) }
+        let made = load(name)
+        cache[name] = made
+        return Image(uiImage: made)
+    }
+
+    nonisolated static func load(_ name: String) -> UIImage {
+        guard let full = UIImage(named: name) else { return UIImage() }
+        return full.preparingThumbnail(of: pixels) ?? full
+    }
+
+    static func warmUp(_ look: BunnyLook = BunnyLook()) {
+        var names = ["BunnyFur", "BunnyOutline", "BunnyBow", "BunnyCollar", look.face.image, look.face.eyes]
+        if let piece = look.top.piece { names.append(piece.rawValue) }
+        let missing = names.filter { cache[$0] == nil }
+        guard !missing.isEmpty else { return }
+        Task.detached(priority: .utility) {
+            var made: [(String, UIImage)] = []
+            for name in missing { made.append((name, load(name))) }
+            let ready = made
+            await MainActor.run {
+                for (name, image) in ready where cache[name] == nil { cache[name] = image }
+            }
+        }
+    }
+}
+
 // One layer of the drawing in a colour.
 struct BunnyLayer: View {
     let name: String
@@ -325,7 +352,7 @@ struct BunnyLayer: View {
     var brightness: Double = 0
 
     var body: some View {
-        Image(name).resizable().interpolation(.high)
+        BunnyImages.image(name).resizable().interpolation(.high)
             .hueRotation(.degrees(hue))
             .saturation(saturation)
             .brightness(brightness)
@@ -357,13 +384,11 @@ struct BunnyFigure: View, Equatable {
         ZStack {
             if look.extra == .halo { BunnyExtraArt(extra: .halo) }
             BunnyLayer("BunnyFur", look.tint(.fur))
-            Image("BunnyOutline").resizable().interpolation(.high)
-            ForEach(look.bottom.pieces + look.top.pieces, id: \.self) { piece in
-                BunnyLayer(piece, outfit)
-            }
+            BunnyImages.image("BunnyOutline").resizable().interpolation(.high)
+            if let piece = look.top.piece { BunnyLayer(piece, outfit) }
             if look.top == .sailor { BunnyLayer("BunnyCollar", look.tint(.collar)) }
-            Image(look.face.image).resizable().interpolation(.high)
-            Image(look.face.eyes).resizable().interpolation(.high)
+            BunnyImages.image(look.face.image).resizable().interpolation(.high)
+            BunnyImages.image(look.face.eyes).resizable().interpolation(.high)
                 .scaleEffect(x: 1, y: blinking && look.face.blinks ? 0.1 : 1, anchor: UnitPoint(x: 0.5, y: look.face.eyeLine))
             if look.bowOn { BunnyLayer("BunnyBow", look.tint(.bow)) }
             if look.extra != .none && look.extra != .halo { BunnyExtraArt(extra: look.extra) }
@@ -495,6 +520,8 @@ struct BunnyBuddy: View {
     var lively = true
     // Off inside buttons (the button gets the tap).
     var tappable = true
+    // A little hop hello when she appears.
+    var greet = false
     var onTap: (() -> Void)? = nil
     @State private var blinking = false
     @State private var hops = 0
@@ -542,6 +569,11 @@ struct BunnyBuddy: View {
                 onTap?()
             }
             .sensoryFeedback(.impact(weight: .light), trigger: hops)
+            .task {
+                guard greet, moving else { return }
+                try? await Task.sleep(for: .milliseconds(520))
+                hops += 1
+            }
             .task(id: look.face.blinks && moving) {
                 guard look.face.blinks, moving else { blinking = false; return }
                 while !Task.isCancelled {

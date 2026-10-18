@@ -417,7 +417,7 @@ struct HomeView: View {
             .pastelCard(radius: 24, padding: 16)
             .overlay {
                 // Sparkles rising through the hello, and a shine sweeping by.
-                SparkleEmitter(colors: [.white, UIColor(Theme.main), UIColor(hex: 0xFFC53D)], rate: 1.2)
+                TwinkleField(colors: [UIColor(hex: 0xFFC53D), .white, UIColor(Theme.main)])
                     .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                     .opacity(0.85)
                     .allowsHitTesting(false)
@@ -508,7 +508,7 @@ struct HomeView: View {
                         }
                         .clipShape(shape)
                     }
-                    .overlay { SparkleEmitter(colors: [.white], rate: 1.6).clipShape(shape) }
+                    .overlay { TwinkleField(colors: [.white, UIColor(hex: 0xFFF1A8)]).clipShape(shape) }
                     .overlay { ShineSweep(every: 4.8, strength: 0.3).clipShape(shape) }
                     .shadow(color: Theme.glow(0.32), radius: 14, y: 6)
             }

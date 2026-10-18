@@ -1,5 +1,14 @@
 # Changes
 
+## Pin board Community, slide-in menu, neater sparkles (iOS app)
+
+- **Community as a pin board** (`PinGrid`, `PinCard`): posts go into two columns (three on iPad), each to whichever column is shortest by a fixed guess of its height (so cards never hop columns while pictures load). Pictures show at their own shape (`ArtImage`, clamped); posts with only words are candy quote cards, the colour picked from the post id. Each card: save button, double-tap to like with a heart pop, author and likes underneath, and a long-press menu (like, save, comments, send, share, copy, report, delete). More posts load near the end of either column. The "start a thread" box and suggestions sit above the board.
+- **Menu as a drawer** (`MenuDrawer`): instead of a full-height sheet, the menu springs in from the left over a dimmed page; tap outside or swipe it left to close. A page picked in it opens once it has slid away. Its sections rise in one after another and the bunny hops hello (`BunnyBuddy(greet:)`).
+- **Faster bunny**: her layers are decoded once at 900 px tall (`BunnyImages`, `preparingThumbnail`) and the usual bunny's layers are decoded in the background at launch, so Home and the menu don't stutter decoding the big drawings.
+- **Bunny**: the bow is cut out whole (the cut region started too far right and clipped the left loop; stray bits are now removed by an opening and the biggest-piece pick). Clothes are one top at a time: Sailor, T-shirt, Hoodie, Ruffles.
+- **Sparkles** (`TwinkleField`): the floating particles are replaced by a few four-pointed stars in fixed spots (a cluster in the top corner and a pair in the opposite one) that twinkle in turn with Core Animation.
+- **PageHero**: a candy banner for the top of a page (title, line, optional button, tilted icon, twinkles, shine), first on Notifications.
+
 ## The real bunny, brighter menu and Community (iOS app)
 
 - **Bunny from the artist's layers**: fur, outline, skirt, pinafore, bloomers and sailor top, and nine faces, all on the same 878×1210 canvas. `scripts/bunny-layers.py` now prepares them: it splits the sailor top's collar off by colour (so it keeps its own colour), splits each face into its eyes and the rest (the eyes squeeze shut around their own line to blink; dreamy and meh don't blink), and cuts the bow, with its outline, out of the finished picture (the part the body layers don't explain). Clothes are a top (none / sailor) and a bottom (none / skirt / pinafore / bloomers / layered); an outfit colour turns every piece to the same target hue from the hue it was painted in (`BunnyPiece.turn`). The bow can be switched off. Older saved bunnies keep their colours (`BunnyLook` decodes field by field).

@@ -71,3 +71,68 @@ struct CandyShortcutGrid: View {
         .contentShape(shape)
     }
 }
+
+// A bright banner at the top of a page: its name, a line about it, an
+// optional button, and a big tilted icon, on a candy gradient with neat
+// twinkles and a passing shine.
+struct PageHero: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    var candy: Candy = .berry
+    var actionTitle: String? = nil
+    var actionIcon: String = "plus"
+    var action: (() -> Void)? = nil
+    @State private var shown = false
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 26, style: .continuous)
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title).font(.display(25)).foregroundStyle(.white)
+                    .lineLimit(1).minimumScaleFactor(0.75)
+                Text(subtitle).font(.jakarta(13, .medium)).foregroundStyle(.white.opacity(0.92))
+                    .fixedSize(horizontal: false, vertical: true)
+                if let actionTitle, let action {
+                    Button(action: action) {
+                        Label(actionTitle, systemImage: actionIcon)
+                            .font(.jakarta(13, .bold)).foregroundStyle(candy.color)
+                            .lineLimit(1)
+                            .padding(.horizontal, 14).frame(height: 34)
+                            .background(.white, in: Capsule())
+                            .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+                    }
+                    .buttonStyle(BouncyStyle(scale: 0.93))
+                    .padding(.top, 4)
+                }
+            }
+            Spacer(minLength: 0)
+            Image(systemName: icon)
+                .font(.system(size: 30, weight: .bold))
+                .foregroundStyle(.white)
+                .symbolEffect(.bounce, value: shown)
+                .frame(width: 70, height: 70)
+                .background(.white.opacity(0.22), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .rotationEffect(.degrees(shown ? -8 : 0))
+                .animation(Motion.reduced ? nil : Motion.playful.delay(0.2), value: shown)
+                .accessibilityHidden(true)
+        }
+        .padding(18)
+        .background {
+            shape.fill(candy.gradient)
+                .overlay {
+                    GeometryReader { geo in
+                        Circle().fill(.white.opacity(0.14)).frame(width: geo.size.height * 1.6)
+                            .offset(x: geo.size.width * 0.6, y: -geo.size.height * 0.4)
+                        Circle().fill(.white.opacity(0.1)).frame(width: geo.size.height * 0.7)
+                            .offset(x: geo.size.width * 0.35, y: geo.size.height * 0.62)
+                    }
+                    .clipShape(shape)
+                }
+                .overlay { TwinkleField(colors: [.white, UIColor(hex: 0xFFF1A8)]).clipShape(shape) }
+                .overlay { ShineSweep(every: 5.5, strength: 0.28).clipShape(shape) }
+                .shadow(color: candy.color.softGlow(0.35), radius: 14, y: 6)
+        }
+        .onAppear { shown = true }
+    }
+}

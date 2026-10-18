@@ -112,13 +112,16 @@ for layer in [load("fur"), load("outline")]:
     base[..., :3] = layer[..., :3] * al + base[..., :3] * (1 - al)
     base[..., 3:] = al + base[..., 3:] * (1 - al)
 diff = np.abs(f[..., :3] - base[..., :3]).sum(-1) + np.abs(f[..., 3] - base[..., 3])
-region = (xx > 470) & (yy > 80) & (yy < 380)
+region = (xx > 400) & (yy > 60) & (yy < 400)
 bow = region & (diff > 0.18) & (f[..., 3] > 0.05)
-# Just the bow itself (the biggest piece), not an eyebrow of the face
-# that was in the finished picture.
-lab, n = nd.label(nd.binary_closing(bow, iterations=3))
-sizes = nd.sum(bow, lab, range(1, n + 1))
+# Just the bow itself: cut thin bridges to stray bits (an eyebrow of the face
+# that was in the finished picture, a sliver of ear), keep the biggest piece,
+# then grow it back to its soft edges.
+core = nd.binary_opening(nd.binary_closing(bow, iterations=2), iterations=5)
+lab, n = nd.label(core)
+sizes = nd.sum(core, lab, range(1, n + 1))
 keep = lab == (int(np.argmax(sizes)) + 1)
+keep = nd.binary_dilation(keep, iterations=6) & (diff > 0.08)
 fh, fs, fv = hsv(f)
 bow = nd.binary_fill_holes(keep) & (f[..., 3] > 0.05) & ~((fs < 0.1) & (fv > 0.9))
 b = f.copy(); b[..., 3] *= bow

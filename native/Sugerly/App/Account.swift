@@ -8,9 +8,10 @@ import SwiftUI
 struct AccountView: View {
     // Closes the menu and opens a page on the tab you're on.
     var go: (Route) -> Void
+    // Closes the menu.
+    var close: () -> Void = {}
     @Environment(AppModel.self) private var model
     @Environment(NotificationsStore.self) private var notes
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shop = false
     @State private var wallet = false
@@ -38,9 +39,9 @@ struct AccountView: View {
                     if let me = model.me { profileCard(me) }
                     walletCard
                     placesGrid
-                    youCard
-                    endCard
-                    footer
+                    youCard.modifier(MenuRise(shown: shown, index: 3))
+                    endCard.modifier(MenuRise(shown: shown, index: 4))
+                    footer.modifier(MenuRise(shown: shown, index: 5))
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 6)
@@ -53,20 +54,30 @@ struct AccountView: View {
             .roundTitle("Menu")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                        .font(.jakarta(16, .bold))
+                    Button(action: close) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Palette.text2)
+                            .frame(width: 32, height: 32)
+                            .background(Palette.surface, in: Circle())
+                            .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
+                    }
+                    .buttonStyle(BouncyStyle(scale: 0.88))
+                    .accessibilityLabel("Close menu")
                 }
             }
         }
         .tint(Theme.main)
-        .presentationDragIndicator(.visible)
         .sheet(isPresented: $shop) { NitroShopView() }
         .sheet(isPresented: $wallet) { WalletView() }
         .sheet(isPresented: $status) { StatusSheet().presentationCornerRadius(30) }
         .confirmationDialog("Log out of Sugerly?", isPresented: $confirmLogout, titleVisibility: .visible) {
             Button("Log out", role: .destructive) { model.signOut() }
         }
-        .onAppear { shown = true }
+        .onAppear {
+            // Sections rise in one after another once the menu has slid in.
+            withAnimation(reduceMotion ? nil : Motion.settle.delay(0.08)) { shown = true }
+        }
     }
 
     // Notifications, Settings, what's new and help.
@@ -145,7 +156,7 @@ struct AccountView: View {
             HStack(alignment: .top, spacing: 8) {
                 profileButton(me, info, presence)
                 // Your bunny says hi (tap her; hold to dress her up).
-                BunnyBuddy(look: bunny.look, height: 92)
+                BunnyBuddy(look: bunny.look, height: 92, greet: true)
                     .padding(.top, -12)
                     .padding(.trailing, -4)
                     .onLongPressGesture { go(.bunny) }
@@ -163,7 +174,7 @@ struct AccountView: View {
         }
         .pastelCard(radius: 26, padding: 16)
         .overlay {
-            SparkleEmitter(colors: [.white, UIColor(Theme.main), UIColor(hex: 0xFFC53D)], rate: 1)
+            TwinkleField(colors: [UIColor(hex: 0xFFC53D), .white, UIColor(Theme.main)])
                 .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                 .opacity(0.8)
                 .allowsHitTesting(false)
@@ -354,5 +365,19 @@ struct AccountView: View {
             .foregroundStyle(Palette.muted)
             .frame(maxWidth: .infinity)
             .padding(.top, 2)
+    }
+}
+
+// A menu section rising into place after the ones above it.
+private struct MenuRise: ViewModifier {
+    let shown: Bool
+    let index: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown || reduceMotion ? 1 : 0)
+            .offset(x: shown || reduceMotion ? 0 : -18, y: shown || reduceMotion ? 0 : 10)
+            .animation(reduceMotion ? nil : Motion.settle.delay(0.05 + Double(index) * 0.05), value: shown)
     }
 }

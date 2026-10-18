@@ -166,6 +166,7 @@ struct CommunityView: View {
     // How much you like each #tag (learned from reels, posts and drawings).
     @State private var taste: [String: Double] = [:]
     @State private var bunny = BunnyStore.shared
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @Namespace private var feedPill
 
     private var visible: [Post] {
@@ -297,28 +298,18 @@ struct CommunityView: View {
                         ForEach(0..<3, id: \.self) { i in SkeletonCard(media: i != 1) }
                     }
 
-                    // One sheet of conversation: a slim composer on top, then
-                    // every post as a thread row with a line down the side.
-                    // Switching feeds swaps the whole sheet with a soft
+                    // A pin board: a "start a thread" box on top, then every
+                    // post as a card in interlocking columns (pictures at
+                    // their own shape, words as colourful quote cards).
+                    // Switching feeds swaps the whole board with a soft
                     // crossfade (posts don't fly around).
-                    LazyVStack(spacing: 0) {
+                    VStack(spacing: 14) {
                         startThread
-                        ForEach(Array(visible.enumerated()), id: \.element.id) { index, post in
-                            PostCard(post: post, path: $path, reporting: $reporting, conversational: true)
-                                .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 18)), removal: .opacity))
-                                .onAppear { if index >= visible.count - 5 { Task { await store.loadMore() } } }
-                            if index == 1 && !suggestions.isEmpty && feed == .forYou {
-                                suggested.padding(12)
-                                    .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1).allowsHitTesting(false) }
-                            }
+                        if feed == .forYou && !suggestions.isEmpty && !visible.isEmpty { suggested }
+                        PinGrid(posts: visible, path: $path, reporting: $reporting, columns: sizeClass == .regular ? 3 : 2) {
+                            Task { await store.loadMore() }
                         }
                     }
-                    .background {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Palette.surface)
-                            .shadow(color: Palette.shadow, radius: 12, y: 4)
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
                     .id(feed.rawValue + (tag ?? ""))
                     .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 14)), removal: .opacity.animation(Motion.exit)))
 
@@ -398,7 +389,7 @@ struct CommunityView: View {
         }
         .pastelCard(radius: 26, padding: 16)
         .overlay {
-            SparkleEmitter(colors: [.white, UIColor(Theme.main), UIColor(hex: 0xFFC53D)], rate: 1)
+            TwinkleField(colors: [UIColor(hex: 0xFFC53D), .white, UIColor(Theme.main)])
                 .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                 .opacity(0.8)
                 .allowsHitTesting(false)
@@ -443,7 +434,7 @@ struct CommunityView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(SoftPressStyle())
-        .overlay(alignment: .bottom) { Rectangle().fill(Palette.border).frame(height: 1).allowsHitTesting(false) }
+        .sugarCard(radius: 22)
     }
 
     // Feed tabs in one bar that always fits the screen: the chosen one is a
