@@ -1,5 +1,13 @@
 # Changes
 
+## Chat streaks, MimiPlus redesign, gem hearts, logo everywhere (iOS app)
+
+- **Chat streaks** (`ChatStreaks.swift`): like TikTok's, the days in a row that both of you wrote in a one-to-one chat, worked out on the phone from the messages the chat list and chats already load (no new database fields or rules). The days each side wrote are saved per account in the chat cache (only the last two weeks, or back to a week before the current streak). From 3 days a flame and the count show by the name in the chat list and in the chat's header; until you've both written today it shows an hourglass, and a missed day starts it again. A fresh phone only has the newest messages, so for streaks that reach the oldest day it knows it fetches older pages of that chat once (`deepen`, at most four pages, remembered with `full`). Finishing today's day in an open chat shows a small "N-day streak!" cheer.
+- **MimiPlus** (`NitroShopView`): a gradient banner with the title in Lilita One, your status or coins, and the artist's gem heart floating with twinkling gem sparkles (`GemHeart`; tap it, or buy, for a hop and a puff of hearts); your preview card; plan cards with a gradient edge when picked and a "Best value" tag on the longer one; the perks as candy tiles two by two; the buy button (and how many coins you still need) in a frosted bar that stays at the bottom.
+- **Gem hearts**: the artist's heart and sparkle are `MimiHeart` / `MimiSparkle`; the bunny's tap puff (`HeartPuff`) now floats those (popping in, swaying, fading) instead of drawn hearts.
+- **Logo on every main page**: `quietTitle` puts the Sugerly logo in the middle of the top bar (Home, Community, Fan Art, Chats, Servers, Music). On Chats the Chats / Servers switch moves from the top bar to just under it.
+- **Community feed bar**: no more flat box behind the bar when it sticks to the top; it's a frosted capsule floating over the posts, and the pill glides with a softer spring.
+
 ## One morphing search, real recolouring, bow in Accessories (iOS app)
 
 - **Recolouring picture items**: clothes and accessories that are pictures are turned from the hue they were painted in to the colour's hue (`hueRotation`), with the colour's strength and lightness, the same way as the bunny's classic pieces (`BunnyPiece`), instead of a colour-blend dye that made them look like one flat colour. Built-in items carry their measured hue (`BunnyItem.hue`); uploaded ones get theirs worked out from the picture when it's loaded (`BunnyRemoteImages.baseHue`, a colourfulness-weighted average hue).

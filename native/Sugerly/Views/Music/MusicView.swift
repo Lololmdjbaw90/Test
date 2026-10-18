@@ -93,8 +93,7 @@ struct MusicView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .sugarBackground()
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
+        .quietTitle("Music")
         .task { await loadUploads() }
         .task(id: "\(genre)|\(query)") {
             if !query.isEmpty { try? await Task.sleep(for: .milliseconds(350)) }

@@ -108,6 +108,7 @@ final class ChatStore {
     }
 
     private func merge(_ messages: [Message], me: String, countUnread: Bool = true) {
+        ChatStreaks.shared.note(messages, me: me)
         var byId = Dictionary(uniqueKeysWithValues: conversations.map { ($0.id, $0) })
         // Oldest first, so the newest message ends up as "last".
         for m in messages.sorted(by: { $0.created < $1.created }) where !processed.contains(m.id) {
@@ -243,27 +244,16 @@ struct ChatListView: View {
     }
 
     var body: some View {
-        Group {
-            // The two sides slide in from their own side of the switch.
-            if section == 1 {
-                ServersHome(path: $path, embedded: true)
-                    .transition(.asymmetric(insertion: .offset(x: 28).combined(with: .opacity), removal: .opacity.animation(Motion.exit)))
-            } else {
-                chats
-                    .transition(.asymmetric(insertion: .offset(x: -28).combined(with: .opacity), removal: .opacity.animation(Motion.exit)))
-            }
+        VStack(spacing: 0) {
+            // Chats or Servers, under the logo.
+            TitleSwitch(titles: ["Chats", "Servers"], selection: $section)
+                .padding(.top, 2)
+                .padding(.bottom, 6)
+            sections
         }
-        .animation(Motion.pick(.snappy(duration: 0.3)), value: section)
-        .appearFade()
         // The page colour stays put while the list fades in.
         .sugarBackground()
-        .navigationTitle(section == 0 ? "Chats" : "Servers")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                TitleSwitch(titles: ["Chats", "Servers"], selection: $section)
-            }
-        }
+        .quietTitle(section == 0 ? "Chats" : "Servers")
         .plainToolbar(leading: { AccountButton() }, trailing: {
             PinkCircleButton(icon: "square.and.pencil", label: "New message") { starting = true }
         })
@@ -283,6 +273,21 @@ struct ChatListView: View {
             }
             .presentationCornerRadius(34)
         }
+    }
+
+    private var sections: some View {
+        Group {
+            // The two sides slide in from their own side of the switch.
+            if section == 1 {
+                ServersHome(path: $path, embedded: true)
+                    .transition(.asymmetric(insertion: .offset(x: 28).combined(with: .opacity), removal: .opacity.animation(Motion.exit)))
+            } else {
+                chats
+                    .transition(.asymmetric(insertion: .offset(x: -28).combined(with: .opacity), removal: .opacity.animation(Motion.exit)))
+            }
+        }
+        .animation(Motion.pick(.snappy(duration: 0.3)), value: section)
+        .appearFade()
     }
 
     private var chats: some View {
@@ -360,6 +365,11 @@ struct ChatListView: View {
         .sugarBackground()
         .motion(Motion.standard, value: shown.map(\.id))
         .refreshable { await store.refresh(me: model.me?.email ?? "") }
+        // Long streaks on a fresh phone: fetch the older days they need.
+        .task {
+            try? await Task.sleep(for: .seconds(1.5))
+            await ChatStreaks.shared.deepen(store.conversations, me: model.me?.email ?? "")
+        }
     }
 
     private func row(_ c: Conversation) -> some View {
@@ -497,8 +507,11 @@ struct ConversationRow: View {
                 Avatar(url: conversation.picture(model), name: conversation.title(model), size: 52, online: other?.isOnline ?? false)
             }
             VStack(alignment: .leading, spacing: 4) {
-                HStack {
+                HStack(spacing: 6) {
                     Text(conversation.title(model)).font(.jakarta(16, unread ? .bold : .semibold)).foregroundStyle(Palette.text).lineLimit(1)
+                    if !conversation.isGroup, let streak = ChatStreaks.shared.streak(conversation.id) {
+                        StreakBadge(streak: streak)
+                    }
                     Spacer()
                     Text(Dates.ago(conversation.last?.created ?? "")).font(.jakarta(12, unread ? .semibold : .regular)).foregroundStyle(unread ? Theme.main : Palette.muted)
                 }

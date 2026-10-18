@@ -556,7 +556,9 @@ struct BunnyHop {
     var lift: CGFloat = 0
 }
 
-// A puff of little hearts floating up (clock-driven, plays on each tap).
+// A puff of the artist's little gem hearts (and a gem sparkle or two)
+// floating up when you tap her (clock-driven, plays on each tap). Each one
+// pops in, sways and fades as it rises.
 struct HeartPuff: View {
     let trigger: Int
     @State private var start: Date?
@@ -567,18 +569,29 @@ struct HeartPuff: View {
             Canvas { ctx, size in
                 guard let start else { return }
                 let t = timeline.date.timeIntervalSince(start)
-                guard t >= 0, t < 1.1 else { return }
-                let colors = [Color(hex: 0xFF5C9A), Color(hex: 0xFF8FB8), Color(hex: 0xC4A6FF), Color(hex: 0xFFB487)]
+                guard t >= 0, t < 1.2 else { return }
+                let heart = ctx.resolve(Image("MimiHeart"))
+                let sparkle = ctx.resolve(Image("MimiSparkle"))
                 for i in 0..<7 {
                     let seed = Double(i) * 1.7
+                    // A small stagger, so they leave one after another.
+                    let local = t - Double(i) * 0.035
+                    guard local > 0 else { continue }
                     let x = size.width * (0.2 + 0.6 * CGFloat((sin(seed * 3.1) + 1) / 2))
-                    let rise = CGFloat(t / 1.1) * size.height * (0.35 + 0.15 * CGFloat(i % 3))
+                    let rise = CGFloat(local / 1.2) * size.height * (0.35 + 0.15 * CGFloat(i % 3))
                     let y = size.height * 0.45 - rise
-                    let r = size.width * (0.05 + 0.015 * CGFloat(i % 3))
+                    let r = size.width * (0.065 + 0.02 * CGFloat(i % 3))
+                    let pop = CGFloat(min(1, local / 0.16))
                     var c = ctx
-                    c.opacity = max(0, 1 - t / 1.1)
-                    c.translateBy(x: x + CGFloat(sin(t * 6 + seed)) * 6, y: y)
-                    c.fill(BunnyShapes.heart(in: CGRect(x: -r, y: -r, width: r * 2, height: r * 1.8)), with: .color(colors[i % colors.count]))
+                    c.opacity = max(0, 1 - local / 1.2)
+                    c.translateBy(x: x + CGFloat(sin(local * 6 + seed)) * 6, y: y)
+                    c.rotate(by: .degrees(sin(seed * 2.3) * 16 + sin(local * 5 + seed) * 6))
+                    c.scaleBy(x: pop, y: pop)
+                    if i % 3 == 2 {
+                        c.draw(sparkle, in: CGRect(x: -r * 0.8, y: -r * 0.9, width: r * 1.6, height: r * 1.8))
+                    } else {
+                        c.draw(heart, in: CGRect(x: -r, y: -r * 0.84, width: r * 2, height: r * 1.68))
+                    }
                 }
             }
         }
@@ -587,7 +600,7 @@ struct HeartPuff: View {
         .task(id: trigger) {
             guard trigger > 0, !reduceMotion else { return }
             start = .now
-            try? await Task.sleep(for: .seconds(1.15))
+            try? await Task.sleep(for: .seconds(1.45))
             start = nil
         }
     }

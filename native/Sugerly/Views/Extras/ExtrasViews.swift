@@ -306,6 +306,12 @@ struct AppRelease: Identifiable {
 
 enum AppReleases {
     static let native: [AppRelease] = [
+        AppRelease(id: "ios-3.11", icon: "flame.fill", title: "Chat streaks and a dreamier MimiPlus", date: "2026-10-19T15:00:00Z", items: [
+            "Chat streaks: write to a friend every day, both of you, and a flame with your days in a row shows by their name. An hourglass means you haven't both written today yet.",
+            "MimiPlus has a new look: a dreamy banner with a gem heart, clearer plans (with the best value marked), the perks as colourful tiles and the button always at the bottom.",
+            "Tap your bunny for a puff of gem hearts and sparkles.",
+            "The Sugerly logo sits at the top of every main page, and Community's feed bar floats smoothly over the posts.",
+        ]),
         AppRelease(id: "ios-3.10", icon: "magnifyingglass", title: "One search on every page", date: "2026-10-19T12:00:00Z", items: [
             "Home, Community, Fan Art, Chats and Servers each have one round search button by the title that grows into the search bar.",
             "Clothes and accessories now change colour the same way as the bunny's first outfits, keeping their light and shade.",

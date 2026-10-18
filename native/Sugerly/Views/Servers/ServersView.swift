@@ -136,9 +136,7 @@ struct ServersHome: View {
         if embedded {
             content
         } else {
-            content
-                .navigationTitle("Servers")
-                .navigationBarTitleDisplayMode(.inline)
+            content.quietTitle("Servers")
         }
     }
 }

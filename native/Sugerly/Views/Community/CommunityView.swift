@@ -383,14 +383,16 @@ struct CommunityView: View {
 
     // Feed tabs in one bar that always fits the screen: the chosen one is a
     // candy pill with its name, the others show just their icon (each in its
-    // own colour). The pill slides over to the one you tap.
+    // own colour). The pill glides over to the one you tap. The bar is a
+    // frosted capsule that floats over the posts when it sticks to the top
+    // (no box behind it).
     private var feedBar: some View {
         HStack(spacing: 4) {
             ForEach(Feed.allCases, id: \.self) { f in
                 let on = feed == f
                 Button {
                     guard feed != f else { return }
-                    withAnimation(Motion.pick(.snappy(duration: 0.32))) { feed = f }
+                    withAnimation(Motion.pick(.spring(response: 0.4, dampingFraction: 0.82))) { feed = f }
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: f.icon)
@@ -424,14 +426,14 @@ struct CommunityView: View {
             }
         }
         .padding(4)
-        .background(Palette.surface, in: Capsule())
-        .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
-        .shadow(color: Palette.shadow, radius: 8, y: 3)
+        .background {
+            Capsule().fill(.ultraThinMaterial)
+                .overlay(Capsule().fill(Palette.surface.opacity(0.78)))
+                .shadow(color: Palette.shadow, radius: 12, y: 5)
+        }
+        .overlay(Capsule().strokeBorder(Palette.border.opacity(0.8), lineWidth: 1).allowsHitTesting(false))
         .sensoryFeedback(.selection, trigger: feed)
         .padding(.vertical, 8)
-        // When it sticks to the top, its strip reaches the screen edges so
-        // posts don't peek out beside it.
-        .background { Rectangle().fill(Palette.bg.opacity(0.97)).padding(.horizontal, -14) }
     }
 
     private var trendingRow: some View {

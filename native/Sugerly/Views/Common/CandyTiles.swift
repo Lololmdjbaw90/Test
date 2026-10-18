@@ -279,7 +279,8 @@ struct PageTitle: View {
 
 extension View {
     /// A page that shows a big PageTitle: the top bar keeps the name (for the
-    /// back button and VoiceOver) without showing it a second time.
+    /// back button and VoiceOver) and shows the Sugerly logo in the middle
+    /// instead of the name a second time.
     func quietTitle(_ title: String) -> some View {
         modifier(QuietTitle(title: title))
     }
@@ -294,12 +295,12 @@ private struct QuietTitle: ViewModifier {
             .navigationBarTitleDisplayMode(.inline)
         if #available(iOS 26.0, *) {
             page.toolbar {
-                ToolbarItem(placement: .principal) { Color.clear.frame(width: 1, height: 1).accessibilityHidden(true) }
+                ToolbarItem(placement: .principal) { BrandLogo(height: 30) }
                     .sharedBackgroundVisibility(.hidden)
             }
         } else {
             page.toolbar {
-                ToolbarItem(placement: .principal) { Color.clear.frame(width: 1, height: 1).accessibilityHidden(true) }
+                ToolbarItem(placement: .principal) { BrandLogo(height: 30) }
             }
         }
     }

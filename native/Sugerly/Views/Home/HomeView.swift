@@ -296,14 +296,7 @@ struct HomeView: View {
         .accessibilityIdentifier("home-feed")
         .onAppear { bunny.use(model.me?.email ?? "") }
         .onChange(of: model.me?.email) { _, email in bunny.use(email ?? "") }
-        .navigationTitle("Home")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                BrandLogo(height: 30)
-                    .accessibilityLabel("Sugerly")
-            }
-        }
+        .quietTitle("Home")
         .rootBar()
         .refreshable { if loadContent { await load() } }
         .task {
