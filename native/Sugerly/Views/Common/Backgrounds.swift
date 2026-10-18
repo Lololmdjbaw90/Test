@@ -702,29 +702,38 @@ struct PatternBackground: View {
         context.fill(Path(CGRect(origin: .zero, size: size)), with: .linearGradient(Gradient(colors: [top, bottom]), startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height)))
     }
 
-    // Rows of clouds. Every cloud in a row is the same and one spacing
-    // apart (so the layer loops); rows differ in size and where they start,
-    // so it doesn't look stamped. Far clouds are smaller and paler.
+    // Rows of clouds, far and near ones taking turns down the page. Every
+    // row has its own height band (a cloud reaches 0.36 of its width above
+    // its centre and 0.24 below, shadow included) with clear sky between
+    // bands, so clouds never touch, even though the two layers drift at
+    // different speeds; within a row they're one spacing apart (so the
+    // layer loops). No row reaches the bank at the bottom.
     private static func cloudLanes(_ context: inout GraphicsContext, _ size: CGSize, _ c: Colors, near: Bool, visibleWidth: CGFloat) {
         let k = cloudScale(visibleWidth)
         let spacing = cloudSpacing(near: near, width: visibleWidth)
-        let rowGap: CGFloat = (near ? 190 : 150) * k
-        var y: CGFloat = (near ? 150 : 70) * k
-        var row = 0
+        // (centre, width, near, where along the row it starts)
+        let rows: [(y: CGFloat, width: CGFloat, near: Bool, phase: CGFloat)] = [
+            (60, 70, false, 0.6), (150, 128, true, 0.15), (235, 60, false, 0.95), (320, 110, true, 0.52),
+        ]
+        let period: CGFloat = 340
+        let floor = size.height - 125 * k
         let style = CloudArt.Style(fill: c.dark ? Color(hex: 0x3A2632) : .white,
                                    shade: c.dark ? c.main.opacity(0.32) : c.light.opacity(0.75))
         var layer = context
         layer.opacity = near ? 1 : (c.dark ? 0.6 : 0.75)
-        while y < size.height + 40 {
-            let width = (near ? 132 : 78) * (row % 2 == 0 ? 1 : 0.82) * k
-            let phase = CGFloat((Double(row) * 0.37 + (near ? 0.15 : 0.6)).truncatingRemainder(dividingBy: 1))
-            var x = phase * spacing - spacing
-            while x < size.width + spacing {
-                CloudArt.draw(&layer, center: CGPoint(x: x, y: y), width: width, style: style)
-                x += spacing
+        var base: CGFloat = 0
+        while base * k < floor {
+            for row in rows where row.near == near {
+                let y = (base + row.y) * k
+                let width = row.width * k
+                guard y + width * 0.24 < floor else { continue }
+                var x = row.phase * spacing - spacing
+                while x < size.width + spacing {
+                    CloudArt.draw(&layer, center: CGPoint(x: x, y: y), width: width, style: style)
+                    x += spacing
+                }
             }
-            y += rowGap
-            row += 1
+            base += period
         }
     }
 

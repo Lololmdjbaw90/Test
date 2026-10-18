@@ -185,6 +185,9 @@ struct ProfileEffect: Identifiable, Hashable {
 }
 
 // Little shapes floating up through a banner. They stay inside it (clipped).
+// Each has its own column, they all rise at the same speed and sway
+// together, and neighbours are spread far apart in height, so no two ever
+// touch.
 struct ProfileEffectLayer: View {
     let effect: String
     var color = ""
@@ -210,22 +213,22 @@ struct ProfileEffectLayer: View {
             Canvas { context, size in
                 guard let symbol = context.resolveSymbol(id: 0) else { return }
                 let n = count
+                let sway = sin(t * 1.3) * 6
                 for i in 0..<n {
                     let seed = Double(i) * 12.9898
                     let rx = (sin(seed) * 43758.5453).truncatingRemainder(dividingBy: 1)
-                    let speed = 0.05 + abs(rx) * 0.06
-                    let phase = (Double(i) * 0.137).truncatingRemainder(dividingBy: 1)
-                    let p = (t * speed + phase).truncatingRemainder(dividingBy: 1)
+                    let phase = (Double(i) * 0.38).truncatingRemainder(dividingBy: 1)
+                    let p = (t * 0.07 + phase).truncatingRemainder(dividingBy: 1)
                     let fall = effect == "snow"
                     let y = fall ? p * (size.height + 30) - 15 : (1 - p) * (size.height + 30) - 15
-                    let x = (Double(i) + 0.5) / Double(n) * size.width + sin(t * 1.3 + seed) * 10
-                    let scale = 0.55 + abs(rx) * 0.7
+                    let x = (Double(i) + 0.5) / Double(n) * size.width + sway
+                    let scale = 0.55 + abs(rx) * 0.5
                     let alpha = min(1, min(p, 1 - p) * 5) * 0.85
                     var c = context
                     c.opacity = alpha
                     c.translateBy(x: x, y: y)
                     c.scaleBy(x: scale, y: scale)
-                    c.rotate(by: .degrees(sin(t + seed) * 20))
+                    c.rotate(by: .degrees(sin(t + seed) * 10))
                     c.draw(symbol, at: .zero)
                 }
             } symbols: {
@@ -784,34 +787,33 @@ struct NitroShopView: View {
 }
 
 // The artist's gem heart floating in the MimiPlus banner, with gem sparkles
-// twinkling round it. Tap it (or buy MimiPlus) for a hop and a puff of
-// little hearts.
+// twinkling round it. The heart and the sparkles each keep their own space
+// (with a gap even as the heart floats), and the sparkles step aside while
+// a puff of little hearts plays (tap it, or buy MimiPlus), so nothing ever
+// touches.
 struct GemHeart: View {
     var size: CGFloat = 110
     var trigger = 0
     @State private var taps = 0
+    @State private var puffing = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var moving: Bool { !reduceMotion && Motion.ambient }
 
     var body: some View {
         ZStack {
-            sparkle(x: -0.4, y: -0.34, scale: 0.26, delay: 0)
-            sparkle(x: 0.42, y: -0.2, scale: 0.2, delay: 0.6)
-            sparkle(x: 0.3, y: 0.42, scale: 0.15, delay: 1.1)
+            sparkles
             Image("MimiHeart").resizable().scaledToFit()
-                .frame(width: size * 0.8)
+                .frame(width: size * 0.62)
                 .shadow(color: Color(hex: 0x9D174D).opacity(0.3), radius: 8, y: 5)
                 .phaseAnimator(moving ? [false, true] : [false]) { content, up in
-                    content
-                        .offset(y: up ? -size * 0.04 : size * 0.02)
-                        .rotationEffect(.degrees(up ? -3 : 3))
+                    content.offset(y: up ? -size * 0.03 : size * 0.015)
                 } animation: { _ in .easeInOut(duration: 1.8) }
                 .keyframeAnimator(initialValue: GemPop(), trigger: taps + trigger) { content, pop in
                     content.scaleEffect(pop.scale)
                 } keyframes: { _ in
                     KeyframeTrack(\.scale) {
-                        SpringKeyframe(1.18, duration: 0.14)
+                        SpringKeyframe(1.1, duration: 0.14)
                         SpringKeyframe(0.94, duration: 0.16)
                         SpringKeyframe(1, duration: 0.3)
                     }
@@ -821,16 +823,33 @@ struct GemHeart: View {
         .overlay { HeartPuff(trigger: taps + trigger).frame(width: size * 1.4, height: size * 1.4) }
         .contentShape(Rectangle())
         .onTapGesture { taps += 1 }
+        .task(id: taps + trigger) {
+            guard taps + trigger > 0 else { return }
+            puffing = true
+            try? await Task.sleep(for: .seconds(1.3))
+            puffing = false
+        }
         .sensoryFeedback(.impact(weight: .light), trigger: taps)
         .accessibilityHidden(true)
+    }
+
+    private var sparkles: some View {
+        ZStack {
+            sparkle(x: -0.43, y: -0.36, scale: 0.17, delay: 0)
+            sparkle(x: 0.43, y: -0.22, scale: 0.15, delay: 0.6)
+            sparkle(x: 0.33, y: 0.39, scale: 0.13, delay: 1.1)
+        }
+        .opacity(puffing ? 0 : 1)
+        .animation(.easeOut(duration: 0.1), value: puffing)
     }
 
     private func sparkle(x: CGFloat, y: CGFloat, scale: CGFloat, delay: Double) -> some View {
         Image("MimiSparkle").resizable().scaledToFit()
             .frame(width: size * scale)
+            // They only fade and shrink a little, never grow past their spot.
             .phaseAnimator(moving ? [false, true] : [true]) { content, lit in
                 content
-                    .scaleEffect(lit ? 1 : 0.7)
+                    .scaleEffect(lit ? 1 : 0.8)
                     .opacity(lit ? 1 : 0.55)
             } animation: { _ in .easeInOut(duration: 1.3).delay(delay * 0.3) }
             .offset(x: size * x, y: size * y)

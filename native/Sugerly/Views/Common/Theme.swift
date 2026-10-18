@@ -727,22 +727,23 @@ struct ShineSweep: View {
     }
 }
 
-// Neat sparkles: a few four-pointed stars in fixed spots (a little cluster
-// in the top corner and one in the opposite bottom corner), each softly
+// Neat sparkles: a few four-pointed stars in fixed spots, each softly
 // twinkling in turn. Core Animation does the twinkling, so it costs almost
 // nothing; with Reduce Motion they just sit still.
 struct TwinkleField: UIViewRepresentable {
+    // Where a star sits, in points in from the top-right corner (so the
+    // gaps between them stay the same on any size of card).
     struct Spot {
-        let x: CGFloat, y: CGFloat, size: CGFloat, delay: Double
+        let right: CGFloat, top: CGFloat, size: CGFloat, delay: Double
     }
     var colors: [UIColor] = [.white]
-    // Where they sit, as parts of the area: one neat little triangle in the
-    // top-right corner (a big star with two small ones under it), twinkling
-    // in turn.
+    // One neat little triangle in the top-right corner: a big star with two
+    // small ones under it, far enough apart that they never touch, even at
+    // their biggest and with their glow.
     var spots: [Spot] = [
-        Spot(x: 0.925, y: 0.1, size: 13, delay: 0),
-        Spot(x: 0.875, y: 0.22, size: 7, delay: 0.6),
-        Spot(x: 0.975, y: 0.22, size: 7, delay: 1.2),
+        Spot(right: 24, top: 18, size: 13, delay: 0),
+        Spot(right: 40, top: 40, size: 7, delay: 0.6),
+        Spot(right: 10, top: 40, size: 7, delay: 1.2),
     ]
 
     func makeUIView(context: Context) -> FieldView { FieldView(colors: colors, spots: spots) }
@@ -778,7 +779,7 @@ struct TwinkleField: UIViewRepresentable {
             CATransaction.setDisableActions(true)
             for (star, spot) in stars {
                 star.bounds = CGRect(x: 0, y: 0, width: spot.size, height: spot.size)
-                star.position = CGPoint(x: bounds.width * spot.x, y: bounds.height * spot.y)
+                star.position = CGPoint(x: bounds.width - spot.right, y: spot.top)
             }
             CATransaction.commit()
         }
@@ -1024,8 +1025,10 @@ struct RewardBurst: View {
                 for i in 0..<pieces {
                     let seed = Double(i) * 12.9898
                     let jitter = abs(sin(seed) * 43758.5453).truncatingRemainder(dividingBy: 1)
-                    let angle = Double(i) / Double(pieces) * 2 * .pi + jitter * 0.5
-                    let distance = reach * CGFloat(0.3 + (0.55 + 0.25 * jitter) * flight)
+                    // Evenly round the circle, starting far enough out that
+                    // neighbours never touch, and all flying out alike.
+                    let angle = Double(i) / Double(pieces) * 2 * .pi + jitter * 0.1
+                    let distance = reach * CGFloat(0.45 + 0.5 * flight)
                     var piece = context
                     piece.opacity = max(0, 1 - max(0, t - 0.45) / 0.6)
                     piece.translateBy(x: center.x + CGFloat(cos(angle)) * distance,

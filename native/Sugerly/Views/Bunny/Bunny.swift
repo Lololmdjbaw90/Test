@@ -556,9 +556,10 @@ struct BunnyHop {
     var lift: CGFloat = 0
 }
 
-// A puff of the artist's little gem hearts (and a gem sparkle or two)
-// floating up when you tap her (clock-driven, plays on each tap). Each one
-// pops in, sways and fades as it rises.
+// A puff of the artist's little gem hearts (and two gem sparkles) floating
+// up when you tap her (clock-driven, plays on each tap). Each one has its own
+// column and they all sway together, so none of them ever touch; each pops
+// in, rises at its own pace and fades.
 struct HeartPuff: View {
     let trigger: Int
     @State private var start: Date?
@@ -572,22 +573,26 @@ struct HeartPuff: View {
                 guard t >= 0, t < 1.2 else { return }
                 let heart = ctx.resolve(Image("MimiHeart"))
                 let sparkle = ctx.resolve(Image("MimiSparkle"))
-                for i in 0..<7 {
+                let count = 5
+                let column = size.width / CGFloat(count)
+                let sway = CGFloat(sin(t * 5)) * column * 0.05
+                for i in 0..<count {
                     let seed = Double(i) * 1.7
                     // A small stagger, so they leave one after another.
                     let local = t - Double(i) * 0.035
                     guard local > 0 else { continue }
-                    let x = size.width * (0.2 + 0.6 * CGFloat((sin(seed * 3.1) + 1) / 2))
+                    // At most 0.7 of a column wide, even when tilted.
+                    let r = column * (i % 2 == 0 ? 0.28 : 0.24)
+                    let x = column * (CGFloat(i) + 0.5) + sway
                     let rise = CGFloat(local / 1.2) * size.height * (0.35 + 0.15 * CGFloat(i % 3))
-                    let y = size.height * 0.45 - rise
-                    let r = size.width * (0.065 + 0.02 * CGFloat(i % 3))
+                    let y = size.height * 0.32 - rise
                     let pop = CGFloat(min(1, local / 0.16))
                     var c = ctx
                     c.opacity = max(0, 1 - local / 1.2)
-                    c.translateBy(x: x + CGFloat(sin(local * 6 + seed)) * 6, y: y)
-                    c.rotate(by: .degrees(sin(seed * 2.3) * 16 + sin(local * 5 + seed) * 6))
+                    c.translateBy(x: x, y: y)
+                    c.rotate(by: .degrees(sin(seed * 2.3) * 12 + sin(local * 5 + seed) * 4))
                     c.scaleBy(x: pop, y: pop)
-                    if i % 3 == 2 {
+                    if i == 1 || i == 3 {
                         c.draw(sparkle, in: CGRect(x: -r * 0.8, y: -r * 0.9, width: r * 1.6, height: r * 1.8))
                     } else {
                         c.draw(heart, in: CGRect(x: -r, y: -r * 0.84, width: r * 2, height: r * 1.68))
@@ -646,28 +651,39 @@ struct BunnySceneView: View {
             }
         case .sky:
             // The same fluffy clouds as the Clouds background, drifting
-            // right at their own speeds; each one leaves the tile completely
-            // before it comes back on the other side.
+            // right at their own speeds. Each has its own band of the sky
+            // (a cloud is about 0.6 of its width tall, so it's sized to fit
+            // with room to spare), so they never touch; each one leaves the
+            // tile completely before it comes back on the other side.
             let style = CloudArt.Style(fill: .white, shade: Color(hex: 0x8FB6F0).opacity(0.5))
-            let clouds: [(y: CGFloat, size: CGFloat, start: CGFloat, speed: Double)] = [
-                (0.2, 0.42, 0.12, 5), (0.42, 0.3, 0.64, 3.4), (0.63, 0.36, 0.32, 4.2), (0.85, 0.26, 0.86, 3),
+            let clouds: [(size: CGFloat, start: CGFloat, speed: Double)] = [
+                (0.42, 0.12, 5), (0.3, 0.64, 3.4), (0.36, 0.32, 4.2), (0.26, 0.86, 3),
             ]
-            for cloud in clouds {
-                let cw = w * cloud.size
+            let band = h / CGFloat(clouds.count)
+            for (i, cloud) in clouds.enumerated() {
+                let cw = min(w * cloud.size, band * 1.25)
+                let top = band * CGFloat(i) + (band - cw * 0.6) / 2
                 let span = w + cw * 1.2
                 let x = (cloud.start * span + CGFloat(t * cloud.speed)).truncatingRemainder(dividingBy: span) - cw * 0.6
-                CloudArt.draw(&ctx, center: CGPoint(x: x, y: h * cloud.y), width: cw, style: style)
+                CloudArt.draw(&ctx, center: CGPoint(x: x, y: top + cw * 0.36), width: cw, style: style)
             }
         case .mint, .night:
-            for i in 0..<14 {
+            // One star per cell of a 4 × 4 grid (two cells left empty),
+            // nudged a little inside its cell and never past it, so no two
+            // stars ever touch. They only fade, they don't grow.
+            let cellW = w / 4, cellH = h / 4
+            let cell = min(cellW, cellH)
+            for i in 0..<16 where i != 5 && i != 10 {
                 let seed = Double(i) * 12.9898
                 let fx = CGFloat(abs(sin(seed) * 43758.5453).truncatingRemainder(dividingBy: 1))
                 let fy = CGFloat(abs(sin(seed * 1.7) * 24634.6345).truncatingRemainder(dividingBy: 1))
                 let twinkle = 0.35 + 0.65 * (0.5 + 0.5 * sin(t * 2.2 + seed))
-                let s = w * (0.025 + 0.02 * CGFloat(i % 3))
+                let s = cell * (0.2 + 0.1 * CGFloat(i % 3))
+                let cx = (CGFloat(i % 4) + 0.5 + (fx - 0.5) * 0.5) * cellW
+                let cy = (CGFloat(i / 4) + 0.5 + (fy - 0.5) * 0.5) * cellH
                 var c = ctx
                 c.opacity = twinkle
-                c.fill(FourPointStar().path(in: CGRect(x: fx * w - s / 2, y: fy * h - s / 2, width: s, height: s)),
+                c.fill(FourPointStar().path(in: CGRect(x: cx - s / 2, y: cy - s / 2, width: s, height: s)),
                        with: .color(scene == .night ? Color(hex: 0xFFF1A8) : .white))
             }
         case .sunset:
@@ -675,7 +691,9 @@ struct BunnySceneView: View {
                 let seed = Double(i) * 3.3
                 let speed = 14 + Double(i % 3) * 6
                 let y = h + 30 - CGFloat((t * speed + seed * 40).truncatingRemainder(dividingBy: Double(h + 60)))
-                let x = w * CGFloat(0.08 + 0.105 * Double(i)) + CGFloat(sin(t + seed)) * 8
+                // Each in its own column, all swaying together (so they keep
+                // their distance).
+                let x = w * CGFloat(0.08 + 0.105 * Double(i)) + CGFloat(sin(t)) * 8
                 let s = w * 0.05
                 ctx.fill(BunnyShapes.heart(in: CGRect(x: x, y: y, width: s, height: s * 0.9)), with: .color(.white.opacity(0.55)))
             }

@@ -79,8 +79,8 @@ struct CandyShortcutGrid: View {
 }
 
 // A bright banner at the top of a page: its name, a line about it, an
-// optional button, and a big tilted icon, on a candy gradient with neat
-// twinkles and a passing shine.
+// optional button, and a big tilted icon, on a candy gradient with soft
+// bubbles and a passing shine.
 struct PageHero: View {
     let title: String
     let subtitle: String
@@ -135,7 +135,7 @@ struct PageHero: View {
                     }
                     .clipShape(shape)
                 }
-                .overlay { TwinkleField(colors: [.white, UIColor(hex: 0xFFF1A8)]).clipShape(shape) }
+                // (No corner sparkles here: they'd sit on the big icon.)
                 .overlay { ShineSweep(every: 5.5, strength: 0.28).clipShape(shape) }
                 .shadow(color: candy.color.softGlow(0.35), radius: 14, y: 6)
         }
