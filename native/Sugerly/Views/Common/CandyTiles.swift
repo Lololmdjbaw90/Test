@@ -194,11 +194,7 @@ struct PageTitle: View {
                 .shadow(color: candy.color.softGlow(0.35), radius: 6, y: 3)
                 .rotationEffect(.degrees(shown ? -7 : 0))
             VStack(alignment: .leading, spacing: 0) {
-                Text(title)
-                    .font(.custom("LilitaOne", size: 34, relativeTo: .largeTitle))
-                    .foregroundStyle(Theme.candy)
-                    .shadow(color: Theme.glow(0.22), radius: 8, y: 3)
-                    .lineLimit(1).minimumScaleFactor(0.6)
+                StickerTitle(text: title)
                 if !subtitle.isEmpty {
                     Text(subtitle)
                         .font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
@@ -305,5 +301,51 @@ private struct QuietTitle: ViewModifier {
                 ToolbarItem(placement: .principal) { BrandLogo(height: 30) }
             }
         }
+    }
+}
+
+// A title like the Sugerly logo: chunky round letters in a pink gradient
+// with soft dots, a thick dark berry outline and a deeper edge under it.
+struct StickerTitle: View {
+    let text: String
+    var size: CGFloat = 34
+
+    private var letters: some View {
+        Text(text).font(.custom("LilitaOne", size: size, relativeTo: .largeTitle))
+    }
+
+    var body: some View {
+        let berry = Color(hex: 0x6E0233)
+        let r = size * 0.09
+        ZStack {
+            // The outline: the word drawn around itself in berry.
+            ForEach(0..<12, id: \.self) { i in
+                let a = Double(i) / 12 * 2 * .pi
+                letters.foregroundStyle(berry)
+                    .offset(x: r * CGFloat(cos(a)), y: r * CGFloat(sin(a)) + size * 0.04)
+            }
+            letters.foregroundStyle(Color(hex: 0x8C1450)).offset(y: size * 0.05)
+            letters.foregroundStyle(LinearGradient(colors: [Color(hex: 0xF9C6DA), Color(hex: 0xF7B2CC), Color(hex: 0xF06AA6)],
+                                                   startPoint: .top, endPoint: .bottom))
+                .overlay {
+                    Canvas { ctx, s in
+                        var y: CGFloat = 3
+                        while y < s.height {
+                            var x: CGFloat = 3
+                            while x < s.width {
+                                ctx.fill(Path(roundedRect: CGRect(x: x, y: y, width: size * 0.12, height: size * 0.12), cornerRadius: size * 0.03),
+                                         with: .color(Color(hex: 0xE8579A).opacity(0.28)))
+                                x += size * 0.2
+                            }
+                            y += size * 0.2
+                        }
+                    }
+                    .mask(letters)
+                }
+        }
+        .padding(r)
+        .lineLimit(1).minimumScaleFactor(0.6)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(text)
     }
 }

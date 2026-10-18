@@ -343,7 +343,9 @@ private struct ShellTabs: View {
     // Tapping the tab you're already on takes it back to its first page.
     private var selection: Binding<AppTab> {
         Binding(get: { nav.tab }, set: { next in
-            if next == nav.tab { nav[next] = [] }
+            // Leaving a tab closes the pages opened on it (Settings,
+            // Notifications…), so coming back shows its first page.
+            nav[next == nav.tab ? next : nav.tab] = []
             TapSound.play(.select)
             nav.tab = next
         })

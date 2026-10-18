@@ -541,13 +541,8 @@ private struct ChoicePop: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
+        // No fade-in: the choices are simply there when a tab opens.
         content
-            .scaleEffect(shown || reduceMotion ? 1 : 0.6)
-            .opacity(shown || reduceMotion ? 1 : 0)
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(Motion.playful.delay(Double(min(index, 10)) * 0.035)) { shown = true }
-            }
     }
 }
 
