@@ -66,7 +66,6 @@ struct BunnyMakerView: View {
                 tabs
                 choices
                     .id(tab)
-                    .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
                 actions
             }
             .padding(.horizontal, 16)
@@ -142,7 +141,8 @@ struct BunnyMakerView: View {
                 ForEach(Tab.allCases) { item in
                     let on = tab == item
                     Button {
-                        withAnimation(Motion.playful) { tab = item }
+                        // Instant, so you can hop between tabs as fast as you like.
+                        tab = item
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: item.icon).font(.system(size: 13, weight: .bold))

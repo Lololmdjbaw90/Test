@@ -582,14 +582,13 @@ struct NitroShopView: View {
                 .font(.jakarta(12)).foregroundStyle(Palette.muted)
                 .padding(.horizontal, 6)
         }
-        .motion(Motion.standard, value: plan)
     }
 
     private func planCard(_ p: NitroStyle.Plan) -> some View {
         let on = plan == p.id
         let best = p.days > 30
         let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
-        return Button { withMotion(Motion.playful) { plan = p.id } } label: {
+        return Button { plan = p.id } label: {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text(p.title).font(.jakarta(15, .bold))
@@ -625,7 +624,6 @@ struct NitroShopView: View {
                         .offset(y: -10)
                 }
             }
-            .scaleEffect(on ? 1 : 0.97)
         }
         .buttonStyle(BouncyStyle(scale: 0.96))
         .accessibilityAddTraits(on ? .isSelected : [])
@@ -661,7 +659,6 @@ struct NitroShopView: View {
                 .overlay(alignment: .top) { Rectangle().fill(Palette.border).frame(height: 1) }
                 .ignoresSafeArea(edges: .bottom)
         }
-        .motion(Motion.standard, value: plan)
     }
 
     private var progress: some View {
