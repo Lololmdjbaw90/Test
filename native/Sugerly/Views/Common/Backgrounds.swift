@@ -377,8 +377,11 @@ struct PatternBackground: View {
                 case .gingham:
                     sliding("gingham", dx: 36, dy: 36, duration: 9, size: size, colors)
                 case .clouds:
+                    // A soft sky, small far clouds drifting slowly, bigger
+                    // near ones a little quicker, and a fluffy bank below.
                     Canvas { ctx, s in Self.sky(&ctx, s, colors) }.frame(width: size.width, height: size.height)
-                    sliding("clouds", dx: Self.cloudSpacing(size), dy: 0, duration: 40, size: size, colors)
+                    sliding("clouds-far", dx: Self.cloudSpacing(near: false, width: size.width), dy: 0, duration: 70, size: size, colors)
+                    sliding("clouds-near", dx: Self.cloudSpacing(near: true, width: size.width), dy: 0, duration: 42, size: size, colors)
                     Canvas { ctx, s in Self.cloudBank(&ctx, s, colors) }.frame(width: size.width, height: size.height)
                 case .off:
                     EmptyView()
@@ -406,7 +409,8 @@ struct PatternBackground: View {
         case "flowers": return { ctx, s in Self.flowers(&ctx, s, c) }
         case "bubbles": return { ctx, s in Self.bubbles(&ctx, s, c) }
         case "gingham": return { ctx, s in Self.gingham(&ctx, s, c) }
-        default: return { ctx, s in Self.cloudLanes(&ctx, s, c, visibleWidth: size.width) }
+        case "clouds-far": return { ctx, s in Self.cloudLanes(&ctx, s, c, near: false, visibleWidth: size.width) }
+        default: return { ctx, s in Self.cloudLanes(&ctx, s, c, near: true, visibleWidth: size.width) }
         }
     }
 
@@ -418,7 +422,9 @@ struct PatternBackground: View {
         case .dots: layers = [("dots", CGSize(width: size.width + 52, height: size.height))]
         case .stripes: layers = [("stripes", CGSize(width: size.width + 40, height: size.height))]
         case .hearts: layers = [("hearts", CGSize(width: size.width, height: size.height + 86.4))]
-        case .clouds: layers = [("clouds", CGSize(width: size.width + Self.cloudSpacing(size), height: size.height))]
+        case .clouds:
+            layers = [("clouds-far", CGSize(width: size.width + Self.cloudSpacing(near: false, width: size.width), height: size.height)),
+                      ("clouds-near", CGSize(width: size.width + Self.cloudSpacing(near: true, width: size.width), height: size.height))]
         case .stars: layers = [("stars-even", size), ("stars-odd", size)]
         case .sprinkles: layers = [("sprinkles", CGSize(width: size.width + 64, height: size.height + 64))]
         case .flowers: layers = [("flowers", CGSize(width: size.width + 90, height: size.height))]
@@ -682,79 +688,104 @@ struct PatternBackground: View {
 
     // MARK: clouds
 
-    private static func cloudWidth(_ size: CGSize) -> CGFloat { min(160, max(110, size.width * 0.36)) }
-    static func cloudSpacing(_ size: CGSize) -> CGFloat { cloudWidth(size) * 2.1 }
+    // Clouds are a little smaller on small previews (Settings).
+    private static func cloudScale(_ width: CGFloat) -> CGFloat { min(1, max(0.5, width / 390)) }
 
-    // Pink sky with tidy white polka dots.
+    // Each layer repeats every this many points across, so sliding it by
+    // exactly that much loops with no seam.
+    static func cloudSpacing(near: Bool, width: CGFloat) -> CGFloat { (near ? 300 : 210) * cloudScale(width) }
+
+    // A soft sky: your pastel, a little deeper towards the bottom.
     private static func sky(_ context: inout GraphicsContext, _ size: CGSize, _ c: Colors) {
-        let top = c.dark ? c.main.opacity(0.18) : c.light.opacity(0.28)
+        let top = c.dark ? c.main.opacity(0.16) : c.light.opacity(0.22)
         let bottom = c.dark ? c.main.opacity(0.3) : c.light.opacity(0.5)
         context.fill(Path(CGRect(origin: .zero, size: size)), with: .linearGradient(Gradient(colors: [top, bottom]), startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height)))
-        let gap: CGFloat = 24
-        var dotsPath = Path()
-        var row = 0
-        var y: CGFloat = 10
-        while y < size.height {
-            var x: CGFloat = row % 2 == 0 ? 8 : 8 + gap / 2
-            while x < size.width + gap {
-                dotsPath.addEllipse(in: CGRect(x: x - 2.4, y: y - 2.4, width: 4.8, height: 4.8))
-                x += gap
-            }
-            y += gap * 0.86
-            row += 1
-        }
-        context.fill(dotsPath, with: .color(.white.opacity(c.dark ? 0.09 : 0.8)))
     }
 
-    // Even lanes of clouds, every other lane shifted half a step.
-    private static func cloudLanes(_ context: inout GraphicsContext, _ size: CGSize, _ c: Colors, visibleWidth: CGFloat) {
-        let fill = c.dark ? Color(hex: 0x2A1822) : Color.white
-        let edge = c.light.opacity(c.dark ? 0.55 : 0.9)
-        let width = cloudWidth(CGSize(width: visibleWidth, height: size.height))
-        let spacing = width * 2.1
-        var lane = 0
-        var laneY: CGFloat = 80
-        var all = Path()
-        while laneY < size.height - 90 {
-            var x = (lane % 2 == 0 ? 0 : spacing / 2) - spacing / 2
+    // Rows of clouds. Every cloud in a row is the same and one spacing
+    // apart (so the layer loops); rows differ in size and where they start,
+    // so it doesn't look stamped. Far clouds are smaller and paler.
+    private static func cloudLanes(_ context: inout GraphicsContext, _ size: CGSize, _ c: Colors, near: Bool, visibleWidth: CGFloat) {
+        let k = cloudScale(visibleWidth)
+        let spacing = cloudSpacing(near: near, width: visibleWidth)
+        let rowGap: CGFloat = (near ? 190 : 150) * k
+        var y: CGFloat = (near ? 150 : 70) * k
+        var row = 0
+        let style = CloudArt.Style(fill: c.dark ? Color(hex: 0x3A2632) : .white,
+                                   shade: c.dark ? c.main.opacity(0.32) : c.light.opacity(0.75))
+        var layer = context
+        layer.opacity = near ? 1 : (c.dark ? 0.6 : 0.75)
+        while y < size.height + 40 {
+            let width = (near ? 132 : 78) * (row % 2 == 0 ? 1 : 0.82) * k
+            let phase = CGFloat((Double(row) * 0.37 + (near ? 0.15 : 0.6)).truncatingRemainder(dividingBy: 1))
+            var x = phase * spacing - spacing
             while x < size.width + spacing {
-                all.addPath(cloudPath(center: CGPoint(x: x, y: laneY), width: width))
+                CloudArt.draw(&layer, center: CGPoint(x: x, y: y), width: width, style: style)
                 x += spacing
             }
-            laneY += 165
-            lane += 1
+            y += rowGap
+            row += 1
         }
-        context.stroke(all, with: .color(edge), lineWidth: 6)
-        context.fill(all, with: .color(fill))
     }
 
-    // Scalloped cloud bank along the bottom.
+    // A fluffy bank of clouds along the bottom.
     private static func cloudBank(_ context: inout GraphicsContext, _ size: CGSize, _ c: Colors) {
-        let fill = c.dark ? Color(hex: 0x2A1822) : Color.white
-        let edge = c.light.opacity(c.dark ? 0.55 : 0.9)
-        let r: CGFloat = 40
+        let style = CloudArt.Style(fill: c.dark ? Color(hex: 0x3A2632) : .white,
+                                   shade: c.dark ? c.main.opacity(0.32) : c.light.opacity(0.75))
+        let k = cloudScale(size.width)
         var bank = Path()
-        var bx: CGFloat = -r * 0.5
-        while bx < size.width + r {
-            bank.addEllipse(in: CGRect(x: bx - r, y: size.height - r * 1.35, width: r * 2, height: r * 2))
-            bx += r * 1.45
+        let radii: [CGFloat] = [46, 34, 52, 38, 44, 32, 50]
+        var x: CGFloat = -20
+        var i = 0
+        while x < size.width + 60 {
+            let r = radii[i % radii.count] * k
+            bank.addEllipse(in: CGRect(x: x - r, y: size.height - r * 1.25, width: r * 2, height: r * 2))
+            x += r * 1.35
+            i += 1
         }
-        bank.addRect(CGRect(x: 0, y: size.height - r * 0.5, width: size.width, height: r))
-        context.stroke(bank, with: .color(edge), lineWidth: 6)
-        context.fill(bank, with: .color(fill))
+        bank.addRect(CGRect(x: -20, y: size.height - 26 * k, width: size.width + 40, height: 60))
+        CloudArt.fill(&context, bank, height: 90 * k, style: style)
+    }
+}
+
+// The one cloud used everywhere (the Clouds background and the bunny's
+// cloudy sky): a flat bottom and four round puffs as one smooth shape, white
+// with a soft shade along its underside and a soft shadow below it. No
+// outlines.
+enum CloudArt {
+    struct Style {
+        var fill: Color
+        var shade: Color
     }
 
-    // A classic cute cloud: flat bottom and three round puffs.
-    private static func cloudPath(center c: CGPoint, width w: CGFloat) -> Path {
+    static func path(center c: CGPoint, width w: CGFloat) -> Path {
         var p = Path()
-        let h = w * 0.5
-        p.addRoundedRect(in: CGRect(x: c.x - w / 2, y: c.y - h * 0.02, width: w, height: h * 0.42), cornerSize: CGSize(width: h * 0.21, height: h * 0.21))
-        let puffs: [(CGFloat, CGFloat, CGFloat)] = [(-0.24, 0.0, 0.19), (0.02, -0.16, 0.26), (0.27, 0.03, 0.16)]
+        // The flat base.
+        p.addRoundedRect(in: CGRect(x: c.x - w / 2, y: c.y - w * 0.03, width: w, height: w * 0.22),
+                         cornerSize: CGSize(width: w * 0.11, height: w * 0.11))
+        // Puffs: across, up, and how big (all as parts of the width).
+        let puffs: [(CGFloat, CGFloat, CGFloat)] = [(-0.3, 0.01, 0.17), (-0.1, -0.08, 0.23), (0.15, -0.1, 0.26), (0.34, 0.0, 0.15)]
         for puff in puffs {
-            let rr = w * puff.2
-            p.addEllipse(in: CGRect(x: c.x + w * puff.0 - rr, y: c.y + h * puff.1 - rr, width: rr * 2, height: rr * 2))
+            let r = w * puff.2
+            p.addEllipse(in: CGRect(x: c.x + w * puff.0 - r, y: c.y + w * puff.1 - r, width: r * 2, height: r * 2))
         }
         return p
+    }
+
+    static func draw(_ context: inout GraphicsContext, center: CGPoint, width: CGFloat, style: Style) {
+        fill(&context, path(center: center, width: width), height: width * 0.46, style: style)
+    }
+
+    // Shadow, body, then the shade on its lower part (clipped to the cloud).
+    static func fill(_ context: inout GraphicsContext, _ shape: Path, height: CGFloat, style: Style) {
+        let box = shape.boundingRect
+        context.fill(shape.offsetBy(dx: 0, dy: height * 0.1), with: .color(style.shade.opacity(0.45)))
+        context.fill(shape, with: .color(style.fill))
+        var inner = context
+        inner.clip(to: shape)
+        inner.fill(Path(box), with: .linearGradient(
+            Gradient(stops: [.init(color: style.shade.opacity(0), location: 0.45), .init(color: style.shade.opacity(0.55), location: 1)]),
+            startPoint: CGPoint(x: box.midX, y: box.minY), endPoint: CGPoint(x: box.midX, y: box.maxY)))
     }
 }
 

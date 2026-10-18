@@ -14,6 +14,7 @@ struct CandyShortcutGrid: View {
     var shown = true
     var open: (Route) -> Void
     @State private var hops: [Int] = Array(repeating: 0, count: 8)
+    @Environment(\.flat) private var flat
 
     var body: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
@@ -27,8 +28,9 @@ struct CandyShortcutGrid: View {
             }
         }
         .task {
-            // Every few seconds one icon hops, so Home never sits still.
-            guard Motion.ambient, !Motion.reduced, !items.isEmpty else { return }
+            // Every few seconds one icon hops, so Home never sits still (not
+            // in the menu, which keeps still).
+            guard Motion.ambient, !Motion.reduced, !flat, !items.isEmpty else { return }
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2.4))
                 guard !Task.isCancelled else { return }
@@ -54,7 +56,7 @@ struct CandyShortcutGrid: View {
                 .lineLimit(2).minimumScaleFactor(0.8)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, minHeight: 34, alignment: .bottomLeading)
-                .shadow(color: .black.opacity(0.12), radius: 1, y: 1)
+                .softShadow(.black.opacity(0.12), radius: 1, y: 1)
         }
         .padding(12)
         .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
@@ -70,7 +72,7 @@ struct CandyShortcutGrid: View {
                     .clipShape(shape)
                 }
                 .overlay(shape.fill(LinearGradient(colors: [Palette.rim(0.35), .clear], startPoint: .top, endPoint: .center)).padding(1))
-                .shadow(color: item.candy.color.softGlow(0.35), radius: 8, y: 4)
+                .softShadow(item.candy.color.softGlow(0.35), radius: 8, y: 4)
         }
         .contentShape(shape)
     }

@@ -476,7 +476,7 @@ private struct BunnyTileFrame: ViewModifier {
             .frame(width: height * 0.9, height: height)
             .clipShape(tile)
             .overlay(tile.strokeBorder(.white.opacity(0.75), lineWidth: 2))
-            .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
+            .softShadow(.black.opacity(0.08), radius: 6, y: 3)
     }
 }
 
@@ -645,17 +645,18 @@ struct BunnySceneView: View {
                 row += 1
             }
         case .sky:
-            for i in 0..<5 {
-                let speed = 6 + Double(i) * 3
-                let span = w * 1.6
-                let x = CGFloat((t * speed + Double(i) * 97).truncatingRemainder(dividingBy: Double(span))) - w * 0.3
-                let y = h * (0.12 + 0.18 * CGFloat(i))
-                let s = w * (0.12 + 0.03 * CGFloat(i % 3))
-                var cloud = Path()
-                cloud.addEllipse(in: CGRect(x: x, y: y, width: s * 1.6, height: s * 0.7))
-                cloud.addEllipse(in: CGRect(x: x + s * 0.3, y: y - s * 0.35, width: s * 0.8, height: s * 0.8))
-                cloud.addEllipse(in: CGRect(x: x + s * 0.8, y: y - s * 0.2, width: s * 0.6, height: s * 0.6))
-                ctx.fill(cloud, with: .color(.white.opacity(0.75)))
+            // The same fluffy clouds as the Clouds background, drifting
+            // right at their own speeds; each one leaves the tile completely
+            // before it comes back on the other side.
+            let style = CloudArt.Style(fill: .white, shade: Color(hex: 0x8FB6F0).opacity(0.5))
+            let clouds: [(y: CGFloat, size: CGFloat, start: CGFloat, speed: Double)] = [
+                (0.2, 0.42, 0.12, 5), (0.42, 0.3, 0.64, 3.4), (0.63, 0.36, 0.32, 4.2), (0.85, 0.26, 0.86, 3),
+            ]
+            for cloud in clouds {
+                let cw = w * cloud.size
+                let span = w + cw * 1.2
+                let x = (cloud.start * span + CGFloat(t * cloud.speed)).truncatingRemainder(dividingBy: span) - cw * 0.6
+                CloudArt.draw(&ctx, center: CGPoint(x: x, y: h * cloud.y), width: cw, style: style)
             }
         case .mint, .night:
             for i in 0..<14 {

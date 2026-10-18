@@ -7,7 +7,9 @@ import SwiftUI
 // Log out at the bottom. The round x at the top, a tap on the page beside it
 // or a swipe to the left closes it.
 //
-// It's kept light so it slides and scrolls smoothly: no page stack inside it
+// It's kept light so it slides and scrolls smoothly: it's built once and
+// kept (opening it just slides it in), it uses the flat look (no soft
+// shadows, which were redrawn on every frame), no page stack inside it
 // (Settings opens on the tab like the other places), no sparkles or shines,
 // and everything that moves on its own holds still while it's open.
 struct AccountView: View, Equatable {
@@ -17,12 +19,10 @@ struct AccountView: View, Equatable {
     var close: () -> Void = {}
     @Environment(AppModel.self) private var model
     @Environment(NotificationsStore.self) private var notes
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shop = false
     @State private var wallet = false
     @State private var status = false
     @State private var confirmLogout = false
-    @State private var shown = false
     @State private var bunny = BunnyStore.shared
 
     // The closures never change what's drawn, so the menu isn't redrawn
@@ -46,12 +46,12 @@ struct AccountView: View, Equatable {
             header
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    if let me = model.me { profileCard(me).modifier(MenuRise(shown: shown, index: 0)) }
-                    walletCard.modifier(MenuRise(shown: shown, index: 1))
-                    placesGrid.modifier(MenuRise(shown: shown, index: 2))
-                    youCard.modifier(MenuRise(shown: shown, index: 3))
-                    endCard.modifier(MenuRise(shown: shown, index: 4))
-                    footer.modifier(MenuRise(shown: shown, index: 5))
+                    if let me = model.me { profileCard(me) }
+                    walletCard
+                    placesGrid
+                    youCard
+                    endCard
+                    footer
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 4)
@@ -61,15 +61,12 @@ struct AccountView: View, Equatable {
             .scrollIndicators(.hidden)
         }
         .tint(Theme.main)
+        .environment(\.flat, true)
         .sheet(isPresented: $shop) { NitroShopView() }
         .sheet(isPresented: $wallet) { WalletView() }
         .sheet(isPresented: $status) { StatusSheet().presentationCornerRadius(30) }
         .confirmationDialog("Log out of Sugerly?", isPresented: $confirmLogout, titleVisibility: .visible) {
             Button("Log out", role: .destructive) { model.signOut() }
-        }
-        .onAppear {
-            // Sections rise in one after another as the menu slides in.
-            withAnimation(reduceMotion ? nil : Motion.settle.delay(0.06)) { shown = true }
         }
     }
 
@@ -88,7 +85,6 @@ struct AccountView: View, Equatable {
                     .frame(width: 38, height: 38)
                     .background(Palette.surface, in: Circle())
                     .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
-                    .shadow(color: Palette.shadow, radius: 6, y: 2)
                     .frame(width: 48, height: 48)
                     .contentShape(Rectangle())
             }
@@ -306,14 +302,11 @@ struct AccountView: View, Equatable {
         .frame(maxWidth: .infinity, minHeight: 66)
         .background {
             shape.fill(candy.gradient)
-                .overlay {
-                    GeometryReader { geo in
-                        Circle().fill(.white.opacity(0.16)).frame(width: geo.size.height * 1.4)
-                            .offset(x: geo.size.width * 0.62, y: -geo.size.height * 0.3)
-                    }
-                    .clipShape(shape)
+                .overlay(alignment: .topTrailing) {
+                    Circle().fill(.white.opacity(0.16)).frame(width: 92, height: 92)
+                        .offset(x: 26, y: -26)
                 }
-                .shadow(color: candy.color.softGlow(0.35), radius: 8, y: 4)
+                .clipShape(shape)
         }
     }
 
@@ -362,19 +355,5 @@ struct AccountView: View, Equatable {
             .foregroundStyle(Palette.muted)
             .frame(maxWidth: .infinity)
             .padding(.top, 2)
-    }
-}
-
-// A menu section rising into place after the ones above it. Only moved,
-// never faded (fading a card with shadows is costly while the menu slides).
-private struct MenuRise: ViewModifier {
-    let shown: Bool
-    let index: Int
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func body(content: Content) -> some View {
-        content
-            .offset(y: shown || reduceMotion ? 0 : 16)
-            .animation(reduceMotion ? nil : Motion.settle.delay(0.05 + Double(index) * 0.05), value: shown)
     }
 }

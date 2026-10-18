@@ -311,6 +311,8 @@ enum AppReleases {
             "MimiPlus has a new look: a dreamy banner with a gem heart, clearer plans (with the best value marked), the perks as colourful tiles and the button always at the bottom.",
             "Tap your bunny for a puff of gem hearts and sparkles.",
             "The Sugerly logo sits at the top of every main page, and Community's feed bar floats smoothly over the posts.",
+            "The menu opens, closes and scrolls smoothly: it's ready before you tap and has no heavy shadows.",
+            "New fluffy clouds for the Clouds background (two layers drifting at different speeds) and for your bunny's cloudy sky.",
         ]),
         AppRelease(id: "ios-3.10", icon: "magnifyingglass", title: "One search on every page", date: "2026-10-19T12:00:00Z", items: [
             "Home, Community, Fan Art, Chats and Servers each have one round search button by the title that grows into the search bar.",

@@ -30,10 +30,6 @@ struct ChatView: View {
     @State private var uploading: String?
     @State private var hasOlder = false
     @State private var loadingOlder = false
-    // The streak cheer (days), and whether the chat has settled enough for
-    // a finished day to be news.
-    @State private var cheer: Int?
-    @State private var settled = false
     @FocusState private var typing: Bool
 
     private var me: String { model.me?.email ?? "" }
@@ -90,28 +86,7 @@ struct ChatView: View {
             }
         }
         .background(Palette.bg.ignoresSafeArea())
-        .overlay(alignment: .top) {
-            if let cheer {
-                StreakCheer(days: cheer)
-                    .padding(.top, 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-        }
-        .sensoryFeedback(.success, trigger: cheer) { _, new in new != nil }
-        // Just the newest ones for a new message; all of them after a page loads.
-        .onChange(of: messages.count) { old, new in
-            ChatStreaks.shared.note(old == 0 || new - old > 20 ? messages : Array(messages.suffix(20)), me: me)
-        }
-        .onChange(of: streak) { old, new in
-            // Today's day just got done (by a message sent or received now).
-            guard settled, let new, new.today, !(old?.today ?? false) else { return }
-            guard let last = messages.last.flatMap({ Dates.parse($0.created) }), Date().timeIntervalSince(last) < 30 else { return }
-            withAnimation(Motion.pick(.spring(response: 0.45, dampingFraction: 0.75))) { cheer = new.days }
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(2.8))
-                withAnimation(Motion.pick(Motion.settle)) { cheer = nil }
-            }
-        }
+        .modifier(StreakWatch(conversation: conversation, messages: messages, me: me, enabled: loadMessages))
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -165,14 +140,7 @@ struct ChatView: View {
         .task {
             guard loadMessages else { loaded = true; return }
             restoreCache()
-            ChatStreaks.shared.note(messages, me: me)
             await poll()
-        }
-        .task {
-            guard loadMessages else { return }
-            try? await Task.sleep(for: .seconds(3))
-            settled = true
-            await ChatStreaks.shared.deepen(conversation, me: me)
         }
     }
 

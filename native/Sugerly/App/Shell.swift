@@ -741,29 +741,32 @@ extension MainShell {
 // MARK: - The + menu
 
 // The menu as a drawer: it springs in from the left edge over a dimmed
-// page. Tap the page or swipe it back to the left to close it. The rounded
-// edge and its shadow are drawn on a plain shape behind the menu (not on the
-// menu itself), so sliding it moves one layer and nothing is redrawn.
+// page. Tap the page or swipe it back to the left to close it. It's built
+// once, a few seconds after the app opens, and then kept just off the
+// screen, so opening it only slides one layer (nothing is built or drawn
+// during the slide). Its edge shadow is a plain gradient, not a blur.
 struct MenuDrawer: View {
     @Binding var open: Bool
     var go: (Route) -> Void
     @State private var drag: CGFloat = 0
+    @State private var built = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { geo in
             let width = min(geo.size.width * 0.86, 400)
             ZStack(alignment: .leading) {
-                if open {
-                    Color.black
-                        .opacity(0.3 * Double(1 - min(1, drag / max(width, 1))))
-                        .ignoresSafeArea()
-                        .contentShape(Rectangle())
-                        .onTapGesture { open = false }
-                        .gesture(closeDrag(width))
-                        .transition(.opacity)
-                        .accessibilityLabel("Close menu")
-                        .accessibilityAddTraits(.isButton)
+                Color.black
+                    .opacity(open ? 0.3 * Double(1 - min(1, drag / max(width, 1))) : 0)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { open = false }
+                    .gesture(closeDrag(width))
+                    .allowsHitTesting(open)
+                    .accessibilityLabel("Close menu")
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHidden(!open)
+                if built || open {
                     AccountView(go: go, close: { open = false })
                         .equatable()
                         .frame(width: width)
@@ -778,20 +781,29 @@ struct MenuDrawer: View {
                                 .offset(x: 15)
                                 .gesture(closeDrag(width))
                         }
-                        .offset(x: -drag)
+                        .offset(x: open ? -drag : -(width + 40))
+                        .allowsHitTesting(open)
+                        .accessibilityHidden(!open)
                         .accessibilityAddTraits(.isModal)
                         .transition(.move(edge: .leading))
                         .zIndex(1)
                 }
             }
-            .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.38, dampingFraction: 0.88), value: open)
+            .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.36, dampingFraction: 0.9), value: open)
         }
-        // The page behind holds still while the menu is open (from just after
-        // it has slid in, so nothing changes during the slide itself).
+        // Built while nothing else is going on, so the first open is as
+        // smooth as the rest.
+        .task {
+            try? await Task.sleep(for: .seconds(3))
+            built = true
+        }
+        .onChange(of: open) { _, now in if now { built = true } }
+        // The page behind holds still while the menu is open: from just
+        // after it has slid in until just after it has slid out, so nothing
+        // starts or stops during a slide.
         .task(id: open) {
-            guard open else { AmbientPause.shared.on = false; return }
-            try? await Task.sleep(for: .milliseconds(420))
-            if !Task.isCancelled { AmbientPause.shared.on = true }
+            try? await Task.sleep(for: .milliseconds(open ? 420 : 400))
+            if !Task.isCancelled { AmbientPause.shared.on = open }
         }
     }
 
@@ -809,7 +821,8 @@ struct MenuDrawer: View {
 }
 
 // Behind the menu: the page colour with a soft wash of your colour at the
-// top and a lilac glow at the bottom, a rounded right edge and a shadow.
+// top and a lilac glow at the bottom, and a rounded right edge with a soft
+// shade beside it (a gradient: a blurred shadow this tall was costly).
 private struct DrawerBackdrop: View {
     @Environment(\.colorScheme) private var scheme
 
@@ -817,7 +830,6 @@ private struct DrawerBackdrop: View {
         let shape = UnevenRoundedRectangle(bottomTrailingRadius: 32, topTrailingRadius: 32, style: .continuous)
         let dark = scheme == .dark
         shape.fill(Palette.bg)
-            .shadow(color: .black.opacity(0.18), radius: 20, x: 6)
             .overlay {
                 shape.fill(LinearGradient(stops: [
                     .init(color: Theme.light.opacity(dark ? 0.14 : 0.36), location: 0),
@@ -827,6 +839,12 @@ private struct DrawerBackdrop: View {
             .overlay {
                 shape.fill(RadialGradient(colors: [Candy.grape.color.opacity(dark ? 0.12 : 0.16), .clear],
                                           center: .bottomLeading, startRadius: 0, endRadius: 340))
+            }
+            .background(alignment: .trailing) {
+                LinearGradient(colors: [.black.opacity(dark ? 0.3 : 0.12), .black.opacity(0)], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: 22)
+                    .padding(.vertical, 24)
+                    .offset(x: 22)
             }
             .ignoresSafeArea()
     }

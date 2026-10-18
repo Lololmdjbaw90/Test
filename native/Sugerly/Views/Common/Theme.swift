@@ -211,6 +211,43 @@ enum Candy: CaseIterable {
     var soft: Color { Palette.swatch(Palette.mix(0xFFFFFF, stops.1, 0.14), 1, Palette.mix(0x1D191C, stops.1, 0.22), 1) }
 }
 
+// Flat look: no soft shadows. The menu uses it: every soft shadow is drawn
+// again on each frame while something slides or scrolls, and the menu had
+// dozens of them, which made it stutter.
+private struct FlatKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var flat: Bool {
+        get { self[FlatKey.self] }
+        set { self[FlatKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// A soft shadow, left off in the flat look (see `flat`).
+    func softShadow(_ color: Color, radius: CGFloat, x: CGFloat = 0, y: CGFloat = 0) -> some View {
+        modifier(SoftShadow(color: color, radius: radius, x: x, y: y))
+    }
+}
+
+private struct SoftShadow: ViewModifier {
+    let color: Color
+    let radius: CGFloat
+    let x: CGFloat
+    let y: CGFloat
+    @Environment(\.flat) private var flat
+
+    func body(content: Content) -> some View {
+        if flat {
+            content
+        } else {
+            content.shadow(color: color, radius: radius, x: x, y: y)
+        }
+    }
+}
+
 // A rounded candy square with a white icon: a shine on top and a soft
 // coloured glow under it.
 struct CandyTile: View {
@@ -223,7 +260,7 @@ struct CandyTile: View {
         Image(systemName: icon)
             .font(.system(size: size * 0.42, weight: .semibold))
             .foregroundStyle(.white)
-            .shadow(color: .black.opacity(0.12), radius: 1, y: 1)
+            .softShadow(.black.opacity(0.12), radius: 1, y: 1)
             .frame(width: size, height: size)
             .background {
                 shape.fill(candy.gradient)
@@ -231,7 +268,7 @@ struct CandyTile: View {
                         shape.fill(LinearGradient(colors: [Palette.rim(0.45), .clear], startPoint: .top, endPoint: .center))
                             .padding(1)
                     }
-                    .shadow(color: candy.color.softGlow(0.28), radius: 6, y: 3)
+                    .softShadow(candy.color.softGlow(0.28), radius: 6, y: 3)
             }
             .accessibilityHidden(true)
     }
@@ -468,8 +505,8 @@ struct SugarCard: ViewModifier {
             .padding(padding)
             .background {
                 shape.fill(Palette.surface)
-                    .shadow(color: Palette.shadow, radius: 1, y: 1)
-                    .shadow(color: Palette.shadow, radius: 14, y: 6)
+                    .softShadow(Palette.shadow, radius: 1, y: 1)
+                    .softShadow(Palette.shadow, radius: 14, y: 6)
             }
             .overlay(shape.strokeBorder(Palette.border.opacity(0.8), lineWidth: 1))
     }
@@ -489,7 +526,7 @@ struct PastelCard: ViewModifier {
                         // A soft sheen along the top edge.
                         shape.fill(LinearGradient(colors: [Palette.rim(0.35), .clear], startPoint: .top, endPoint: .center))
                     }
-                    .shadow(color: Palette.shadow, radius: 14, y: 6)
+                    .softShadow(Palette.shadow, radius: 14, y: 6)
             }
             .overlay(shape.strokeBorder(Palette.rim(0.55), lineWidth: 1))
     }

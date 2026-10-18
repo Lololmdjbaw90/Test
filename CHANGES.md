@@ -7,6 +7,9 @@
 - **Gem hearts**: the artist's heart and sparkle are `MimiHeart` / `MimiSparkle`; the bunny's tap puff (`HeartPuff`) now floats those (popping in, swaying, fading) instead of drawn hearts.
 - **Logo on every main page**: `quietTitle` puts the Sugerly logo in the middle of the top bar (Home, Community, Fan Art, Chats, Servers, Music). On Chats the Chats / Servers switch moves from the top bar to just under it.
 - **Community feed bar**: no more flat box behind the bar when it sticks to the top; it's a frosted capsule floating over the posts, and the pill glides with a softer spring.
+- **Menu without lag**: the menu is built once (a few seconds after the app opens, or on the first open) and then kept just off the screen, so opening it only slides one layer instead of building every card mid-slide. Inside it, the new flat look (`\.flat`, `softShadow`) leaves out the soft shadows on cards, candy tiles, shortcut tiles and the bunny tile (each was redrawn on every frame while it slid or scrolled); the drawer's edge shadow is a gradient strip instead of a 20 pt blur; the sections no longer rise in one by one; the shortcut icons don't hop; and the page behind starts moving again only after the menu has slid out.
+- **Clouds**: one cloud shape for every cloud (`CloudArt`): a flat bottom and four puffs as one smooth shape, white with a soft shade underneath and a soft shadow, no outlines. The Clouds background is a soft sky with two layers (small pale clouds far away drifting slowly, bigger ones nearer a little quicker), each looping seamlessly, and a fluffy bank along the bottom; Settings previews scale them down. The bunny's cloudy sky uses the same clouds, drifting across and leaving the tile completely before coming back.
+- **Build fix**: the chat screen was too much for the compiler in one expression; the streak parts are a separate modifier (`StreakWatch`).
 
 ## One morphing search, real recolouring, bow in Accessories (iOS app)
 

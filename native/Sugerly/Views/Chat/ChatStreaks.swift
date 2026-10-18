@@ -252,3 +252,52 @@ struct StreakCheer: View {
         .accessibilityElement(children: .combine)
     }
 }
+
+// In an open chat: notes messages as they arrive (just the newest ones for
+// a new message, all of them after a page loads), fetches older days for a
+// long streak, and cheers when today's streak day gets done right then.
+struct StreakWatch: ViewModifier {
+    let conversation: Conversation
+    let messages: [Message]
+    let me: String
+    var enabled = true
+    @State private var cheer: Int?
+    // Settled enough that a finished day is news (not just loading in).
+    @State private var settled = false
+
+    private var streak: ChatStreaks.Streak? {
+        conversation.isGroup ? nil : ChatStreaks.shared.streak(conversation.id)
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(alignment: .top) {
+                if let cheer {
+                    StreakCheer(days: cheer)
+                        .padding(.top, 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .sensoryFeedback(.success, trigger: cheer) { _, new in new != nil }
+            .onChange(of: messages.count) { old, new in
+                ChatStreaks.shared.note(old == 0 || new - old > 20 ? messages : Array(messages.suffix(20)), me: me)
+            }
+            .onChange(of: streak) { old, new in celebrate(old, new) }
+            .task {
+                guard enabled, !conversation.isGroup else { return }
+                try? await Task.sleep(for: .seconds(3))
+                settled = true
+                await ChatStreaks.shared.deepen(conversation, me: me)
+            }
+    }
+
+    private func celebrate(_ old: ChatStreaks.Streak?, _ new: ChatStreaks.Streak?) {
+        guard settled, let new, new.today, !(old?.today ?? false) else { return }
+        guard let last = messages.last.flatMap({ Dates.parse($0.created) }), Date().timeIntervalSince(last) < 30 else { return }
+        withAnimation(Motion.pick(.spring(response: 0.45, dampingFraction: 0.75))) { cheer = new.days }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2.8))
+            withAnimation(Motion.pick(Motion.settle)) { cheer = nil }
+        }
+    }
+}
