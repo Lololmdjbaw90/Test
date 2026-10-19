@@ -87,7 +87,7 @@ struct ReelTimeline: View {
                     .font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
                     .contentTransition(.symbolEffect(.replace))
                     .frame(width: 36, height: 36)
-                    .background(Theme.main, in: Circle())
+                    .background(Theme.solid, in: Circle())
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }

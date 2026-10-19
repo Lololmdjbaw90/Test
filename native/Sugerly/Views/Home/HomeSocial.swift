@@ -321,7 +321,7 @@ struct HappeningNow: View {
                 .overlay(alignment: .bottomTrailing) {
                     Image(systemName: item.icon).font(.system(size: 8, weight: .bold)).foregroundStyle(.white)
                         .frame(width: 18, height: 18)
-                        .background(Theme.main, in: Circle())
+                        .background(Theme.solid, in: Circle())
                         .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
                         .offset(x: 4, y: 4)
                 }
@@ -560,7 +560,7 @@ struct WeeklyChallengeCard: View {
                 } label: {
                     Label("Join", systemImage: "plus").font(.jakarta(14, .semibold)).foregroundStyle(.white)
                         .frame(maxWidth: .infinity).frame(height: 40)
-                        .background(Theme.main, in: Capsule())
+                        .background(Theme.solid, in: Capsule())
                 }
                 Button { showEntries(c.tag) } label: {
                     Label(active ? "Showing entries" : "See entries", systemImage: active ? "checkmark" : "square.grid.2x2")

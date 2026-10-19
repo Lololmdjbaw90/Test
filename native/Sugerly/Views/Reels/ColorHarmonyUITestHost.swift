@@ -16,7 +16,7 @@ struct ColorHarmonyUITestHost: View {
                     PageTitle(title: "Your colors", subtitle: "Calm surfaces. Colorful details.", icon: "paintpalette.fill")
                     HStack {
                         Button("Rose") { Theme.custom = nil; Theme.accent = .rose }
-                        Button("Mint") { Theme.custom = nil; Theme.accent = .mint }
+                        Button("Mint") { Theme.custom = nil; Theme.accent = .mint }.accessibilityIdentifier("harmony-mint")
                         Button("Pale yellow") { Theme.custom = (0xFFF7B0, 0xFFFBE1) }
                         Button("Dark") { dark.toggle() }
                     }.font(.jakarta(13, .semibold)).tint(Theme.main)
@@ -59,6 +59,7 @@ struct ColorHarmonyUITestHost: View {
             for mode in [UIUserInterfaceStyle.light, .dark] {
                 let traits = UITraitCollection(userInterfaceStyle: mode)
                 func hex(_ color: Color) -> UInt32 { UIColor(color).resolvedColor(with: traits).rgbHex }
+                if Palette.contrast(hex(Theme.solid), 0xFFFFFF) < 4.5 { failures.append("solid fill") }
                 for background in [Palette.surface, Palette.surface2] {
                     if Palette.contrast(hex(Theme.main), hex(background)) < 4.5 { failures.append("link") }
                     if Palette.contrast(hex(Palette.muted), hex(background)) < 4.5 { failures.append("muted") }

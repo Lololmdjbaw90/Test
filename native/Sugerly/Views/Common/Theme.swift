@@ -411,6 +411,7 @@ enum Theme {
         // at both ends, including admin-selected yellow or very pale accents.
         LinearGradient(colors: buttonStops.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing)
     }
+    static var solid: Color { Color(hex: buttonStops[1]) }
     static var buttonStops: [UInt32] {
         [Palette.readable(Palette.mix(mainHex, 0xFFFFFF, 0.06), on: 0xFFFFFF),
          Palette.readable(Palette.mix(mainHex, partnerHex, 0.30), on: 0xFFFFFF)]
@@ -703,7 +704,6 @@ struct Chip: View {
                         .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
                 }
             }
-            .scaleEffect(active ? 1 : 0.97)
             .contentShape(Capsule())
         }
         .buttonStyle(BouncyStyle(scale: 0.92))

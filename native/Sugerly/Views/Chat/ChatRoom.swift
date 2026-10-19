@@ -374,7 +374,7 @@ struct ChatView: View {
                         Image(systemName: hasText ? "arrow.up" : "mic.fill")
                             .font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
                             .frame(width: 42, height: 42)
-                            .background(Theme.main, in: Circle())
+                            .background(Theme.solid, in: Circle())
                             .contentTransition(.symbolEffect(.replace))
                             .motion(Motion.playful, value: hasText)
                     }
@@ -435,7 +435,7 @@ struct ChatView: View {
             .background(Palette.surface, in: Capsule())
             Button { Task { await sendVoiceNote() } } label: {
                 Image(systemName: "arrow.up").font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
-                    .frame(width: 42, height: 42).background(Theme.main, in: Circle())
+                    .frame(width: 42, height: 42).background(Theme.solid, in: Circle())
             }
             .buttonStyle(BouncyStyle(scale: 0.88))
             .accessibilityLabel("Send voice message")
@@ -1351,7 +1351,7 @@ struct VoiceNoteBubble: View {
                             .contentTransition(.symbolEffect(.replace))
                     }
                 }
-                .frame(width: 38, height: 38).background(Theme.main, in: Circle())
+                .frame(width: 38, height: 38).background(Theme.solid, in: Circle())
             }
             .buttonStyle(BouncyStyle(scale: 0.88))
             VStack(alignment: .leading, spacing: 4) {

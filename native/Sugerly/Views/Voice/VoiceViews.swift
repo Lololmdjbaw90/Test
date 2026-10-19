@@ -268,7 +268,7 @@ struct VoiceDock: View {
                 if voice.sharingScreen {
                     Button { voice.stopScreenShare() } label: {
                         Image(systemName: "rectangle.on.rectangle.slash").font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
-                            .frame(width: 36, height: 36).background(Theme.main, in: Circle())
+                            .frame(width: 36, height: 36).background(Theme.solid, in: Circle())
                     }
                     .buttonStyle(BouncyStyle())
                     .accessibilityLabel("Stop sharing")

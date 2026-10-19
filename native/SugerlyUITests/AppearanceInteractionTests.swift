@@ -43,7 +43,7 @@ final class AppearanceInteractionTests: XCTestCase {
         capture("color-harmony-controls-rose")
         // Return to the theme controls, including an intentionally pale accent.
         for _ in 0..<8 where !app.buttons["Pale yellow"].isHittable { app.scrollViews.firstMatch.swipeDown() }
-        app.buttons["Mint"].tap()
+        app.buttons["harmony-mint"].tap()
         capture("color-harmony-mint")
         app.buttons["Pale yellow"].tap()
         capture("color-harmony-pale-accent")

@@ -546,7 +546,7 @@ struct ArtworkDetailView: View {
                         .font(.jakarta(15, .semibold))
                         .foregroundStyle(liked ? .white : Palette.text)
                         .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 16).frame(height: 42)
-                        .background(liked ? Theme.main : Palette.surface2, in: Capsule())
+                        .background(liked ? Theme.solid : Palette.surface2, in: Capsule())
                         .motion(Motion.playful, value: liked)
                     }
                     .buttonStyle(BouncyStyle(scale: 0.92))
