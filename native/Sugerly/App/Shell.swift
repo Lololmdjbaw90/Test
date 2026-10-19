@@ -287,7 +287,26 @@ private struct ShellSounds: ViewModifier {
 @MainActor
 @Observable
 final class Navigator {
-    var tab: AppTab = .home
+    var tab: AppTab = .home {
+        didSet {
+            guard tab != oldValue else { return }
+            // Settings and notifications are short visits. Leave the tab
+            // where it was before that visit, including when a notification
+            // opened a detail page or Settings opened a NavigationLink child.
+            // Keeping this here also covers widget/deep-link tab switches.
+            guard let first = self[oldValue].firstIndex(where: { route in
+                switch route {
+                case .settings, .notifications: return true
+                default: return false
+                }
+            }) else { return }
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                self[oldValue] = Array(self[oldValue].prefix(first))
+            }
+        }
+    }
     var home: [Route] = []
     var community: [Route] = []
     var gallery: [Route] = []

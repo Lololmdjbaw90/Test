@@ -5,8 +5,7 @@ import SwiftUI
 // logging in or loading anything.
 struct ShellUITestHost: View {
     @Environment(AppModel.self) private var model
-    @State private var tab: AppTab = .chat
-    @State private var chatPath: [Route] = []
+    @State private var nav = Navigator()
     @State private var chats = ChatStore()
     @State private var notes = NotificationsStore()
     @State private var posts = PostsStore()
@@ -14,21 +13,34 @@ struct ShellUITestHost: View {
     private let conversation = Conversation(id: "fixture-chat", members: ["test@example.invalid", "friend@example.invalid"], isGroup: true, groupName: "Navigation test", last: nil, unread: 0)
     private let otherTabs: [(AppTab, String, String)] = [(.home, "Home", "house"), (.community, "Community", "person.2"), (.gallery, "Fan Art", "paintpalette"), (.reels, "Reels", "play.rectangle")]
 
+    init() {
+        let navigator = Navigator()
+        navigator.tab = .chat
+        _nav = State(initialValue: navigator)
+    }
+
     var body: some View {
-        TabView(selection: $tab) {
+        TabView(selection: Binding(get: { nav.tab }, set: { nav.tab = $0 })) {
             ForEach(otherTabs, id: \.0) { entry in
-                NavigationStack {
-                    Text("\(entry.1) page").font(.display(38))
+                NavigationStack(path: nav.path(entry.0)) {
+                    VStack(spacing: 20) {
+                        Text("\(entry.1) page").font(.display(38))
+                        Button("Open settings") { nav.push(.settings) }
+                        Button("Open saved profile") { nav.push(.person("saved@example.invalid")) }
+                    }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .sugarBackground()
                         .navigationTitle(entry.1)
                         .navigationBarTitleDisplayMode(.inline)
                         .rootBar()
+                        .navigationDestination(for: Route.self) { route in
+                            destination(route, on: entry.0)
+                        }
                 }
                 .tabItem { Label(entry.1, systemImage: entry.2) }
                 .tag(entry.0)
             }
-            NavigationStack(path: $chatPath.once) {
+            NavigationStack(path: nav.path(.chat)) {
                 VStack(spacing: 20) {
                     Text("Messages").font(.display(38))
                     NavigationLink("Open test chat", value: Route.chat(conversation))
@@ -40,7 +52,7 @@ struct ShellUITestHost: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .rootBar()
                 .navigationDestination(for: Route.self) { route in
-                    RouteView(route: route, path: $chatPath.once, loadContent: false)
+                    destination(route, on: .chat)
                 }
             }
             .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
@@ -56,8 +68,39 @@ struct ShellUITestHost: View {
         }
         .environment(chats).environment(notes).environment(posts).environment(player)
         .environment(VoiceEngine.shared).environment(CallCenter.shared)
+        .onChange(of: model.showNotifications) { _, show in
+            guard show else { return }
+            model.showNotifications = false
+            nav.push(.notifications)
+        }
         .onAppear {
             model.me = UserProfile(["id": "fixture-user", "email": "test@example.invalid", "display_name": "Mimi"])
+            notes.items = [AppNotification([
+                "id": "fixture-notification", "type": "mention", "message": "Navigation notification",
+                "from_display_name": "Luna", "from_email": "friend@example.invalid",
+                "link": "/profile?email=notification@example.invalid", "is_read": true,
+                "created_date": Dates.iso(Date())
+            ])]
+        }
+    }
+
+    @ViewBuilder
+    private func destination(_ route: Route, on tab: AppTab) -> some View {
+        if case .person(let email) = route {
+            // Keep profile destinations local; Settings, its nested Hidden
+            // words link, Notifications and the Navigator are the real views.
+            VStack(spacing: 20) {
+                Text(email == "saved@example.invalid" ? "Saved profile page" : "Notification profile page")
+                Button("Open settings") { nav.push(.settings) }
+                Button("Switch to Home") { nav.tab = .home }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .sugarBackground()
+            .navigationTitle("Profile")
+            .navigationBarTitleDisplayMode(.inline)
+            .rootBar()
+        } else {
+            RouteView(route: route, path: nav.path(tab), loadContent: false)
         }
     }
 

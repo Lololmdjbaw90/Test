@@ -26,6 +26,11 @@ on:
         type: boolean
         default: true
 
+      test_filter:
+        description: "Optional comma-separated UI test classes; blank runs the full suite"
+        default: ""
+        type: string
+
 jobs:
   upload:
     runs-on: macos-15
@@ -70,11 +75,15 @@ jobs:
       - name: Test iPhone editor and Fanart interactions
         if: ${{ inputs.tests }}
         timeout-minutes: 18
+        env:
+          TEST_FILTER: ${{ inputs.test_filter }}
         run: bash scripts/test-native-interactions.sh
 
       - name: Test Home scrolling on iPad
         if: ${{ inputs.tests }}
         timeout-minutes: 10
+        env:
+          TEST_FILTER: ${{ inputs.test_filter }}
         run: bash scripts/test-native-interactions.sh iPad HomeIPadTests
 
       - name: Export interaction screenshots

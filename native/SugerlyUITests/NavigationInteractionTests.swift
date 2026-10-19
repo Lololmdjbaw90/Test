@@ -58,4 +58,66 @@ final class NavigationInteractionTests: XCTestCase {
         XCTAssertTrue(messageInput.waitForExistence(timeout: 3))
         XCTAssertEqual(backButtons.count, 1)
     }
+
+    func testSettingsAndItsNestedPageCloseWhenLeavingTheirTab() {
+        app.buttons["Community"].tap()
+        app.buttons["Open saved profile"].tap()
+        XCTAssertTrue(app.staticTexts["Saved profile page"].waitForExistence(timeout: 3))
+        app.buttons["Open settings"].tap()
+        XCTAssertTrue(app.buttons["Edit profile"].waitForExistence(timeout: 5))
+
+        // Hidden words is an ordinary destination NavigationLink inside
+        // Settings, so its presentation is not recorded in Navigator's path.
+        let hiddenWords = app.staticTexts["Hidden words"]
+        for _ in 0..<12 where !hiddenWords.isHittable {
+            dismissNotificationPermissionIfNeeded()
+            app.swipeUp()
+        }
+        XCTAssertTrue(hiddenWords.isHittable)
+        hiddenWords.tap()
+        XCTAssertTrue(app.textFields["Add a word or phrase"].waitForExistence(timeout: 3))
+        app.buttons["Home"].tap()
+        XCTAssertTrue(app.staticTexts["Home page"].waitForExistence(timeout: 3))
+        app.buttons["Community"].tap()
+        XCTAssertTrue(app.staticTexts["Saved profile page"].waitForExistence(timeout: 3),
+                      "Leaving Settings must return to the page before it, including its nested pages")
+        XCTAssertFalse(app.textFields["Add a word or phrase"].exists)
+
+        // A fresh visit starts at Settings, rather than reopening its child.
+        app.buttons["Open settings"].tap()
+        XCTAssertTrue(app.buttons["Edit profile"].waitForExistence(timeout: 3))
+        app.buttons["Home"].tap()
+        app.buttons["Community"].tap()
+        XCTAssertTrue(app.staticTexts["Saved profile page"].waitForExistence(timeout: 3))
+    }
+
+    func testNotificationsCloseOnTabTapAndProgrammaticSwitchWithoutLosingOtherPages() {
+        app.buttons["Home"].tap()
+        app.buttons["Open saved profile"].tap()
+        XCTAssertTrue(app.staticTexts["Saved profile page"].waitForExistence(timeout: 3))
+        app.buttons["Fan Art"].tap()
+        app.buttons["Notifications"].tap()
+        XCTAssertTrue(app.staticTexts["Your updates"].waitForExistence(timeout: 3))
+        app.buttons["Home"].tap()
+        XCTAssertTrue(app.staticTexts["Saved profile page"].waitForExistence(timeout: 3),
+                      "An unrelated tab's ordinary navigation must stay intact")
+        app.buttons["Fan Art"].tap()
+        XCTAssertTrue(app.staticTexts["Fan Art page"].waitForExistence(timeout: 3))
+
+        app.buttons["Notifications"].tap()
+        let notification = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Luna")).firstMatch
+        XCTAssertTrue(notification.waitForExistence(timeout: 3))
+        notification.tap()
+        XCTAssertTrue(app.staticTexts["Notification profile page"].waitForExistence(timeout: 3))
+        app.buttons["Switch to Home"].tap()
+        XCTAssertTrue(app.staticTexts["Saved profile page"].waitForExistence(timeout: 3))
+        app.buttons["Fan Art"].tap()
+        XCTAssertTrue(app.staticTexts["Fan Art page"].waitForExistence(timeout: 3),
+                      "A programmatic switch must also remove Notifications and the page opened from it")
+    }
+
+    private func dismissNotificationPermissionIfNeeded() {
+        let alert = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
+        if alert.exists { alert.buttons.firstMatch.tap() }
+    }
 }

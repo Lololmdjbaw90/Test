@@ -394,19 +394,31 @@ struct CoinIcon: View {
 // dreamy banner with the artist's gem heart floating in it, you with the
 // perks switched on, the plans (the bigger one marked best value), the perks
 // as candy tiles, and the buy button always in reach at the bottom.
+// Plan changes are observed only by the picker and buy bar, not the animated
+// hero/profile preview and the rest of the shop.
+@Observable
+private final class NitroPlanSelection {
+    var plan = NitroStyle.plans[0].id
+}
+
+private struct NitroSelectionSection<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+    var body: some View { content() }
+}
+
 struct NitroShopView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var busy: String?
     @State private var burst = 0
-    @State private var plan = NitroStyle.plans[0].id
+    @State private var selection = NitroPlanSelection()
     @State private var editing = false
     @State private var shown = false
 
     private var me: UserProfile? { model.me }
     private var coins: Int { me?.coins ?? 0 }
     private var nitro: Bool { me?.isNitro ?? false }
-    private var chosen: NitroStyle.Plan { NitroStyle.plans.first { $0.id == plan } ?? NitroStyle.plans[0] }
+    private var chosen: NitroStyle.Plan { NitroStyle.plans.first { $0.id == selection.plan } ?? NitroStyle.plans[0] }
     private static let violet = Color(hex: 0x8B5CF6)
 
     private struct Perk {
@@ -430,7 +442,7 @@ struct NitroShopView: View {
                     hero.entrance(shown, 0)
                     if nitro { activeCard.entrance(shown, 1) }
                     preview.entrance(shown, 1)
-                    plans.entrance(shown, 2)
+                    NitroSelectionSection { plans }.entrance(shown, 2)
                     perksGrid.entrance(shown, 3)
                     walletLink.entrance(shown, 4)
                 }
@@ -439,7 +451,7 @@ struct NitroShopView: View {
                 .frame(maxWidth: 640)
                 .frame(maxWidth: .infinity)
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) { buyBar }
+            .safeAreaInset(edge: .bottom, spacing: 0) { NitroSelectionSection { buyBar } }
             .sugarBackground()
             .overlay { ConfettiBurst(trigger: burst) }
             .navigationTitle("MimiPlus")
@@ -585,10 +597,15 @@ struct NitroShopView: View {
     }
 
     private func planCard(_ p: NitroStyle.Plan) -> some View {
-        let on = plan == p.id
+        let on = selection.plan == p.id
         let best = p.days > 30
         let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
-        return Button { plan = p.id } label: {
+        return Button {
+            guard selection.plan != p.id else { return }
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { selection.plan = p.id }
+        } label: {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text(p.title).font(.jakarta(15, .bold))
@@ -626,6 +643,7 @@ struct NitroShopView: View {
             }
         }
         .buttonStyle(BouncyStyle(scale: 0.96))
+        .accessibilityIdentifier("mimiplus-plan-\(p.id)")
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 

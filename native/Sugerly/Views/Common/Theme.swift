@@ -47,7 +47,7 @@ enum Palette {
     // white cards and the candy colours stand out (pink on pink on pink
     // looked messy). Cards: clean white. Fields, chips and tracks: a soft
     // warm grey with a hint of your colour. Hairlines: barely there. Text: plum.
-    static var bg: Color { pastel(0xF7F4F3, 0.07, dark: 0x131114, 0.05) }
+    static var bg: Color { pastel(0xFFFFFF, 0.015, dark: 0x131114, 0.05) }
     static var surface: Color { pastel(0xFFFFFF, 0.0, dark: 0x1D191C, 0.06) }
     static var surface2: Color { pastel(0xF4F0EF, 0.12, dark: 0x29232A, 0.07) }
     static var border: Color { pastel(0xEEE8E7, 0.10, dark: 0x352D33, 0.08) }
