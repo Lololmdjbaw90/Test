@@ -54,7 +54,10 @@ enum Palette {
     static var borderStrong: Color { pastel(0xE2DAD9, 0.18, dark: 0x473B43, 0.10) }
     static var text: Color { ink(0x2B1D24, 0.10, dark: 0xFBF1F4, 0.04) }
     static var text2: Color { ink(0x5E4A53, 0.12, dark: 0xD6C3CB, 0.05) }
-    static var muted: Color { ink(0x74636D, 0.06, dark: 0xB4A1AB, 0.03) }
+    static var muted: Color {
+        swatch(readable(mix(0x74636D, Theme.mainHex, 0.06), on: mix(0xF4F0EF, Theme.lightHex, 0.12)), 1,
+               readable(mix(0xB4A1AB, Theme.lightHex, 0.03), on: mix(0x29232A, Theme.mainHex, 0.07)), 1)
+    }
 
     // Cream and ivory for warm touches (coins, rewards, highlights).
     static let cream = Color.dynamic(light: creamHex, dark: 0x3A3023)
