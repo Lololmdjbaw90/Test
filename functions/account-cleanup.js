@@ -32,7 +32,7 @@ export const accountChatCleanup = functionsV1.runWith({ timeoutSeconds: 540, fai
         const removal = db.collection("ChatRemoval").doc(id);
         await db.runTransaction(async tx => {
           if ((await tx.get(removal)).exists) return;
-          tx.create(removal, { to_email: recipient, conversation_id: conversation, deleted_email: email, created_date: new Date().toISOString() });
+          tx.create(removal, { to_email: recipient, conversation_id: conversation, created_date: new Date().toISOString() });
           tx.create(db.collection("Notification").doc(`deleted-chat-${id}`), {
             to_email: recipient, from_email: "", from_display_name: "Sugerly", from_profile_picture: "",
             type: "account_deleted", message: "A person you chatted with deleted their account. Your private chat has been removed.",
@@ -42,6 +42,14 @@ export const accountChatCleanup = functionsV1.runWith({ timeoutSeconds: 540, fai
       }
       batch.delete(doc.ref);
     }
+    await batch.commit();
+  }
+  // Cosmetic entitlements contain account identifiers and go with the account.
+  while (true) {
+    const purchases = await db.collection("BunnyPurchase").where("user_id", "==", user.uid).limit(300).get();
+    if (purchases.empty) break;
+    const batch = db.batch();
+    for (const purchase of purchases.docs) batch.delete(purchase.ref);
     await batch.commit();
   }
   // Also remove a stale profile left behind by a deletion from another client.

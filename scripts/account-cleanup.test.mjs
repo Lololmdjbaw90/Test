@@ -6,7 +6,7 @@ import vm from 'node:vm';
 const source = readFileSync(new URL('../functions/account-cleanup.js', import.meta.url), 'utf8')
   .replace(/^import .*;\r?\n/gm, '').replace('export const accountChatCleanup =', 'globalThis.worker =');
 function fixture(messages, failCommit = false) {
-  const tables = { DirectMessage: new Map(messages.map((m, i) => [`m${i}`, m])), User: new Map([['gone-id', { email: 'gone@example.invalid' }]]), Notification: new Map(), ChatRemoval: new Map() };
+  const tables = { DirectMessage: new Map(messages.map((m, i) => [`m${i}`, m])), User: new Map([['gone-id', { email: 'gone@example.invalid' }]]), Notification: new Map(), ChatRemoval: new Map(), BunnyPurchase: new Map([["owned", { user_id: "gone-id" }]]) };
   let failed = false;
   const ref = (table, id) => ({ table, id, delete: async () => tables[table].delete(id) });
   const apply = operations => { for (const [type, r, data] of operations) {
@@ -18,7 +18,7 @@ function fixture(messages, failCommit = false) {
     collection: table => ({
       doc: id => ref(table, id),
       where: (field, op, email) => ({ limit: limit => ({ get: async () => {
-        const docs = [...tables[table]].filter(([, d]) => d[field].includes(email)).slice(0, limit).map(([id, d]) => ({ data: () => d, ref: ref(table, id) }));
+        const docs = [...tables[table]].filter(([, d]) => (op === "==" ? d[field] === email : d[field].includes(email))).slice(0, limit).map(([id, d]) => ({ data: () => d, ref: ref(table, id) }));
         return { docs, empty: !docs.length };
       } }) }),
     }),
@@ -49,6 +49,7 @@ test('deletion paginates every private message and emits one notice per conversa
   assert.equal(f.tables.Notification.size, 1);
   assert.equal([...f.tables.Notification.values()][0].to_email, 'friend@example.invalid');
   assert.equal(f.tables.User.size, 0);
+  assert.equal(f.tables.BunnyPurchase.size, 0);
 });
 test('retry after a partial failure does not duplicate the notification', async () => {
   const f = fixture([dm], true);
