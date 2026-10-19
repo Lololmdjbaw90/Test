@@ -1,7 +1,7 @@
 import SwiftUI
 
-// Shortcuts as candy tiles with a white icon and the place's name, three
-// to a row (Home and the menu).
+// Quiet shortcut cards use color on their icons, leaving labels and content
+// on neutral surfaces so the main action retains the strongest emphasis.
 struct CandyShortcutGrid: View {
     struct Item {
         let title: String
@@ -14,27 +14,16 @@ struct CandyShortcutGrid: View {
     var shown = true
     var open: (Route) -> Void
     @State private var hops: [Int] = Array(repeating: 0, count: 8)
-    @Environment(\.flat) private var flat
 
     var body: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
             ForEach(Array(items.enumerated()), id: \.element.title) { i, item in
-                Button { open(item.route) } label: { tile(item, hop: hops[i % hops.count]) }
+                Button { hops[i % hops.count] += 1; open(item.route) } label: { tile(item, hop: hops[i % hops.count]) }
                     .buttonStyle(BouncyStyle(scale: 0.92))
                     .accessibilityLabel(item.title)
                     .scaleEffect(shown || Motion.reduced ? 1 : 0.7)
                     .opacity(shown || Motion.reduced ? 1 : 0)
                     .animation(Motion.reduced ? nil : Motion.playful.delay(0.12 + Double(min(i, 8)) * 0.05), value: shown)
-            }
-        }
-        .task {
-            // Every few seconds one icon hops, so Home never sits still (not
-            // in the menu, which keeps still).
-            guard Motion.ambient, !Motion.reduced, !flat, !items.isEmpty else { return }
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(2.4))
-                guard !Task.isCancelled else { return }
-                if !Motion.paused { hops[Int.random(in: 0..<items.count)] += 1 }
             }
         }
     }
@@ -47,40 +36,30 @@ struct CandyShortcutGrid: View {
                 .foregroundStyle(.white)
                 .symbolEffect(.bounce, value: hop)
                 .frame(width: 38, height: 38)
-                .background(.white.opacity(0.24), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(item.candy.gradient, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             Spacer(minLength: 12)
             // Room for two lines on every tile (so "Customize bunny" fits and
             // the tiles stay the same height).
             Text(item.title)
-                .font(.jakarta(13, .bold)).foregroundStyle(.white)
+                .font(.jakarta(13, .bold)).foregroundStyle(Palette.text)
                 .lineLimit(2).minimumScaleFactor(0.8)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, minHeight: 34, alignment: .bottomLeading)
-                .softShadow(.black.opacity(0.12), radius: 1, y: 1)
         }
         .padding(12)
         .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
         .background {
-            shape.fill(item.candy.gradient)
-                .overlay {
-                    // A soft bubble in the corner and a shine along the top.
-                    GeometryReader { geo in
-                        Circle().fill(.white.opacity(0.16))
-                            .frame(width: geo.size.width * 0.7)
-                            .offset(x: geo.size.width * 0.5, y: geo.size.height * 0.35)
-                    }
-                    .clipShape(shape)
-                }
-                .overlay(shape.fill(LinearGradient(colors: [Palette.rim(0.35), .clear], startPoint: .top, endPoint: .center)).padding(1))
-                .softShadow(item.candy.color.softGlow(0.35), radius: 8, y: 4)
+            shape.fill(Palette.surface)
+                .overlay(shape.fill(item.candy.soft.opacity(0.55)))
+                .overlay(shape.strokeBorder(Palette.border, lineWidth: 1))
+                .softShadow(Palette.shadow, radius: 6, y: 2)
         }
         .contentShape(shape)
     }
 }
 
-// A bright banner at the top of a page: its name, a line about it, an
-// optional button, and a big tilted icon, on a candy gradient with soft
-// bubbles and a passing shine.
+// Page introductions share the same title, detail, and action hierarchy.
+// A soft category tint and compact icon provide character without a loud banner.
 struct PageHero: View {
     let title: String
     let subtitle: String
@@ -92,52 +71,37 @@ struct PageHero: View {
     @State private var shown = false
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 26, style: .continuous)
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title).font(.display(25)).foregroundStyle(.white)
-                    .lineLimit(1).minimumScaleFactor(0.75)
-                Text(subtitle).font(.jakarta(13, .medium)).foregroundStyle(.white.opacity(0.92))
+        let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title).font(.display(25)).foregroundStyle(Palette.text)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                Text(subtitle).font(.jakarta(13, .medium)).foregroundStyle(Palette.text2)
                     .fixedSize(horizontal: false, vertical: true)
                 if let actionTitle, let action {
                     Button(action: action) {
-                        Label(actionTitle, systemImage: actionIcon)
-                            .font(.jakarta(13, .bold)).foregroundStyle(candy.color)
-                            .lineLimit(1)
-                            .padding(.horizontal, 14).frame(height: 34)
-                            .background(.white, in: Capsule())
-                            .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+                        Label(actionTitle, systemImage: actionIcon).font(.jakarta(13, .semibold))
                     }
-                    .buttonStyle(BouncyStyle(scale: 0.93))
+                    .buttonStyle(OutlineButtonStyle())
                     .padding(.top, 4)
                 }
             }
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: icon)
-                .font(.system(size: 30, weight: .bold))
-                .foregroundStyle(.white)
+                .font(.system(size: 24, weight: .semibold)).foregroundStyle(.white)
                 .symbolEffect(.bounce, value: shown)
-                .frame(width: 70, height: 70)
-                .background(.white.opacity(0.22), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .rotationEffect(.degrees(shown ? -8 : 0))
-                .animation(Motion.reduced ? nil : Motion.playful.delay(0.2), value: shown)
+                .frame(width: 56, height: 56)
+                .background(candy.gradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .rotationEffect(.degrees(shown ? -5 : 0))
+                .animation(Motion.reduced ? nil : Motion.playful, value: shown)
                 .accessibilityHidden(true)
         }
-        .padding(18)
+        .padding(20)
         .background {
-            shape.fill(candy.gradient)
-                .overlay {
-                    GeometryReader { geo in
-                        Circle().fill(.white.opacity(0.14)).frame(width: geo.size.height * 1.6)
-                            .offset(x: geo.size.width * 0.6, y: -geo.size.height * 0.4)
-                        Circle().fill(.white.opacity(0.1)).frame(width: geo.size.height * 0.7)
-                            .offset(x: geo.size.width * 0.35, y: geo.size.height * 0.62)
-                    }
-                    .clipShape(shape)
-                }
-                // (No corner sparkles here: they'd sit on the big icon.)
-                .overlay { ShineSweep(every: 5.5, strength: 0.28).clipShape(shape) }
-                .shadow(color: candy.color.softGlow(0.35), radius: 14, y: 6)
+            shape.fill(Palette.surface)
+                .overlay(shape.fill(LinearGradient(colors: [candy.soft, Palette.surface], startPoint: .topLeading, endPoint: .bottomTrailing)))
+                .overlay(shape.strokeBorder(Palette.border, lineWidth: 1))
+                .softShadow(Palette.shadow, radius: 8, y: 3)
         }
         .onAppear { shown = true }
     }
@@ -191,14 +155,14 @@ struct PageTitle: View {
                 .frame(width: 44, height: 44)
                 .background(Theme.gradient, in: sticker)
                 .overlay(sticker.strokeBorder(.white.opacity(0.4), lineWidth: 1.5))
-                .shadow(color: Theme.glow(0.35), radius: 6, y: 3)
+                .shadow(color: Theme.glow(0.16), radius: 4, y: 2)
                 .rotationEffect(.degrees(shown ? -7 : 0))
             VStack(alignment: .leading, spacing: 5) {
                 StickerTitle(text: title)
                 if !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
-                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .font(.jakarta(13, .semibold)).foregroundStyle(Palette.text2)
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 }
             }
             .accessibilityElement(children: .combine)

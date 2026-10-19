@@ -30,6 +30,27 @@ final class AppearanceInteractionTests: XCTestCase {
         XCTAssertTrue(app.buttons["Open MimiPlus"].isHittable)
     }
 
+    func testColorHarmonyAcrossThemesAndButtonStates() {
+        app.buttons["Review colors"].tap()
+        let result = app.staticTexts["contrast-result"]
+        XCTAssertTrue(result.waitForExistence(timeout: 5))
+        XCTAssertTrue(result.label.hasPrefix("Contrast checks passed"), result.label)
+        let primary = app.buttons["harmony-primary"]
+        for _ in 0..<5 where !primary.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        XCTAssertGreaterThanOrEqual(primary.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(app.buttons["harmony-secondary"].frame.height, 44)
+        XCTAssertFalse(app.buttons["harmony-disabled"].isEnabled)
+        capture("color-harmony-controls-rose")
+        // Return to the theme controls, including an intentionally pale accent.
+        for _ in 0..<8 where !app.buttons["Pale yellow"].isHittable { app.scrollViews.firstMatch.swipeDown() }
+        app.buttons["Mint"].tap()
+        capture("color-harmony-mint")
+        app.buttons["Pale yellow"].tap()
+        capture("color-harmony-pale-accent")
+        app.buttons["Dark"].tap()
+        capture("color-harmony-dark")
+    }
+
     func testBunnyThreeLayerLimitAndMobileAdjustments() {
         app.buttons["Open bunny"].tap()
         let outfit = app.buttons["Outfit"].firstMatch

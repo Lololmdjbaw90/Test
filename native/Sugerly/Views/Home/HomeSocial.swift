@@ -129,7 +129,7 @@ struct HomeComposerBar: View {
                     Text("What are you making today?")
                         .font(.jakarta(15, .medium)).foregroundStyle(Palette.muted)
                         .lineLimit(1).minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                         .padding(.horizontal, 14)
                         .background(Palette.surface2, in: Capsule())
                 }
@@ -139,6 +139,8 @@ struct HomeComposerBar: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(BouncyStyle(scale: 0.98))
+            .accessibilityLabel("Start a post")
+            .accessibilityIdentifier("home-compose-post")
             HStack(spacing: 0) {
                 action("Post", "text.bubble.fill", .berry) { compose(.post) }
                 action("Reel", "play.rectangle.fill", .peach) { compose(.reel) }
@@ -158,7 +160,7 @@ struct HomeComposerBar: View {
                 Text(title).font(.jakarta(12.5, .semibold)).foregroundStyle(Palette.text2)
                     .lineLimit(1).minimumScaleFactor(0.7)
             }
-            .frame(maxWidth: .infinity, minHeight: 40)
+            .frame(maxWidth: .infinity, minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(BouncyStyle(scale: 0.92))
