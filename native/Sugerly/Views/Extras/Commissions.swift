@@ -350,7 +350,7 @@ struct CommissionsView: View {
                         if t != .explore && badge(t) > 0 {
                             Text("\(badge(t))").font(.jakarta(11, .heavy)).foregroundStyle(active ? Theme.main : .white)
                                 .padding(.horizontal, 6).frame(height: 18)
-                                .background(active ? Color.white : Theme.solid, in: Capsule())
+                                .background(active ? Color.white : Theme.main, in: Capsule())
                         }
                     }
                     .foregroundStyle(active ? .white : Palette.text2)

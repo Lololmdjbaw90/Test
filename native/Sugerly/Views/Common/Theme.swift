@@ -54,10 +54,7 @@ enum Palette {
     static var borderStrong: Color { pastel(0xE2DAD9, 0.18, dark: 0x473B43, 0.10) }
     static var text: Color { ink(0x2B1D24, 0.10, dark: 0xFBF1F4, 0.04) }
     static var text2: Color { ink(0x5E4A53, 0.12, dark: 0xD6C3CB, 0.05) }
-    static var muted: Color {
-        swatch(readable(mix(0x74636D, Theme.mainHex, 0.06), on: mix(0xF4F0EF, Theme.lightHex, 0.12)), 1,
-               readable(mix(0xB4A1AB, Theme.lightHex, 0.03), on: mix(0x29232A, Theme.mainHex, 0.07)), 1)
-    }
+    static var muted: Color { ink(0x95838B, 0.12, dark: 0x9C8891, 0.06) }
 
     // Cream and ivory for warm touches (coins, rewards, highlights).
     static let cream = Color.dynamic(light: creamHex, dark: 0x3A3023)
@@ -68,9 +65,9 @@ enum Palette {
     // The three stops of a hero card: a fresh, clear run from a pale tint of
     // your pastel into a juicier shade of it. In dark mode, deep plum shades
     // of your colour.
-    static var heroA: Color { hero(light: mix(0xFFFFFF, Theme.lightHex, 0.12), 0.08) }
-    static var heroB: Color { hero(light: mix(0xFFFFFF, Theme.lightHex, 0.28), 0.14) }
-    static var heroC: Color { hero(light: mix(0xFFFFFF, Theme.partnerHex, 0.13), 0.20) }
+    static var heroA: Color { hero(light: mix(0xFFFFFF, Theme.peachHex, 0.42), 0.12) }
+    static var heroB: Color { hero(light: mix(0xFFFFFF, Theme.lightHex, 0.75), 0.22) }
+    static var heroC: Color { hero(light: mix(Theme.lightHex, Theme.partnerHex, 0.45), 0.34) }
 
     // The glossy touches (a white rim, a sheen along the top) are for light
     // pages. On dark pages they fade to a faint hairline, so nothing shines
@@ -128,48 +125,6 @@ enum Palette {
             UInt32(max(0, min(255, (ch(a, shift) * (1 - t) + ch(b, shift) * t).rounded()))) << shift
         }
         return blend(16) | blend(8) | blend(0)
-    }
-
-    // Contrast is calculated from linear sRGB luminance. Cache derived inks:
-    // choosing a pastel theme must not make links or button labels unreadable.
-    private struct ContrastKey: Hashable { let color: UInt32; let background: UInt32; let minimum: Double }
-    nonisolated(unsafe) private static var readableColors: [ContrastKey: UInt32] = [:]
-
-    static func contrast(_ a: UInt32, _ b: UInt32) -> Double {
-        func luminance(_ hex: UInt32) -> Double {
-            func channel(_ shift: UInt32) -> Double {
-                let value = Double((hex >> shift) & 255) / 255
-                return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
-            }
-            return 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
-        }
-        let first = luminance(a), second = luminance(b)
-        return (max(first, second) + 0.05) / (min(first, second) + 0.05)
-    }
-
-    static func readable(_ color: UInt32, on background: UInt32, minimum: Double = 4.5) -> UInt32 {
-        let key = ContrastKey(color: color, background: background, minimum: minimum)
-        swatchLock.lock()
-        let cached = readableColors[key]
-        swatchLock.unlock()
-        if let cached { return cached }
-        var result = color
-        if contrast(color, background) < minimum {
-            let target: UInt32 = contrast(0x000000, background) >= contrast(0xFFFFFF, background) ? 0x000000 : 0xFFFFFF
-            var low = 0.0, high = 1.0
-            result = target
-            for _ in 0..<18 {
-                let amount = (low + high) / 2
-                let candidate = mix(color, target, amount)
-                if contrast(candidate, background) >= minimum + 0.02 { high = amount; result = candidate }
-                else { low = amount }
-            }
-        }
-        swatchLock.lock()
-        if readableColors.count > 512 { readableColors.removeAll(keepingCapacity: true) }
-        readableColors[key] = result
-        swatchLock.unlock()
-        return result
     }
 
     // The same colour turned round the colour wheel (negative: towards
@@ -232,16 +187,12 @@ enum Candy: CaseIterable {
         case .grape: return (0xC4A6FF, 0x8763EE)
         }
     }
-    private var harmonized: UInt32 { Palette.mix(stops.1, Theme.mainHex, 0.16) }
-    var color: Color {
-        Palette.swatch(Palette.readable(harmonized, on: 0xFFFFFF, minimum: 5.2), 1,
-                       Palette.readable(harmonized, on: 0x1D191C, minimum: 5.2), 1)
-    }
+    var color: Color { Color(hex: stops.1) }
     // Lighter at the top, like a boiled sweet. A touch deeper in dark mode.
     var gradient: LinearGradient {
-        let top = Palette.readable(Palette.mix(harmonized, 0xFFFFFF, 0.10), on: 0xFFFFFF)
-        let bottom = Palette.readable(harmonized, on: 0xFFFFFF)
-        return LinearGradient(colors: [Color(hex: top), Color(hex: bottom)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        LinearGradient(colors: [Palette.swatch(stops.0, 1, Palette.mix(stops.0, stops.1, 0.4), 1),
+                                Palette.swatch(stops.1, 1, Palette.mix(stops.1, 0x000000, 0.12), 1)],
+                       startPoint: .top, endPoint: .bottom)
     }
     // The colour a symbol gets in lists and menus, so the same kind of
     // thing always has the same colour.
@@ -257,7 +208,7 @@ enum Candy: CaseIterable {
         return rules.first { icon.contains($0.0) }?.1
     }
     // A pale wash of the colour, for a tile's soft background.
-    var soft: Color { Palette.swatch(Palette.mix(0xFFFFFF, harmonized, 0.08), 1, Palette.mix(0x1D191C, harmonized, 0.16), 1) }
+    var soft: Color { Palette.swatch(Palette.mix(0xFFFFFF, stops.1, 0.14), 1, Palette.mix(0x1D191C, stops.1, 0.22), 1) }
 }
 
 // Flat look: no soft shadows. The menu uses it: every soft shadow is drawn
@@ -377,18 +328,13 @@ enum Theme {
             if ThemeStore.shared.customLight != newValue?.light { ThemeStore.shared.customLight = newValue?.light }
         }
     }
-    static var main: Color {
-        Palette.swatch(Palette.readable(mainHex, on: Palette.mix(0xF4F0EF, lightHex, 0.12), minimum: 4.8), 1,
-                       Palette.readable(mainHex, on: Palette.mix(0x29232A, mainHex, 0.07), minimum: 4.8), 1)
-    }
+    static var main: Color { custom.map { Color(hex: $0.main) } ?? accent.main }
     static var mainHex: UInt32 { custom?.main ?? accent.mainHex }
     static var lightHex: UInt32 { custom?.light ?? accent.lightHex }
     static var light: Color { custom.map { Color(hex: $0.light) } ?? accent.light }
     static var pink: Color { main }
     static var rose: Color { main }
-    static var soft: Color {
-        Palette.swatch(Palette.mix(0xFFFFFF, mainHex, 0.09), 1, Palette.mix(0x1D191C, mainHex, 0.18), 1)
-    }
+    static var soft: Color { main.opacity(0.12) }
     // The accent as a candy fill (a touch lighter at the top), used for
     // buttons, badges and highlights everywhere.
     static var gradient: LinearGradient { candy }
@@ -407,14 +353,10 @@ enum Theme {
     // the accent, then its purple partner bottom-right. In dark mode it's
     // a touch deeper, so it doesn't glow.
     static var candy: LinearGradient {
-        // Keep the gradient within one hue family and white labels readable
-        // at both ends, including admin-selected yellow or very pale accents.
-        LinearGradient(colors: buttonStops.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing)
-    }
-    static var solid: Color { Color(hex: buttonStops[1]) }
-    static var buttonStops: [UInt32] {
-        [Palette.readable(Palette.mix(mainHex, 0xFFFFFF, 0.06), on: 0xFFFFFF),
-         Palette.readable(Palette.mix(mainHex, partnerHex, 0.30), on: 0xFFFFFF)]
+        let top = Palette.swatch(Palette.mix(Palette.turn(mainHex, 12), 0xFFFFFF, 0.2), 1, Palette.mix(mainHex, 0xFFFFFF, 0.06), 1)
+        let middle = Palette.swatch(mainHex, 1, Palette.mix(mainHex, 0x000000, 0.06), 1)
+        let bottom = Palette.swatch(partnerHex, 1, Palette.mix(partnerHex, 0x000000, 0.14), 1)
+        return LinearGradient(colors: [top, middle, bottom], startPoint: .topLeading, endPoint: .bottomTrailing)
     }
     // The soft rosy glow under candy buttons and chips. On dark pages it's a
     // plain shadow instead (a pink glow there looks like neon).
@@ -563,7 +505,8 @@ struct SugarCard: ViewModifier {
             .padding(padding)
             .background {
                 shape.fill(Palette.surface)
-                    .softShadow(Palette.shadow, radius: 10, y: 3)
+                    .softShadow(Palette.shadow, radius: 1, y: 1)
+                    .softShadow(Palette.shadow, radius: 14, y: 6)
             }
             .overlay(shape.strokeBorder(Palette.border.opacity(0.8), lineWidth: 1))
     }
@@ -616,8 +559,9 @@ struct GradientButtonStyle: ButtonStyle {
     }
 }
 
-// Primary actions carry the accent; secondary actions stay on a neutral
-// surface. Labels remain readable for every custom accent and disabled state.
+// The main button: a candy-rose pill — the accent with a soft highlight on
+// top, white text and a little rosy shadow. It squishes when pressed and
+// springs back.
 private struct GradientButtonBody: View {
     let configuration: ButtonStyleConfiguration
     let height: CGFloat
@@ -629,18 +573,19 @@ private struct GradientButtonBody: View {
         let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
         configuration.label
             .font(.jakarta(15, .semibold))
-            .foregroundStyle(enabled ? Color.white : Palette.muted)
+            .foregroundStyle(.white)
             // Stays on one line (shrinking a little if it must).
             .lineLimit(1)
             .minimumScaleFactor(0.75)
             .padding(.horizontal, 18)
-            .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: max(44, height))
+            .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: min(height, 50))
             .background {
-                shape.fill(enabled ? AnyShapeStyle(Theme.candy) : AnyShapeStyle(Palette.surface2))
+                shape.fill(Theme.candy)
+                    .overlay { if enabled { ShineSweep(every: 4.2).clipShape(shape) } }
                     .overlay(shape.strokeBorder(Palette.rim(0.22), lineWidth: 1))
-                    .shadow(color: Theme.glow(enabled ? (pressed ? 0.08 : 0.16) : 0), radius: pressed ? 2 : 6, y: pressed ? 1 : 3)
+                    .shadow(color: Theme.glow(enabled ? (pressed ? 0.12 : 0.28) : 0), radius: pressed ? 4 : 10, y: pressed ? 2 : 5)
             }
-            .opacity(pressed && enabled ? 0.92 : 1)
+            .opacity(enabled ? (pressed ? 0.92 : 1) : 0.45)
             .scaleEffect(pressed && !Motion.reduced ? 0.965 : 1)
             .animation(pressed ? Motion.press : Motion.release, value: pressed)
     }
@@ -651,27 +596,21 @@ struct OutlineButtonStyle: ButtonStyle {
     var height: CGFloat = 44
     var fullWidth = false
     func makeBody(configuration: Configuration) -> some View {
-        OutlineButtonBody(configuration: configuration, height: height, fullWidth: fullWidth)
-    }
-}
-
-private struct OutlineButtonBody: View {
-    let configuration: ButtonStyleConfiguration
-    let height: CGFloat
-    let fullWidth: Bool
-    @Environment(\.isEnabled) private var enabled
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
         configuration.label
             .font(.jakarta(14, .semibold))
-            .foregroundStyle(enabled ? Theme.main : Palette.muted)
-            .lineLimit(1).minimumScaleFactor(0.8)
+            .foregroundStyle(Theme.main)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
             .padding(.horizontal, 16)
-            .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: max(44, height))
-            .background(enabled ? Palette.surface : Palette.surface2, in: shape)
-            .overlay(shape.strokeBorder(enabled ? Theme.main.opacity(0.28) : Palette.border, lineWidth: 1))
-            .opacity(configuration.isPressed && enabled ? 0.85 : 1)
+            .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: min(height, 46))
+            // White with a soft shadow and a hint of your colour on the
+            // edge, so it stands out on tinted pages too.
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Palette.surface)
+                    .shadow(color: Palette.shadow, radius: 6, y: 2)
+            }
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.main.opacity(0.2), lineWidth: 1))
+            .opacity(configuration.isPressed ? 0.8 : 1)
             .scaleEffect(configuration.isPressed && !Motion.reduced ? 0.97 : 1)
             .animation(configuration.isPressed ? Motion.press : Motion.release, value: configuration.isPressed)
     }
@@ -692,7 +631,7 @@ struct Chip: View {
                     .lineLimit(1).minimumScaleFactor(0.8)
             }
             .padding(.horizontal, 14)
-            .frame(minHeight: 44)
+            .frame(minHeight: 36)
             .foregroundStyle(active ? Color.white : Palette.text2)
             .background {
                 if active {
@@ -704,10 +643,10 @@ struct Chip: View {
                         .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
                 }
             }
+            .scaleEffect(active ? 1 : 0.97)
             .contentShape(Capsule())
         }
         .buttonStyle(BouncyStyle(scale: 0.92))
-        .accessibilityAddTraits(active ? .isSelected : [])
         .sensoryFeedback(.selection, trigger: active)
         .motion(Motion.playful, value: active)
     }
@@ -751,7 +690,7 @@ struct SectionHeader: View {
                     .font(.jakarta(14, .medium))
                     .foregroundStyle(Theme.main)
                     .lineLimit(1)
-                    .padding(.horizontal, 12).frame(minHeight: 44)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(Theme.soft, in: Capsule())
                     .contentShape(Capsule())
                 }

@@ -457,7 +457,7 @@ struct ChatListView: View {
                 }
                 Spacer(minLength: 0)
                 Text("\(list.count)").font(.jakarta(12, .semibold)).foregroundStyle(.white)
-                    .frame(minWidth: 22, minHeight: 22).background(Theme.solid, in: Capsule())
+                    .frame(minWidth: 22, minHeight: 22).background(Theme.main, in: Capsule())
             }
         }
         .tint(Palette.muted)

@@ -263,7 +263,7 @@ struct HomeView: View {
             LazyVStack(alignment: .leading, spacing: 28) {
                 PageTitle(title: "Home", subtitle: Date().formatted(.dateTime.weekday(.wide).day().month(.wide)), icon: "house.fill", candy: .peach,
                           search: $searchText, prompt: "Search people, posts and tags") { searching = true }
-                    .padding(.bottom, -8)
+                    .padding(.bottom, -14)
                 announcementBanner
                 hero.homeSection(appeared, 0)
                 HomeComposerBar(compose: compose).homeSection(appeared, 1)
@@ -411,6 +411,12 @@ struct HomeView: View {
                 XPBar(info: info)
             }
             .pastelCard(radius: 24, padding: 16)
+            .overlay {
+                // A shine sweeping by (no sparkles: the bunny's tile is the
+                // card's sparkle).
+                ShineSweep(every: 5.5, strength: 0.32)
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            }
             DailyRewardButton()
         }
     }

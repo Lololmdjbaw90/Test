@@ -129,7 +129,7 @@ struct HomeComposerBar: View {
                     Text("What are you making today?")
                         .font(.jakarta(15, .medium)).foregroundStyle(Palette.muted)
                         .lineLimit(1).minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
                         .padding(.horizontal, 14)
                         .background(Palette.surface2, in: Capsule())
                 }
@@ -139,8 +139,6 @@ struct HomeComposerBar: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(BouncyStyle(scale: 0.98))
-            .accessibilityLabel("Start a post")
-            .accessibilityIdentifier("home-compose-post")
             HStack(spacing: 0) {
                 action("Post", "text.bubble.fill", .berry) { compose(.post) }
                 action("Reel", "play.rectangle.fill", .peach) { compose(.reel) }
@@ -160,7 +158,7 @@ struct HomeComposerBar: View {
                 Text(title).font(.jakarta(12.5, .semibold)).foregroundStyle(Palette.text2)
                     .lineLimit(1).minimumScaleFactor(0.7)
             }
-            .frame(maxWidth: .infinity, minHeight: 44)
+            .frame(maxWidth: .infinity, minHeight: 40)
             .contentShape(Rectangle())
         }
         .buttonStyle(BouncyStyle(scale: 0.92))
@@ -321,7 +319,7 @@ struct HappeningNow: View {
                 .overlay(alignment: .bottomTrailing) {
                     Image(systemName: item.icon).font(.system(size: 8, weight: .bold)).foregroundStyle(.white)
                         .frame(width: 18, height: 18)
-                        .background(Theme.solid, in: Circle())
+                        .background(Theme.main, in: Circle())
                         .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
                         .offset(x: 4, y: 4)
                 }
@@ -560,7 +558,7 @@ struct WeeklyChallengeCard: View {
                 } label: {
                     Label("Join", systemImage: "plus").font(.jakarta(14, .semibold)).foregroundStyle(.white)
                         .frame(maxWidth: .infinity).frame(height: 40)
-                        .background(Theme.solid, in: Capsule())
+                        .background(Theme.main, in: Capsule())
                 }
                 Button { showEntries(c.tag) } label: {
                     Label(active ? "Showing entries" : "See entries", systemImage: active ? "checkmark" : "square.grid.2x2")

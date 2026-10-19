@@ -7,14 +7,13 @@ final class HomeInteractionTests: XCTestCase {
         app.launchArguments = ["--polish-ui-test"]
         app.launch()
         app.buttons["Home"].tap()
-        let composer = app.buttons["home-compose-post"]
+        let composer = app.staticTexts["What are you making today?"]
         XCTAssertTrue(composer.waitForExistence(timeout: 5))
-        let feed = app.scrollViews["home-feed"]
-        for _ in 0..<3 where !composer.isHittable { feed.swipeUp() }
-        XCTAssertTrue(composer.isHittable, "The post composer must remain reachable")
+        XCTAssertTrue(composer.isHittable, "Creating a post should be reachable without scrolling")
         let coins = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "coins")).firstMatch
-        XCTAssertTrue(coins.exists, "Your coins show in the Home header")
+        XCTAssertTrue(coins.waitForExistence(timeout: 3), "Your coins show at the top of Home")
         XCTAssertTrue(composer.isHittable)
+        let feed = app.scrollViews["home-feed"]
         XCTAssertTrue(feed.exists)
         // Home is a long page: scroll until the last section shows, then
         // all the way back up.
