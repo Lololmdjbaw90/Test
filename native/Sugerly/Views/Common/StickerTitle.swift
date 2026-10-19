@@ -6,7 +6,7 @@ import CoreText
 // the outline and dots do not add live masks or shadows while scrolling.
 struct StickerTitle: View {
     let text: String
-    @ScaledMetric(relativeTo: .largeTitle) private var size: CGFloat
+    @ScaledMetric private var size: CGFloat
 
     init(text: String, size: CGFloat = 34) {
         self.text = text
