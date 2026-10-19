@@ -469,7 +469,7 @@ struct ChatView: View {
 
     private func poll() async {
         while !Task.isCancelled {
-            if chats.wasRemoved(conversation.id) { messages = []; dismiss(); return }
+            if chats.wasRemoved(conversation.id) { messages = []; dismissChat(); return }
             await load()
             let slow = FS.missingIndex.contains("DirectMessage")
             try? await Task.sleep(for: .seconds(slow ? 4 : 2))

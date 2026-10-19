@@ -86,10 +86,11 @@ final class BunnyCatalog {
     }
 
     // The team adds a picture for everyone.
-    func add(name: String, slot: BunnySlot, png: Data, by email: String) async throws {
+    func add(name: String, slot: BunnySlot, png: Data, by email: String, price: Int = 0) async throws {
+        guard (0...1000000).contains(price) else { throw APIError(message: "Enter a price from 0 to 1,000,000 coins.") }
         let url = try await StorageClient.upload(png, contentType: "image/png", fileExtension: "png")
         let doc = try await FS.create("BunnyItem", [
-            "name": name, "slot": slot.rawValue, "image_url": url,
+            "name": String(name.prefix(60)), "slot": slot.rawValue, "image_url": url, "price_coins": price,
             "created_by": email, "created_date": FS.nowISO(),
         ])
         if let item = BunnyItem(doc: doc) { uploaded.append(item) } else { await load(force: true) }
@@ -232,6 +233,7 @@ struct BunnyItemUploader: View {
     @State private var png: Data?
     @State private var preview: UIImage?
     @State private var name = ""
+    @State private var price = "0"
     @State private var chosenSlot: BunnySlot = .top
     @State private var problem: String?
     @State private var busy = false
@@ -264,6 +266,11 @@ struct BunnyItemUploader: View {
                             Text("Head or face").tag(BunnySlot.head)
                         }
                         .pickerStyle(.segmented)
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Price in coins · 0 is free").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+                        TextField("0", text: $price).keyboardType(.numberPad)
+                            .padding(14).background(Palette.surface, in: RoundedRectangle(cornerRadius: 14))
                     }
                     Button { Task { await upload() } } label: {
                         HStack(spacing: 8) {
@@ -333,10 +340,13 @@ struct BunnyItemUploader: View {
 
     private func upload() async {
         guard let png, let me = model.me else { return }
+        guard let amount = Int(price), (0...1000000).contains(amount) else {
+            problem = "Enter a price from 0 to 1,000,000 coins."; return
+        }
         busy = true
         defer { busy = false }
         do {
-            try await BunnyCatalog.shared.add(name: name.trimmingCharacters(in: .whitespaces), slot: chosenSlot, png: png, by: me.email)
+            try await BunnyCatalog.shared.add(name: name.trimmingCharacters(in: .whitespaces), slot: chosenSlot, png: png, by: me.email, price: amount)
             model.showToast("Added for everyone", icon: "hare.fill")
             dismiss()
         } catch {

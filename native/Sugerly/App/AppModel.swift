@@ -586,5 +586,11 @@ extension View {
             guard !gone.isEmpty, list.wrappedValue.contains(where: { gone.contains($0.id) }) else { return }
             withMotion(Motion.standard) { list.wrappedValue.removeAll { gone.contains($0.id) } }
         }
+        .onChange(of: list.wrappedValue.map(\.id)) { _, _ in
+            let gone = Removed.shared.ids
+            if list.wrappedValue.contains(where: { gone.contains($0.id) }) {
+                list.wrappedValue.removeAll { gone.contains($0.id) }
+            }
+        }
     }
 }

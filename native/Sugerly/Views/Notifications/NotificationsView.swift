@@ -833,10 +833,10 @@ struct AdminView: View {
             try await FS.delete(item.collection, item.id)
             Removed.shared.add(item.id)
             posts.posts.removeAll { $0.id == item.id }
-            _ = try? await FS.create("Log", ["action": "moderation_delete", "details": "Deleted \(item.label.lowercased()) \(item.id)", "user_email": model.me?.email ?? ""])
             withMotion(Motion.standard) { data.items.removeAll { $0.id == item.id && $0.collection == item.collection } }
             if item.collection == "Community" { data.servers.removeAll { $0.id == item.id } }
             model.showToast("\(item.label) deleted", icon: "trash.fill")
+            Task { _ = try? await FS.create("Log", ["action": "moderation_delete", "details": "Deleted \(item.label.lowercased()) \(item.id)", "user_email": model.me?.email ?? ""]) }
         } catch {
             model.showToast("Couldn't delete — \(error.localizedDescription)", error: true)
         }

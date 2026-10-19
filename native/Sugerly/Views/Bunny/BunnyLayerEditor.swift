@@ -12,7 +12,7 @@ struct BunnyLayerEditor: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 12) {
-                BunnyPortrait(look: look).frame(height: 240)
+                BunnyPortrait(look: look, animated: false).frame(height: 240)
                     .clipShape(RoundedRectangle(cornerRadius: 24)).padding(.horizontal)
                 ScrollView {
                     VStack(spacing: 16) {

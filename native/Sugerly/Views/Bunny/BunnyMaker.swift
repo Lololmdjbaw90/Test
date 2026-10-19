@@ -90,8 +90,13 @@ struct BunnyMakerView: View {
             look = store.look
             loaded = true
         }
-        .onChange(of: look) { _, next in if loaded { store.save(next) } }
-        .sensoryFeedback(.selection, trigger: look)
+        .task(id: look) {
+            guard loaded else { return }
+            try? await Task.sleep(for: .milliseconds(250))
+            if !Task.isCancelled { store.save(look) }
+        }
+        .onDisappear { if loaded { store.save(look) } }
+        .sensoryFeedback(.selection, trigger: tab)
         .sensoryFeedback(.success, trigger: cheer)
         .task {
             await catalog.load()
@@ -257,7 +262,7 @@ struct BunnyMakerView: View {
         return VStack(alignment: .leading, spacing: 14) {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
                 ForEach(Array(BunnyTop.allCases.enumerated()), id: \.element.id) { i, top in
-                    clothes(top.label, pieces: top.piece.map { [$0] } ?? [], on: look.layers(.top).contains { $0.id == "classic:" + top.rawValue }, index: i) {
+                    clothes(top.label, pieces: top.piece.map { [$0] } ?? [], on: top == .none ? look.layers(.top).isEmpty : look.layers(.top).contains { $0.id == "classic:" + top.rawValue }, index: i) {
                         if top == .none { look.setLayers([], .top) }
                         else { toggle("classic:" + top.rawValue, slot: .top) }
                     }
@@ -294,7 +299,8 @@ struct BunnyMakerView: View {
             arrangeButton(.head)
             if !look.layers(.head).isEmpty {
                 ListHeader(title: "COLOUR").padding(.leading, 6)
-                swatches(bow ? .bow : .accessory)
+                swatches(.accessory)
+                if bow { ListHeader(title: "BOW COLOUR"); swatches(.bow) }
             }
         }
     }
@@ -486,7 +492,8 @@ struct BunnyMakerView: View {
         Binding(get: { Color(hex: look.tint(part).swatch) }, set: { color in
             var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
             UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
-            look.customColors[part.rawValue] = (UInt32(r * 255) << 16) | (UInt32(g * 255) << 8) | UInt32(b * 255)
+            func byte(_ value: CGFloat) -> UInt32 { UInt32(max(0, min(255, value * 255))) }
+            look.customColors[part.rawValue] = (byte(r) << 16) | (byte(g) << 8) | byte(b)
         })
     }
 
