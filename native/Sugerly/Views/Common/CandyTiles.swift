@@ -189,9 +189,9 @@ struct PageTitle: View {
                 .foregroundStyle(.white)
                 .symbolEffect(.bounce, value: shown)
                 .frame(width: 44, height: 44)
-                .background(candy.gradient, in: sticker)
+                .background(Theme.gradient, in: sticker)
                 .overlay(sticker.strokeBorder(.white.opacity(0.4), lineWidth: 1.5))
-                .shadow(color: candy.color.softGlow(0.35), radius: 6, y: 3)
+                .shadow(color: Theme.glow(0.35), radius: 6, y: 3)
                 .rotationEffect(.degrees(shown ? -7 : 0))
             VStack(alignment: .leading, spacing: 5) {
                 StickerTitle(text: title)

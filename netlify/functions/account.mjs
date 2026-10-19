@@ -243,7 +243,7 @@ async function adminDelete(event, input) {
       if (rows.length < 300) return;
     }
   };
-  for (const collection of ["CommunityPost", "MusicReview", "Reel", "CommunityComment", "Comment", "ChannelMessage", "ServerMember", "DirectMessage"]) {
+  for (const collection of ["CommunityPost", "MusicReview", "Reel", "CommunityComment", "Comment", "ChannelMessage", "ServerMember"]) {
     await wipe(collection, "user_email", email);
   }
   await wipe("Artwork", "created_by", email);

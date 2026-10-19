@@ -512,6 +512,7 @@ struct AdminView: View {
         }
     }
 
+    @Environment(PostsStore.self) private var posts
     @Environment(AppModel.self) private var model
     @State private var tab: Tab = .overview
     @State private var data = AdminData()
@@ -583,7 +584,7 @@ struct AdminView: View {
         }
         .sugarBackground()
         .navigationBarTitleDisplayMode(.inline)
-        .refreshable { await data.load(); await loadReports() }
+        .refreshable { await data.load(); await loadReports(); await model.refreshAdminPeople() }
         .task {
             if model.me?.isAdmin != true { tab = .reports }
             async let everything: Void = data.load()
@@ -597,7 +598,7 @@ struct AdminView: View {
             defaultAccent = SiteTheme.shared.defaultAccent
             giphyKey = SiteTheme.shared.giphyKey
             commissionFee = String(Int(SiteTheme.shared.commissionFee))
-            if model.people.isEmpty { await model.loadPeople() }
+            await model.refreshAdminPeople()
             await everything
         }
         .confirmationDialog("Delete this \(confirmDelete?.label.lowercased() ?? "item")?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }), titleVisibility: .visible) {
@@ -699,11 +700,18 @@ struct AdminView: View {
 
     private var users: some View {
         let list = model.people.values
+            .filter { !Removed.shared.ids.contains($0.id) }
             .filter { search.isEmpty || $0.displayName.localizedCaseInsensitiveContains(search) || $0.email.localizedCaseInsensitiveContains(search) }
             .sorted { $0.siteRole.rank != $1.siteRole.rank ? $0.siteRole.rank > $1.siteRole.rank : $0.displayName.lowercased() < $1.displayName.lowercased() }
         let team = model.people.values.filter { $0.siteRole.rank > 0 }.count
         return VStack(alignment: .leading, spacing: 10) {
             SearchField(text: $search, placeholder: "Search users…")
+                .task {
+                    while !Task.isCancelled {
+                        await model.refreshAdminPeople()
+                        try? await Task.sleep(for: .seconds(15))
+                    }
+                }
                 .task(id: search) {
                     guard !search.isEmpty else { return }
                     try? await Task.sleep(for: .milliseconds(300))
@@ -823,6 +831,8 @@ struct AdminView: View {
     private func remove(_ item: AdminItem) async {
         do {
             try await FS.delete(item.collection, item.id)
+            Removed.shared.add(item.id)
+            posts.posts.removeAll { $0.id == item.id }
             _ = try? await FS.create("Log", ["action": "moderation_delete", "details": "Deleted \(item.label.lowercased()) \(item.id)", "user_email": model.me?.email ?? ""])
             withMotion(Motion.standard) { data.items.removeAll { $0.id == item.id && $0.collection == item.collection } }
             if item.collection == "Community" { data.servers.removeAll { $0.id == item.id } }

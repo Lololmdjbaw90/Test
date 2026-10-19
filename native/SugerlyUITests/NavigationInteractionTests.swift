@@ -30,11 +30,11 @@ final class NavigationInteractionTests: XCTestCase {
             message.typeText("Local draft")
             backButtons.firstMatch.tap()
             XCTAssertTrue(open.waitForExistence(timeout: 3))
-            XCTAssertTrue(app.buttons["Home"].isHittable, "Returning must bring the tab bar back")
+            XCTAssertTrue(tabButton("Home").waitForExistence(timeout: 3), "Returning must bring the tab bar back")
         }
-        app.buttons["Home"].tap()
+        tapTab("Home")
         XCTAssertTrue(app.staticTexts["Home page"].waitForExistence(timeout: 3))
-        app.buttons["Chat"].tap()
+        tapTab("Chat")
         XCTAssertTrue(open.isHittable)
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = "phone-tab-bar-after-chat"
@@ -44,7 +44,8 @@ final class NavigationInteractionTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Create something"].waitForExistence(timeout: 3))
     }
 
-    func testChatEdgeSwipeKeepsNavigationPathInSync() {
+    func testChatEdgeSwipeKeepsNavigationPathInSync() throws {
+        try XCTSkipIf(app.frame.width > 600, "This test covers the iPhone edge gesture; iPad navigation is tested with its Back button.")
         let open = app.buttons["Open test chat"]
         XCTAssertTrue(open.waitForExistence(timeout: 5))
         open.tap()
@@ -53,14 +54,14 @@ final class NavigationInteractionTests: XCTestCase {
         let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.4))
         start.press(forDuration: 0.1, thenDragTo: end)
         XCTAssertTrue(open.waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["Chat"].isHittable)
+        XCTAssertTrue(tabButton("Chat").waitForExistence(timeout: 3))
         open.tap()
         XCTAssertTrue(messageInput.waitForExistence(timeout: 3))
         XCTAssertEqual(backButtons.count, 1)
     }
 
     func testSettingsAndItsNestedPageCloseWhenLeavingTheirTab() {
-        app.buttons["Community"].tap()
+        tapTab("Community")
         app.buttons["Open saved profile"].tap()
         XCTAssertTrue(app.staticTexts["Saved profile page"].waitForExistence(timeout: 3))
         app.buttons["Open settings"].tap()
@@ -76,9 +77,9 @@ final class NavigationInteractionTests: XCTestCase {
         XCTAssertTrue(hiddenWords.isHittable)
         hiddenWords.tap()
         XCTAssertTrue(app.textFields["Add a word or phrase"].waitForExistence(timeout: 3))
-        app.buttons["Home"].tap()
+        tapTab("Home")
         XCTAssertTrue(app.staticTexts["Home page"].waitForExistence(timeout: 3))
-        app.buttons["Community"].tap()
+        tapTab("Community")
         XCTAssertTrue(app.staticTexts["Saved profile page"].waitForExistence(timeout: 3),
                       "Leaving Settings must return to the page before it, including its nested pages")
         XCTAssertFalse(app.textFields["Add a word or phrase"].exists)
@@ -86,22 +87,22 @@ final class NavigationInteractionTests: XCTestCase {
         // A fresh visit starts at Settings, rather than reopening its child.
         app.buttons["Open settings"].tap()
         XCTAssertTrue(app.buttons["Edit profile"].waitForExistence(timeout: 3))
-        app.buttons["Home"].tap()
-        app.buttons["Community"].tap()
+        tapTab("Home")
+        tapTab("Community")
         XCTAssertTrue(app.staticTexts["Saved profile page"].waitForExistence(timeout: 3))
     }
 
     func testNotificationsCloseOnTabTapAndProgrammaticSwitchWithoutLosingOtherPages() {
-        app.buttons["Home"].tap()
+        tapTab("Home")
         app.buttons["Open saved profile"].tap()
         XCTAssertTrue(app.staticTexts["Saved profile page"].waitForExistence(timeout: 3))
-        app.buttons["Fan Art"].tap()
+        tapTab("Fan Art")
         app.buttons["Notifications"].tap()
         XCTAssertTrue(app.staticTexts["Your updates"].waitForExistence(timeout: 3))
-        app.buttons["Home"].tap()
+        tapTab("Home")
         XCTAssertTrue(app.staticTexts["Saved profile page"].waitForExistence(timeout: 3),
                       "An unrelated tab's ordinary navigation must stay intact")
-        app.buttons["Fan Art"].tap()
+        tapTab("Fan Art")
         XCTAssertTrue(app.staticTexts["Fan Art page"].waitForExistence(timeout: 3))
 
         app.buttons["Notifications"].tap()
@@ -111,9 +112,20 @@ final class NavigationInteractionTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Notification profile page"].waitForExistence(timeout: 3))
         app.buttons["Switch to Home"].tap()
         XCTAssertTrue(app.staticTexts["Saved profile page"].waitForExistence(timeout: 3))
-        app.buttons["Fan Art"].tap()
+        tapTab("Fan Art")
         XCTAssertTrue(app.staticTexts["Fan Art page"].waitForExistence(timeout: 3),
                       "A programmatic switch must also remove Notifications and the page opened from it")
+    }
+
+    private func tabButton(_ label: String) -> XCUIElement {
+        let matches = app.buttons.matching(NSPredicate(format: "label == %@", label)).allElementsBoundByIndex
+        return matches.first(where: { $0.isHittable }) ?? app.buttons[label].firstMatch
+    }
+
+    private func tapTab(_ label: String) {
+        let button = tabButton(label)
+        XCTAssertTrue(button.waitForExistence(timeout: 3))
+        button.tap()
     }
 
     private func dismissNotificationPermissionIfNeeded() {

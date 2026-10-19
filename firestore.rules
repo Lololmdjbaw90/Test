@@ -459,6 +459,15 @@ service cloud.firestore {
 
     // Clothes and accessories for the bunny, added by the team; everyone
     // signed in sees them.
+    match /BunnyPurchase/{id} {
+      allow read: if signedIn() && resource.data.user_email == ownEmail();
+      allow write: if false;
+    }
+    match /ChatRemoval/{id} {
+      allow read: if signedIn() && resource.data.to_email == ownEmail();
+      allow write: if false;
+    }
+
     match /BunnyItem/{id} {
       allow read: if signedIn();
       allow create, update, delete: if isAdmin();

@@ -154,6 +154,19 @@ final class AppModel {
         people = map
     }
 
+    func refreshAdminPeople() async {
+        guard me?.isAdmin == true else { return }
+        let known = Array(people.values.filter { $0.email != me?.email }.prefix(300))
+        do {
+            let fresh = try await FS.getMany("User", known.map(\.id))
+            for user in known where fresh[user.id] == nil {
+                people.removeValue(forKey: user.email)
+                Removed.shared.add(user.id)
+            }
+            await loadPeople()
+        } catch { /* Keep the last successful list when offline. */ }
+    }
+
     func person(_ email: String) -> UserProfile? {
         let key = email.lowercased()
         // You always see your own newest name and picture, straight away.
@@ -525,7 +538,7 @@ final class AppModel {
         await wipe("Artwork", await rows("Artwork", [.equals("created_by", email)]))
         await wipe("Commission", await rows("Commission", [.equals("artist_email", email)]))
         await wipe("CommunityComment", await rows("CommunityComment", [.equals("post_id", "profile_\(email)")]))
-        await wipe("DirectMessage", await rows("DirectMessage", [.contains("member_emails", email)]).filter { $0.str("user_email") == email })
+        // Auth deletion triggers server-side DM cleanup and notices for the other members.
         await wipe("Friendship", await rows("Friendship", [.equals("requester_email", email)]))
         await wipe("Friendship", await rows("Friendship", [.equals("receiver_email", email)]))
         await wipe("Notification", await rows("Notification", [.equals("to_email", email)]))

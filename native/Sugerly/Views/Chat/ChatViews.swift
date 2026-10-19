@@ -15,7 +15,7 @@ final class ChatStore {
     private var loaded = false
     private var processed = Set<String>() // message ids already counted
 
-    var unread: Int { conversations.reduce(0) { $0 + $1.unread } }
+    var unread: Int { conversations.filter { !isClosed($0) }.reduce(0) { $0 + $1.unread } }
     // Conversations where someone else has written / where you have written
     // (for message requests).
     private(set) var heard = Set<String>()
@@ -26,6 +26,11 @@ final class ChatStore {
     // Closed DMs hide from the list until a new message comes in (like Discord).
     private(set) var closed: [String: String] = (UserDefaults.standard.dictionary(forKey: "sugerly.closedDMs") as? [String: String]) ?? [:]
 
+    private var closedKey: String { "sugerly.closedDMs." + Drafts.owner }
+    private var removedChats = Set<String>()
+    private var cleanupChecked = Date.distantPast
+    private var cleanupCursor = ""
+
     func isClosed(_ c: Conversation) -> Bool {
         guard let at = closed[c.id] else { return false }
         return (c.last?.created ?? "") <= at
@@ -34,13 +39,13 @@ final class ChatStore {
     func close(_ id: String) {
         closed[id] = FS.nowISO()
         markRead(id)
-        UserDefaults.standard.set(closed, forKey: "sugerly.closedDMs")
+        UserDefaults.standard.set(closed, forKey: closedKey)
     }
 
     func reopen(_ id: String) {
         guard closed[id] != nil else { return }
         closed[id] = nil
-        UserDefaults.standard.set(closed, forKey: "sugerly.closedDMs")
+        UserDefaults.standard.set(closed, forKey: closedKey)
     }
 
     // Older chats (beyond the newest messages) load as you scroll the list.
@@ -52,6 +57,7 @@ final class ChatStore {
     func refresh(me: String) async {
         guard !me.isEmpty else { return }
         restore()
+        await removeDeletedAccountChats(me: me)
         if !loaded && conversations.isEmpty { loading = true }
         defer { loading = false }
         do {
@@ -72,6 +78,31 @@ final class ChatStore {
         }
     }
 
+    private func removeDeletedAccountChats(me: String) async {
+        guard Date().timeIntervalSince(cleanupChecked) > 15 else { return }
+        do {
+            var filters: [FS.Filter] = [.equals("to_email", me)]
+            if !cleanupCursor.isEmpty { filters.append(.after("created_date", cleanupCursor)) }
+            let docs = try await FS.query("ChatRemoval", filters, orderBy: "created_date", descending: false, limit: 300)
+            for doc in docs {
+                let id = doc.str("conversation_id")
+                guard !id.isEmpty else { continue }
+                removedChats.insert(id)
+                ChatCache.save(id, [])
+                if doc.str("created_date") > cleanupCursor { cleanupCursor = doc.str("created_date") }
+            }
+            if !docs.isEmpty {
+                conversations.removeAll { removedChats.contains($0.id) }
+                UserDefaults.standard.set(Array(removedChats), forKey: "sugerly.removedChats." + Drafts.owner)
+                UserDefaults.standard.set(cleanupCursor, forKey: "sugerly.chatCleanupCursor." + Drafts.owner)
+                persist()
+            }
+            cleanupChecked = Date()
+        } catch { /* Offline is not evidence that somebody deleted their account. */ }
+    }
+
+    func wasRemoved(_ id: String) -> Bool { removedChats.contains(id) }
+
     func loadOlder(me: String) async {
         guard hasOlder, !loadingOlder, !oldestFetched.isEmpty, !me.isEmpty else { return }
         loadingOlder = true
@@ -89,13 +120,16 @@ final class ChatStore {
     private func restore() {
         guard !restored else { return }
         restored = true
+        closed = (UserDefaults.standard.dictionary(forKey: closedKey) as? [String: String]) ?? [:]
+        removedChats = Set(UserDefaults.standard.stringArray(forKey: "sugerly.removedChats." + Drafts.owner) ?? [])
+        cleanupCursor = UserDefaults.standard.string(forKey: "sugerly.chatCleanupCursor." + Drafts.owner) ?? ""
         guard conversations.isEmpty else { return }
         let saved: [Conversation] = ChatCache.read("list").compactMap { d in
             guard let id = d["id"] as? String else { return nil }
             let last = (d["last"] as? [String: Any]).map(Message.init)
             return Conversation(id: id, members: d.strs("members"), isGroup: d.bool("group"), groupName: d.str("name"), last: last, unread: 0)
         }
-        conversations = saved.sorted { ($0.last?.created ?? "") > ($1.last?.created ?? "") }
+        conversations = saved.filter { !removedChats.contains($0.id) }.sorted { ($0.last?.created ?? "") > ($1.last?.created ?? "") }
     }
 
     private func persist() {
@@ -111,7 +145,7 @@ final class ChatStore {
         ChatStreaks.shared.note(messages, me: me)
         var byId = Dictionary(uniqueKeysWithValues: conversations.map { ($0.id, $0) })
         // Oldest first, so the newest message ends up as "last".
-        for m in messages.sorted(by: { $0.created < $1.created }) where !processed.contains(m.id) {
+        for m in messages.sorted(by: { $0.created < $1.created }) where !processed.contains(m.id) && !removedChats.contains(m.conversationId) {
             processed.insert(m.id)
             var c = byId[m.conversationId] ?? Conversation(id: m.conversationId, members: m.members, isGroup: m.isGroup, groupName: m.groupName, last: nil, unread: 0)
             if (c.last?.created ?? "") <= m.created { c.last = m }
@@ -122,6 +156,15 @@ final class ChatStore {
             if m.created > newest { newest = m.created }
         }
         conversations = byId.values.sorted { ($0.last?.created ?? "") > ($1.last?.created ?? "") }
+    }
+
+    func removedMessage(_ id: String, in conversationID: String, remaining: [Message]) {
+        processed.remove(id)
+        if let i = conversations.firstIndex(where: { $0.id == conversationID }), conversations[i].last?.id == id {
+            conversations[i].last = remaining.last
+            if remaining.isEmpty { close(conversationID) }
+        }
+        persist()
     }
 
     func markRead(_ id: String) {
@@ -174,7 +217,7 @@ struct ChatListView: View {
         let me = model.me?.email ?? ""
         return store.conversations.filter { c in
             (c.isGroup || !c.others(me).contains(where: blocked.contains)) &&
-                (search.isEmpty ? !store.isClosed(c) : c.title(model).localizedCaseInsensitiveContains(search))
+                !store.isClosed(c) && (search.isEmpty || c.title(model).localizedCaseInsensitiveContains(search))
         }
     }
 

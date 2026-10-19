@@ -129,7 +129,6 @@ struct ChatView: View {
             Button("Cancel", role: .cancel) {}
         } message: { _ in Text("This can't be undone.") }
         .onAppear {
-            chats.reopen(conversation.id)
             Alerts.shared.openConversation = conversation.id
         }
         .onDisappear {
@@ -466,8 +465,11 @@ struct ChatView: View {
         Task { try? await FS.update("DirectMessage", message.id, ["reactions": payload, "updated_date": FS.nowISO()]) }
     }
 
+    @State private var lastDeletionCheck = Date.distantPast
+
     private func poll() async {
         while !Task.isCancelled {
+            if chats.wasRemoved(conversation.id) { messages = []; dismiss(); return }
             await load()
             let slow = FS.missingIndex.contains("DirectMessage")
             try? await Task.sleep(for: .seconds(slow ? 4 : 2))
@@ -494,6 +496,16 @@ struct ChatView: View {
         guard let docs = try? await FS.query("DirectMessage", filters, orderBy: "created_date", limit: page) else {
             loaded = true
             return
+        }
+        if Date().timeIntervalSince(lastDeletionCheck) > 30 {
+            let checked = Array(messages.filter { !$0.pending }.suffix(50))
+            if let current = try? await FS.getMany("DirectMessage", checked.map(\.id)) {
+                let gone = Set(checked.filter { current[$0.id] == nil }.map(\.id))
+                messages.removeAll { gone.contains($0.id) }
+                for id in gone { chats.removedMessage(id, in: conversation.id, remaining: messages) }
+                if !gone.isEmpty { ChatCache.save(conversation.id, messages) }
+                lastDeletionCheck = Date()
+            }
         }
         let incoming = docs.map(Message.init)
         let known = Set(messages.map(\.id))
@@ -677,9 +689,16 @@ struct ChatView: View {
     }
 
     private func delete(_ message: Message) {
-        withMotion { messages.removeAll { $0.id == message.id } }
-        ChatCache.save(conversation.id, messages)
-        Task { try? await FS.delete("DirectMessage", message.id) }
+        Task {
+            do {
+                try await FS.delete("DirectMessage", message.id)
+                withMotion { messages.removeAll { $0.id == message.id } }
+                ChatCache.save(conversation.id, messages)
+                chats.removedMessage(message.id, in: conversation.id, remaining: messages)
+            } catch {
+                model.showToast("Couldn't delete the message. Please try again.", error: true)
+            }
+        }
     }
 }
 

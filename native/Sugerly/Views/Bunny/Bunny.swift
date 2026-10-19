@@ -160,6 +160,13 @@ enum BunnyScene: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+struct BunnyClothingLayer: Codable, Equatable, Identifiable {
+    var id: String
+    var x: Double = 0
+    var y: Double = 0
+    var rotation: Double = 0
+}
+
 struct BunnyLook: Codable, Equatable {
     var fur = 0
     var bowOn = true
@@ -175,8 +182,30 @@ struct BunnyLook: Codable, Equatable {
     var head = ""
     // The accessory's colour (picture clothes use the outfit colour).
     var accessory = 0
+    var clothesLayers: [BunnyClothingLayer]? = nil
+    var headLayers: [BunnyClothingLayer]? = nil
+    var customColors: [String: UInt32] = [:]
+
+    func layers(_ slot: BunnySlot) -> [BunnyClothingLayer] {
+        if slot == .top {
+            return clothesLayers ?? (wear.isEmpty ? (top == .none ? [] : [.init(id: "classic:" + top.rawValue)]) : [.init(id: wear)])
+        }
+        return headLayers ?? (head.isEmpty ? (bowOn ? [.init(id: "classic:bow")] : []) : [.init(id: head)])
+    }
+
+    mutating func setLayers(_ layers: [BunnyClothingLayer], _ slot: BunnySlot) {
+        let bounded = Array(layers.prefix(3))
+        if slot == .top { clothesLayers = bounded; wear = ""; top = .none }
+        else { headLayers = bounded; head = ""; bowOn = false }
+    }
+
 
     func tint(_ part: BunnyPart) -> BunnyTint {
+        if let hex = customColors[part.rawValue] {
+            var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            UIColor(Color(hex: hex)).getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+            return BunnyTint(name: "Custom", hue: Double(h) * 360, saturation: Double(s), brightness: Double(b) - 0.85, swatch: hex)
+        }
         let list = part.tints
         return list[max(0, min(list.count - 1, index(part)))]
     }
@@ -192,6 +221,7 @@ struct BunnyLook: Codable, Equatable {
     }
 
     mutating func set(_ part: BunnyPart, _ value: Int) {
+        customColors[part.rawValue] = nil
         switch part {
         case .fur: fur = value
         case .bow: bow = value
@@ -231,6 +261,9 @@ extension BunnyLook {
         wear = (try? c.decodeIfPresent(String.self, forKey: .wear)) ?? wear
         head = (try? c.decodeIfPresent(String.self, forKey: .head)) ?? head
         accessory = (try? c.decodeIfPresent(Int.self, forKey: .accessory)) ?? accessory
+        clothesLayers = (try? c.decodeIfPresent([BunnyClothingLayer].self, forKey: .clothesLayers)).map { Array($0.prefix(3)) }
+        headLayers = (try? c.decodeIfPresent([BunnyClothingLayer].self, forKey: .headLayers)).map { Array($0.prefix(3)) }
+        customColors = (try? c.decodeIfPresent([String: UInt32].self, forKey: .customColors)) ?? [:]
     }
 }
 
@@ -355,29 +388,37 @@ struct BunnyFigure: View, Equatable {
     }
 
     var body: some View {
-        let outfit = look.tint(.outfit)
-        ZStack {
-            BunnyLayer("BunnyFur", look.tint(.fur))
-            BunnyImages.image("BunnyOutline").resizable().interpolation(.high)
-            if let item = BunnyCatalog.shared.item(look.wear) {
-                BunnyItemLayer(item: item, tint: outfit)
-            } else {
-                if let piece = look.top.piece { BunnyLayer(piece, outfit) }
-                if look.top == .sailor { BunnyLayer("BunnyCollar", look.tint(.collar)) }
-            }
-            BunnyImages.image(look.face.image).resizable().interpolation(.high)
-            BunnyImages.image(look.face.eyes).resizable().interpolation(.high)
-            // A hat or accessory takes the bow's place.
-            if let item = BunnyCatalog.shared.item(look.head) {
-                BunnyItemLayer(item: item, tint: look.tint(.accessory))
-            } else if look.bowOn {
-                BunnyLayer("BunnyBow", look.tint(.bow))
+        GeometryReader { geometry in
+            ZStack {
+                BunnyLayer("BunnyFur", look.tint(.fur))
+                BunnyImages.image("BunnyOutline").resizable().interpolation(.high)
+                clothing(.top, size: geometry.size)
+                BunnyImages.image(look.face.image).resizable().interpolation(.high)
+                BunnyImages.image(look.face.eyes).resizable().interpolation(.high)
+                clothing(.head, size: geometry.size)
             }
         }
         .aspectRatio(BunnyArt.aspect, contentMode: .fit)
         .drawingGroup()
         .accessibilityHidden(true)
     }
+    private func clothing(_ slot: BunnySlot, size: CGSize) -> some View {
+        ForEach(look.layers(slot)) { layer in
+            ZStack {
+                if layer.id == "classic:bow" {
+                    BunnyLayer("BunnyBow", look.tint(.bow))
+                } else if layer.id.hasPrefix("classic:"), let top = BunnyTop(rawValue: String(layer.id.dropFirst(8))) {
+                    if let piece = top.piece { BunnyLayer(piece, look.tint(.outfit)) }
+                    if top == .sailor { BunnyLayer("BunnyCollar", look.tint(.collar)) }
+                } else if let item = BunnyCatalog.shared.item(layer.id) {
+                    BunnyItemLayer(item: item, tint: look.tint(slot == .top ? .outfit : .accessory))
+                }
+            }
+            .rotationEffect(.degrees(layer.rotation))
+            .offset(x: layer.x * size.width, y: layer.y * size.height)
+        }
+    }
+
 }
 
 enum BunnyShapes {

@@ -5,6 +5,7 @@ import Foundation
 // server for what's new, and old chats never drop off the list however long
 // the history gets.
 enum ChatCache {
+    private static let writes = DispatchQueue(label: "sugerly.chat-cache", qos: .utility)
     private static var root: URL {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Chats", isDirectory: true)
@@ -28,7 +29,7 @@ enum ChatCache {
         let clean = docs.filter { JSONSerialization.isValidJSONObject($0) }
         guard let data = try? JSONSerialization.data(withJSONObject: clean) else { return }
         let target = file(name)
-        DispatchQueue.global(qos: .utility).async { try? data.write(to: target, options: .atomic) }
+        writes.async { try? data.write(to: target, options: .atomic) }
     }
 
     // Messages of one chat: the newest ones (enough to open instantly).

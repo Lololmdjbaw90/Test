@@ -164,7 +164,7 @@ struct ReelsView: View {
 
     private var shown: [Reel] {
         let blocked = Set(model.me?.blocked ?? [])
-        let list = reels.filter { !blocked.contains($0.authorEmail) }
+        let list = reels.filter { !blocked.contains($0.authorEmail) && !Removed.shared.ids.contains($0.id) }
         if feed == "following" {
             let following = Set(model.me?.following ?? [])
             return list.filter { following.contains($0.authorEmail) }

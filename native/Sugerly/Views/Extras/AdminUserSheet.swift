@@ -181,6 +181,8 @@ struct AdminUserSheet: View {
         do {
             let json = try await AccountServer.call("admin-delete", ["email": u.email], signedIn: true)
             let removed = json["removed"] as? Int ?? 0
+            model.people.removeValue(forKey: u.email)
+            Removed.shared.add(u.id)
             await model.loadPeople()
             model.showToast("\(u.displayName)'s account is deleted\(removed > 0 ? " (\(removed) things removed)" : "")", icon: "trash.fill")
             dismiss()

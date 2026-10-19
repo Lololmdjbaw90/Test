@@ -24,6 +24,7 @@ struct BunnyItem: Identifiable, Equatable {
     var url = ""
     // The hue it was painted in (uploaded ones: worked out from the picture).
     var hue: Double? = nil
+    var price: Int = 0
 
     var uploaded: Bool { asset.isEmpty }
 
@@ -57,7 +58,7 @@ extension BunnyItem {
         let id = doc.str("id")
         let url = doc.str("image_url")
         guard !id.isEmpty, !url.isEmpty, let slot = BunnySlot(rawValue: doc.str("slot")) else { return nil }
-        self.init(id: id, name: doc.str("name").isEmpty ? "Item" : doc.str("name"), slot: slot, url: url)
+        self.init(id: id, name: doc.str("name").isEmpty ? "Item" : doc.str("name"), slot: slot, url: url, price: max(0, doc.int("price_coins")))
     }
 }
 
@@ -92,6 +93,13 @@ final class BunnyCatalog {
             "created_by": email, "created_date": FS.nowISO(),
         ])
         if let item = BunnyItem(doc: doc) { uploaded.append(item) } else { await load(force: true) }
+    }
+
+    func edit(_ item: BunnyItem, name: String, price: Int) async throws {
+        let clean = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60))
+        guard !clean.isEmpty, (0...1000000).contains(price) else { throw APIError(message: "Enter a name and a price from 0 to 1,000,000 coins.") }
+        try await FS.update("BunnyItem", item.id, ["name": clean, "price_coins": price])
+        if let i = uploaded.firstIndex(where: { $0.id == item.id }) { uploaded[i].name = clean; uploaded[i].price = price }
     }
 
     func remove(_ item: BunnyItem) async throws {
@@ -282,6 +290,7 @@ struct BunnyItemUploader: View {
     // Her with the new item on, as she'd wear it.
     private var stage: some View {
         var base = look
+        base.setLayers([], chosenSlot)
         if chosenSlot == .top { base.top = .none; base.wear = "" } else { base.head = ""; base.bowOn = false }
         return ZStack {
             BunnySceneView(scene: look.scene, animated: false)

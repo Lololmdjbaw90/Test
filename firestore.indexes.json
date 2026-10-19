@@ -301,6 +301,20 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "ChatRemoval",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "to_email",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_date",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

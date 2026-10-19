@@ -18,6 +18,12 @@ struct BunnyMakerView: View {
     @State private var shuffles = 0
     // The team adding a new item (clothes or an accessory).
     @State private var adding: BunnySlot?
+    @State private var editing: BunnyItem?
+    @State private var deleting: BunnyItem?
+    @State private var arranging: BunnySlot?
+    @State private var buying: BunnyItem?
+    @State private var owned = Set<String>()
+    @State private var purchasing = false
     @State private var catalog = BunnyCatalog.shared
 
     enum Tab: String, CaseIterable, Identifiable {
@@ -87,7 +93,25 @@ struct BunnyMakerView: View {
         .onChange(of: look) { _, next in if loaded { store.save(next) } }
         .sensoryFeedback(.selection, trigger: look)
         .sensoryFeedback(.success, trigger: cheer)
-        .task { await catalog.load() }
+        .task {
+            await catalog.load()
+            if let email = model.me?.email,
+               let docs = try? await FS.query("BunnyPurchase", [.equals("user_email", email)], limit: 1000) {
+                owned = Set(docs.map { $0.str("item_id") })
+            }
+        }
+        .sheet(item: $arranging) { slot in BunnyLayerEditor(look: $look, slot: slot) }
+        .sheet(item: $editing) { item in BunnyItemEditView(item: item) }
+        .alert("Delete uploaded item?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
+            Button("Cancel", role: .cancel) { deleting = nil }
+            Button("Delete", role: .destructive) { if let item = deleting { Task { await remove(item) } }; deleting = nil }
+        } message: { Text("This removes the item from everyone's catalog and bunny. Purchases already made are not refunded.") }
+        .confirmationDialog("Buy this bunny item?", isPresented: Binding(get: { buying != nil }, set: { if !$0 { buying = nil } }), titleVisibility: .visible) {
+            if let item = buying {
+                Button("Buy \(item.name) for \(item.price) coins") { Task { await purchase(item) } }
+            }
+            Button("Cancel", role: .cancel) { buying = nil }
+        }
         .sheet(item: $adding) { slot in
             BunnyItemUploader(slot: slot, look: look)
                 .presentationCornerRadius(30)
@@ -174,7 +198,7 @@ struct BunnyMakerView: View {
 
     @ViewBuilder
     private var choices: some View {
-        if tab == .collar && (look.top != .sailor || !look.wear.isEmpty) {
+        if tab == .collar && !look.layers(.top).contains(where: { $0.id == "classic:sailor" }) {
             EmptyCard(icon: "tshirt.fill", title: "No collar", text: "The collar comes with the sailor top. Pick it under Outfit.", compact: true)
         } else if let part = tab.part {
             swatches(part)
@@ -233,17 +257,18 @@ struct BunnyMakerView: View {
         return VStack(alignment: .leading, spacing: 14) {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
                 ForEach(Array(BunnyTop.allCases.enumerated()), id: \.element.id) { i, top in
-                    clothes(top.label, pieces: top.piece.map { [$0] } ?? [], on: look.wear.isEmpty && look.top == top, index: i) {
-                        look.top = top
-                        look.wear = ""
+                    clothes(top.label, pieces: top.piece.map { [$0] } ?? [], on: look.layers(.top).contains { $0.id == "classic:" + top.rawValue }, index: i) {
+                        if top == .none { look.setLayers([], .top) }
+                        else { toggle("classic:" + top.rawValue, slot: .top) }
                     }
                 }
                 ForEach(Array(tops.enumerated()), id: \.element.id) { i, item in
-                    itemTile(item, on: look.wear == item.id, index: BunnyTop.allCases.count + i) { look.wear = item.id }
+                    itemTile(item, on: look.layers(.top).contains { $0.id == item.id }, index: BunnyTop.allCases.count + i) { toggle(item.id, slot: .top) }
                 }
                 if isAdmin { addTile(.top, index: BunnyTop.allCases.count + tops.count) }
             }
-            if !look.wear.isEmpty || look.top != .none {
+            arrangeButton(.top)
+            if !look.layers(.top).isEmpty {
                 ListHeader(title: "COLOUR").padding(.leading, 6)
                 swatches(.outfit)
             }
@@ -254,20 +279,20 @@ struct BunnyMakerView: View {
     // the like. Then the colour of whichever she wears.
     private var accessories: some View {
         let heads = catalog.items(.head)
-        let bow = look.head.isEmpty && look.bowOn
+        let bow = look.layers(.head).contains { $0.id == "classic:bow" }
         return VStack(alignment: .leading, spacing: 14) {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                clothes("None", pieces: [], on: look.head.isEmpty && !look.bowOn, index: 0) {
-                    look.head = ""
-                    look.bowOn = false
+                clothes("None", pieces: [], on: look.layers(.head).isEmpty, index: 0) {
+                    look.setLayers([], .head)
                 }
                 bowTile(on: bow)
                 ForEach(Array(heads.enumerated()), id: \.element.id) { i, item in
-                    itemTile(item, on: look.head == item.id, index: i + 2) { look.head = item.id }
+                    itemTile(item, on: look.layers(.head).contains { $0.id == item.id }, index: i + 2) { toggle(item.id, slot: .head) }
                 }
                 if isAdmin { addTile(.head, index: heads.count + 2) }
             }
-            if bow || !look.head.isEmpty {
+            arrangeButton(.head)
+            if !look.layers(.head).isEmpty {
                 ListHeader(title: "COLOUR").padding(.leading, 6)
                 swatches(bow ? .bow : .accessory)
             }
@@ -278,8 +303,7 @@ struct BunnyMakerView: View {
     private func bowTile(on: Bool) -> some View {
         Button {
             withAnimation(Motion.playful) {
-                look.head = ""
-                look.bowOn = true
+                toggle("classic:bow", slot: .head)
             }
         } label: {
             VStack(spacing: 6) {
@@ -308,7 +332,8 @@ struct BunnyMakerView: View {
     // A picture item, zoomed to the part she wears.
     private func itemTile(_ item: BunnyItem, on: Bool, index: Int, pick: @escaping () -> Void) -> some View {
         Button {
-            withAnimation(Motion.playful) { pick() }
+            if item.price > 0 && !owned.contains(item.id) { buying = item }
+            else { pick() }
         } label: {
             VStack(spacing: 6) {
                 ZStack {
@@ -324,6 +349,7 @@ struct BunnyMakerView: View {
                 .scaleEffect(on ? 1.03 : 1)
                 Text(item.name).font(.jakarta(12, on ? .bold : .medium))
                     .foregroundStyle(on ? Palette.text : Palette.text2).lineLimit(1).minimumScaleFactor(0.8)
+                if item.price > 0 { Text(owned.contains(item.id) ? "Owned" : "\(item.price) coins").font(.jakarta(11, .bold)).foregroundStyle(Theme.main) }
             }
             .contentShape(Rectangle())
         }
@@ -331,7 +357,18 @@ struct BunnyMakerView: View {
         .accessibilityLabel(item.name)
         .accessibilityAddTraits(on ? .isSelected : [])
         .modifier(ChoicePop(index: index))
-        .modifier(TeamDelete(enabled: isAdmin && item.uploaded) { Task { await remove(item) } })
+        .disabled(purchasing)
+        .overlay(alignment: .topTrailing) {
+            if isAdmin && item.uploaded {
+                Menu {
+                    Button { editing = item } label: { Label("Rename / price", systemImage: "pencil") }
+                    Button(role: .destructive) { deleting = item } label: { Label("Delete item", systemImage: "trash") }
+                } label: {
+                    Image(systemName: "ellipsis.circle.fill").font(.system(size: 24))
+                        .foregroundStyle(Theme.main, Palette.surface).frame(width: 44, height: 44)
+                }.accessibilityLabel("Manage \(item.name)")
+            }
+        }
     }
 
     // The team adds a new item here.
@@ -356,6 +393,8 @@ struct BunnyMakerView: View {
     private func remove(_ item: BunnyItem) async {
         do {
             try await catalog.remove(item)
+            look.setLayers(look.layers(.top).filter { $0.id != item.id }, .top)
+            look.setLayers(look.layers(.head).filter { $0.id != item.id }, .head)
             if look.wear == item.id { look.wear = "" }
             if look.head == item.id { look.head = "" }
             model.showToast("Item deleted", icon: "trash.fill")
@@ -400,9 +439,12 @@ struct BunnyMakerView: View {
 
     private func swatches(_ part: BunnyPart) -> some View {
         let picked = look.index(part)
-        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 14) {
+        return VStack(spacing: 14) {
+            ColorPicker("Custom colour · Free", selection: customColor(part), supportsOpacity: false)
+                .font(.jakarta(14, .bold)).frame(minHeight: 44)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 14) {
             ForEach(Array(part.tints.enumerated()), id: \.element.id) { i, tint in
-                let on = picked == i
+                let on = picked == i && look.customColors[part.rawValue] == nil
                 Button {
                     withAnimation(Motion.playful) { look.set(part, i) }
                 } label: {
@@ -435,8 +477,46 @@ struct BunnyMakerView: View {
                 .modifier(ChoicePop(index: i))
             }
         }
+        }
         .padding(16)
         .sugarCard(radius: 24)
+    }
+
+    private func customColor(_ part: BunnyPart) -> Binding<Color> {
+        Binding(get: { Color(hex: look.tint(part).swatch) }, set: { color in
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
+            look.customColors[part.rawValue] = (UInt32(r * 255) << 16) | (UInt32(g * 255) << 8) | UInt32(b * 255)
+        })
+    }
+
+    private func toggle(_ id: String, slot: BunnySlot) {
+        var layers = look.layers(slot)
+        if layers.contains(where: { $0.id == id }) { layers.removeAll { $0.id == id } }
+        else {
+            guard layers.count < 3 else { model.showToast("Up to 3 items per tab. Remove one first."); return }
+            layers.append(.init(id: id))
+        }
+        look.setLayers(layers, slot)
+    }
+
+    private func arrangeButton(_ slot: BunnySlot) -> some View {
+        Button { arranging = slot } label: {
+            Label("Arrange layers (\(look.layers(slot).count)/3)", systemImage: "square.3.layers.3d")
+        }.buttonStyle(OutlineButtonStyle(fullWidth: true)).disabled(look.layers(slot).isEmpty)
+    }
+
+    private func purchase(_ item: BunnyItem) async {
+        guard !purchasing else { return }
+        purchasing = true
+        defer { purchasing = false; buying = nil }
+        do {
+            _ = try await Backend.call("bunny-purchase", ["item_id": item.id, "expected_price": item.price], signedIn: true, missing: "The shop is temporarily unavailable.")
+            owned.insert(item.id)
+            try? await model.loadProfile()
+            toggle(item.id, slot: item.slot)
+            model.showToast("Item unlocked", icon: "checkmark.circle.fill")
+        } catch { model.showToast(error.localizedDescription, error: true) }
     }
 
     private var scenes: some View {

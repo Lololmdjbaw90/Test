@@ -485,3 +485,39 @@ export async function settle(session) {
   await notify(order.artist_email, buyer, `${order.buyer_name || "Someone"} paid for "${order.commission_title}". Time to create!`, `/Commissions?order=${orderId}`);
   return { status: "paid", orderId };
 }
+// An idempotent purchase: item price, balance and ownership share one transaction.
+// Only this server can create BunnyPurchase records.
+export async function purchaseBunnyItem(user, itemID, expectedPrice) {
+  if (!/^[A-Za-z0-9_-]{1,160}$/.test(itemID)) throw new Problem(400, "Choose a valid item.");
+  const purchaseID = crypto.createHash("sha256").update(`${user.uid}:${itemID}`).digest("hex");
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const { transaction } = await firestore(":beginTransaction", { method: "POST", body: JSON.stringify({ options: { readWrite: {} } }) });
+    try {
+      const names = [docName("BunnyItem", itemID), docName("User", user.uid), docName("BunnyPurchase", purchaseID)];
+      const rows = await firestore(":batchGet", { method: "POST", body: JSON.stringify({ documents: names, transaction }) });
+      const found = new Map(rows.filter(r => r.found).map(r => [r.found.name, fromDocument(r.found)]));
+      const item = found.get(names[0]), profile = found.get(names[1]), owned = found.get(names[2]);
+      if (!item) throw new Problem(404, "This item is no longer available.");
+      if (!profile) throw new Problem(404, "Your profile is unavailable. Sign in again.");
+      if (owned) {
+        await firestore(":rollback", { method: "POST", body: JSON.stringify({ transaction }) });
+        return { owned: true, coins: profile.coins };
+      }
+      const price = item.price_coins ?? 0;
+      if (!Number.isSafeInteger(price) || price < 0 || price > 1000000) throw new Problem(400, "This item's price needs correcting.");
+      if (expectedPrice !== price) throw new Problem(409, "The price changed. Reopen the shop before buying.");
+      const balance = profile.coins ?? 0;
+      if (!Number.isSafeInteger(balance) || balance < price) throw new Problem(400, "You don't have enough coins.");
+      const fields = value => Object.fromEntries(Object.entries(value).map(([k, v]) => [k, encode(v)]));
+      await firestore(":commit", { method: "POST", body: JSON.stringify({ transaction, writes: [
+        { update: { name: names[1], fields: fields({ coins: balance - price, updated_date: new Date().toISOString() }) }, updateMask: { fieldPaths: ["coins", "updated_date"] } },
+        { update: { name: names[2], fields: fields({ user_email: user.email, user_id: user.uid, item_id: itemID, price_coins: price, created_date: new Date().toISOString() }) }, currentDocument: { exists: false } },
+      ] }) });
+      return { owned: true, coins: balance - price };
+    } catch (error) {
+      await firestore(":rollback", { method: "POST", body: JSON.stringify({ transaction }) }).catch(() => {});
+      if (attempt < 3 && /Firestore 409|ABORTED/.test(error.message)) continue;
+      throw error;
+    }
+  }
+}

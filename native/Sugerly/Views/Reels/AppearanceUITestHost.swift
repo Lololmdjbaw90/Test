@@ -6,6 +6,7 @@ struct AppearanceUITestHost: View {
     @State private var search = ""
     @State private var shop = false
     @State private var dark = false
+    @State private var bunny = false
 
     var body: some View {
         NavigationStack {
@@ -19,11 +20,13 @@ struct AppearanceUITestHost: View {
                     Button("Dark mode") { dark.toggle() }
                 }
                 Button("Open MimiPlus") { shop = true }
+                Button("Open bunny") { BunnyStore.shared.save(BunnyLook()); bunny = true }
                 Spacer()
             }
             .padding(16)
             .sugarBackground()
             .sheet(isPresented: $shop) { NitroShopView() }
+            .sheet(isPresented: $bunny) { NavigationStack { BunnyMakerView() } }
         }
         .preferredColorScheme(dark ? .dark : .light)
         .onAppear {
