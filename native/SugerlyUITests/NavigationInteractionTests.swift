@@ -105,7 +105,7 @@ final class NavigationInteractionTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Fan Art page"].waitForExistence(timeout: 3))
 
         app.buttons["Notifications"].tap()
-        let notification = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Luna")).firstMatch
+        let notification = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Navigation notification")).firstMatch
         XCTAssertTrue(notification.waitForExistence(timeout: 3))
         notification.tap()
         XCTAssertTrue(app.staticTexts["Notification profile page"].waitForExistence(timeout: 3))

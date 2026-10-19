@@ -663,6 +663,7 @@ struct NitroShopView: View {
                 .contentTransition(.numericText())
             }
             .buttonStyle(GradientButtonStyle(height: 52))
+            .accessibilityIdentifier("mimiplus-purchase")
             .disabled(busy != nil || coins < chosen.cost)
             .opacity(coins < chosen.cost ? 0.55 : 1)
         }

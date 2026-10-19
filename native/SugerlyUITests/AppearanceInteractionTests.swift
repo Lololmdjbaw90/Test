@@ -38,10 +38,10 @@ final class AppearanceInteractionTests: XCTestCase {
         if !month.isHittable { app.scrollViews.firstMatch.swipeUp() }
         for _ in 0..<6 {
             season.tap()
-            XCTAssertTrue(app.buttons["You need 2000 more coins"].waitForExistence(timeout: 2))
+            XCTAssertEqual(app.buttons["mimiplus-purchase"].label.filter(\.isNumber), "2000")
             XCTAssertTrue(season.isSelected)
             month.tap()
-            XCTAssertTrue(app.buttons["You need 800 more coins"].waitForExistence(timeout: 2))
+            XCTAssertEqual(app.buttons["mimiplus-purchase"].label.filter(\.isNumber), "800")
             XCTAssertTrue(month.isSelected)
         }
         capture("mimiplus-after-switching")
