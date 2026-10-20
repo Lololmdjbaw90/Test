@@ -198,13 +198,18 @@ struct AnimatedImageView: UIViewRepresentable {
             super.layoutSubviews()
             imageView.frame = bounds
         }
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if window != nil { imageView.startAnimating() }
+            else { imageView.stopAnimating() }
+        }
     }
 
     func makeUIView(context: Context) -> Box {
         let box = Box()
         box.imageView.contentMode = fill ? .scaleAspectFill : .scaleAspectFit
         box.imageView.image = image
-        box.imageView.startAnimating()
+        if box.window != nil { box.imageView.startAnimating() }
         return box
     }
 
@@ -212,8 +217,23 @@ struct AnimatedImageView: UIViewRepresentable {
         box.imageView.contentMode = fill ? .scaleAspectFill : .scaleAspectFit
         if box.imageView.image !== image {
             box.imageView.image = image
-            box.imageView.startAnimating()
+            if box.window != nil { box.imageView.startAnimating() }
         }
+    }
+}
+
+// Cancellation is checked on ImageIO's callback thread before dispatching a
+// frame to UIKit. A dismissed player must stop decoding, not just hide frames.
+final class GIFPlaybackRun: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancelled = false
+    var isCancelled: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return cancelled
+    }
+    func cancel() {
+        lock.lock(); defer { lock.unlock() }
+        cancelled = true
     }
 }
 
@@ -225,7 +245,7 @@ struct LiveGIF: UIViewRepresentable {
 
     final class Player: UIView {
         var data: Data? { didSet { if data != oldValue { restart() } } }
-        private var run = UUID()
+        private var run: GIFPlaybackRun?
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -238,23 +258,29 @@ struct LiveGIF: UIViewRepresentable {
             restart()
         }
 
-        func stop() { run = UUID() }
+        func stop() { run?.cancel(); run = nil }
 
         private func restart() {
             stop()
             guard window != nil, let data else { return }
-            let mine = run
+            let mine = GIFPlaybackRun()
+            run = mine
             if layer.contents == nil, let first = UIImage(data: data)?.cgImage { layer.contents = first }
             CGAnimateImageDataWithBlock(data as CFData, nil) { [weak self] _, image, stop in
+                guard !mine.isCancelled, self != nil else {
+                    mine.cancel()
+                    stop.pointee = true
+                    return
+                }
                 guard Thread.isMainThread else {
                     DispatchQueue.main.async { [weak self] in
-                        guard let self, self.run == mine else { return }
+                        guard let self, !mine.isCancelled else { return }
                         self.layer.contents = image
                     }
                     return
                 }
                 MainActor.assumeIsolated {
-                    guard let self, self.run == mine else { stop.pointee = true; return }
+                    guard let self, !mine.isCancelled else { stop.pointee = true; return }
                     self.layer.contents = image
                 }
             }

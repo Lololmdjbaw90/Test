@@ -11,28 +11,18 @@ struct MorphDots: View {
     var body: some View {
         Group {
             if reduceMotion {
-                row(active: -1)
+                HStack(spacing: dot * 0.55) {
+                    ForEach(0..<3, id: \.self) { _ in Circle().fill(.tint).frame(width: dot, height: dot) }
+                }
             } else {
-                PhaseAnimator([0, 1, 2]) { active in
-                    row(active: active)
-                } animation: { _ in .spring(response: 0.34, dampingFraction: 0.72) }
+                // Fixed-size platform animation; no spring-driven SwiftUI
+                // layout loop for every loading picture and button.
+                ProgressView().progressViewStyle(.circular).controlSize(.small)
             }
         }
+        .frame(width: dot * 6, height: dot * 2)
         .accessibilityElement()
         .accessibilityLabel("Loading")
-    }
-
-    private func row(active: Int) -> some View {
-        HStack(spacing: dot * 0.55) {
-            ForEach(0..<3, id: \.self) { i in
-                Capsule()
-                    .fill(.tint)
-                    .frame(width: i == active ? dot * 2.6 : dot, height: dot)
-                    .opacity(active < 0 || i == active ? 1 : 0.4)
-                    .offset(y: i == active ? -dot * 0.25 : 0)
-            }
-        }
-        .frame(height: dot * 2)
     }
 }
 
