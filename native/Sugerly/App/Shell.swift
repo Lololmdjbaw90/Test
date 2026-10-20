@@ -830,13 +830,20 @@ struct MenuDrawer: View {
 
     // Dragging to the left closes it.
     private func closeDrag(_ width: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 12)
-            .onChanged { value in drag = max(0, -value.translation.width) }
+        // This hit area moves with the drawer. Local coordinates feed its
+        // movement back into the gesture, so a stationary finger can jitter.
+        DragGesture(minimumDistance: 12, coordinateSpace: .global)
+            .onChanged { value in
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) { drag = min(width, max(0, -value.translation.width)) }
+            }
             .onEnded { value in
-                if drag > width * 0.3 || value.predictedEndTranslation.width < -width * 0.5 {
-                    open = false
+                let closes = drag > width * 0.3 || value.predictedEndTranslation.width < -width * 0.5
+                withAnimation(Motion.standard) {
+                    if closes { open = false }
+                    drag = 0
                 }
-                withAnimation(Motion.release) { drag = 0 }
             }
     }
 }
