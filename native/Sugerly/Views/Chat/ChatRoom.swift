@@ -19,6 +19,7 @@ struct ChatView: View {
     @Environment(\.dismiss) private var dismissChat
     @State private var messages: [Message] = []
     @State private var draft = ""
+    @State private var validating = false
     @State private var gifs = false
     @State private var loaded = false
     @State private var reporting: ReportSheet.Target?
@@ -81,7 +82,7 @@ struct ChatView: View {
                 guard let key else { return }
                 // After the new bubble is laid out, so the scroll lands once.
                 DispatchQueue.main.async {
-                    withMotion(Motion.standard) { proxy.scrollTo(key, anchor: .bottom) }
+                    proxy.scrollTo(key, anchor: .bottom)
                 }
             }
         }
@@ -380,6 +381,7 @@ struct ChatView: View {
                     }
                     .buttonStyle(BouncyStyle(scale: 0.88))
                     .accessibilityLabel(hasText ? "Send" : "Record a voice message")
+                    .disabled(validating)
                     .sensoryFeedback(.impact(weight: .medium), trigger: messages.count)
                 }
             }
@@ -596,7 +598,8 @@ struct ChatView: View {
         var pending = Message(data)
         pending.id = "pending-\(UUID().uuidString)"
         pending.pending = true
-        withAnimation(Self.arrive) { messages.append(pending); replyTo = nil }
+        messages.append(pending)
+        replyTo = nil
         do {
             let doc = try await FS.create("DirectMessage", data)
             var created = Message(doc)
@@ -621,9 +624,13 @@ struct ChatView: View {
 
     private func send() async {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, let data = payload(text: text, imageURL: "") else { return }
-        guard await TextGuard.clear([text], kind: .message, model: model) else { return }
-        draft = ""
+        guard !validating, !text.isEmpty, let data = payload(text: text, imageURL: "") else { return }
+        let original = draft
+        validating = true
+        let allowed = await TextGuard.clear([text], kind: .message, model: model)
+        validating = false
+        guard allowed else { return }
+        if draft == original { draft = "" }
         TapSound.play(.send)
         await post(data)
     }

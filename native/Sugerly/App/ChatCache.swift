@@ -26,10 +26,12 @@ enum ChatCache {
     }
 
     static func write(_ name: String, _ docs: [Doc]) {
-        let clean = docs.filter { JSONSerialization.isValidJSONObject($0) }
-        guard let data = try? JSONSerialization.data(withJSONObject: clean) else { return }
         let target = file(name)
-        writes.async { try? data.write(to: target, options: .atomic) }
+        writes.async {
+            let clean = docs.filter { JSONSerialization.isValidJSONObject($0) }
+            guard let data = try? JSONSerialization.data(withJSONObject: clean) else { return }
+            try? data.write(to: target, options: .atomic)
+        }
     }
 
     // Messages of one chat: the newest ones (enough to open instantly).

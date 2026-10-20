@@ -569,7 +569,7 @@ enum TextGuard {
         }
 
         // 4. on-device filter
-        let local = ModEngine.analyze(text, kind: kind)
+        let local = await Task.detached(priority: .userInitiated) { ModEngine.analyze(text, kind: kind) }.value
         if local.blocked {
             let muted = addStrike(local.strike, state: &state, model: model, now: now)
             save(state, me.email)

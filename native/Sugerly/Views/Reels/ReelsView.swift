@@ -165,6 +165,7 @@ struct ReelsView: View {
     var create: () -> Void
     var initialReels: [Reel]? = nil
     @Environment(AppModel.self) private var model
+    @Environment(Player.self) private var music
     @State private var reels: [Reel] = []
     @State private var activeId: String?
     @State private var feed = "foryou"
@@ -294,7 +295,8 @@ struct ReelsView: View {
             lastLoad = Date()
             await load()
         }
-        .onChange(of: visible) { _, now in
+        .onChange(of: visible, initial: true) { _, now in
+            if now { music.close(); AppleMusic.shared.stop() }
             if now, activeId == nil { activeId = shown.first?.id }
             if now && initialReels == nil { Task { await checkNew() } }
         }
@@ -895,7 +897,8 @@ struct ReelPage: View {
     }
 
     private func start() {
-        if music.playing { music.pause() }
+        if music.track != nil { music.close() }
+        AppleMusic.shared.stop()
         if reel.isVideo {
             if video == nil, let url = URL(string: reel.mediaURL) {
                 video = ReelVideo.get(reel.id, url: url, start: reel.trimStart, filter: reel.filterId, speed: reel.speed)

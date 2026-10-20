@@ -188,8 +188,8 @@ struct BunnyMakerView: View {
     // MARK: tabs
 
     private var tabs: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+        VStack {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 98), spacing: 8)], spacing: 8) {
                 ForEach(Tab.allCases) { item in
                     let on = tab == item
                     Button {
@@ -199,10 +199,10 @@ struct BunnyMakerView: View {
                         HStack(spacing: 6) {
                             Image(systemName: item.icon).font(.system(size: 13, weight: .bold))
                                 .symbolEffect(.bounce, value: on)
-                            Text(item.label).font(.jakarta(14, .semibold)).lineLimit(1)
+                            Text(item.label).font(.jakarta(12, .semibold)).lineLimit(1).minimumScaleFactor(0.7)
                         }
                         .foregroundStyle(on ? .white : Palette.text2)
-                        .padding(.horizontal, 14).frame(height: 38)
+                        .padding(.horizontal, 8).frame(maxWidth: .infinity).frame(height: 38)
                         .background {
                             if on {
                                 Capsule().fill(item.candy.gradient)

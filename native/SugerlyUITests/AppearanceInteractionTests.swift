@@ -74,6 +74,19 @@ final class AppearanceInteractionTests: XCTestCase {
         capture("bunny-new-bodies")
     }
 
+    func testBunnyBackgroundTabIsReachableAndSelectable() {
+        app.buttons["Open bunny"].tap()
+        let background = app.buttons["Background"].firstMatch
+        XCTAssertTrue(background.waitForExistence(timeout: 15))
+        for _ in 0..<4 where !background.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        background.tap()
+        let clouds = app.buttons["Background: Clouds"]
+        for _ in 0..<4 where !clouds.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        clouds.tap()
+        XCTAssertTrue(clouds.isSelected)
+        capture("bunny-background-selection")
+    }
+
     func testMimiPlusRepeatedPlanChangesUpdateCost() {
         app.buttons["Open MimiPlus"].tap()
         let month = app.buttons["mimiplus-plan-month"]
