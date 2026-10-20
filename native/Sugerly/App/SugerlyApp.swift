@@ -37,7 +37,9 @@ struct SugerlyApp: App {
             // text), so the biggest text sizes can't push things off screen.
             Group {
                 #if DEBUG
-                if ProcessInfo.processInfo.arguments.contains("--appearance-ui-test") {
+                if ProcessInfo.processInfo.arguments.contains("--reel-playback-ui-test") {
+                    ReelPlaybackUITestHost().environment(model).sugarProgress()
+                } else if ProcessInfo.processInfo.arguments.contains("--appearance-ui-test") {
                     AppearanceUITestHost().environment(model).sugarProgress()
                 } else if ProcessInfo.processInfo.arguments.contains("--polish-ui-test") {
                     PolishUITestHost().environment(model).sugarProgress()
@@ -229,38 +231,43 @@ struct GoodbyeCover: View {
 
 // Shown while logging in: the app gets ready behind it.
 struct SettingUpCover: View {
-    @State private var shown = false
-
-    var body: some View {
-        VStack(spacing: 14) {
-            MimiBuddy(icon: "sparkles", mood: .happy, size: 130, animated: false)
-            Text("Setting things up for you").font(.display(28)).foregroundStyle(Palette.text)
-                .multilineTextAlignment(.center)
-                .opacity(shown ? 1 : 0)
-                .offset(y: shown || Motion.reduced ? 0 : 8)
-            MorphDots(dot: 9)
-                .tint(Theme.main)
-        }
-        .padding(.horizontal, 30)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .sugarBackground()
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Setting things up for you")
-        .onAppear { withAnimation(Motion.pick(Motion.enter.delay(0.1))) { shown = true } }
-    }
+    var body: some View { SugerlyLaunchScreen(message: "Getting your world ready", detail: "Your friends, creations and little moments") }
 }
 
-// The icon stays still (Mimi never moves); only its sparkles twinkle.
 struct SplashView: View {
+    var body: some View { SugerlyLaunchScreen(message: "A little joy is loading", detail: "Welcome to Sugerly") }
+}
+
+private struct SugerlyLaunchScreen: View {
+    let message: String
+    let detail: String
     var body: some View {
-        VStack(spacing: 16) {
-            AppBadge(size: 132)
-            BrandLogo(height: 58)
-            SugarLoader(size: 13)
+        ZStack {
+            Palette.surface.ignoresSafeArea()
+            VStack {
+                Circle().fill(Theme.soft).frame(width: 230, height: 230).offset(x: -140, y: -90)
+                Spacer()
+                Circle().fill(Theme.main.opacity(0.07)).frame(width: 280, height: 280).offset(x: 140, y: 100)
+            }.ignoresSafeArea().accessibilityHidden(true)
+            VStack(spacing: 22) {
+                AppBadge(size: 108)
+                    .padding(20)
+                    .background(RoundedRectangle(cornerRadius: 44).fill(Theme.soft))
+                    .overlay(alignment: .topTrailing) {
+                        Image(systemName: "sparkle").font(.system(size: 25, weight: .bold)).foregroundStyle(Theme.main).offset(x: 4, y: -4)
+                    }
+                BrandLogo(height: 56)
+                VStack(spacing: 8) {
+                    Text(message).font(.display(23)).foregroundStyle(Palette.text)
+                    Text(detail).font(.jakarta(13, .medium)).foregroundStyle(Palette.text2)
+                }.multilineTextAlignment(.center)
+                ProgressView().progressViewStyle(.circular).tint(Theme.main)
+                    .frame(width: 46, height: 46).background(Theme.soft, in: Circle())
+            }.padding(28)
+            VStack { Spacer(); Text("Made for your little world").font(.jakarta(11, .semibold)).foregroundStyle(Palette.muted).padding(.bottom, 24) }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .sugarBackground()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(message)
     }
 }
 

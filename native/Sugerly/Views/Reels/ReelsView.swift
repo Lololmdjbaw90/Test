@@ -21,7 +21,11 @@ struct LoopingVideo: UIViewRepresentable {
         return view
     }
     func updateUIView(_ view: PlayerUIView, context: Context) {
+        if view.playerLayer.player !== player { view.playerLayer.player = player }
         view.playerLayer.videoGravity = fill ? .resizeAspectFill : .resizeAspect
+    }
+    static func dismantleUIView(_ view: PlayerUIView, coordinator: ()) {
+        view.playerLayer.player = nil
     }
 }
 
@@ -35,6 +39,9 @@ final class ReelVideo {
     var portrait = true
     private var statusObservation: NSKeyValueObservation?
     private var sizeObservation: NSKeyValueObservation?
+    private var preparation: Task<Void, Never>?
+    private var wantsPlayback = false
+    private var loopObservation: NSKeyValueObservation?
 
     // Videos are kept around for the few reels near the one on screen, so
     // swiping to the next one starts right away.
@@ -68,28 +75,41 @@ final class ReelVideo {
         let asset = AVURLAsset(url: url)
         let item = AVPlayerItem(asset: asset)
         item.preferredForwardBufferDuration = 3
-        player.automaticallyWaitsToMinimizeStalling = false
+        player.automaticallyWaitsToMinimizeStalling = true
         player.defaultRate = Float(max(0.25, min(3, speed)))
-        if filter != "none" {
-            // The website's filter, drawn live on the video.
-            Task { [weak self] in
-                guard let composition = try? await AVMutableVideoComposition.videoComposition(with: asset, applyingCIFiltersWithHandler: { request in
-                    request.finish(with: WebFilter.apply(filter, to: request.sourceImage), context: nil)
-                }) else { return }
-                guard let self else { return }
-                for item in self.player.items() { item.videoComposition = composition }
+        preparation = Task { [weak self] in
+            do {
+                let duration = try await asset.load(.duration)
+                guard let self, !Task.isCancelled else { return }
+                guard duration.seconds.isFinite, duration.seconds > 0 else { self.failed = true; return }
+                if filter != "none" {
+                    item.videoComposition = try await AVMutableVideoComposition.videoComposition(with: asset, applyingCIFiltersWithHandler: { request in
+                        request.finish(with: WebFilter.apply(filter, to: request.sourceImage), context: nil)
+                    })
+                }
+                guard !Task.isCancelled else { return }
+                let offset = start.isFinite ? max(0, min(start, max(0, duration.seconds - 0.05))) : 0
+                let range = offset > 0 ? CMTimeRange(start: CMTime(seconds: offset, preferredTimescale: 600), end: duration) : .invalid
+                self.looper = AVPlayerLooper(player: self.player, templateItem: item, timeRange: range)
+                self.loopObservation = self.looper?.observe(\.status, options: [.initial, .new]) { [weak self] looper, _ in
+                    let failed = looper.status == .failed
+                    Task { @MainActor in if failed { self?.failed = true } }
+                }
+                if self.wantsPlayback { self.player.play() }
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.failed = true
             }
         }
-        looper = AVPlayerLooper(player: player, templateItem: item, timeRange: CMTimeRange(start: CMTime(seconds: start, preferredTimescale: 600), end: .positiveInfinity))
         player.isMuted = false
-        statusObservation = player.observe(\.currentItem?.status, options: [.new]) { [weak self] p, _ in
+        statusObservation = player.observe(\.currentItem?.status, options: [.initial, .new]) { [weak self] p, _ in
             let status = p.currentItem?.status
             Task { @MainActor in
                 if status == .failed { self?.failed = true }
                 if status == .readyToPlay { self?.ready = true }
             }
         }
-        sizeObservation = player.observe(\.currentItem?.presentationSize, options: [.new]) { [weak self] p, _ in
+        sizeObservation = player.observe(\.currentItem?.presentationSize, options: [.initial, .new]) { [weak self] p, _ in
             let size = p.currentItem?.presentationSize ?? .zero
             Task { @MainActor in
                 if size.width > 0, size.height > 0 { self?.portrait = size.height >= size.width * 1.1 }
@@ -98,7 +118,8 @@ final class ReelVideo {
     }
 
     func play() {
-        player.play()
+        wantsPlayback = true
+        if looper != nil { player.play() }
         if timeObserver == nil {
             timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.1, preferredTimescale: 600), queue: .main) { [weak self] time in
                 MainActor.assumeIsolated {
@@ -112,7 +133,7 @@ final class ReelVideo {
             }
         }
     }
-    func pause() { player.pause() }
+    func pause() { wantsPlayback = false; player.pause() }
 
     var duration: Double = 0
 
@@ -142,6 +163,7 @@ struct ReelsView: View {
     let visible: Bool
     @Binding var path: [Route]
     var create: () -> Void
+    var initialReels: [Reel]? = nil
     @Environment(AppModel.self) private var model
     @State private var reels: [Reel] = []
     @State private var activeId: String?
@@ -201,7 +223,7 @@ struct ReelsView: View {
                                             .overlay(Color.black.opacity(0.45))
                                     }
                                     ReelPage(reel: reel, active: visible && activeId == reel.id, near: abs(i - activeIndex) <= 1, path: $path,
-                                             insets: geo.safeAreaInsets,
+                                             insets: geo.safeAreaInsets, loadContent: initialReels == nil,
                                              onNext: { advance(from: reel.id) }, onHide: { hide($0) })
                                         .frame(width: column, height: geo.size.height)
                                         .clipShape(RoundedRectangle(cornerRadius: column < geo.size.width - 1 ? 28 : 0, style: .continuous))
@@ -225,7 +247,6 @@ struct ReelsView: View {
                     .scrollIndicators(.hidden)
                     .scrollBounceBehavior(.basedOnSize)
                 }
-                .ignoresSafeArea()
             }
 
             refreshBadge
@@ -268,13 +289,14 @@ struct ReelsView: View {
         .toolbarBackground(Color.black.opacity(0.55), for: .tabBar)
         .toolbarColorScheme(.dark, for: .tabBar)
         .task {
+            if let initialReels { reels = initialReels; activeId = initialReels.first?.id; loading = false; return }
             if let lastLoad, Date().timeIntervalSince(lastLoad) < 90 { return }
             lastLoad = Date()
             await load()
         }
         .onChange(of: visible) { _, now in
             if now, activeId == nil { activeId = shown.first?.id }
-            if now { Task { await checkNew() } }
+            if now && initialReels == nil { Task { await checkNew() } }
         }
         .onReceive(NotificationCenter.default.publisher(for: Self.posted)) { note in
             if let reel = note.object as? Reel { showPosted(reel) }
@@ -521,8 +543,10 @@ struct ReelPage: View {
     // The screen's notch / home bar and the floating tab bar, so the
     // buttons sit just clear of them on every iPhone and iPad.
     var insets = EdgeInsets()
+    var loadContent = true
     var bottomRoom: CGFloat = 0
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(Player.self) private var music
     @Environment(\.dismiss) private var dismiss
     @State private var video: ReelVideo?
@@ -612,6 +636,10 @@ struct ReelPage: View {
         }
         .onChange(of: near) { _, now in if now && !active { preload() } }
         .onDisappear { video?.pause(); sound?.pause(); learnWatch() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active && active { start() }
+            else { video?.pause(); sound?.pause() }
+        }
         .onChange(of: active) { _, now in
             if now { start(); watchStart = Date() } else { video?.pause(); sound?.pause(); learnWatch() }
         }
@@ -624,7 +652,7 @@ struct ReelPage: View {
             video?.player.isMuted = now || reel.muted
             sound?.isMuted = now
         }
-        .task(id: reel.id) { await refreshComments() }
+        .task(id: reel.id) { if loadContent { await refreshComments() } }
         .sheet(isPresented: $comments, onDismiss: { Task { await refreshComments() } }) {
             NavigationStack {
                 CommentsScreen(collection: "CommunityComment", field: "post_id", targetId: "reel_\(reel.id)", ownerEmail: reel.authorEmail, link: "/Reels?r=\(reel.id)", disabled: reel.commentsOff) {
@@ -878,7 +906,7 @@ struct ReelPage: View {
             if !paused { video?.play() }
         }
         if !paused { startSound() }
-        countView()
+        if loadContent { countView() }
     }
 
     // The reel's song (Deezer preview links expire, so get a fresh one).
@@ -894,7 +922,7 @@ struct ReelPage: View {
                let fresh = json["preview"] as? String, !fresh.isEmpty {
                 link = fresh
             }
-            guard active, wanted == reel.id, sound == nil, let url = URL(string: link), !link.isEmpty else { return }
+            guard active, !paused, scenePhase == .active, wanted == reel.id, sound == nil, let url = URL(string: link), !link.isEmpty else { return }
             let p = AVPlayer(url: url)
             p.isMuted = muted
             p.defaultRate = currentRate   // the song keeps pace with the video
