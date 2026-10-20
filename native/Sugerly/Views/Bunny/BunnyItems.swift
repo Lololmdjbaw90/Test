@@ -10,9 +10,9 @@ import PhotosUI
 // Where an item goes: clothes (instead of a top) or on her head and face
 // (instead of the bow).
 enum BunnySlot: String, CaseIterable, Identifiable {
-    case top, head
+    case top, head, body, face, collar
     var id: String { rawValue }
-    var label: String { self == .top ? "Clothes" : "Accessory" }
+    var label: String { switch self { case .top: return "Clothes"; case .head: return "Accessory"; case .body: return "Body"; case .face: return "Face"; case .collar: return "Collar" } }
 }
 
 struct BunnyItem: Identifiable, Equatable {
@@ -33,6 +33,13 @@ struct BunnyItem: Identifiable, Equatable {
     var tileFocus: UnitPoint { slot == .top ? UnitPoint(x: 0.5, y: 0.7) : UnitPoint(x: 0.5, y: 0.3) }
 
     static let builtIn: [BunnyItem] = [
+        BunnyItem(id: "body-fox", name: "Fox", slot: .body, asset: "BunnyBodyFox", hue: 340),
+        BunnyItem(id: "body-monkey", name: "Monkey", slot: .body, asset: "BunnyBodyMonkey", hue: 340),
+        BunnyItem(id: "body-lamb", name: "Lamb", slot: .body, asset: "BunnyBodyLamb", hue: 340),
+        BunnyItem(id: "body-bear", name: "Bear", slot: .body, asset: "BunnyBodyBear", hue: 340),
+        BunnyItem(id: "body-deer", name: "Deer", slot: .body, asset: "BunnyBodyDeer", hue: 340),
+        BunnyItem(id: "body-cat", name: "Cat", slot: .body, asset: "BunnyBodyCat", hue: 340),
+
         BunnyItem(id: "maid", name: "Maid", slot: .top, asset: "BunnyItemMaid", hue: 245),
         BunnyItem(id: "frills", name: "Frills", slot: .top, asset: "BunnyItemFrills", hue: 194),
         BunnyItem(id: "stripes", name: "Stripes", slot: .top, asset: "BunnyItemStripes", hue: 236),
@@ -262,10 +269,9 @@ struct BunnyItemUploader: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Where it goes").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
                         Picker("Where it goes", selection: $chosenSlot) {
-                            Text("Clothes").tag(BunnySlot.top)
-                            Text("Head or face").tag(BunnySlot.head)
+                            ForEach(BunnySlot.allCases) { slot in Text(slot.label).tag(slot) }
                         }
-                        .pickerStyle(.segmented)
+                        .pickerStyle(.menu)
                     }
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Price in coins · 0 is free").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
@@ -297,8 +303,13 @@ struct BunnyItemUploader: View {
     // Her with the new item on, as she'd wear it.
     private var stage: some View {
         var base = look
-        base.setLayers([], chosenSlot)
-        if chosenSlot == .top { base.top = .none; base.wear = "" } else { base.head = ""; base.bowOn = false }
+        switch chosenSlot {
+        case .top: base.setLayers([], .top)
+        case .head: base.setLayers([], .head)
+        case .body: base.bodyItem = ""
+        case .face: base.faceItem = ""
+        case .collar: base.collarItem = ""
+        }
         return ZStack {
             BunnySceneView(scene: look.scene, animated: false)
             ZStack {

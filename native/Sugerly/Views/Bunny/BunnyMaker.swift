@@ -27,7 +27,7 @@ struct BunnyMakerView: View {
     @State private var catalog = BunnyCatalog.shared
 
     enum Tab: String, CaseIterable, Identifiable {
-        case fur, face, outfit, accessory, collar, scene
+        case body, fur, face, outfit, accessory, collar, scene
         var id: String { rawValue }
         var label: String {
             switch self {
@@ -38,6 +38,7 @@ struct BunnyMakerView: View {
         }
         var icon: String {
             switch self {
+            case .body: return "pawprint.fill"
             case .fur: return "hare.fill"
             case .collar: return "seal.fill"
             case .outfit: return "tshirt.fill"
@@ -48,6 +49,7 @@ struct BunnyMakerView: View {
         }
         var candy: Candy {
             switch self {
+            case .body: return .berry
             case .fur: return .berry
             case .collar: return .peach
             case .outfit: return .sky
@@ -66,6 +68,32 @@ struct BunnyMakerView: View {
     }
 
     var body: some View {
+        ZStack {
+            if loaded { editor.transition(.identity) }
+            else {
+                VStack(spacing: 14) {
+                    Image(systemName: "hare.fill").font(.system(size: 54)).foregroundStyle(Theme.main)
+                    Text("Getting your bunny ready…").font(.display(22)).foregroundStyle(Palette.text)
+                    ProgressView().tint(Theme.main)
+                }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Palette.surface)
+            }
+        }
+        .task {
+            guard !loaded else { return }
+            store.use(model.me?.email ?? "")
+            look = store.look
+            let ids = [look.bodyItem, look.faceItem, look.collarItem] + look.layers(.top).map(\.id) + look.layers(.head).map(\.id)
+            if ids.contains(where: { !$0.isEmpty && !$0.hasPrefix("classic:") && catalog.item($0) == nil }) { await catalog.load() }
+            await BunnyImages.prepare(look)
+            guard !Task.isCancelled else { return }
+            var transaction = Transaction(); transaction.disablesAnimations = true
+            withTransaction(transaction) { loaded = true }
+        }
+        .navigationTitle("Customize bunny")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var editor: some View {
         ScrollView {
             VStack(spacing: 18) {
                 stage
@@ -84,12 +112,7 @@ struct BunnyMakerView: View {
         .sugarBackground()
         .navigationTitle("Customize bunny")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            guard !loaded else { return }
-            store.use(model.me?.email ?? "")
-            look = store.look
-            loaded = true
-        }
+
         .task(id: look) {
             guard loaded else { return }
             try? await Task.sleep(for: .milliseconds(250))
@@ -132,7 +155,7 @@ struct BunnyMakerView: View {
             .frame(height: 340)
             .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 32, style: .continuous).strokeBorder(Palette.rim(0.7), lineWidth: 1.5))
-            .shadow(color: Theme.glow(0.22), radius: 18, y: 8)
+            .background(RoundedRectangle(cornerRadius: 32).fill(Theme.main.opacity(0.12)).offset(y: 3))
             .overlay(alignment: .topTrailing) {
                 Button {
                     shuffles += 1
@@ -203,12 +226,16 @@ struct BunnyMakerView: View {
 
     @ViewBuilder
     private var choices: some View {
-        if tab == .collar && !look.layers(.top).contains(where: { $0.id == "classic:sailor" }) {
-            EmptyCard(icon: "tshirt.fill", title: "No collar", text: "The collar comes with the sailor top. Pick it under Outfit.", compact: true)
+        if tab == .body {
+            catalogChoices(.body)
+        } else if tab == .collar {
+            catalogChoices(.collar)
+            swatches(.collar)
         } else if let part = tab.part {
             swatches(part)
         } else if tab == .face {
             faces
+            catalogChoices(.face)
         } else if tab == .outfit {
             outfits
         } else if tab == .accessory {
@@ -218,13 +245,31 @@ struct BunnyMakerView: View {
         }
     }
 
+    private func selected(_ slot: BunnySlot) -> String {
+        switch slot { case .body: return look.bodyItem; case .face: return look.faceItem; case .collar: return look.collarItem; default: return "" }
+    }
+
+    private func catalogChoices(_ slot: BunnySlot) -> some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 12) {
+            Button(slot == .body ? "Classic bunny" : "Default") {
+                switch slot { case .body: look.bodyItem = ""; case .face: look.faceItem = ""; case .collar: look.collarItem = ""; default: break }
+            }.buttonStyle(OutlineButtonStyle(fullWidth: true))
+            ForEach(Array(catalog.items(slot).enumerated()), id: \.element.id) { i, item in
+                itemTile(item, on: selected(slot) == item.id, index: i) {
+                    switch slot { case .body: look.bodyItem = item.id; case .face: look.faceItem = item.id; case .collar: look.collarItem = item.id; default: break }
+                }
+            }
+            if isAdmin { addTile(slot, index: catalog.items(slot).count) }
+        }
+    }
+
     // Each face shown on your bunny's own fur.
     private var faces: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 12) {
             ForEach(Array(BunnyFace.allCases.enumerated()), id: \.element.id) { i, face in
                 let on = look.face == face
                 Button {
-                    withAnimation(Motion.playful) { look.face = face }
+                    withAnimation(Motion.playful) { look.face = face; look.faceItem = "" }
                 } label: {
                     VStack(spacing: 6) {
                         ZStack {
@@ -403,6 +448,9 @@ struct BunnyMakerView: View {
             look.setLayers(look.layers(.head).filter { $0.id != item.id }, .head)
             if look.wear == item.id { look.wear = "" }
             if look.head == item.id { look.head = "" }
+            if look.bodyItem == item.id { look.bodyItem = "" }
+            if look.faceItem == item.id { look.faceItem = "" }
+            if look.collarItem == item.id { look.collarItem = "" }
             model.showToast("Item deleted", icon: "trash.fill")
         } catch {
             model.showToast("Couldn't delete it — \(error.localizedDescription)", error: true)
@@ -498,6 +546,12 @@ struct BunnyMakerView: View {
     }
 
     private func toggle(_ id: String, slot: BunnySlot) {
+        switch slot {
+        case .body: look.bodyItem = id; return
+        case .face: look.faceItem = id; return
+        case .collar: look.collarItem = id; return
+        default: break
+        }
         var layers = look.layers(slot)
         if layers.contains(where: { $0.id == id }) { layers.removeAll { $0.id == id } }
         else {

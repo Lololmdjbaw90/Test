@@ -79,7 +79,7 @@ struct NotificationsPage: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 18) {
-                PageHero(title: "Your updates", subtitle: notes.unread > 0 ? "\(notes.unread) new since you last looked" : "Likes, follows, comments and mentions", icon: "bell.badge.fill", candy: .berry)
+                PageHero(title: "Your updates", subtitle: notes.unread > 0 ? "\(notes.unread) new since you last looked" : "Likes, follows, comments and mentions", icon: "bell.badge.fill", candy: .berry, themed: true)
                 filterChips
                 content
             }
@@ -95,7 +95,6 @@ struct NotificationsPage: View {
         .modifier(TrailingBarItem(item: markAllButton))
         .refreshable { await notes.refresh(me: model.me?.email ?? "") }
         .motion(Motion.standard, value: filter)
-        .motion(Motion.standard, value: notes.unread)
         .onAppear { appeared = true }
         .onDisappear { notes.markAllRead() }
     }
@@ -106,7 +105,7 @@ struct NotificationsPage: View {
     @ViewBuilder
     private var markAllButton: some View {
         if notes.unread > 0 {
-            Button { withMotion(Motion.standard) { notes.markAllRead() } } label: {
+            Button { notes.markAllRead() } label: {
                 Label("Read all", systemImage: "checkmark")
                     .font(.jakarta(13, .heavy)).foregroundStyle(Theme.main)
                     .padding(.horizontal, 12).frame(height: 34)
@@ -166,22 +165,19 @@ struct NotificationsPage: View {
         let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
         return VStack(alignment: .leading, spacing: 8) {
             sectionTitle(title, bundles.count)
-            VStack(spacing: 0) {
+            LazyVStack(spacing: 0) {
                 ForEach(Array(bundles.enumerated()), id: \.element.id) { i, b in
                     if i > 0 {
                         Rectangle().fill(Palette.border).frame(height: 1).padding(.leading, 70)
                     }
                     tappable(b)
-                        .opacity(appeared || reduceMotion ? 1 : 0)
-                        .offset(y: appeared || reduceMotion ? 0 : 8)
-                        .animation(Motion.staggered(Motion.enter, i), value: appeared)
-                        .transition(.rise)
+
                 }
             }
             .background(Palette.surface, in: shape)
             .clipShape(shape)
             .overlay(shape.strokeBorder(Palette.border, lineWidth: 1))
-            .background { shape.fill(Palette.surface).shadow(color: Palette.shadow, radius: 10, y: 4) }
+            .background { shape.fill(Theme.main.opacity(0.08)).offset(y: 2) }
         }
     }
 

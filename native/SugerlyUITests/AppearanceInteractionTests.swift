@@ -58,6 +58,22 @@ final class AppearanceInteractionTests: XCTestCase {
         XCTAssertTrue(arrange.waitForExistence(timeout: 3))
     }
 
+    func testBunnyBodiesAndIndependentUploadCategories() {
+        app.buttons["Open bunny"].tap()
+        let body = app.buttons["Body"].firstMatch
+        XCTAssertTrue(body.waitForExistence(timeout: 15))
+        for _ in 0..<3 where !body.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        body.tap()
+        for name in ["Fox", "Monkey", "Lamb", "Bear", "Deer", "Cat"] {
+            let item = app.buttons[name].firstMatch
+            for _ in 0..<4 where !item.isHittable { app.scrollViews.firstMatch.swipeUp() }
+            XCTAssertTrue(item.exists)
+            item.tap()
+            XCTAssertTrue(item.isSelected)
+        }
+        capture("bunny-new-bodies")
+    }
+
     func testMimiPlusRepeatedPlanChangesUpdateCost() {
         app.buttons["Open MimiPlus"].tap()
         let month = app.buttons["mimiplus-plan-month"]

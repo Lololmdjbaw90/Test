@@ -339,7 +339,7 @@ struct HomeView: View {
         guard !Task.isCancelled else { return }
         // Keep what's showing if a refresh fails. New things fade in softly
         // instead of popping.
-        withAnimation(Motion.pick(.smooth(duration: 0.4))) {
+        do {
             if let nextArt { artworks = nextArt.map(Artwork.init) }
             if let nextTracks { tracks = nextTracks.map(Track.init) }
             if let nextServers { servers = nextServers.map(Server.init) }
@@ -410,7 +410,10 @@ struct HomeView: View {
                 }
                 XPBar(info: info)
             }
-            .pastelCard(radius: 24, padding: 16)
+            .padding(16)
+            .background(RoundedRectangle(cornerRadius: 24).fill(Theme.pastel))
+            .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(Palette.rim(0.55), lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: 24).fill(Theme.main.opacity(0.16)).offset(y: 4))
             .overlay {
                 // A shine sweeping by (no sparkles: the bunny's tile is the
                 // card's sparkle).
@@ -859,11 +862,7 @@ private struct HeroPop: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
-        let visible = shown || reduceMotion
         content
-            .opacity(visible ? 1 : 0)
-            .scaleEffect(visible ? 1 : 0.7)
-            .animation(reduceMotion ? nil : Motion.playful.delay(0.18 + Double(min(index, 8)) * 0.05), value: shown)
     }
 }
 

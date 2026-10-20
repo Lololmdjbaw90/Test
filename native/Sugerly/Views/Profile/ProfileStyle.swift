@@ -438,13 +438,13 @@ struct NitroShopView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    hero.entrance(shown, 0)
-                    if nitro { activeCard.entrance(shown, 1) }
-                    preview.entrance(shown, 1)
-                    NitroSelectionSection { plans }.entrance(shown, 2)
-                    perksGrid.entrance(shown, 3)
-                    walletLink.entrance(shown, 4)
+                LazyVStack(alignment: .leading, spacing: 18) {
+                    hero
+                    if nitro { activeCard }
+                    preview
+                    NitroSelectionSection { plans }
+                    perksGrid
+                    walletLink
                 }
                 .padding(16)
                 .padding(.bottom, 8)
@@ -500,7 +500,7 @@ struct NitroShopView: View {
         }
         .clipShape(shape)
         .overlay(shape.strokeBorder(Color.white.opacity(0.4), lineWidth: 1))
-        .shadow(color: Self.violet.opacity(0.28), radius: 16, y: 8)
+        .background(shape.fill(Self.violet.opacity(0.15)).offset(y: 4))
         .accessibilityElement(children: .combine)
     }
 

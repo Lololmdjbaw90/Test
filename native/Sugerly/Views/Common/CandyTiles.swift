@@ -86,6 +86,7 @@ struct PageHero: View {
     let subtitle: String
     let icon: String
     var candy: Candy = .berry
+    var themed = false
     var actionTitle: String? = nil
     var actionIcon: String = "plus"
     var action: (() -> Void)? = nil
@@ -125,7 +126,7 @@ struct PageHero: View {
         }
         .padding(18)
         .background {
-            shape.fill(candy.gradient)
+            shape.fill(themed ? Theme.gradient : candy.gradient)
                 .overlay {
                     GeometryReader { geo in
                         Circle().fill(.white.opacity(0.14)).frame(width: geo.size.height * 1.6)
@@ -137,7 +138,7 @@ struct PageHero: View {
                 }
                 // (No corner sparkles here: they'd sit on the big icon.)
                 .overlay { ShineSweep(every: 5.5, strength: 0.28).clipShape(shape) }
-                .shadow(color: candy.color.softGlow(0.35), radius: 14, y: 6)
+                .background(shape.fill(themed ? Theme.main.opacity(0.15) : candy.color.opacity(0.15)).offset(y: 3))
         }
         .onAppear { shown = true }
     }

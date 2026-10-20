@@ -169,6 +169,9 @@ struct BunnyClothingLayer: Codable, Equatable, Identifiable {
 
 struct BunnyLook: Codable, Equatable {
     var fur = 0
+    var bodyItem = ""
+    var faceItem = ""
+    var collarItem = ""
     var bowOn = true
     var bow = 0
     var collar = 0
@@ -251,6 +254,9 @@ extension BunnyLook {
         self.init()
         let c = try decoder.container(keyedBy: CodingKeys.self)
         fur = (try? c.decodeIfPresent(Int.self, forKey: .fur)) ?? fur
+        bodyItem = (try? c.decodeIfPresent(String.self, forKey: .bodyItem)) ?? ""
+        faceItem = (try? c.decodeIfPresent(String.self, forKey: .faceItem)) ?? ""
+        collarItem = (try? c.decodeIfPresent(String.self, forKey: .collarItem)) ?? ""
         bowOn = (try? c.decodeIfPresent(Bool.self, forKey: .bowOn)) ?? bowOn
         bow = (try? c.decodeIfPresent(Int.self, forKey: .bow)) ?? bow
         collar = (try? c.decodeIfPresent(Int.self, forKey: .collar)) ?? collar
@@ -334,6 +340,21 @@ enum BunnyImages {
         return full.preparingThumbnail(of: pixels) ?? full
     }
 
+    static func prepare(_ look: BunnyLook) async {
+        var names = ["BunnyFur", "BunnyOutline", "BunnyBow", "BunnyCollar", look.face.image, look.face.eyes]
+        names += BunnyTop.allCases.compactMap { $0.piece?.rawValue }
+        names += BunnyCatalog.shared.all.filter { !$0.asset.isEmpty }.map(\.asset)
+        let missing = names.filter { cache[$0] == nil }
+        let ready = await Task.detached(priority: .userInitiated) {
+            missing.map { ($0, load($0)) }
+        }.value
+        for (name, image) in ready { cache[name] = image }
+        let ids = [look.bodyItem, look.faceItem, look.collarItem] + look.layers(.top).map(\.id) + look.layers(.head).map(\.id)
+        for id in ids {
+            if let item = BunnyCatalog.shared.item(id), !item.url.isEmpty { await BunnyRemoteImages.shared.fetch(item.url) }
+        }
+    }
+
     static func warmUp(_ look: BunnyLook = BunnyLook()) {
         var names = ["BunnyFur", "BunnyOutline", "BunnyBow", "BunnyCollar", look.face.image, look.face.eyes]
         if let piece = look.top.piece { names.append(piece.rawValue) }
@@ -390,16 +411,27 @@ struct BunnyFigure: View, Equatable {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                BunnyLayer("BunnyFur", look.tint(.fur))
-                BunnyImages.image("BunnyOutline").resizable().interpolation(.high)
+                if let item = BunnyCatalog.shared.item(look.bodyItem) {
+                    BunnyItemLayer(item: item, tint: look.tint(.fur))
+                } else {
+                    BunnyLayer("BunnyFur", look.tint(.fur))
+                    BunnyImages.image("BunnyOutline").resizable().interpolation(.high)
+                }
                 clothing(.top, size: geometry.size)
-                BunnyImages.image(look.face.image).resizable().interpolation(.high)
-                BunnyImages.image(look.face.eyes).resizable().interpolation(.high)
+                if let item = BunnyCatalog.shared.item(look.faceItem) {
+                    BunnyItemLayer(item: item)
+                } else {
+                    BunnyImages.image(look.face.image).resizable().interpolation(.high)
+                    BunnyImages.image(look.face.eyes).resizable().interpolation(.high)
+                }
+                if let item = BunnyCatalog.shared.item(look.collarItem) {
+                    BunnyItemLayer(item: item, tint: look.tint(.collar))
+                }
                 clothing(.head, size: geometry.size)
             }
         }
         .aspectRatio(BunnyArt.aspect, contentMode: .fit)
-        .drawingGroup()
+        .transaction { $0.animation = nil }
         .accessibilityHidden(true)
     }
     private func clothing(_ slot: BunnySlot, size: CGSize) -> some View {
@@ -663,7 +695,7 @@ struct BunnySceneView: View {
     var body: some View {
         let moving = animated && !reduceMotion && Motion.ambient
         ZStack {
-            LinearGradient(colors: scene.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+            LinearGradient(colors: [Palette.surface, Theme.soft, Theme.main.opacity(0.18)], startPoint: .topLeading, endPoint: .bottomTrailing)
             TimelineView(.animation(minimumInterval: 1 / 30, paused: !moving)) { timeline in
                 let t = moving ? timeline.date.timeIntervalSinceReferenceDate : 0
                 Canvas { ctx, size in Self.motif(scene, &ctx, size, t) }
