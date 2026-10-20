@@ -252,7 +252,9 @@ struct MiniPlayer: View {
     @Environment(Player.self) private var player
     @AppStorage("sugerly.music.widget-x") private var savedX = 0.0
     @AppStorage("sugerly.music.widget-y") private var savedY = 0.0
-    @GestureState private var translation = CGSize.zero
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var translation = CGSize.zero
+    @State private var dragging = false
 
     private var screen: CGSize { UIScreen.main.bounds.size }
     private var cardWidth: CGFloat { min(360, max(240, screen.width - 24)) }
@@ -262,14 +264,29 @@ struct MiniPlayer: View {
                       height: min(0, max(-max(0, screen.height - 280), savedY + delta.height)))
     }
     private var moveWidget: some Gesture {
-        DragGesture(minimumDistance: 6, coordinateSpace: .global)
-            .updating($translation) { value, state, transaction in
-                transaction.animation = nil
-                state = value.translation
+        DragGesture(minimumDistance: 2, coordinateSpace: .global)
+            .onChanged { value in
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    dragging = true
+                    translation = value.translation
+                }
             }
             .onEnded { value in
-                let at = position(value.translation)
-                withAnimation(Motion.standard) { savedX = at.width; savedY = at.height }
+                // Commit the resting position and clear the drag in one update.
+                // A bounded bit of momentum avoids a hard stop at finger-up.
+                let extra = CGSize(
+                    width: reduceMotion ? 0 : max(-50, min(50, (value.predictedEndTranslation.width - value.translation.width) * 0.2)),
+                    height: reduceMotion ? 0 : max(-70, min(70, (value.predictedEndTranslation.height - value.translation.height) * 0.2)))
+                let at = position(CGSize(width: value.translation.width + extra.width,
+                                         height: value.translation.height + extra.height))
+                withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.42, dampingFraction: 0.9)) {
+                    savedX = at.width
+                    savedY = at.height
+                    translation = .zero
+                    dragging = false
+                }
             }
     }
 
@@ -323,9 +340,8 @@ struct MiniPlayer: View {
             .padding(.vertical, 9)
             .glassPill(cornerRadius: 26)
             .frame(width: cardWidth)
-            .scaleEffect(translation == .zero ? 1 : 1.025)
-            .rotationEffect(.degrees(max(-3, min(3, translation.width / 50))))
-            .animation(Motion.standard, value: translation == .zero)
+            .scaleEffect(dragging && !reduceMotion ? 1.015 : 1)
+            .rotationEffect(.degrees(reduceMotion ? 0 : max(-1.5, min(1.5, translation.width / 90))))
             .offset(x: position(translation).width, y: position(translation).height)
             .transition(.opacity)
             .sensoryFeedback(.impact(weight: .light), trigger: player.playing)

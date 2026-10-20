@@ -555,7 +555,7 @@ private struct BunnyTileFrame: ViewModifier {
 
 // The same tile as one still picture, made once per look and size and kept
 // (the menu shows this: one picture is far lighter than her layers while it
-// slides and scrolls). Until it's ready, just her background shows.
+// slides and scrolls). Show her static layers immediately on a cache miss.
 struct BunnyStillTile: View {
     var look: BunnyLook
     var height: CGFloat = 76
@@ -569,15 +569,19 @@ struct BunnyStillTile: View {
             if let image {
                 Image(uiImage: image).resizable()
             } else {
-                BunnySceneView(scene: look.scene, animated: false)
+                ZStack(alignment: .bottom) {
+                    BunnySceneView(scene: look.scene, animated: false)
+                    BunnyFigure(look: look)
+                        .frame(height: height * 0.8)
+                        .padding(.bottom, height * 0.04)
+                }
+                .transaction { $0.animation = nil }
             }
         }
         .modifier(BunnyTileFrame(height: height))
         .task(id: key) {
             BunnySnapshots.scale = scale
             guard BunnySnapshots.cached(key) == nil else { return }
-            // After the menu has slid in.
-            try? await Task.sleep(for: .milliseconds(450))
             guard !Task.isCancelled, let fresh = BunnySnapshots.make(look, height) else { return }
             made = (key, fresh)
         }
@@ -615,12 +619,9 @@ enum BunnySnapshots {
         return image
     }
 
-    // Made a little after Home shows, so the menu has it ready.
+    // Prepare the small still before the drawer is opened.
     static func warm(_ look: BunnyLook) {
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(2))
-            make(look, 76)
-        }
+        make(look, 76)
     }
 }
 
