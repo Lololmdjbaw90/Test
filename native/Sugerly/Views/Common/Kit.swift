@@ -400,22 +400,11 @@ private struct AppearFade: ViewModifier {
 
 private struct ScrollFade: ViewModifier {
     let axis: Axis
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    // Cards settle in as they scroll onto the screen and ease away as they
-    // leave, following your finger. Only near the edges, so reading is calm.
     func body(content: Content) -> some View {
-        if reduceMotion {
-            content
-        } else {
-            let vertical = axis == .vertical
-            content.scrollTransition(.interactive.threshold(.visible(0.35)), axis: axis) { view, phase in
-                view
-                    .opacity(phase.isIdentity ? 1 : 0.4)
-                    .scaleEffect(phase.isIdentity ? 1 : 0.94)
-                    .offset(y: vertical ? CGFloat(phase.value) * 18 : 0)
-            }
-        }
+        // Native scrolling already moves the content. Transforming and fading
+        // every card on every scroll frame forces extra compositing passes.
+        content
     }
 }
 

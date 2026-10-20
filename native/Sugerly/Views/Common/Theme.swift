@@ -505,8 +505,7 @@ struct SugarCard: ViewModifier {
             .padding(padding)
             .background {
                 shape.fill(Palette.surface)
-                    .softShadow(Palette.shadow, radius: 1, y: 1)
-                    .softShadow(Palette.shadow, radius: 14, y: 6)
+                    .softShadow(Palette.shadow, radius: 6, y: 2)
             }
             .overlay(shape.strokeBorder(Palette.border.opacity(0.8), lineWidth: 1))
     }
@@ -1077,7 +1076,7 @@ struct Shimmer: ViewModifier {
 
     func body(content: Content) -> some View {
         // With Reduce Motion on, the placeholder simply stays still.
-        if reduceMotion {
+        if reduceMotion || !Motion.ambient {
             content
         } else {
             content

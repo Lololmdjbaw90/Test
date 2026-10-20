@@ -94,7 +94,7 @@ enum AnimatedImages {
             kCGImageSourceShouldCacheImmediately: true,
             kCGImageSourceThumbnailMaxPixelSize: pixel,
         ]
-        if count <= 1 {
+        if count <= 1 || maxFrames <= 1 {
             guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return UIImage(data: data) }
             return UIImage(cgImage: cg)
         }

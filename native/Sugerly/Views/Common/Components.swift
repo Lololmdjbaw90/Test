@@ -27,7 +27,7 @@ struct Avatar: View {
             Group {
                 if live {
                     FullGIF(url: url)
-                } else if let shown = own ?? (url.isEmpty ? nil : (AnimatedImages.looksAnimated(url) ? AnimatedImages.cached(url, maxPixel: pixel) : MemoryImages.get(url))) {
+                } else if let shown = own ?? (url.isEmpty ? nil : (AnimatedImages.looksAnimated(url) ? AnimatedImages.cached(url, maxPixel: pixel, maxFrames: 1) : MemoryImages.get(ImagePipeline.cacheKey(url, maxPixel: pixel)))) {
                     LoadedImage(image: shown)
                 } else {
                     initial
@@ -40,16 +40,16 @@ struct Avatar: View {
             PresenceBadge(presence: presence, online: online, size: size)
         }
         .accessibilityHidden(true)
-        .task(id: url) {
+        .task(id: "\(url)#\(Int(pixel))#\(live)") {
             if imageURL != url { image = nil; imageURL = url }
             guard !url.isEmpty, !live else { return }
             let target = url
             if AnimatedImages.looksAnimated(target) {
-                if let loaded = await AnimatedImages.load(target, maxPixel: pixel), target == url { image = loaded }
+                if let loaded = await AnimatedImages.load(target, maxPixel: pixel, maxFrames: 1), target == url { image = loaded }
                 return
             }
-            guard image == nil || MemoryImages.get(target) == nil else { return }
-            if let loaded = await ImagePipeline.shared.load(target), target == url { image = loaded }
+            guard image == nil || MemoryImages.get(ImagePipeline.cacheKey(target, maxPixel: pixel)) == nil else { return }
+            if let loaded = await ImagePipeline.shared.load(target, maxPixel: pixel), target == url { image = loaded }
         }
     }
 
@@ -121,20 +121,28 @@ actor ImagePipeline {
     static let shared = ImagePipeline()
     private var running: [String: Task<UIImage?, Never>] = [:]
 
-    func load(_ url: String) async -> UIImage? {
-        if let hit = MemoryImages.get(url) { return hit }
-        if let task = running[url] { return await task.value }
+    nonisolated static func cacheKey(_ url: String, maxPixel: CGFloat = 1400) -> String {
+        maxPixel == 1400 ? url : "\(url)#thumb-\(Int(maxPixel))"
+    }
+
+    func load(_ url: String, maxPixel: CGFloat = 1400) async -> UIImage? {
+        let key = Self.cacheKey(url, maxPixel: maxPixel)
+        if let hit = MemoryImages.get(key) { return hit }
+        if let task = running[key] { return await task.value }
         let task = Task<UIImage?, Never>.detached(priority: .userInitiated) {
             guard let link = URL(string: url) else { return nil }
             var request = URLRequest(url: link)
             request.cachePolicy = .returnCacheDataElseLoad
             guard let (data, _) = try? await URLSession.shared.data(for: request) else { return nil }
-            return ImagePipeline.downsample(data, maxPixel: 1400)
+            await DecodeGate.shared.enter()
+            let image = ImagePipeline.downsample(data, maxPixel: maxPixel)
+            await DecodeGate.shared.leave()
+            return image
         }
-        running[url] = task
+        running[key] = task
         let image = await task.value
-        running[url] = nil
-        if let image { MemoryImages.set(image, for: url) }
+        running[key] = nil
+        if let image { MemoryImages.set(image, for: key) }
         return image
     }
 

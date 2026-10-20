@@ -1,6 +1,7 @@
 #if DEBUG
 import SwiftUI
 import PhotosUI
+import ImageIO
 
 // Isolated real controls: no login, account mutations, or remote fixtures.
 struct PolishUITestHost: View {
@@ -37,6 +38,9 @@ struct PolishUITestHost: View {
                 Text("Wall").tag(3)
                 Text("Home").tag(4)
             }.pickerStyle(.segmented).padding()
+            if ProcessInfo.processInfo.arguments.contains("--check-performance-policy") {
+                Text(PerformanceFixture.result).font(.caption2).accessibilityIdentifier("performance-policy")
+            }
             if tab == 0 {
                 Text(stickers.first.map { String(format: "%.2f,%.2f", $0.start, $0.end ?? 10) } ?? "Deleted")
                     .accessibilityIdentifier("timing-value")
@@ -82,5 +86,25 @@ struct PolishUITestHost: View {
             } onDelete: { id in stickers.removeAll { $0.id == id } }
         }
     }
+}
+// Exercise the real image decoders without network access or private accounts.
+@MainActor
+private enum PerformanceFixture {
+    static let result: String = {
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(data, "com.compuserve.gif" as CFString, 2, nil) else { return "GIF fixture failed" }
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 16, height: 16))
+        for color in [UIColor.red, UIColor.blue] {
+            let image = renderer.image { context in color.setFill(); context.fill(CGRect(x: 0, y: 0, width: 16, height: 16)) }
+            guard let cg = image.cgImage else { return "GIF frame failed" }
+            CGImageDestinationAddImage(destination, cg, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 0.1]] as CFDictionary)
+        }
+        guard CGImageDestinationFinalize(destination),
+              let poster = AnimatedImages.decode(data as Data, maxPixel: 16, maxFrames: 1), poster.images == nil,
+              let animated = AnimatedImages.decode(data as Data, maxPixel: 16, maxFrames: 2), (animated.images?.count ?? 0) >= 2 else { return "GIF playback policy failed" }
+        guard !Motion.ambient else { return "Decorative animations still running" }
+        guard ImagePipeline.cacheKey("fixture", maxPixel: 96) != ImagePipeline.cacheKey("fixture") else { return "Thumbnail cache collision" }
+        return "Performance fixtures passed"
+    }()
 }
 #endif

@@ -43,10 +43,10 @@ enum Motion {
         return MainActor.assumeIsolated { UIAccessibility.isReduceMotionEnabled }
     }
 
-    /// Things that keep moving on their own (drifting backgrounds, a
-    /// bobbing bunny, twinkles): off with Reduce Motion, and off during the
-    /// automatic UI tests (which wait for the screen to be still).
-    static let ambient: Bool = !ProcessInfo.processInfo.arguments.contains { $0.hasSuffix("-ui-test") }
+    /// Decorative loops are disabled in production as well as tests. Several
+    /// cached tabs can otherwise keep animating simultaneously. Keep movement
+    /// tied to a tap, playback, or one short page entrance instead.
+    static let ambient = false
 
     /// True while the menu covers the page: the page's own little
     /// animations (the bunny's float, shines, hopping icons) pause, so
@@ -107,10 +107,7 @@ struct BlurFade: ViewModifier {
     let amount: Double
 
     func body(content: Content) -> some View {
-        content
-            .blur(radius: 4 * amount)
-            .opacity(1 - amount)
-            .scaleEffect(1 - 0.08 * amount)
+        content.opacity(1 - amount)
     }
 }
 

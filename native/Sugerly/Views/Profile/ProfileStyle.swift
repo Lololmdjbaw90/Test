@@ -102,8 +102,8 @@ private struct AuroraName: View {
     var body: some View {
         // 12 updates a second is plenty for a slow 5-second slide (many of
         // these can be on screen at once in a feed).
-        TimelineView(.animation(minimumInterval: 1 / 12, paused: still)) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
+        TimelineView(.animation(minimumInterval: 1 / 12, paused: still || !Motion.ambient)) { timeline in
+            let t = still || !Motion.ambient ? 0 : timeline.date.timeIntervalSinceReferenceDate
             let phase = CGFloat(t.truncatingRemainder(dividingBy: 5) / 5)
             text.foregroundStyle(LinearGradient(
                 colors: [Color(hex: 0xEE8FAE), Color(hex: 0xB19CFF), Color(hex: 0x7CBEFF), Color(hex: 0xEE8FAE), Color(hex: 0xB19CFF)],
@@ -208,8 +208,8 @@ struct ProfileEffectLayer: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: paused)) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: paused || !Motion.ambient)) { timeline in
+            let t = paused || !Motion.ambient ? 0 : timeline.date.timeIntervalSinceReferenceDate
             Canvas { context, size in
                 guard let symbol = context.resolveSymbol(id: 0) else { return }
                 let n = count

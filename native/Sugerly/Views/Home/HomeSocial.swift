@@ -139,6 +139,7 @@ struct HomeComposerBar: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(BouncyStyle(scale: 0.98))
+            .accessibilityIdentifier("home-compose-post")
             HStack(spacing: 0) {
                 action("Post", "text.bubble.fill", .berry) { compose(.post) }
                 action("Reel", "play.rectangle.fill", .peach) { compose(.reel) }

@@ -351,7 +351,7 @@ struct PatternBackground: View {
         var light: Color
     }
 
-    private var moving: Bool { animated && !reduceMotion }
+    private var moving: Bool { animated && !reduceMotion && Motion.ambient }
 
     var body: some View {
         let colors = Colors(dark: scheme == .dark, main: Theme.main, light: Theme.light)
