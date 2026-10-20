@@ -2,6 +2,7 @@ import XCTest
 
 final class ReelPlaybackInteractionTests: XCTestCase {
     func testVideosAdvanceSwipeLoopAndResumeAboveTabBar() {
+        continueAfterFailure = false
         let app = XCUIApplication()
         app.launchArguments = ["--reel-playback-ui-test"]
         app.launch()

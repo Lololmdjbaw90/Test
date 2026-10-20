@@ -41,31 +41,9 @@ struct ReelPlaybackUITestHost: View {
     }
 
     nonisolated private static func makeClip() async throws -> URL {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
-        let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
-        let input = AVAssetWriterInput(mediaType: .video, outputSettings: [AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: 180, AVVideoHeightKey: 320])
-        let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32ARGB, kCVPixelBufferWidthKey as String: 180, kCVPixelBufferHeightKey as String: 320])
-        writer.add(input)
-        guard writer.startWriting() else { throw writer.error ?? APIError(message: "Cannot create fixture") }
-        writer.startSession(atSourceTime: .zero)
-        for frame in 0..<60 {
-            while !input.isReadyForMoreMediaData { try await Task.sleep(for: .milliseconds(5)) }
-            var buffer: CVPixelBuffer?
-            CVPixelBufferCreate(kCFAllocatorDefault, 180, 320, kCVPixelFormatType_32ARGB, nil, &buffer)
-            guard let buffer else { throw APIError(message: "Cannot create pixels") }
-            CVPixelBufferLockBaseAddress(buffer, [])
-            let bytes = CVPixelBufferGetBaseAddress(buffer)!.assumingMemoryBound(to: UInt8.self)
-            let stride = CVPixelBufferGetBytesPerRow(buffer)
-            for y in 0..<320 { for x in 0..<180 {
-                let at = y * stride + x * 4
-                bytes[at] = 255; bytes[at + 1] = UInt8(frame * 4); bytes[at + 2] = UInt8(y % 255); bytes[at + 3] = 160
-            } }
-            CVPixelBufferUnlockBaseAddress(buffer, [])
-            guard adaptor.append(buffer, withPresentationTime: CMTime(value: Int64(frame), timescale: 20)) else { throw writer.error ?? APIError(message: "Cannot append pixels") }
+        guard let url = Bundle.main.url(forResource: "PlaybackFixture", withExtension: "mp4") else {
+            throw APIError(message: "The playback fixture is missing")
         }
-        input.markAsFinished()
-        await writer.finishWriting()
-        guard writer.status == .completed else { throw writer.error ?? APIError(message: "Cannot finish clip") }
         return url
     }
 }
