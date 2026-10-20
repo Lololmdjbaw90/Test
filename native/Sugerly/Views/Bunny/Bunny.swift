@@ -593,7 +593,7 @@ enum BunnySnapshots {
     static func key(_ look: BunnyLook, _ height: CGFloat) -> String {
         let data = (try? JSONEncoder().encode(look)) ?? Data()
         // Uploaded items count once their picture has arrived.
-        return "\(Int(height))-\(BunnyRemoteImages.shared.images.count)-" + data.base64EncodedString()
+        return "\(Theme.mainHex)-\(Theme.lightHex)-\(UITraitCollection.current.userInterfaceStyle.rawValue)-\(Int(height))-\(BunnyRemoteImages.shared.images.count)-" + data.base64EncodedString()
     }
 
     static func cached(_ key: String) -> UIImage? { cache[key] }
