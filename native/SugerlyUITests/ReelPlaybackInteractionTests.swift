@@ -32,7 +32,11 @@ final class ReelPlaybackInteractionTests: XCTestCase {
         XCTAssertTrue(back.waitForExistence(timeout: 5))
         XCTAssertEqual(app.buttons.matching(identifier: "Back").count, 1)
         XCTAssertLessThan(back.frame.minX, 30)
-        XCTAssertGreaterThanOrEqual(back.frame.minY, app.statusBars.firstMatch.frame.maxY)
+        if app.statusBars.firstMatch.exists {
+            XCTAssertGreaterThanOrEqual(back.frame.minY, app.statusBars.firstMatch.frame.maxY)
+        } else {
+            XCTAssertGreaterThanOrEqual(back.frame.minY, 24, "Back must clear the system status area")
+        }
         back.tap()
         XCTAssertTrue(app.buttons["Open single reel"].waitForExistence(timeout: 5))
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "reel-playing-above-tab-bar"; shot.lifetime = .keepAlways; add(shot)
