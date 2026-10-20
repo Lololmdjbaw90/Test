@@ -267,21 +267,17 @@ struct MiniPlayer: View {
         DragGesture(minimumDistance: 2, coordinateSpace: .global)
             .onChanged { value in
                 var transaction = Transaction()
-                transaction.disablesAnimations = true
+                transaction.animation = nil
                 withTransaction(transaction) {
                     dragging = true
                     translation = value.translation
                 }
             }
             .onEnded { value in
-                // Commit the resting position and clear the drag in one update.
-                // A bounded bit of momentum avoids a hard stop at finger-up.
-                let extra = CGSize(
-                    width: reduceMotion ? 0 : max(-50, min(50, (value.predictedEndTranslation.width - value.translation.width) * 0.2)),
-                    height: reduceMotion ? 0 : max(-70, min(70, (value.predictedEndTranslation.height - value.translation.height) * 0.2)))
-                let at = position(CGSize(width: value.translation.width + extra.width,
-                                         height: value.translation.height + extra.height))
-                withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.42, dampingFraction: 0.9)) {
+                // Place it exactly where the finger stopped. Animate the lift
+                // settling away, rather than throwing the card past that point.
+                let at = position(value.translation)
+                withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .smooth(duration: 0.4)) {
                     savedX = at.width
                     savedY = at.height
                     translation = .zero
@@ -342,6 +338,8 @@ struct MiniPlayer: View {
             .frame(width: cardWidth)
             .scaleEffect(dragging && !reduceMotion ? 1.015 : 1)
             .rotationEffect(.degrees(reduceMotion ? 0 : max(-1.5, min(1.5, translation.width / 90))))
+            // Animate pickup/put-down without adding delay to finger tracking.
+            .animation(reduceMotion ? nil : .smooth(duration: 0.28), value: dragging)
             .offset(x: position(translation).width, y: position(translation).height)
             .transition(.opacity)
             .sensoryFeedback(.impact(weight: .light), trigger: player.playing)

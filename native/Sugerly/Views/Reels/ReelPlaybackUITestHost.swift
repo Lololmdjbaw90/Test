@@ -4,6 +4,7 @@ import AVFoundation
 
 struct ReelPlaybackUITestHost: View {
     @State private var player = Player()
+    @State private var chats = ChatStore()
     @State private var path: [Route] = []
     @State private var tab = 1
     @State private var fixtures: [Reel] = []
@@ -32,6 +33,7 @@ struct ReelPlaybackUITestHost: View {
         .compactTabBar(enabled: tab != 1)
         .environment(\.horizontalSizeClass, .compact)
         .environment(player)
+        .environment(chats)
         .overlay(alignment: .topLeading) {
             TimelineView(.periodic(from: .now, by: 0.2)) { _ in
                 VStack {
