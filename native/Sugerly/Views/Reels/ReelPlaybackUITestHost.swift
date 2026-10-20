@@ -9,13 +9,14 @@ struct ReelPlaybackUITestHost: View {
     @State private var fixtures: [Reel] = []
     @State private var videos: [ReelVideo] = []
     @State private var problem = ""
+    @State private var single = false
 
     var body: some View {
         TabView(selection: $tab) {
             SplashView().tabItem { Label("Home", systemImage: "house") }.tag(0)
             Group {
                 if fixtures.isEmpty { Text(problem.isEmpty ? "Preparing clip" : problem) }
-                else { ReelsView(visible: tab == 1, path: $path, create: {}, initialReels: fixtures) }
+                else { ReelsView(visible: tab == 1 && !single, path: $path, create: {}, initialReels: fixtures) }
             }.tabItem { Label("Reels", systemImage: "play.rectangle") }.tag(1)
         }
         .compactTabBar()
@@ -30,6 +31,12 @@ struct ReelPlaybackUITestHost: View {
                     }
                 }.font(.system(size: 10)).foregroundStyle(.white).padding(4).background(.black)
             }
+        }
+        .overlay(alignment: .topTrailing) {
+            if !fixtures.isEmpty { Button("Open single reel") { single = true }.padding(6).background(.white) }
+        }
+        .fullScreenCover(isPresented: $single) {
+            if let reel = fixtures.first { SingleReelView(reel: reel, path: $path, loadContent: false).environment(player) }
         }
         .task {
             do {

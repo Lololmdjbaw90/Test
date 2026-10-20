@@ -15,7 +15,9 @@ final class ReelPlaybackInteractionTests: XCTestCase {
         XCTAssertLessThan(share.frame.maxY, app.tabBars.firstMatch.frame.minY)
         let feed = app.scrollViews["reel-feed"]
         XCTAssertTrue(feed.exists)
-        feed.swipeUp(velocity: .fast)
+        let dragStart = feed.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.82))
+        let dragEnd = feed.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.08))
+        dragStart.press(forDuration: 0.05, thenDragTo: dragEnd)
         let second = app.staticTexts["clip-1-state"]
         expectation(for: playing, evaluatedWith: second)
         waitForExpectations(timeout: 15)
@@ -25,6 +27,14 @@ final class ReelPlaybackInteractionTests: XCTestCase {
         app.tabBars.buttons["Reels"].tap()
         expectation(for: playing, evaluatedWith: second)
         waitForExpectations(timeout: 15)
+        app.buttons["Open single reel"].tap()
+        let back = app.buttons["Back"]
+        XCTAssertTrue(back.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons.matching(identifier: "Back").count, 1)
+        XCTAssertLessThan(back.frame.minX, 30)
+        XCTAssertGreaterThanOrEqual(back.frame.minY, app.statusBars.firstMatch.frame.maxY)
+        back.tap()
+        XCTAssertTrue(app.buttons["Open single reel"].waitForExistence(timeout: 5))
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "reel-playing-above-tab-bar"; shot.lifetime = .keepAlways; add(shot)
     }
 }

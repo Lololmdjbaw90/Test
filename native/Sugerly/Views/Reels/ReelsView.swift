@@ -1100,6 +1100,8 @@ struct ReelPage: View {
 struct SingleReelView: View {
     let reel: Reel
     @Binding var path: [Route]
+    var loadContent = true
+    @Environment(\.dismiss) private var dismiss
     var body: some View {
         GeometryReader { geo in
             // On iPad the reel is a phone-shaped column on a blurred copy of
@@ -1113,14 +1115,26 @@ struct SingleReelView: View {
                         .blur(radius: 40)
                         .overlay(Color.black.opacity(0.45))
                 }
-                ReelPage(reel: reel, active: true, path: $path, showBack: true, insets: geo.safeAreaInsets)
+                ReelPage(reel: reel, active: true, path: $path, showBack: false, insets: geo.safeAreaInsets, loadContent: loadContent)
                     .frame(width: column, height: geo.size.height)
                     .clipShape(RoundedRectangle(cornerRadius: wide ? 28 : 0, style: .continuous))
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .clipped()
         }
-        .ignoresSafeArea()
+        .overlay(alignment: .topLeading) {
+            Button {
+                if path.isEmpty { dismiss() } else { path.removeLast() }
+            } label: {
+                Image(systemName: "chevron.left").font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white).frame(width: 44, height: 44)
+                    .background(.black.opacity(0.4), in: Circle())
+                    .overlay(Circle().strokeBorder(.white.opacity(0.25), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Back")
+            .padding(.leading, 12).padding(.top, 6)
+        }
         .background(Color.black.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
     }
