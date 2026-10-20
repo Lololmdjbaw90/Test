@@ -37,7 +37,9 @@ struct SugerlyApp: App {
             // text), so the biggest text sizes can't push things off screen.
             Group {
                 #if DEBUG
-                if ProcessInfo.processInfo.arguments.contains("--reel-playback-ui-test") {
+                if ProcessInfo.processInfo.arguments.contains("--editor-loop-ui-test") {
+                    EditorLoopUITestHost().environment(model).sugarProgress()
+                } else if ProcessInfo.processInfo.arguments.contains("--reel-playback-ui-test") {
                     ReelPlaybackUITestHost().environment(model).sugarProgress()
                 } else if ProcessInfo.processInfo.arguments.contains("--appearance-ui-test") {
                     AppearanceUITestHost().environment(model).sugarProgress()

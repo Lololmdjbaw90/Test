@@ -156,15 +156,16 @@ private struct BarIcon: View {
 extension View {
     /// On iOS 26 the tab bar shrinks to a small bubble while you scroll down
     /// (the page gets the room) and comes back as soon as you scroll up.
-    func compactTabBar() -> some View {
-        modifier(CompactTabBar())
+    func compactTabBar(enabled: Bool = true) -> some View {
+        modifier(CompactTabBar(enabled: enabled))
     }
 }
 
 private struct CompactTabBar: ViewModifier {
+    var enabled = true
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            content.tabBarMinimizeBehavior(.onScrollDown)
+            content.tabBarMinimizeBehavior(enabled ? .onScrollDown : .never)
         } else {
             content
         }
@@ -348,7 +349,7 @@ struct BottomDock: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        let busy = player.track != nil || voice.room != nil
+        let busy = (player.track != nil && !player.widgetHidden) || voice.room != nil
         VStack(spacing: 8) {
             VoiceDock()
             MiniPlayer()

@@ -13,21 +13,34 @@ struct ReelPlaybackUITestHost: View {
 
     var body: some View {
         TabView(selection: $tab) {
-            SplashView().tabItem { Label("Home", systemImage: "house") }.tag(0)
+            VStack {
+                SplashView()
+                Button("Start test music") {
+                    if let url = Bundle.main.url(forResource: "MusicFixture", withExtension: "m4a") {
+                        let track = Track(["id": "music-fixture", "title": "Music test", "music_url": url.absoluteString])
+                        player.play(track, in: [track])
+                    }
+                }.padding()
+            }
+            .safeAreaInset(edge: .bottom) { MiniPlayer() }
+            .tabItem { Label("Home", systemImage: "house") }.tag(0)
             Group {
                 if fixtures.isEmpty { Text(problem.isEmpty ? "Preparing clip" : problem) }
                 else { ReelsView(visible: tab == 1 && !single, path: $path, create: {}, initialReels: fixtures) }
             }.tabItem { Label("Reels", systemImage: "play.rectangle") }.tag(1)
         }
-        .compactTabBar()
+        .compactTabBar(enabled: tab != 1)
         .environment(\.horizontalSizeClass, .compact)
         .environment(player)
         .overlay(alignment: .topLeading) {
             TimelineView(.periodic(from: .now, by: 0.2)) { _ in
                 VStack {
+                    Text(player.widgetHidden ? "hidden" : player.playing ? "playing" : "paused").accessibilityIdentifier("music-state")
                     ForEach(Array(videos.enumerated()), id: \.offset) { i, video in
                         Text(video.failed ? "failed" : video.ready && video.player.rate > 0 && video.player.currentTime().seconds > 0.4 ? "playing" : "paused")
                             .accessibilityIdentifier("clip-\(i)-state")
+                        Text("\(video.completedLoops)").accessibilityIdentifier("clip-\(i)-loops")
+                        Text("\(video.restarts)").accessibilityIdentifier("clip-\(i)-restarts")
                     }
                 }.font(.system(size: 10)).foregroundStyle(.white).padding(4).background(.black)
             }

@@ -13,6 +13,33 @@ final class Player {
     var playing = false
     var time: Double = 0
     var duration: Double = 0
+    private(set) var widgetHidden = false
+    @ObservationIgnored private var suppressedBy = Set<String>()
+    @ObservationIgnored private var resumeAfterSuppression = false
+    @ObservationIgnored private var restoreTask: Task<Void, Never>?
+
+    func setSuppressed(_ reason: String, active: Bool) {
+        restoreTask?.cancel()
+        if active {
+            if suppressedBy.isEmpty && !widgetHidden { resumeAfterSuppression = playing }
+            suppressedBy.insert(reason)
+            widgetHidden = true
+            player?.pause()
+            playing = false
+            updateNowPlaying()
+        } else {
+            suppressedBy.remove(reason)
+            guard suppressedBy.isEmpty else { return }
+            restoreTask = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(180))
+                guard !Task.isCancelled, let self, self.suppressedBy.isEmpty else { return }
+                self.widgetHidden = false
+                let resumes = self.resumeAfterSuppression
+                self.resumeAfterSuppression = false
+                if resumes { self.resume() }
+            }
+        }
+    }
 
     @ObservationIgnored private var player: AVPlayer?
     @ObservationIgnored private var timeObserver: Any?
@@ -68,7 +95,7 @@ final class Player {
             let status = player.timeControlStatus
             Task { @MainActor in
                 guard let self else { return }
-                let now = status != .paused
+                let now = status != .paused && !self.widgetHidden
                 if self.playing != now { self.playing = now }
             }
         }
@@ -78,8 +105,8 @@ final class Player {
             Task { @MainActor in await self?.recover(t) }
         }
         watchInterruptions()
-        p.play()
-        playing = true
+        if widgetHidden { resumeAfterSuppression = true; playing = false }
+        else { p.play(); playing = true }
         updateNowPlaying()
         setupRemote()
     }
@@ -117,6 +144,7 @@ final class Player {
 
     // Plays from where it is, or from the start if the song had finished.
     private func resume() {
+        guard !widgetHidden else { resumeAfterSuppression = true; return }
         guard let player else { return }
         activateSession()
         AppleMusic.shared.stop()
@@ -169,12 +197,14 @@ final class Player {
     }
 
     func pause() {
+        resumeAfterSuppression = false
         player?.pause()
         playing = false
         updateNowPlaying()
     }
 
     func close() {
+        resumeAfterSuppression = false
         teardown()
         track = nil
         playing = false
@@ -220,10 +250,38 @@ final class Player {
 // The floating "now playing" card above the tab bar.
 struct MiniPlayer: View {
     @Environment(Player.self) private var player
+    @AppStorage("sugerly.music.widget-x") private var savedX = 0.0
+    @AppStorage("sugerly.music.widget-y") private var savedY = 0.0
+    @GestureState private var translation = CGSize.zero
+
+    private var screen: CGSize { UIScreen.main.bounds.size }
+    private var cardWidth: CGFloat { min(360, max(240, screen.width - 24)) }
+    private func position(_ delta: CGSize) -> CGSize {
+        let side = max(0, (screen.width - cardWidth) / 2 - 8)
+        return CGSize(width: min(side, max(-side, savedX + delta.width)),
+                      height: min(0, max(-max(0, screen.height - 280), savedY + delta.height)))
+    }
+    private var moveWidget: some Gesture {
+        DragGesture(minimumDistance: 6, coordinateSpace: .global)
+            .updating($translation) { value, state, transaction in
+                transaction.animation = nil
+                state = value.translation
+            }
+            .onEnded { value in
+                let at = position(value.translation)
+                savedX = at.width; savedY = at.height
+            }
+    }
 
     var body: some View {
-        if let track = player.track {
+        if let track = player.track, !player.widgetHidden {
             VStack(spacing: 6) {
+                Capsule().fill(Palette.muted.opacity(0.5)).frame(width: 32, height: 4)
+                    .frame(maxWidth: .infinity).frame(height: 14)
+                    .contentShape(Rectangle())
+                    .gesture(moveWidget)
+                    .accessibilityLabel("Move music player")
+                    .accessibilityIdentifier("music-widget-handle")
                 HStack(spacing: 12) {
                     // A still cover: a spinning one redrew the bar on every
                     // frame and made the whole app stutter while music played.
@@ -264,8 +322,9 @@ struct MiniPlayer: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
             .glassPill(cornerRadius: 26)
-            .padding(.horizontal, 12)
-            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .frame(width: cardWidth)
+            .offset(x: position(translation).width, y: position(translation).height)
+            .transition(.opacity)
             .sensoryFeedback(.impact(weight: .light), trigger: player.playing)
         }
     }

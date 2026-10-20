@@ -394,7 +394,7 @@ private struct ShellTabs: View {
                 .badge(chats.unread)
                 .tag(AppTab.chat)
         }
-        .compactTabBar()
+        .compactTabBar(enabled: nav.tab != .reels)
         .tint(Theme.main)
         // iPad: the tab bar sits at the bottom like on iPhone. (iPadOS puts
         // the tabs at the top, squeezed in with each page's title and
@@ -628,7 +628,10 @@ struct MainShell: View {
         }
         // Joining a call: the song stops so you can hear each other.
         .onChange(of: voice.room?.id) { _, id in
-            if id != nil, player.playing { player.pause() }
+            player.setSuppressed("call", active: id != nil)
+        }
+        .onChange(of: nav.composer) { _, composer in
+            player.setSuppressed("reel-studio", active: composer == .reel)
         }
         .onChange(of: model.soundRequest?.id) { _, id in
             if id != nil { nav.composer = .reel }

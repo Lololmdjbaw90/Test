@@ -41,6 +41,7 @@ final class ReelVideo {
     private var sizeObservation: NSKeyValueObservation?
     private var preparation: Task<Void, Never>?
     private var wantsPlayback = false
+    private var loopStart = CMTime.zero
     private var loopObservation: NSKeyValueObservation?
 
     // Videos are kept around for the few reels near the one on screen, so
@@ -66,6 +67,8 @@ final class ReelVideo {
     }
 
     var progress: Double = 0
+    private(set) var completedLoops = 0
+    private(set) var restarts = 0
     private var timeObserver: Any?
 
     // Forget a video so the next try loads it fresh.
@@ -93,6 +96,7 @@ final class ReelVideo {
                 }
                 guard !Task.isCancelled else { return }
                 let offset = start.isFinite ? max(0, min(start, max(0, duration.seconds - 0.05))) : 0
+                self.loopStart = CMTime(seconds: offset, preferredTimescale: 600)
                 let range = offset > 0 ? CMTimeRange(start: CMTime(seconds: offset, preferredTimescale: 600), end: duration) : .invalid
                 self.looper = AVPlayerLooper(player: self.player, templateItem: item, timeRange: range)
                 self.loopObservation = self.looper?.observe(\.status, options: [.initial, .new]) { [weak self] looper, _ in
@@ -121,9 +125,18 @@ final class ReelVideo {
         }
     }
 
-    func play() {
+    func play(fromStart: Bool = false) {
         wantsPlayback = true
-        if looper != nil { player.play() }
+        if looper != nil {
+            if fromStart {
+                player.pause()
+                progress = 0
+                restarts += 1
+                player.seek(to: loopStart, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+                    Task { @MainActor in if let self, self.wantsPlayback { self.player.play() } }
+                }
+            } else { player.play() }
+        }
         if timeObserver == nil {
             timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.1, preferredTimescale: 600), queue: .main) { [weak self] time in
                 MainActor.assumeIsolated {
@@ -131,6 +144,7 @@ final class ReelVideo {
                     let total = item.duration.seconds
                     if total.isFinite, total > 0 {
                         self.duration = total
+                        if self.progress > 0.8 && time.seconds / total < 0.2 { self.completedLoops += 1 }
                         self.progress = min(1, max(0, time.seconds / total))
                     }
                 }
@@ -230,11 +244,13 @@ struct ReelsView: View {
                                     ReelPage(reel: reel, active: visible && activeId == reel.id, near: abs(i - activeIndex) <= 1, path: $path,
                                              insets: geo.safeAreaInsets, loadContent: initialReels == nil,
                                              onNext: { advance(from: reel.id) }, onHide: { hide($0) })
-                                        .frame(width: column, height: geo.size.height)
+                                        .frame(width: min(column, geo.size.height * 9 / 16))
+                                        .containerRelativeFrame(.vertical)
                                         .clipShape(RoundedRectangle(cornerRadius: column < geo.size.width - 1 ? 28 : 0, style: .continuous))
                                         .padding(.vertical, column < geo.size.width - 1 ? 0 : 0)
                                 }
-                                .frame(width: geo.size.width, height: geo.size.height)
+                                .frame(width: geo.size.width)
+                                .containerRelativeFrame(.vertical)
                                 .clipped()
                                 .id(reel.id)
                             }
@@ -248,7 +264,9 @@ struct ReelsView: View {
                     }
                     .coordinateSpace(.named("reels"))
                     .scrollTargetBehavior(.paging)
-                    .scrollPosition(id: $activeId)
+                    .scrollPosition(id: $activeId, anchor: .top)
+                    .contentMargins(.vertical, 0, for: .scrollContent)
+                    .clipped()
                     .accessibilityIdentifier("reel-feed")
                     .scrollIndicators(.hidden)
                     .scrollBounceBehavior(.basedOnSize)
@@ -305,10 +323,12 @@ struct ReelsView: View {
             await load()
         }
         .onChange(of: visible, initial: true) { _, now in
-            if now { music.close(); AppleMusic.shared.stop() }
+            music.setSuppressed("reel-feed", active: now)
+            if now { AppleMusic.shared.stop() }
             if now, activeId == nil { activeId = shown.first?.id }
             if now && initialReels == nil { Task { await checkNew() } }
         }
+        .onDisappear { music.setSuppressed("reel-feed", active: false) }
         .onReceive(NotificationCenter.default.publisher(for: Self.posted)) { note in
             if let reel = note.object as? Reel { showPosted(reel) }
         }
@@ -592,7 +612,12 @@ struct ReelPage: View {
     var body: some View {
         ZStack {
             Color.black
-            media
+            GeometryReader { frame in
+                media
+                    .frame(width: min(frame.size.width, frame.size.height * 9 / 16), height: min(frame.size.height, frame.size.width * 16 / 9))
+                    .clipped()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
             if !reel.texts.isEmpty {
                 ReelTextLayer(texts: reel.texts, active: active).allowsHitTesting(false)
             }
@@ -643,7 +668,7 @@ struct ReelPage: View {
                 .presentationCornerRadius(30)
         }
         .onAppear {
-            if active { start() } else if near { preload() }
+            if active { start(restart: true) } else if near { preload() }
         }
         .onChange(of: near) { _, now in if now && !active { preload() } }
         .onDisappear { video?.pause(); sound?.pause(); learnWatch() }
@@ -652,7 +677,7 @@ struct ReelPage: View {
             else { video?.pause(); sound?.pause() }
         }
         .onChange(of: active) { _, now in
-            if now { start(); watchStart = Date() } else { video?.pause(); sound?.pause(); learnWatch() }
+            if now { start(restart: true); watchStart = Date() } else { video?.pause(); sound?.pause(); learnWatch() }
         }
         .confirmationDialog(soundName, isPresented: $useSound, titleVisibility: .visible) {
             Button("Use this sound") { Task { await takeSound() } }
@@ -905,8 +930,8 @@ struct ReelPage: View {
         video = ReelVideo.get(reel.id, url: url, start: reel.trimStart, filter: reel.filterId, speed: reel.speed)
     }
 
-    private func start() {
-        if music.track != nil { music.close() }
+    private func start(restart: Bool = false) {
+        if restart { paused = false; sound?.seek(to: .zero) }
         AppleMusic.shared.stop()
         if reel.isVideo {
             if video == nil, let url = URL(string: reel.mediaURL) {
@@ -915,7 +940,7 @@ struct ReelPage: View {
             ReelAudio.prepare()
             applySpeed()
             video?.player.isMuted = muted || reel.muted
-            if !paused { video?.play() }
+            if !paused { video?.play(fromStart: restart) }
         }
         if !paused { startSound() }
         if loadContent { countView() }
@@ -1102,6 +1127,7 @@ struct SingleReelView: View {
     @Binding var path: [Route]
     var loadContent = true
     @Environment(\.dismiss) private var dismiss
+    @Environment(Player.self) private var music
     var body: some View {
         GeometryReader { geo in
             // On iPad the reel is a phone-shaped column on a blurred copy of
@@ -1137,6 +1163,8 @@ struct SingleReelView: View {
         }
         .background(Color.black.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
+        .onAppear { music.setSuppressed("single-reel", active: true) }
+        .onDisappear { music.setSuppressed("single-reel", active: false) }
     }
 }
 

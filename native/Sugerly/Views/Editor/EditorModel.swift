@@ -13,7 +13,8 @@ final class EditorModel {
     enum Kind { case none, video, slides, photo }
 
     // The finished reel (and the live video preview): 9:16.
-    nonisolated static let reelSize = CGSize(width: 720, height: 1280)
+    nonisolated static let reelSize = CGSize(width: 1080, height: 1920)
+    nonisolated static let previewSize = CGSize(width: 720, height: 1280)
     nonisolated static let slideSize = CGSize(width: 1080, height: 1920)
     static let reelAspect: CGFloat = 9.0 / 16.0
 

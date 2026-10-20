@@ -103,6 +103,7 @@ final class EditorPlayer {
     private(set) var playing = false
     private(set) var time: Double = 0
     private(set) var slide = 0
+    private(set) var completedLoops = 0
 
     @ObservationIgnored let live = LiveLook()
     @ObservationIgnored private let seeker = PreviewSeeker()
@@ -111,6 +112,8 @@ final class EditorPlayer {
     // Jumping back to the start of the trim: one jump at a time (asking again
     // 30 times a second while it was still on its way froze the picture).
     @ObservationIgnored private var looping = false
+    @ObservationIgnored private var wantsPlayback = false
+    @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var music: AVPlayer?
     @ObservationIgnored private var slideTask: Task<Void, Never>?
     @ObservationIgnored private var resumeAfterScrub = false
@@ -143,7 +146,7 @@ final class EditorPlayer {
         let composition = AVMutableVideoComposition(asset: asset) { request in
             request.finish(with: live.frame(request.sourceImage, size: request.renderSize), context: nil)
         }
-        composition.renderSize = EditorModel.reelSize
+        composition.renderSize = EditorModel.previewSize
         item.videoComposition = composition
         av.replaceCurrentItem(with: item)
         av.defaultRate = Float(rate)
@@ -175,12 +178,14 @@ final class EditorPlayer {
             NotificationCenter.default.removeObserver(endObserver)
             self.endObserver = nil
         }
+        generation = UUID()
         looping = false
         av.replaceCurrentItem(with: nil)
         isVideo = false
         scrubbing = false
         time = 0
         slide = 0
+        completedLoops = 0
     }
 
     func teardown() {
@@ -257,12 +262,14 @@ final class EditorPlayer {
             guard !slideSeconds.isEmpty else { return }
             startSlides()
         }
+        wantsPlayback = true
         playing = true
         music?.seek(to: CMTime(seconds: musicTime, preferredTimescale: 600))
         music?.play()
     }
 
     func pause() {
+        wantsPlayback = false
         playing = false
         av.pause()
         music?.pause()
@@ -352,15 +359,21 @@ final class EditorPlayer {
     // MARK: video clock
 
     private func loopToStart() {
-        guard isVideo, !looping, !scrubbing, av.currentItem != nil else { return }
+        guard isVideo, wantsPlayback, !looping, !scrubbing, av.currentItem != nil else { return }
+        let currentGeneration = generation
         looping = true
         time = 0
         music?.seek(to: .zero, completionHandler: { _ in })
-        av.seek(to: CMTime(seconds: trimStart, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+        av.seek(to: CMTime(seconds: trimStart, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, self.generation == currentGeneration else { return }
                 self.looping = false
-                if self.playing { self.av.playImmediately(atRate: Float(self.rate)) }
+                if self.wantsPlayback && finished {
+                    self.completedLoops += 1
+                    self.playing = true
+                    self.av.playImmediately(atRate: Float(self.rate))
+                    self.music?.play()
+                }
             }
         }
     }
@@ -376,10 +389,9 @@ final class EditorPlayer {
 
     private func tick(_ seconds: Double) {
         guard isVideo, !scrubbing, !looping, seconds.isFinite else { return }
-        let moving = av.rate != 0
-        if moving != playing { playing = moving }
-        // Loop back to the start of the trim.
-        if moving && (seconds >= trimEnd - 0.05 || seconds < trimStart - 0.25) {
+        // A temporary zero rate while buffering or reaching the last frame
+        // must not erase the user's intent to keep previewing in a loop.
+        if wantsPlayback && (seconds >= trimEnd - 0.05 || seconds < trimStart - 0.25) {
             loopToStart()
             return
         }
