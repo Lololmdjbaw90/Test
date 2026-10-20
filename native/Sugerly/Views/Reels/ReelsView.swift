@@ -49,12 +49,16 @@ final class ReelVideo {
     private static var order: [String] = []
 
     static func get(_ id: String, url: URL, start: Double, filter: String = "none", speed: Double = 1) -> ReelVideo {
-        if let hit = pool[id] { return hit }
+        if let hit = pool[id] {
+            order.removeAll { $0 == id }; order.append(id)
+            return hit
+        }
         let video = ReelVideo(url: url, start: start, filter: filter, speed: speed)
         pool[id] = video
         order.append(id)
         while order.count > 5 {
-            let old = order.removeFirst()
+            guard let index = order.firstIndex(where: { pool[$0]?.wantsPlayback != true }) else { break }
+            let old = order.remove(at: index)
             pool[old]?.pause()
             pool[old] = nil
         }
@@ -290,7 +294,11 @@ struct ReelsView: View {
         .toolbarBackground(Color.black.opacity(0.55), for: .tabBar)
         .toolbarColorScheme(.dark, for: .tabBar)
         .task {
-            if let initialReels { reels = initialReels; activeId = initialReels.first?.id; loading = false; return }
+            if let initialReels {
+                if reels.isEmpty { reels = initialReels; activeId = initialReels.first?.id }
+                loading = false
+                return
+            }
             if let lastLoad, Date().timeIntervalSince(lastLoad) < 90 { return }
             lastLoad = Date()
             await load()
