@@ -619,6 +619,18 @@ struct ReelPage: View {
                     .clipped()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .contentShape(Rectangle())
+            .gesture(
+                SpatialTapGesture(count: 2).exclusively(before: SpatialTapGesture(count: 1))
+                    .onEnded { tap in
+                        switch tap {
+                        case .first(let value): doubleTap(at: value.location)
+                        case .second: togglePause()
+                        }
+                    }
+            )
+            .onLongPressGesture(minimumDuration: 0.45) { sharing = true }
+            .accessibilityIdentifier("reel-media")
             if !reel.texts.isEmpty {
                 ReelTextLayer(texts: reel.texts, active: active).allowsHitTesting(false)
             }
@@ -629,7 +641,7 @@ struct ReelPage: View {
                     .transition(.pop)
                     .allowsHitTesting(false)
             }
-            ForEach(hearts) { HeartBurstView(burst: $0) }
+            ForEach(hearts) { HeartBurstView(burst: $0).allowsHitTesting(false) }
             if clearMode {
                 VStack {
                     HStack {
@@ -647,10 +659,6 @@ struct ReelPage: View {
                 overlay.transition(.opacity)
             }
         }
-        .contentShape(Rectangle())
-        .onTapGesture(count: 2, coordinateSpace: .local) { point in doubleTap(at: point) }
-        .onTapGesture { togglePause() }
-        .onLongPressGesture(minimumDuration: 0.45) { sharing = true }
         .sensoryFeedback(.impact(weight: .medium), trigger: sharing) { _, now in now }
         .animation(.easeInOut(duration: 0.25), value: clearMode)
         .onChange(of: video?.progress ?? 0) { _, now in
@@ -880,13 +888,16 @@ struct ReelPage: View {
             .buttonStyle(BouncyStyle())
             .padding(.bottom, 6)
             bubble(liked ? "heart.fill" : "heart", count: reel.likeTotal, tint: liked) { toggleLike() }
+                .accessibilityLabel(liked ? "Unlike" : "Like")
                 .sensoryFeedback(.impact(weight: .light), trigger: liked)
             bubble("bubble.left", count: reel.commentsOff ? nil : commentCount) {
                 comments = true
                 let r = reel
                 Task { await ReelBrain.shared.commented(r) }
             }
+            .accessibilityLabel("Comments")
             bubble(saved ? "bookmark.fill" : "bookmark", tint: saved) { toggleSave() }
+                .accessibilityLabel(saved ? "Unsave" : "Save")
             bubble("arrowshape.turn.up.right.fill") { sharing = true }
                 .accessibilityLabel("Share")
             Button { useSound = true } label: {

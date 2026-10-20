@@ -15,10 +15,28 @@ final class ReelPlaybackInteractionTests: XCTestCase {
             return count >= 2
         }, evaluatedWith: app.staticTexts["clip-0-loops"])
         waitForExpectations(timeout: 15)
+        let videoTap = app.scrollViews["reel-feed"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4))
+        videoTap.tap()
+        expectation(for: NSPredicate(format: "label == 'paused'"), evaluatedWith: first)
+        waitForExpectations(timeout: 5)
+        videoTap.tap()
+        expectation(for: playing, evaluatedWith: first)
+        waitForExpectations(timeout: 10)
+        XCTAssertTrue(app.buttons["Like"].firstMatch.isHittable)
+        XCTAssertTrue(app.buttons["Save"].firstMatch.isHittable)
+        XCTAssertTrue(app.buttons["Comments"].firstMatch.isHittable)
         XCTAssertFalse(app.staticTexts["Playback test 1"].isHittable, "The next reel must stay below the clipped viewport")
         let share = app.buttons["Share"].firstMatch
         XCTAssertTrue(share.exists)
         XCTAssertLessThan(share.frame.maxY, app.tabBars.firstMatch.frame.minY)
+        share.tap()
+        XCTAssertTrue(app.staticTexts["Send to"].waitForExistence(timeout: 5))
+        // Dismiss using a drag beginning inside the sheet, away from its buttons.
+        let sheetTitle = app.staticTexts["Send to"]
+        let sheetTop = sheetTitle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0))
+        sheetTop.press(forDuration: 0.05, thenDragTo: sheetTop.withOffset(CGVector(dx: 0, dy: 550)))
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: sheetTitle)
+        waitForExpectations(timeout: 5)
         let feed = app.scrollViews["reel-feed"]
         XCTAssertTrue(feed.exists)
         let dragStart = feed.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.82))
