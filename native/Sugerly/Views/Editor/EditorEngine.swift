@@ -257,7 +257,7 @@ final class EditorPlayer {
 
     // While paused, a changed look shows on the frame on screen straight away.
     private func repaint() {
-        guard isVideo, !playing, av.currentItem != nil else { return }
+        guard isVideo, prepared, !playing, av.currentItem != nil else { return }
         repaintFlip.toggle()
         seeker.seek(av, seconds: trimStart + time + (repaintFlip ? 0.001 : 0), precise: true)
     }
@@ -312,7 +312,7 @@ final class EditorPlayer {
 
     // The trim handles show any moment of the whole video.
     func show(sourceSeconds: Double) {
-        guard isVideo else { return }
+        guard isVideo, prepared else { return }
         seeker.seek(av, seconds: sourceSeconds)
     }
 
@@ -326,7 +326,7 @@ final class EditorPlayer {
     func endScrub() {
         guard scrubbing else { return }
         scrubbing = false
-        if isVideo { seeker.seek(av, seconds: trimStart + time, precise: true) }
+        if isVideo && prepared { seeker.seek(av, seconds: trimStart + time, precise: true) }
         if resumeAfterScrub {
             resumeAfterScrub = false
             play()
