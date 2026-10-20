@@ -19,6 +19,7 @@ struct ReelPlaybackUITestHost: View {
             }.tabItem { Label("Reels", systemImage: "play.rectangle") }.tag(1)
         }
         .compactTabBar()
+        .environment(\.horizontalSizeClass, .compact)
         .environment(player)
         .overlay(alignment: .topLeading) {
             TimelineView(.periodic(from: .now, by: 0.2)) { _ in
