@@ -713,8 +713,8 @@ struct ReelPage: View {
             if let video, !video.failed {
                 ZStack {
                     // The cover shows at once; the video fades in over it.
-                    if !video.ready { RemoteImage(url: reel.coverURL, contentMode: video.portrait ? .fill : .fit) }
-                    LoopingVideo(player: video.player, fill: video.portrait)
+                    if !video.ready { RemoteImage(url: reel.coverURL, contentMode: .fit) }
+                    LoopingVideo(player: video.player, fill: false)
                         .scaleEffect(x: reel.mirror ? -1 : 1, y: 1)
                         .opacity(video.ready ? 1 : 0)
                         .animation(.easeOut(duration: 0.2), value: video.ready)

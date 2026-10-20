@@ -819,7 +819,7 @@ struct VideoPlayerLayer: UIViewRepresentable {
     func makeUIView(context: Context) -> PlayerUIView {
         let view = PlayerUIView()
         view.playerLayer.player = player
-        view.playerLayer.videoGravity = .resizeAspectFill
+        view.playerLayer.videoGravity = .resizeAspect
         view.backgroundColor = .black
         return view
     }

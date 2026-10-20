@@ -375,7 +375,7 @@ private struct SlideImage: View {
                 if doc.previews.indices.contains(i) {
                     Image(uiImage: doc.previews[i])
                         .resizable()
-                        .scaledToFill()
+                        .scaledToFit()
                         .id(i)
                         .transition(.opacity)
                 }

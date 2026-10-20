@@ -42,7 +42,7 @@ final class LiveLook: @unchecked Sendable {
         var img = source
         if let crop { img = VideoCrop.cut(img, crop) }
         img = img.transformed(by: CGAffineTransform(translationX: -img.extent.minX, y: -img.extent.minY))
-        img = VideoCrop.fill(img, size)
+        img = VideoCrop.fit(img, size)
         if !look.isNeutral { img = look.apply(img) }
         return img
     }
@@ -108,6 +108,8 @@ final class EditorPlayer {
     @ObservationIgnored let live = LiveLook()
     @ObservationIgnored private let seeker = PreviewSeeker()
     @ObservationIgnored private var observer: Any?
+    @ObservationIgnored private var readiness: NSKeyValueObservation?
+    @ObservationIgnored private var prepared = false
     @ObservationIgnored private var endObserver: NSObjectProtocol?
     // Jumping back to the start of the trim: one jump at a time (asking again
     // 30 times a second while it was still on its way froze the picture).
@@ -149,6 +151,15 @@ final class EditorPlayer {
         composition.renderSize = EditorModel.previewSize
         item.videoComposition = composition
         av.replaceCurrentItem(with: item)
+        let currentGeneration = generation
+        readiness = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
+            let ready = item.status == .readyToPlay
+            Task { @MainActor in
+                guard ready, let self, self.generation == currentGeneration, !self.prepared else { return }
+                self.prepared = true
+                self.seek(self.time, precise: true)
+            }
+        }
         av.defaultRate = Float(rate)
         // At the very end the player keeps going and we loop it ourselves,
         // instead of it stopping on the last frame.
@@ -157,7 +168,6 @@ final class EditorPlayer {
             MainActor.assumeIsolated { self?.loopToStart() }
         }
         watch()
-        seek(0, precise: true)
     }
 
     func loadSlides(_ seconds: [Double]) {
@@ -170,6 +180,9 @@ final class EditorPlayer {
     // Stops everything and lets go of the video (the song stays picked).
     func reset() {
         pause()
+        readiness = nil
+        prepared = false
+        seeker.reset(av)
         if let observer {
             av.removeTimeObserver(observer)
             self.observer = nil
@@ -256,16 +269,18 @@ final class EditorPlayer {
     func play() {
         if isVideo {
             guard av.currentItem != nil else { return }
-            if time >= length - 0.05 { seek(0, precise: true) }
-            av.playImmediately(atRate: Float(rate))
+            wantsPlayback = true
+            playing = true
+            if time >= length - 0.05 { time = 0 }
+            if prepared { seek(time, precise: true) }
         } else {
             guard !slideSeconds.isEmpty else { return }
+            wantsPlayback = true
+            playing = true
             startSlides()
+            music?.seek(to: CMTime(seconds: musicTime, preferredTimescale: 600))
+            music?.play()
         }
-        wantsPlayback = true
-        playing = true
-        music?.seek(to: CMTime(seconds: musicTime, preferredTimescale: 600))
-        music?.play()
     }
 
     func pause() {
@@ -282,7 +297,12 @@ final class EditorPlayer {
         let t = min(max(0, t), length)
         time = t
         if isVideo {
-            seeker.seek(av, seconds: trimStart + t, precise: precise)
+            guard prepared else { return }
+            seeker.seek(av, seconds: trimStart + t, precise: precise) { [weak self] finished in
+                guard let self, finished, self.wantsPlayback, !self.scrubbing else { return }
+                self.av.playImmediately(atRate: Float(self.rate))
+                self.music?.play()
+            }
         } else {
             let i = slideIndex(at: t)
             if i != slide { slide = i }
@@ -388,7 +408,7 @@ final class EditorPlayer {
     }
 
     private func tick(_ seconds: Double) {
-        guard isVideo, !scrubbing, !looping, seconds.isFinite else { return }
+        guard isVideo, prepared, !scrubbing, !looping, !seeker.isSeeking, seconds.isFinite else { return }
         // A temporary zero rate while buffering or reaching the last frame
         // must not erase the user's intent to keep previewing in a loop.
         if wantsPlayback && (seconds >= trimEnd - 0.05 || seconds < trimStart - 0.25) {

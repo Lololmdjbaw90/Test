@@ -233,11 +233,11 @@ struct GoodbyeCover: View {
 
 // Shown while logging in: the app gets ready behind it.
 struct SettingUpCover: View {
-    var body: some View { SugerlyLaunchScreen(message: "Getting your world ready", detail: "Your friends, creations and little moments") }
+    var body: some View { SugerlyLaunchScreen(message: "Welcome back", detail: "Your friends, creations and little moments") }
 }
 
 struct SplashView: View {
-    var body: some View { SugerlyLaunchScreen(message: "A little joy is loading", detail: "Welcome to Sugerly") }
+    var body: some View { SugerlyLaunchScreen(message: "Welcome back", detail: "Welcome to Sugerly") }
 }
 
 private struct SugerlyLaunchScreen: View {

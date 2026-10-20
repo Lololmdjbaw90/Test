@@ -269,7 +269,7 @@ struct MiniPlayer: View {
             }
             .onEnded { value in
                 let at = position(value.translation)
-                savedX = at.width; savedY = at.height
+                withAnimation(Motion.standard) { savedX = at.width; savedY = at.height }
             }
     }
 
@@ -323,6 +323,9 @@ struct MiniPlayer: View {
             .padding(.vertical, 9)
             .glassPill(cornerRadius: 26)
             .frame(width: cardWidth)
+            .scaleEffect(translation == .zero ? 1 : 1.025)
+            .rotationEffect(.degrees(max(-3, min(3, translation.width / 50))))
+            .animation(Motion.standard, value: translation == .zero)
             .offset(x: position(translation).width, y: position(translation).height)
             .transition(.opacity)
             .sensoryFeedback(.impact(weight: .light), trigger: player.playing)

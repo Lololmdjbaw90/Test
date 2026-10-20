@@ -245,15 +245,36 @@ struct BunnyMakerView: View {
         }
     }
 
+    private var originalBody: BunnyLook {
+        var original = look
+        original.bodyItem = ""
+        return original
+    }
+
     private func selected(_ slot: BunnySlot) -> String {
         switch slot { case .body: return look.bodyItem; case .face: return look.faceItem; case .collar: return look.collarItem; default: return "" }
     }
 
     private func catalogChoices(_ slot: BunnySlot) -> some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 12) {
-            Button(slot == .body ? "Classic bunny" : "Default") {
-                switch slot { case .body: look.bodyItem = ""; case .face: look.faceItem = ""; case .collar: look.collarItem = ""; default: break }
-            }.buttonStyle(OutlineButtonStyle(fullWidth: true))
+            if slot != .face {
+                Button {
+                    if slot == .body { look.bodyItem = "" } else { look.collarItem = "" }
+                } label: {
+                    VStack(spacing: 6) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 18).fill(Palette.surface2)
+                            if slot == .body {
+                                let original = originalBody
+                                BunnyFigure(look: original).frame(height: 78)
+                            } else {
+                                Image(systemName: "circle.slash").foregroundStyle(Palette.muted)
+                            }
+                        }.frame(height: 84)
+                        Text(slot == .body ? "Bunny" : "None").font(.jakarta(12, .semibold)).foregroundStyle(Palette.text2)
+                    }
+                }.buttonStyle(BouncyStyle())
+            }
             ForEach(Array(catalog.items(slot).enumerated()), id: \.element.id) { i, item in
                 itemTile(item, on: selected(slot) == item.id, index: i) {
                     switch slot { case .body: look.bodyItem = item.id; case .face: look.faceItem = item.id; case .collar: look.collarItem = item.id; default: break }

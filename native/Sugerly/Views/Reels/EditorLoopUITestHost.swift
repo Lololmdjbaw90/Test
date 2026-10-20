@@ -1,6 +1,7 @@
 #if DEBUG
 import SwiftUI
 import AVFoundation
+import CoreImage
 
 struct EditorLoopUITestHost: View {
     @State private var doc = EditorModel()
@@ -9,6 +10,12 @@ struct EditorLoopUITestHost: View {
     var body: some View {
         VStack {
             Text(status).accessibilityIdentifier("editor-export-result")
+            Text(Self.fullFrameFits ? "Whole frame visible" : "Framing failed").accessibilityIdentifier("editor-framing-result")
+            Button("Import again") {
+                Task {
+                    if let url = Bundle.main.url(forResource: "LandscapeFixture", withExtension: "mp4"), await doc.openVideo(url) { status = "Imported again" }
+                }
+            }
             Text(doc.player.completedLoops >= 2 && doc.player.playing ? "looping" : "waiting")
                 .accessibilityIdentifier("editor-loop-state")
             Text("\(doc.player.completedLoops)").accessibilityIdentifier("editor-loop-count")
@@ -20,6 +27,17 @@ struct EditorLoopUITestHost: View {
         }
         .onDisappear { doc.player.teardown() }
     }
+    private static let fullFrameFits: Bool = {
+        let size = CGSize(width: 108, height: 192)
+        let source = CIImage(color: CIColor(red: 1, green: 0, blue: 0)).cropped(to: CGRect(x: 0, y: 0, width: 200, height: 100))
+        let framed = VideoCrop.fit(source, size)
+        var pixels = [UInt8](repeating: 0, count: 108 * 192 * 4)
+        pixels.withUnsafeMutableBytes { buffer in
+            CIContext().render(framed, toBitmap: buffer.baseAddress!, rowBytes: 108 * 4, bounds: CGRect(origin: .zero, size: size), format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB())
+        }
+        return pixels[(96 * 108 + 54) * 4] > 200 && pixels[(2 * 108 + 54) * 4] < 20
+    }()
+
     private func export() async {
         guard !exporting else { return }
         exporting = true

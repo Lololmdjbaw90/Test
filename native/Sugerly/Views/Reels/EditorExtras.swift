@@ -319,6 +319,17 @@ struct DrawPanel: View {
 // MARK: - Cropping video frames
 
 enum VideoCrop {
+    // Keep the full source visible in the portrait canvas. No stretch or crop.
+    static func fit(_ image: CIImage, _ size: CGSize) -> CIImage {
+        let e = image.extent
+        let scale = min(size.width / max(1, e.width), size.height / max(1, e.height))
+        let transform = CGAffineTransform(translationX: -e.minX, y: -e.minY)
+            .concatenating(CGAffineTransform(scaleX: scale, y: scale))
+            .concatenating(CGAffineTransform(translationX: (size.width - e.width * scale) / 2, y: (size.height - e.height * scale) / 2))
+        let background = CIImage(color: CIColor(red: 0, green: 0, blue: 0)).cropped(to: CGRect(origin: .zero, size: size))
+        return image.transformed(by: transform).composited(over: background).cropped(to: background.extent)
+    }
+
     // The part of a frame inside `unit` (0…1, measured from the top-left), moved to 0,0.
     static func cut(_ img: CIImage, _ unit: CGRect) -> CIImage {
         let e = img.extent
