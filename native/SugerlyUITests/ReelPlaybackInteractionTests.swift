@@ -13,7 +13,9 @@ final class ReelPlaybackInteractionTests: XCTestCase {
         let share = app.buttons["Share"].firstMatch
         XCTAssertTrue(share.exists)
         XCTAssertLessThan(share.frame.maxY, app.tabBars.firstMatch.frame.minY)
-        app.swipeUp()
+        let feed = app.scrollViews["reel-feed"]
+        XCTAssertTrue(feed.exists)
+        feed.swipeUp(velocity: .fast)
         let second = app.staticTexts["clip-1-state"]
         expectation(for: playing, evaluatedWith: second)
         waitForExpectations(timeout: 15)

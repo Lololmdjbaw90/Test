@@ -249,6 +249,7 @@ struct ReelsView: View {
                     .coordinateSpace(.named("reels"))
                     .scrollTargetBehavior(.paging)
                     .scrollPosition(id: $activeId)
+                    .accessibilityIdentifier("reel-feed")
                     .scrollIndicators(.hidden)
                     .scrollBounceBehavior(.basedOnSize)
                 }
