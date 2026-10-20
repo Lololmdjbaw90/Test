@@ -328,6 +328,7 @@ struct ReelsView: View {
             if now, activeId == nil { activeId = shown.first?.id }
             if now && initialReels == nil { Task { await checkNew() } }
         }
+        .onAppear { music.setSuppressed("reel-feed", active: visible) }
         .onDisappear { music.setSuppressed("reel-feed", active: false) }
         .onReceive(NotificationCenter.default.publisher(for: Self.posted)) { note in
             if let reel = note.object as? Reel { showPosted(reel) }
