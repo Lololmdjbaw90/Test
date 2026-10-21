@@ -331,6 +331,7 @@ struct FullGIF: View {
         }
     }
 
+    @ViewBuilder
     private var playback: some View {
         let shown = loadedURL == url ? data : nil
         Color.clear
