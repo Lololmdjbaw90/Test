@@ -50,6 +50,22 @@ jobs:
         with:
           node-version: 22
 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Check artist verification rules and creator purchases
+        run: |
+          node --test scripts/bunny-purchase.test.mjs
+          mkdir -p "$RUNNER_TEMP/artist-rules"
+          cp firestore.rules scripts/tests/artist-verification.rules.test.mjs "$RUNNER_TEMP/artist-rules/"
+          cd "$RUNNER_TEMP/artist-rules"
+          npm init -y >/dev/null
+          npm install --no-save firebase@11.10.0 @firebase/rules-unit-testing@4 firebase-tools@14
+          echo '{"firestore":{"rules":"firestore.rules"},"emulators":{"firestore":{"port":8080},"singleProjectMode":true}}' > firebase.json
+          npx firebase emulators:exec --only firestore --project demo-sugerly-rules "node --test artist-verification.rules.test.mjs"
+
       - name: Publish Firestore and Storage rules
         if: env.FIREBASE_SERVICE_ACCOUNT != '' || env.FIREBASE_PRIVATE_KEY != ''
         run: |

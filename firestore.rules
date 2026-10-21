@@ -216,12 +216,35 @@ service cloud.firestore {
       allow update, delete: if isAdmin() || ownsResource();
     }
 
+    // Artist approval is held in admin-only SiteConfig documents, never on
+    // the editable profile. Existing orders remain accessible after revocation.
+    function reviewedArtist(uid) {
+      let badgeId = 'artist-' + uid;
+      let badge = /databases/$(database)/documents/SiteConfig/$(badgeId);
+      return exists(badge) && get(badge).data.get('verified', false) == true;
+    }
+    function commissionOpen(data) {
+      return data.get('is_open', data.get('status', '') == 'open') == true;
+    }
+    function verifiedOrderArtist() {
+      let uid = request.resource.data.get('artist_uid', '');
+      let user = /databases/$(database)/documents/User/$(uid);
+      let listing = /databases/$(database)/documents/Commission/$(request.resource.data.commission_id);
+      return uid != '' && exists(user) && reviewedArtist(uid)
+        && get(user).data.email == request.resource.data.artist_email
+        && exists(listing) && commissionOpen(get(listing).data)
+        && get(listing).data.artist_email == request.resource.data.artist_email;
+    }
+
     match /Commission/{id} {
       allow read: if signedIn();
       // Ratings and sales are counted by the payment server only.
-      allow create: if ownsIncomingData() && !mutedNow()
+      allow create: if signedIn() && !mutedNow() && reviewedArtist(request.auth.uid)
+        && request.resource.data.artist_email == ownEmail()
         && !request.resource.data.keys().hasAny(['rating_sum', 'rating_count', 'orders_completed']);
       allow update: if isAdmin() || (ownsResource()
+        && request.resource.data.artist_email == resource.data.artist_email
+        && (!commissionOpen(request.resource.data) || reviewedArtist(request.auth.uid))
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['rating_sum', 'rating_count', 'orders_completed']));
       allow delete: if isAdmin() || ownsResource();
     }
@@ -241,7 +264,7 @@ service cloud.firestore {
 
     match /CommissionOrder/{id} {
       allow read: if isAdmin() || orderBuyer() || orderArtist();
-      allow create: if signedIn() && !mutedNow()
+      allow create: if signedIn() && !mutedNow() && verifiedOrderArtist()
         && request.resource.data.buyer_email == ownEmail()
         && request.resource.data.artist_email is string
         && request.resource.data.artist_email != ownEmail()

@@ -347,8 +347,13 @@ enum BunnyImages {
     // its dark ink at decode time so fur uses the bunny's exact colour path.
     // This runs once per cached layer, never while animating the figure.
     nonisolated private static func catLayer(ink: Bool) -> UIImage {
-        guard let source = UIImage(named: "BunnyBodyCat"),
-              let image = (source.preparingThumbnail(of: pixels) ?? source).cgImage else { return UIImage() }
+        guard let source = UIImage(named: "BunnyBodyCat"), let original = source.cgImage else { return UIImage() }
+        // This legacy drawing has a 950px-wide canvas; the wardrobe uses 878.
+        // Remove the empty side margins instead of squeezing the cat thin.
+        let canvasWidth = Int((Double(original.height) * 878 / 1210).rounded())
+        let rect = CGRect(x: max(0, (original.width - canvasWidth) / 2), y: 0, width: min(original.width, canvasWidth), height: original.height)
+        guard let normalized = original.cropping(to: rect),
+              let image = (UIImage(cgImage: normalized).preparingThumbnail(of: pixels) ?? UIImage(cgImage: normalized)).cgImage else { return UIImage() }
         let width = image.width, height = image.height
         var bytes = [UInt8](repeating: 0, count: width * height * 4)
         let flags = CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue

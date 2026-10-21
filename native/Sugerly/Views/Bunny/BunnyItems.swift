@@ -26,6 +26,10 @@ struct BunnyItem: Identifiable, Equatable {
     // The hue it was painted in (uploaded ones: worked out from the picture).
     var hue: Double? = nil
     var price: Int = 0
+    var sellerUID = ""
+    var sellerName = ""
+    var sourceItemID = ""
+    var forSale = true
 
     var uploaded: Bool { asset.isEmpty }
 
@@ -67,6 +71,10 @@ extension BunnyItem {
         let url = doc.str("image_url")
         guard !id.isEmpty, !url.isEmpty, let slot = BunnySlot(rawValue: doc.str("slot")) else { return nil }
         self.init(id: id, name: doc.str("name").isEmpty ? "Item" : doc.str("name"), slot: slot, url: url, price: max(0, doc.int("price_coins")))
+        sellerUID = doc.str("seller_uid")
+        sellerName = doc.str("seller_name")
+        sourceItemID = doc.str("source_item_id")
+        forSale = (doc["is_active"] as? Bool) ?? true
     }
 }
 
@@ -85,7 +93,7 @@ final class BunnyCatalog {
     }
     var all: [BunnyItem] { BunnyItem.builtIn + uploaded + personal }
 
-    func items(_ slot: BunnySlot) -> [BunnyItem] { all.filter { $0.slot == slot } }
+    func items(_ slot: BunnySlot) -> [BunnyItem] { all.filter { item in item.slot == slot && !personal.contains(where: { $0.id == item.sourceItemID }) } }
 
     func item(_ id: String) -> BunnyItem? {
         id.isEmpty ? nil : all.first { $0.id == id }
@@ -265,6 +273,7 @@ struct BunnyItemUploader: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    PageTitle(title: personal ? "Made by you" : "New bunny item", subtitle: personal ? "A little piece of your imagination." : "Something cute for the wardrobe.", icon: "tshirt.fill", candy: .berry)
                     Text(personal ? "Import your own artwork as a transparent PNG, 878 × 1210. Draw it where it should sit on your bunny. It goes in your personal wardrobe, not the public shop." : "Draw the item on a transparent PNG the same size as the bunny (878 × 1210), in the same place you'd see it on her. It shows for everyone straight away.")
                         .font(.jakarta(13, .medium)).foregroundStyle(Palette.text2)
                         .fixedSize(horizontal: false, vertical: true)
@@ -306,7 +315,7 @@ struct BunnyItemUploader: View {
                 .padding(18)
             }
             .sugarBackground()
-            .navigationTitle("New bunny item")
+            .quietTitle(personal ? "Import an item" : "New bunny item")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -391,5 +400,52 @@ struct BunnyItemUploader: View {
         } catch {
             problem = error.localizedDescription
         }
+    }
+}
+
+struct BunnySaleEditor: View {
+    let item: BunnyItem
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var price = "100"
+    @State private var rights = false
+    @State private var busy = false
+    @State private var error: String?
+    private var personalID: String { item.sourceItemID.isEmpty ? item.id : item.sourceItemID }
+
+    var body: some View {
+        ComposerScaffold(title: "Your little shop", actionTitle: "List item", busy: busy, canPost: rights && !name.isEmpty && Int(price) != nil,
+                         onClose: { dismiss() }, onPost: { Task { await sell(active: true) } }) {
+            PageTitle(title: "Made to share", subtitle: "Your art, in someone else’s wardrobe.", icon: "bag.fill", candy: .peach)
+            BunnyItemLayer(item: item).aspectRatio(BunnyArt.aspect, contentMode: .fit).frame(height: 220)
+                .frame(maxWidth: .infinity).background(Theme.soft, in: RoundedRectangle(cornerRadius: 24))
+            SugarField(placeholder: "Item name", text: $name)
+            SugarField(placeholder: "Price in coins", text: $price).keyboardType(.numberPad)
+            Text("You receive the full price in coins for each new purchase. Coins stay in Sugerly and cannot be cashed out.")
+                .font(.jakarta(13)).foregroundStyle(Palette.text2)
+            Toggle("I made this artwork and have the rights to sell it", isOn: $rights).font(.jakarta(13, .semibold)).tint(Theme.main)
+            Button("Stop selling this item", role: .destructive) { Task { await sell(active: false) } }.disabled(busy)
+            if let error { Text(error).font(.jakarta(13)).foregroundStyle(Palette.danger) }
+        }
+        .onAppear {
+            let listing = BunnyCatalog.shared.uploaded.first { $0.sourceItemID == personalID }
+            name = listing?.name ?? item.name
+            price = String(max(1, listing?.price ?? (item.price == 0 ? 100 : item.price)))
+        }
+    }
+
+    private func sell(active: Bool) async {
+        guard !busy else { return }
+        guard !active || (rights && (1...1000000).contains(Int(price) ?? 0)) else { error = "Choose a price from 1 to 1,000,000 coins."; return }
+        if active, !(await TextGuard.clear([name], kind: .name, model: model, cooldown: false)) { return }
+        busy = true
+        defer { busy = false }
+        do {
+            _ = try await Backend.call("bunny-sell", ["item_id": personalID, "name": name, "price": Int(price) ?? 0, "active": active], signedIn: true, missing: "The creator shop is temporarily unavailable.")
+            await BunnyCatalog.shared.load(force: true)
+            model.showToast(active ? "Your item is for sale" : "Your item is no longer for sale", icon: "bag.fill")
+            dismiss()
+        } catch { self.error = error.localizedDescription }
     }
 }

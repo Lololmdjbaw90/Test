@@ -234,17 +234,15 @@ struct ReelsView: View {
                             ForEach(Array(list.enumerated()), id: \.element.id) { i, reel in
                                 // On iPad (or any wide screen) the reel is a phone-shaped
                                 // column in the middle, on a blurred copy of its cover.
-                                let column = Swift.min(geo.size.width, geo.size.height * 0.6)
+                                let column = geo.size.width < 600 ? geo.size.width : min(560, geo.size.height * 0.66)
                                 ZStack {
                                     if column < geo.size.width - 1 {
-                                        RemoteImage(url: reel.coverURL.isEmpty ? (reel.pictures.first ?? "") : reel.coverURL)
-                                            .blur(radius: 40)
-                                            .overlay(Color.black.opacity(0.45))
+                                        LinearGradient(colors: [Color(hex: 0x211522), .black], startPoint: .topLeading, endPoint: .bottomTrailing)
                                     }
                                     ReelPage(reel: reel, active: visible && activeId == reel.id, near: abs(i - activeIndex) <= 1, path: $path,
                                              insets: geo.safeAreaInsets, loadContent: initialReels == nil,
                                              onNext: { advance(from: reel.id) }, onHide: { hide($0) })
-                                        .frame(width: min(column, geo.size.height * 9 / 16))
+                                        .frame(width: column)
                                         .containerRelativeFrame(.vertical)
                                         .clipShape(RoundedRectangle(cornerRadius: column < geo.size.width - 1 ? 28 : 0, style: .continuous))
                                         .padding(.vertical, column < geo.size.width - 1 ? 0 : 0)
@@ -789,10 +787,9 @@ struct ReelPage: View {
                 .transition(.pop)
             }
             Spacer()
-            HStack(alignment: .bottom, spacing: 12) {
-                info
-                Spacer(minLength: 8)
-                actions
+            HStack(alignment: .bottom, spacing: 10) {
+                info.frame(maxWidth: .infinity, alignment: .leading)
+                actions.frame(width: 48)
             }
             .padding(.leading, 16)
             .padding(.trailing, 10)
@@ -804,7 +801,7 @@ struct ReelPage: View {
                 }
             }
         }
-        .padding(.bottom, insets.bottom + (showBack ? 14 : bottomRoom + 2))
+        .padding(.bottom, showBack ? max(12, insets.bottom) : max(10, bottomRoom))
     }
 
     private var relation: String? {
@@ -821,9 +818,9 @@ struct ReelPage: View {
     private var info: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button { path.append(.person(reel.authorEmail)) } label: {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("@\(author?.displayName ?? reel.authorName)").font(.jakarta(17, .heavy)).foregroundStyle(.white)
-                    Text("· \(Dates.ago(reel.created))").font(.jakarta(13)).foregroundStyle(.white.opacity(0.7))
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("@\(author?.displayName ?? reel.authorName)").font(.jakarta(15, .heavy)).lineLimit(1).foregroundStyle(.white)
+                    Text("· \(Dates.ago(reel.created))").font(.jakarta(11)).foregroundStyle(.white.opacity(0.7)).fixedSize()
                     if reel.views > 0 {
                         Label(Self.compact(reel.views), systemImage: "play.fill").font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.75))
                     }
@@ -867,10 +864,10 @@ struct ReelPage: View {
     }
 
     private var actions: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 12) {
             Button { path.append(.person(reel.authorEmail)) } label: {
-                Avatar(url: author?.picture ?? reel.authorPicture, name: author?.displayName ?? reel.authorName, size: 54, nitro: author?.isNitro ?? false)
-                    .overlay(Circle().strokeBorder(.white, lineWidth: 2.5))
+                Avatar(url: author?.picture ?? reel.authorPicture, name: author?.displayName ?? reel.authorName, size: 44, nitro: author?.isNitro ?? false)
+                    .overlay(Circle().strokeBorder(.white, lineWidth: 2))
                     .overlay(alignment: .bottom) {
                         if (!following || justFollowed) && reel.authorEmail != me {
                             Image(systemName: justFollowed ? "checkmark" : "plus").font(.system(size: 12, weight: .bold))
@@ -926,14 +923,12 @@ struct ReelPage: View {
 
     private func bubbleLabel(_ icon: String, tint: Bool) -> some View {
         Image(systemName: icon)
-            .font(.system(size: 22, weight: .bold))
+            .font(.system(size: 25, weight: .semibold))
             .foregroundStyle(tint ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Color.white))
             .symbolEffect(.bounce, value: tint)
-            .frame(width: 54, height: 54)
-            .background(.white.opacity(0.2), in: Circle())
-            .background(.ultraThinMaterial.opacity(0.5), in: Circle())
-            .overlay(Circle().strokeBorder(.white.opacity(0.35), lineWidth: 1))
-            .shadow(color: .black.opacity(0.15), radius: 6, y: 2)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+            .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
     }
 
     // Get the video ready (buffered, paused) before you swipe to it.
@@ -1144,14 +1139,12 @@ struct SingleReelView: View {
         GeometryReader { geo in
             // On iPad the reel is a phone-shaped column on a blurred copy of
             // its cover, like in the feed.
-            let column = Swift.min(geo.size.width, geo.size.height * 0.6)
+            let column = geo.size.width < 600 ? geo.size.width : min(560, geo.size.height * 0.66)
             let wide = column < geo.size.width - 1
             ZStack {
                 Color.black
                 if wide {
-                    RemoteImage(url: reel.coverURL.isEmpty ? (reel.pictures.first ?? "") : reel.coverURL)
-                        .blur(radius: 40)
-                        .overlay(Color.black.opacity(0.45))
+                    LinearGradient(colors: [Color(hex: 0x211522), .black], startPoint: .topLeading, endPoint: .bottomTrailing)
                 }
                 ReelPage(reel: reel, active: true, path: $path, showBack: false, insets: geo.safeAreaInsets, loadContent: loadContent)
                     .frame(width: column, height: geo.size.height)

@@ -714,10 +714,10 @@ struct EditProfileView: View {
             field("Interests") { SugarField(placeholder: "anime, watercolor, cats", text: $interests) }
             field("Websites · up to 5") { SugarField(placeholder: "One website per line", text: $website, lines: 2...5) }
 
-            field("Artist verification · optional") {
+            field("Artist verification · required for commissions") {
                 VStack(alignment: .leading, spacing: 8) {
                     SugarField(placeholder: "Portfolio and process/WIP links, one per line", text: $artistPortfolio, lines: 2...5)
-                    Text("Save your links, then request a portfolio review through Help & support. Include work-in-progress examples that show your process. Only admins can grant the Reviewed artist badge.")
+                    Text("Before opening commissions, save your links and request a portfolio review through Help & support. Include work-in-progress examples that show your process. Only admins can grant the Reviewed artist badge.")
                         .font(.jakarta(12)).foregroundStyle(Palette.muted)
                 }
             }
