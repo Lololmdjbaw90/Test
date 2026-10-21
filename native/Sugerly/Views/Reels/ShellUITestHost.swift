@@ -59,6 +59,12 @@ struct ShellUITestHost: View {
             .badge(3)
             .tag(AppTab.chat)
         }
+        .overlay {
+            MenuDrawer(open: Binding(get: { model.showMenu }, set: { model.showMenu = $0 })) { route in
+                model.showMenu = false
+                nav.push(route)
+            }
+        }
         .compactTabBar()
         .tint(Theme.main)
         .sheet(isPresented: createShown) {

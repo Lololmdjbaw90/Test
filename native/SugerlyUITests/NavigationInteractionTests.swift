@@ -18,6 +18,26 @@ final class NavigationInteractionTests: XCTestCase {
         app.descendants(matching: .any).matching(identifier: "chat-message-input").firstMatch
     }
 
+    func testMenuCoversScreenAndBottomRowsStayReachable() {
+        let menu = app.buttons["Menu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 5))
+        menu.tap()
+        let panel = app.descendants(matching: .any).matching(identifier: "menu-drawer-panel").firstMatch
+        XCTAssertTrue(panel.waitForExistence(timeout: 5))
+        XCTAssertLessThanOrEqual(panel.frame.minY, app.frame.minY + 1, "Drawer must cover the top safe area")
+        XCTAssertGreaterThanOrEqual(panel.frame.maxY, app.frame.maxY - 1, "Drawer must cover the home indicator and tab bar")
+        let logout = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'Log out'")).firstMatch
+        let scroll = panel.scrollViews.firstMatch
+        for _ in 0..<6 where !logout.isHittable { scroll.swipeUp() }
+        XCTAssertTrue(logout.isHittable, "Bottom menu actions must be reachable")
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "menu-full-screen-bottom"; shot.lifetime = .keepAlways; add(shot)
+        let close = app.buttons.matching(identifier: "Close menu").allElementsBoundByIndex.first { $0.frame.width < 100 }
+        XCTAssertNotNil(close)
+        close?.tap()
+        XCTAssertTrue(app.buttons["Open test chat"].isHittable)
+    }
+
     func testSingleChatBackRestoresTabBarAfterTypingAndRepeatedVisits() {
         let open = app.buttons["Open test chat"]
         XCTAssertTrue(open.waitForExistence(timeout: 5))

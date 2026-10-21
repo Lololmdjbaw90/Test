@@ -780,6 +780,9 @@ struct MenuDrawer: View {
     var body: some View {
         GeometryReader { geo in
             let width = min(geo.size.width * 0.86, 400)
+            let top = geo.safeAreaInsets.top
+            let bottom = geo.safeAreaInsets.bottom
+            let height = geo.size.height + top + bottom
             ZStack(alignment: .leading) {
                 Color.black
                     .opacity(open ? 0.3 * Double(1 - min(1, drag / max(width, 1))) : 0)
@@ -794,9 +797,11 @@ struct MenuDrawer: View {
                 if built || open {
                     AccountView(go: go, close: { open = false })
                         .equatable()
-                        .frame(width: width)
-                        .frame(maxHeight: .infinity)
+                        .padding(.top, top)
+                        .padding(.bottom, min(bottom, 34))
+                        .frame(width: width, height: height)
                         .background { DrawerBackdrop() }
+                        .accessibilityIdentifier("menu-drawer-panel")
                         // A strip along the right edge to swipe it shut (not
                         // over the menu itself, so scrolling it stays smooth).
                         .overlay(alignment: .trailing) {
@@ -814,8 +819,11 @@ struct MenuDrawer: View {
                         .zIndex(1)
                 }
             }
+            .frame(width: geo.size.width, height: height, alignment: .leading)
+            .offset(y: -top)
             .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.36, dampingFraction: 0.9), value: open)
         }
+        .ignoresSafeArea(.keyboard)
         // Built while nothing else is going on, so the first open is as
         // smooth as the rest.
         .task {
