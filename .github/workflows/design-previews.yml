@@ -1,6 +1,13 @@
 name: Capture design previews
 on:
   workflow_dispatch:
+    inputs:
+      family:
+        default: iPad
+        type: string
+      test_filter:
+        default: DesignPreviewTests/testAppearanceOptionsAndProfilePresets
+        type: string
   push:
     branches: [codex/social-editor-polish]
     paths: [.github/workflows/design-previews.yml]
@@ -16,10 +23,10 @@ jobs:
           sudo xcode-select -s "$XC"
           brew install xcodegen
           cd native && xcodegen generate
-      - name: Capture iPhone screens
+      - name: Capture simulator screens
         env:
-          TEST_FILTER: DesignPreviewTests
-        run: bash scripts/test-native-interactions.sh
+          TEST_FILTER: ${{ inputs.test_filter || 'DesignPreviewTests/testAppearanceOptionsAndProfilePresets' }}
+        run: bash scripts/test-native-interactions.sh "${{ inputs.family || 'iPad' }}"
       - name: Export screenshots
         if: always()
         run: |

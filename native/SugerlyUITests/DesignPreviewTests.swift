@@ -45,12 +45,19 @@ final class DesignPreviewTests: XCTestCase {
         app.launchArguments = ["--polish-ui-test", "--design-preview", "--preview-profile"]
         app.launch()
         let lavender = app.buttons["Lavender profile theme"]
-        for _ in 0..<7 where !lavender.isHittable { app.swipeUp() }
+        let save = app.buttons["Save"]
+        for _ in 0..<7 {
+            if lavender.isHittable && lavender.frame.maxY < save.frame.minY - 12 { break }
+            app.swipeUp()
+        }
         XCTAssertTrue(lavender.isHittable)
         lavender.tap()
         XCTAssertTrue(lavender.isSelected)
         let mint = app.buttons["Mint soda profile theme"]
-        for _ in 0..<2 where !mint.isHittable { app.swipeUp() }
+        for _ in 0..<3 {
+            if mint.isHittable && mint.frame.maxY < save.frame.minY - 12 { break }
+            app.swipeUp()
+        }
         mint.tap()
         XCTAssertTrue(mint.isSelected)
         XCTAssertFalse(lavender.isSelected)
