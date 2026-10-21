@@ -391,7 +391,7 @@ final class AppModel {
             "nitro_active": u.nitroActive, "nitro_until": u.nitroUntil, "name_style": u.nameStyle, "banner_color": u.bannerColor,
             "interests": u.interests, "pronouns": u.pronouns, "custom_status": u.status, "profile_color": u.profileColor,
             "bunny_picture": u.bunnyPicture, "bunny_items": u.bunnyItemsJSON, "artist_portfolio": u.artistPortfolio,
-            "profile_effect": u.profileEffect, "website": u.website, "stickers": u.stickers, "my_gifs": u.myGifs,
+            "profile_effect": u.profileEffect, "website": u.website, "websites": u.websites, "stickers": u.stickers, "my_gifs": u.myGifs,
             "accepted_chats": u.acceptedChats, "ignored": u.ignored, "presence": u.presence, "custom_status_until": u.statusUntil,
             "banned": u.banned, "ban_reason": u.banReason, "banned_until": u.bannedUntil,
             "muted_until_ms": u.mutedUntilMs, "mod_strikes": u.modStrikes,

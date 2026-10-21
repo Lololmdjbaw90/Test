@@ -136,7 +136,7 @@ private enum PerformanceFixture {
         guard CGImageDestinationFinalize(destination),
               let poster = AnimatedImages.decode(data as Data, maxPixel: 16, maxFrames: 1), poster.images == nil,
               let animated = AnimatedImages.decode(data as Data, maxPixel: 16, maxFrames: 2), (animated.images?.count ?? 0) >= 2 else { return "GIF playback policy failed" }
-        let links = UserProfile(["website": "example.com\nhttps://portfolio.example.com\njavascript://bad.com\nexample.com"])
+        let links = UserProfile(["website": "legacy.example.com", "websites": ["example.com", "https://portfolio.example.com", "javascript://bad.com", "example.com"]])
         guard links.profileLinks.count == 2, ProfileLinks.url("javascript://bad.com") == nil else { return "Profile link validation failed" }
         guard !Motion.ambient else { return "Decorative animations still running" }
         guard ImagePipeline.cacheKey("fixture", maxPixel: 96) != ImagePipeline.cacheKey("fixture") else { return "Thumbnail cache collision" }

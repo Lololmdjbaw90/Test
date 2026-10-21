@@ -944,7 +944,7 @@ struct EditProfileView: View {
         pronouns = me.pronouns
         status = me.status
         bio = me.bio
-        website = me.website
+        website = me.profileLinks.map(\.absoluteString).joined(separator: "\n")
         artistPortfolio = me.artistPortfolio
         interests = me.interests.joined(separator: ", ")
         nameStyle = me.nameStyle.isEmpty ? "default" : me.nameStyle
@@ -987,7 +987,7 @@ struct EditProfileView: View {
                 "bio": bio.trimmingCharacters(in: .whitespacesAndNewlines),
                 "pronouns": String(pronouns.trimmingCharacters(in: .whitespaces).prefix(24)),
                 "custom_status": String(status.trimmingCharacters(in: .whitespacesAndNewlines).prefix(80)),
-                "website": entries.joined(separator: "\n"),
+                "website": entries.first ?? "", "websites": entries,
                 "artist_portfolio": String(artistPortfolio.prefix(4000)),
                 "interests": Array(tags.prefix(12)),
                 "name_style": nameStyle, "banner_color": bannerColor, "profile_color": profileColor, "profile_effect": effect,

@@ -90,9 +90,11 @@ struct UserProfile: Identifiable, Hashable {
     var bunnyItemsJSON: String
     var artistPortfolio: String
     var website: String
+    var websites: [String]
     var profileLinks: [URL] {
         var seen = Set<String>()
-        return website.split(whereSeparator: \.isNewline).compactMap { ProfileLinks.url(String($0)) }
+        let entries = websites.isEmpty ? website.split(whereSeparator: \.isNewline).map(String.init) : websites
+        return entries.compactMap { ProfileLinks.url($0) }
             .filter { seen.insert($0.absoluteString).inserted }.prefix(5).map { $0 }
     }
     var stickers: [String]
@@ -157,6 +159,7 @@ struct UserProfile: Identifiable, Hashable {
         bunnyItemsJSON = d.str("bunny_items")
         artistPortfolio = d.str("artist_portfolio")
         website = d.str("website")
+        websites = d.strs("websites")
         stickers = d.strs("stickers")
         myGifs = d.strs("my_gifs")
         acceptedChats = d.strs("accepted_chats").map { $0.lowercased() }
