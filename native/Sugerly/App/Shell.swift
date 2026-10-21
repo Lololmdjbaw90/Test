@@ -506,6 +506,7 @@ struct MainShell: View {
     // The tabs with everything that opens over them.
     private var framed: some View {
         ShellTabs(nav: nav)
+            .environment(\.backgroundPaused, model.showMenu || model.showCreate || nav.composer != nil || calls.incoming != nil)
             .overlay(alignment: .top) {
                 if let toast = model.toast {
                     ToastView(toast: toast)
