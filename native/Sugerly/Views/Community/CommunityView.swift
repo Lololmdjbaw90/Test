@@ -283,15 +283,25 @@ struct CommunityView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 14, pinnedViews: [.sectionHeaders]) {
+            LazyVStack(alignment: .leading, spacing: 10, pinnedViews: [.sectionHeaders]) {
                 PageTitle(title: "Community", subtitle: "Little updates. Long conversations.", icon: "person.2.fill", candy: .berry,
                           search: $searchText, prompt: "Search people, posts and tags") { searching = true }
                 if !storyPeople.isEmpty { stories.stagger(appeared, 1) }
+                DisclosureGroup {
                 WeeklyChallengeCard(posts: store.posts, active: tag != nil && tag == DailyContent.challenge?.tag, compose: compose) { t in
                     withAnimation(Motion.pick(.snappy(duration: 0.3))) { tag = tag == t ? nil : t }
                 }
                 .stagger(appeared, 2)
                 if !topCreators.isEmpty { creatorsRow.stagger(appeared, 3) }
+                } label: {
+                    Label("Challenges & top creators", systemImage: "sparkles")
+                        .font(.jakarta(13, .bold)).foregroundStyle(Theme.main)
+                        .frame(minHeight: 32)
+                }
+                .tint(Theme.main)
+                .padding(.horizontal, 12).padding(.vertical, 4)
+                .background(Theme.soft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+
                 Section {
                     if !trending.isEmpty || tag != nil { trendingRow }
 
@@ -304,7 +314,7 @@ struct CommunityView: View {
                     // their own shape, words as colourful quote cards).
                     // Switching feeds swaps the whole board with a soft
                     // crossfade (posts don't fly around).
-                    VStack(spacing: 14) {
+                    VStack(spacing: 10) {
                         startThread
                         if feed == .forYou && !suggestions.isEmpty && !visible.isEmpty { suggested }
                         PinGrid(posts: visible, path: $path, reporting: $reporting, columns: sizeClass == .regular ? 3 : 2) {
@@ -325,6 +335,7 @@ struct CommunityView: View {
                 } header: {
                     feedBar
                 }
+
             }
             .padding(.horizontal, 14)
             .padding(.top, 10)
@@ -361,20 +372,18 @@ struct CommunityView: View {
     private var startThread: some View {
         Button(action: compose) {
             HStack(spacing: 12) {
-                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 40)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(model.me?.displayName ?? "You").font(.jakarta(14, .semibold)).foregroundStyle(Palette.text)
-                    Text("Start a thread…").font(.jakarta(14)).foregroundStyle(Palette.muted)
-                }
+                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 36)
+                Text("What’s happening?").font(.jakarta(14, .medium)).foregroundStyle(Palette.text2)
+                    .lineLimit(1).minimumScaleFactor(0.85)
                 Spacer(minLength: 0)
                 Text("Post").font(.jakarta(13, .bold)).foregroundStyle(.white)
-                    .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 16).frame(height: 34)
+                    .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 16).frame(minHeight: 44)
                     .background {
                         Capsule().fill(Theme.candy)
                             .shadow(color: Theme.glow(0.28), radius: 6, y: 3)
                     }
             }
-            .padding(.horizontal, 16).padding(.vertical, 14)
+            .padding(.horizontal, 12).padding(.vertical, 8)
             .contentShape(Rectangle())
         }
         .buttonStyle(SoftPressStyle())

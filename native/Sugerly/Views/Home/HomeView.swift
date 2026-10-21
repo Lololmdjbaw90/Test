@@ -260,10 +260,10 @@ struct HomeView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 28) {
+            LazyVStack(alignment: .leading, spacing: 18) {
                 PageTitle(title: "Home", subtitle: Date().formatted(.dateTime.weekday(.wide).day().month(.wide)), icon: "house.fill", candy: .peach,
                           search: $searchText, prompt: "Search people, posts and tags") { searching = true }
-                    .padding(.bottom, -14)
+                    .padding(.bottom, -4)
                 announcementBanner
                 hero.homeSection(appeared, 0)
                 HomeComposerBar(compose: compose).homeSection(appeared, 1)
@@ -282,7 +282,7 @@ struct HomeView: View {
             }
             .padding(.horizontal, sizeClass == .regular ? 24 : 16)
             .padding(.top, 8)
-            .padding(.bottom, 48)
+            .padding(.bottom, 28)
             .sideRails(760)
         }
         .scrollIndicators(.hidden)
@@ -379,19 +379,19 @@ struct HomeView: View {
         let info = LevelInfo(xp: me?.xp ?? 0)
         let friends = mutualFriends
         let online = friends.filter { model.person($0)?.isOnline == true }.count
-        return VStack(alignment: .leading, spacing: 14) {
+        return VStack(alignment: .leading, spacing: 10) {
             // Hello, in the palette: cream into blush into rose, with Mimi.
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 8) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(greeting).font(.jakarta(15, .medium)).foregroundStyle(Palette.text2)
                         Text(name.isEmpty ? "Hi there" : name)
-                            .font(.display(32)).foregroundStyle(Palette.text)
+                            .font(.display(29)).foregroundStyle(Palette.text)
                             .lineLimit(1).minimumScaleFactor(0.6)
                     }
                     Spacer(minLength: 0)
                     // Your bunny (tap her!). Long press to dress her up.
-                    BunnyOnScene(look: bunny.look, height: 100)
+                    BunnyOnScene(look: bunny.look, height: 84)
                         .onLongPressGesture { path.append(.bunny) }
                 }
                 // Three even tiles (number on top, a short word under it), so
@@ -410,7 +410,7 @@ struct HomeView: View {
                 }
                 XPBar(info: info)
             }
-            .padding(16)
+            .padding(14)
             .background(RoundedRectangle(cornerRadius: 24).fill(Theme.pastel))
             .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(Palette.rim(0.55), lineWidth: 1))
             .background(RoundedRectangle(cornerRadius: 24).fill(Theme.main.opacity(0.16)).offset(y: 4))

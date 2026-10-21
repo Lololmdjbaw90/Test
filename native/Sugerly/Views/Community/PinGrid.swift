@@ -35,7 +35,7 @@ struct PinGrid: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             ForEach(Array(split.enumerated()), id: \.offset) { _, column in
-                LazyVStack(spacing: 14) {
+                LazyVStack(spacing: 10) {
                     ForEach(column) { placed in
                         PinCard(post: placed.post, path: $path, reporting: $reporting, index: placed.index)
                             .onAppear { if placed.index >= posts.count - 6 { onNearEnd() } }

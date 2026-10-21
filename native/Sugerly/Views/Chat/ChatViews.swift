@@ -254,16 +254,16 @@ struct ChatListView: View {
                 Text("Online now").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
             }
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 14) {
+                HStack(spacing: 10) {
                     ForEach(Array(onlineFriends.enumerated()), id: \.element) { i, email in
                         let person = model.person(email)
                         Button { openChat(with: email) } label: {
                             VStack(spacing: 5) {
-                                Avatar(url: person?.picture ?? "", name: person?.displayName ?? email, size: 54, online: true)
+                                Avatar(url: person?.picture ?? "", name: person?.displayName ?? email, size: 44, online: true)
                                     .padding(3)
                                     .overlay(Circle().strokeBorder(Candy.allCases[i % Candy.allCases.count].gradient, lineWidth: 2.5))
                                 Text(person?.displayName ?? "").font(.jakarta(11, .semibold)).foregroundStyle(Palette.text2)
-                                    .lineLimit(1).frame(width: 64)
+                                    .lineLimit(1).frame(width: 58)
                             }
                         }
                         .buttonStyle(BouncyStyle(scale: 0.9))
@@ -274,7 +274,7 @@ struct ChatListView: View {
             }
             .scrollClipDisabled()
         }
-        .padding(12)
+        .padding(10)
         .sugarCard(radius: 20)
     }
 
@@ -417,11 +417,11 @@ struct ChatListView: View {
 
     private func row(_ c: Conversation) -> some View {
         Button { path.append(.chat(c)) } label: {
-            ConversationRow(conversation: c, card: false)
+            ConversationRow(conversation: c, card: true)
         }
-        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-        .listRowBackground(c.unread > 0 ? Palette.blush.opacity(0.45) : Color.clear)
-        .listRowSeparatorTint(Palette.border)
+        .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) { withMotion(Motion.standard) { store.close(c.id) } } label: {
                 Label(c.isGroup ? "Hide" : "Close", systemImage: "xmark.circle")
@@ -541,13 +541,13 @@ struct ConversationRow: View {
         let me = model.me?.email ?? ""
         let other = conversation.others(me).first.flatMap { model.person($0) }
         let unread = conversation.unread > 0
-        let row = HStack(spacing: 14) {
+        let row = HStack(spacing: 10) {
             if conversation.isGroup {
                 Image(systemName: "person.3.fill").font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.main)
-                    .frame(width: 52, height: 52)
+                    .frame(width: 44, height: 44)
                     .background(Theme.soft, in: Circle())
             } else {
-                Avatar(url: conversation.picture(model), name: conversation.title(model), size: 52, online: other?.isOnline ?? false)
+                Avatar(url: conversation.picture(model), name: conversation.title(model), size: 44, online: other?.isOnline ?? false)
             }
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
@@ -556,7 +556,7 @@ struct ConversationRow: View {
                         StreakBadge(streak: streak)
                     }
                     Spacer()
-                    Text(Dates.ago(conversation.last?.created ?? "")).font(.jakarta(12, unread ? .semibold : .regular)).foregroundStyle(unread ? Theme.main : Palette.muted)
+                    Text(Dates.ago(conversation.last?.created ?? "")).fixedSize().font(.jakarta(12, unread ? .semibold : .regular)).foregroundStyle(unread ? Theme.main : Palette.muted)
                 }
                 HStack(spacing: 5) {
                     if let last = conversation.last, last.authorEmail == me, last.kind != "call" {
@@ -581,9 +581,9 @@ struct ConversationRow: View {
         }
         if card {
             row
-                .padding(12)
-                .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+                .padding(.horizontal, 12).padding(.vertical, 7)
+                .background(unread ? Theme.soft : Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(unread ? Theme.main.opacity(0.28) : Palette.border, lineWidth: 1))
         } else {
             row.contentShape(Rectangle())
         }
