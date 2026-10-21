@@ -78,7 +78,12 @@ final class BunnyCatalog {
     private(set) var uploaded: [BunnyItem] = []
     @ObservationIgnored private var loadedAt = Date.distantPast
 
-    var all: [BunnyItem] { BunnyItem.builtIn + uploaded }
+    private(set) var personal: [BunnyItem] = []
+    func usePersonal(_ json: String) {
+        let docs = json.data(using: .utf8).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [Doc] } ?? []
+        personal = docs.prefix(30).compactMap(BunnyItem.init(doc:))
+    }
+    var all: [BunnyItem] { BunnyItem.builtIn + uploaded + personal }
 
     func items(_ slot: BunnySlot) -> [BunnyItem] { all.filter { $0.slot == slot } }
 
@@ -244,6 +249,7 @@ struct BunnyItemLayer: View {
 struct BunnyItemUploader: View {
     var slot: BunnySlot
     var look: BunnyLook
+    var personal = false
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var pick: PhotosPickerItem?
@@ -259,7 +265,7 @@ struct BunnyItemUploader: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Draw the item on a transparent PNG the same size as the bunny (878 × 1210), in the same place you'd see it on her. It shows for everyone straight away.")
+                    Text(personal ? "Import your own artwork as a transparent PNG, 878 × 1210. Draw it where it should sit on your bunny. It goes in your personal wardrobe, not the public shop." : "Draw the item on a transparent PNG the same size as the bunny (878 × 1210), in the same place you'd see it on her. It shows for everyone straight away.")
                         .font(.jakarta(13, .medium)).foregroundStyle(Palette.text2)
                         .fixedSize(horizontal: false, vertical: true)
                     stage
@@ -284,14 +290,14 @@ struct BunnyItemUploader: View {
                         .pickerStyle(.menu)
                     }
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Price in coins · 0 is free").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
-                        TextField("0", text: $price).keyboardType(.numberPad)
+                        Text(personal ? "Personal items are free" : "Price in coins · 0 is free").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+                        TextField("0", text: $price).keyboardType(.numberPad).disabled(personal)
                             .padding(14).background(Palette.surface, in: RoundedRectangle(cornerRadius: 14))
                     }
                     Button { Task { await upload() } } label: {
                         HStack(spacing: 8) {
                             if busy { ProgressView().tint(.white) } else { Image(systemName: "icloud.and.arrow.up.fill") }
-                            Text("Add for everyone")
+                            Text(personal ? "Add to my wardrobe" : "Add for everyone")
                         }
                     }
                     .buttonStyle(GradientButtonStyle(height: 50))
@@ -367,8 +373,20 @@ struct BunnyItemUploader: View {
         busy = true
         defer { busy = false }
         do {
-            try await BunnyCatalog.shared.add(name: name.trimmingCharacters(in: .whitespaces), slot: chosenSlot, png: png, by: me.email, price: amount)
-            model.showToast("Added for everyone", icon: "hare.fill")
+            if personal {
+                var docs = me.bunnyItemsJSON.data(using: .utf8).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [Doc] } ?? []
+                guard docs.count < 30 else { throw APIError(message: "Your wardrobe holds up to 30 imported items.") }
+                let url = try await StorageClient.upload(png, contentType: "image/png", fileExtension: "png")
+                docs.append(["id": "personal-" + UUID().uuidString, "name": String(name.prefix(60)), "slot": chosenSlot.rawValue, "image_url": url, "price_coins": 0])
+                let data = try JSONSerialization.data(withJSONObject: docs)
+                let json = String(decoding: data, as: UTF8.self)
+                try await model.updateMe(["bunny_items": json])
+                BunnyCatalog.shared.usePersonal(json)
+                model.showToast("Added to your wardrobe", icon: "tshirt.fill")
+            } else {
+                try await BunnyCatalog.shared.add(name: name.trimmingCharacters(in: .whitespaces), slot: chosenSlot, png: png, by: me.email, price: amount)
+                model.showToast("Added for everyone", icon: "hare.fill")
+            }
             dismiss()
         } catch {
             problem = error.localizedDescription

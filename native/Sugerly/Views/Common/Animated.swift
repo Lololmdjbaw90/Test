@@ -117,8 +117,16 @@ enum AnimatedImages {
         // stay up longer are repeated (the same image, so no extra memory).
         let unit = max(0.02, delays.min() ?? 0.1)
         var timed: [UIImage] = []
-        for (frame, d) in zip(frames, delays) { timed += Array(repeating: frame, count: max(1, Int((d / unit).rounded()))) }
-        if timed.count > frames.count * 12 { return UIImage.animatedImage(with: frames, duration: max(0.1, delays.reduce(0, +))) }
+        // Check before allocating: a malformed delay must never create millions
+        // of repeated frame references and stall a conversation on opening.
+        let limit = frames.count * 12
+        for (frame, d) in zip(frames, delays) {
+            let repeats = (d / unit).rounded()
+            guard repeats.isFinite, repeats <= Double(limit - timed.count) else {
+                return UIImage.animatedImage(with: frames, duration: max(0.1, delays.reduce(0, +)))
+            }
+            timed += Array(repeating: frame, count: max(1, Int(repeats)))
+        }
         return UIImage.animatedImage(with: timed, duration: max(0.1, Double(timed.count) * unit))
     }
 
@@ -152,8 +160,8 @@ enum AnimatedImages {
         } else if let webp = props[kCGImagePropertyWebPDictionary] as? [CFString: Any] {
             value = (webp[kCGImagePropertyWebPUnclampedDelayTime] as? Double) ?? (webp[kCGImagePropertyWebPDelayTime] as? Double)
         }
-        guard let v = value, v > 0.011 else { return 0.1 }
-        return v
+        guard let v = value, v.isFinite, v > 0.011 else { return 0.1 }
+        return min(v, 10)
     }
 }
 

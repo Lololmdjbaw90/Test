@@ -17,6 +17,7 @@ struct BunnyMakerView: View {
     @State private var cheer = 0
     @State private var shuffles = 0
     // The team adding a new item (clothes or an accessory).
+    @State private var importing = false
     @State private var adding: BunnySlot?
     @State private var editing: BunnyItem?
     @State private var deleting: BunnyItem?
@@ -80,6 +81,7 @@ struct BunnyMakerView: View {
         }
         .task {
             guard !loaded else { return }
+            catalog.usePersonal(model.me?.bunnyItemsJSON ?? "")
             store.use(model.me?.email ?? "")
             look = store.look
             let ids = [look.bodyItem, look.faceItem, look.collarItem] + look.layers(.top).map(\.id) + look.layers(.head).map(\.id)
@@ -140,6 +142,7 @@ struct BunnyMakerView: View {
             }
             Button("Cancel", role: .cancel) { buying = nil }
         }
+        .sheet(isPresented: $importing) { BunnyItemUploader(slot: .top, look: look, personal: true) }
         .sheet(item: $adding) { slot in
             BunnyItemUploader(slot: slot, look: look)
                 .presentationCornerRadius(30)
@@ -640,6 +643,12 @@ struct BunnyMakerView: View {
 
     private var actions: some View {
         VStack(spacing: 10) {
+            Button { importing = true } label: {
+                Label("Import my own item", systemImage: "square.and.arrow.up")
+            }.buttonStyle(OutlineButtonStyle(fullWidth: true))
+            Button { Task { await publishBunny() } } label: {
+                Label("Show my bunny on my profile", systemImage: "hare.fill")
+            }.buttonStyle(OutlineButtonStyle(fullWidth: true)).disabled(busy)
             Button { Task { await useAsPicture() } } label: {
                 HStack(spacing: 8) {
                     if busy { ProgressView().tint(.white) } else { Image(systemName: "person.crop.circle.fill") }
@@ -661,6 +670,17 @@ struct BunnyMakerView: View {
                 .buttonStyle(OutlineButtonStyle(fullWidth: true))
             }
         }
+    }
+
+    private func publishBunny() async {
+        guard !busy, let image = BunnyPortrait.render(look, side: 720), let data = image.pngData() else { return }
+        busy = true
+        defer { busy = false }
+        do {
+            let url = try await StorageClient.upload(data, contentType: "image/png", fileExtension: "png")
+            try await model.updateMe(["bunny_picture": url])
+            model.showToast("Your bunny is on your profile", icon: "hare.fill")
+        } catch { model.showToast(error.localizedDescription, error: true) }
     }
 
     private func useAsPicture() async {

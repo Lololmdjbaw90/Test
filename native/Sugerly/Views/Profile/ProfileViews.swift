@@ -100,6 +100,7 @@ struct ProfileContent: View {
 
     private var following: Bool { model.me?.following.contains(person.email) ?? false }
     // Counted by the database, so it's right however many people there are.
+    @State private var artistVerified = false
     @State private var followers = 0
     private var totalLikes: Int { posts.reduce(0) { $0 + $1.likeTotal } }
     // Three across on iPhone, four on iPad.
@@ -113,6 +114,16 @@ struct ProfileContent: View {
                     identity.stagger(appeared, 1)
                     stats.stagger(appeared, 2)
                     buttons.stagger(appeared, 2)
+                    if !person.bunnyPicture.isEmpty {
+                        VStack(spacing: 8) {
+                            Label("\(person.displayName)’s bunny", systemImage: "hare.fill").font(.jakarta(14, .bold))
+                            RemoteImage(url: person.bunnyPicture, contentMode: .fit).frame(height: 190)
+                            if isMe {
+                                Button("Remove from profile") { Task { try? await model.updateMe(["bunny_picture": ""]) } }
+                                    .font(.jakarta(12, .semibold))
+                            }
+                        }.frame(maxWidth: .infinity).sugarCard(radius: 22, padding: 14)
+                    }
                     if isMe { XPBar(info: LevelInfo(xp: person.xp)).sugarCard(radius: 22, padding: 14).stagger(appeared, 3) }
                     VStack(spacing: 12) {
                         tabs
@@ -135,7 +146,10 @@ struct ProfileContent: View {
         .sugarBackground()
         .onAppear { appeared = true }
         .refreshable { await load(); await loadSaved() }
-        .task(id: person.email) { await load() }
+        .task(id: person.email) {
+            await load()
+            artistVerified = (try? await FS.get("SiteConfig", "artist-" + person.id))?["verified"] as? Bool ?? false
+        }
         .task(id: savedKey) { await loadSaved() }
         .dropRemoved($posts)
         .dropRemoved($reels)
@@ -214,6 +228,11 @@ struct ProfileContent: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             }
+            if artistVerified {
+                Label("Reviewed artist", systemImage: "checkmark.seal.fill")
+                    .font(.jakarta(13, .bold)).foregroundStyle(Theme.main)
+                    .accessibilityHint("An admin reviewed this artist’s portfolio. This does not guarantee a commission outcome.")
+            }
             statusBubble
             if !person.bio.isEmpty {
                 Text(person.bio).font(.jakarta(15)).foregroundStyle(Palette.text)
@@ -233,9 +252,9 @@ struct ProfileContent: View {
                         .background(tint.opacity(0.1), in: Capsule())
                 }
             }
-            if !person.website.isEmpty, let url = URL(string: person.website.hasPrefix("http") ? person.website : "https://\(person.website)") {
+            ForEach(person.profileLinks, id: \.absoluteString) { url in
                 Link(destination: url) {
-                    Label(person.website.replacingOccurrences(of: "https://", with: "").replacingOccurrences(of: "http://", with: ""), systemImage: "link")
+                    Label(url.absoluteString.replacingOccurrences(of: "https://", with: "").replacingOccurrences(of: "http://", with: ""), systemImage: "link")
                         .font(.jakarta(13, .bold)).foregroundStyle(tint).lineLimit(1)
                 }
             }
@@ -656,6 +675,7 @@ struct EditProfileView: View {
     @State private var status = ""
     @State private var bio = ""
     @State private var website = ""
+    @State private var artistPortfolio = ""
     @State private var interests = ""
     @State private var nameStyle = "default"
     @State private var bannerColor = ""
@@ -692,8 +712,15 @@ struct EditProfileView: View {
             }
             field("Bio") { SugarField(placeholder: "A few words about you and your art", text: $bio, lines: 3...6) }
             field("Interests") { SugarField(placeholder: "anime, watercolor, cats", text: $interests) }
-            field("Website") { SugarField(placeholder: "yoursite.com", text: $website) }
+            field("Websites · up to 5") { SugarField(placeholder: "One website per line", text: $website, lines: 2...5) }
 
+            field("Artist verification · optional") {
+                VStack(alignment: .leading, spacing: 8) {
+                    SugarField(placeholder: "Portfolio and process/WIP links, one per line", text: $artistPortfolio, lines: 2...5)
+                    Text("Save your links, then request a portfolio review through Help & support. Include work-in-progress examples that show your process. Only admins can grant the Reviewed artist badge.")
+                        .font(.jakarta(12)).foregroundStyle(Palette.muted)
+                }
+            }
             // Each part is its own little view, so typing in a field above
             // only redraws what shows that field (the preview and the name
             // styles), not every swatch and picker.
@@ -918,6 +945,7 @@ struct EditProfileView: View {
         status = me.status
         bio = me.bio
         website = me.website
+        artistPortfolio = me.artistPortfolio
         interests = me.interests.joined(separator: ", ")
         nameStyle = me.nameStyle.isEmpty ? "default" : me.nameStyle
         bannerColor = me.bannerColor
@@ -943,9 +971,13 @@ struct EditProfileView: View {
         error = nil
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { error = "Pick a display name."; return }
-        guard !Moderation.hasLink(bio), !Moderation.hasLink(status) else { error = "Links aren't allowed in your bio or status — use the Website box."; return }
+        guard !Moderation.hasLink(bio), !Moderation.hasLink(status) else { error = "Links aren't allowed in your bio or status — use the Websites box."; return }
         guard await TextGuard.clear([trimmed, pronouns], kind: .name, model: model, cooldown: false),
               await TextGuard.clear([bio, status, interests], kind: .profile, model: model) else { return }
+        let entries = website.split(whereSeparator: \.isNewline).map { String($0).trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        guard entries.count <= 5, entries.allSatisfy({ ProfileLinks.url($0) != nil }) else {
+            error = "Add up to 5 valid websites, one per line (https:// or http://)."; return
+        }
         saving = true
         defer { saving = false }
         let tags = interests.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
@@ -955,7 +987,8 @@ struct EditProfileView: View {
                 "bio": bio.trimmingCharacters(in: .whitespacesAndNewlines),
                 "pronouns": String(pronouns.trimmingCharacters(in: .whitespaces).prefix(24)),
                 "custom_status": String(status.trimmingCharacters(in: .whitespacesAndNewlines).prefix(80)),
-                "website": website.trimmingCharacters(in: .whitespacesAndNewlines),
+                "website": entries.joined(separator: "\n"),
+                "artist_portfolio": String(artistPortfolio.prefix(4000)),
                 "interests": Array(tags.prefix(12)),
                 "name_style": nameStyle, "banner_color": bannerColor, "profile_color": profileColor, "profile_effect": effect,
                 "effect_color": effectColor, "effect_amount": effectAmount, "name_color": nameColor,
@@ -1540,9 +1573,11 @@ struct AppearanceSettings: View {
                 Picker("Theme", selection: themeChoice) {
                     Text("Light").tag("light")
                     Text("Dark").tag("dark")
-                    Text("Auto").tag("system")
+                    Text("Match device").tag("system")
                 }
                 .pickerStyle(.segmented)
+                Text("Match device follows your iPhone or iPad’s Light and Dark appearance.")
+                    .font(.jakarta(12)).foregroundStyle(Palette.muted)
             }
             .padding(.vertical, 4)
             VStack(alignment: .leading, spacing: 12) {

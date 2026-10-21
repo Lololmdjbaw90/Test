@@ -86,7 +86,15 @@ struct UserProfile: Identifiable, Hashable {
     var nameColor = ""
     var avatarFrame = ""
     var bannerPattern = ""
+    var bunnyPicture: String
+    var bunnyItemsJSON: String
+    var artistPortfolio: String
     var website: String
+    var profileLinks: [URL] {
+        var seen = Set<String>()
+        return website.split(whereSeparator: \.isNewline).compactMap { ProfileLinks.url(String($0)) }
+            .filter { seen.insert($0.absoluteString).inserted }.prefix(5).map { $0 }
+    }
     var stickers: [String]
     var myGifs: [String]
     // Privacy and presence (app extras, like Discord)
@@ -145,6 +153,9 @@ struct UserProfile: Identifiable, Hashable {
         nameColor = d.str("name_color")
         avatarFrame = d.str("avatar_frame")
         bannerPattern = d.str("banner_pattern")
+        bunnyPicture = d.str("bunny_picture")
+        bunnyItemsJSON = d.str("bunny_items")
+        artistPortfolio = d.str("artist_portfolio")
         website = d.str("website")
         stickers = d.strs("stickers")
         myGifs = d.strs("my_gifs")
@@ -696,5 +707,18 @@ enum SiteRole: String, CaseIterable, Identifiable {
         case .moderator: return "Looks after posts, comments and reports"
         case .member: return "No team powers"
         }
+    }
+}
+
+// Dedicated profile links stay separate from the link-free bio/status fields.
+enum ProfileLinks {
+    static func url(_ text: String) -> URL? {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, value.count <= 2048,
+              let url = URL(string: value.contains("://") ? value : "https://" + value),
+              let scheme = url.scheme?.lowercased(), ["http", "https"].contains(scheme),
+              let host = url.host, host.contains("."), !host.contains(" "),
+              url.user == nil, url.password == nil else { return nil }
+        return url
     }
 }

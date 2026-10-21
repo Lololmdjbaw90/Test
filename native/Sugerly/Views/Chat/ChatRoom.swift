@@ -50,14 +50,18 @@ struct ChatView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    // Scrolling up to the top loads the next older page.
+                    // Older history loads only on request, never from layout callbacks.
                     if loaded && hasOlder {
-                        HStack(spacing: 8) {
-                            ProgressView().controlSize(.small).tint(Theme.main)
-                            Text("Loading earlier messages").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
+                        Button { Task { await loadOlder(proxy) } } label: {
+                            HStack(spacing: 8) {
+                                if loadingOlder { ProgressView().controlSize(.small) }
+                                Text(loadingOlder ? "Loading earlier messages…" : "Load earlier messages")
+                                    .font(.jakarta(12, .semibold))
+                            }
+                            .frame(maxWidth: .infinity).padding(.vertical, 12)
                         }
-                        .frame(maxWidth: .infinity).padding(.vertical, 12)
-                        .onAppear { Task { await loadOlder(proxy) } }
+                        .disabled(loadingOlder)
+                        .accessibilityIdentifier("chat-load-earlier")
                     }
                     if loaded && messages.isEmpty { emptyState }
                     ForEach(Array(messages.enumerated()), id: \.element.key) { index, message in
@@ -483,7 +487,7 @@ struct ChatView: View {
         guard messages.isEmpty else { return }
         let cached = ChatCache.messages(conversation.id)
         guard !cached.isEmpty else { return }
-        messages = cached
+        messages = Array(cached.suffix(50))
         hasOlder = true
         loaded = true
     }
@@ -494,7 +498,7 @@ struct ChatView: View {
         let newest = messages.last(where: { !$0.pending })?.created ?? ""
         let incremental = loaded && !newest.isEmpty
         if incremental { filters.append(.after("created_date", ChatStore.minus(newest, seconds: 60))) }
-        let page = incremental ? 100 : 200
+        let page = incremental ? 100 : 50
         guard let docs = try? await FS.query("DirectMessage", filters, orderBy: "created_date", limit: page) else {
             loaded = true
             return
@@ -545,7 +549,7 @@ struct ChatView: View {
 
     // The page before the oldest message on screen, keeping your place.
     private func loadOlder(_ proxy: ScrollViewProxy) async {
-        guard !loadingOlder, let oldest = messages.first(where: { !$0.pending }) else { return }
+        guard hasOlder, !loadingOlder, let oldest = messages.first(where: { !$0.pending }) else { return }
         loadingOlder = true
         defer { loadingOlder = false }
         let filters: [FS.Filter] = [.equals("conversation_id", conversation.id), .contains("member_emails", me), .before("created_date", oldest.created)]
@@ -553,7 +557,7 @@ struct ChatView: View {
         hasOlder = docs.count >= 100
         let known = Set(messages.map(\.id))
         let page = docs.map(Message.init).filter { !known.contains($0.id) }
-        guard !page.isEmpty else { return }
+        guard !page.isEmpty else { hasOlder = false; return }
         var still = Transaction()
         still.disablesAnimations = true
         withTransaction(still) { messages = (page + messages).sorted { $0.created < $1.created } }
