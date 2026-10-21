@@ -1,6 +1,9 @@
 name: Capture design previews
 on:
   workflow_dispatch:
+  push:
+    branches: [codex/social-editor-polish]
+    paths: [.github/workflows/design-previews.yml]
 jobs:
   preview:
     runs-on: macos-15
