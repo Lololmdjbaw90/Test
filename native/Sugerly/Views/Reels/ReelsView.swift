@@ -232,9 +232,8 @@ struct ReelsView: View {
                     ScrollView(.vertical) {
                         LazyVStack(spacing: 0) {
                             ForEach(Array(list.enumerated()), id: \.element.id) { i, reel in
-                                // On iPad (or any wide screen) the reel is a phone-shaped
-                                // column in the middle, on a blurred copy of its cover.
-                                let column = geo.size.width < 600 ? geo.size.width : min(560, geo.size.height * 0.66)
+                                // The playback surface fills its viewport on phones and tablets.
+                                let column = geo.size.width
                                 ZStack {
                                     if column < geo.size.width - 1 {
                                         LinearGradient(colors: [Color(hex: 0x211522), .black], startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -269,6 +268,7 @@ struct ReelsView: View {
                     .scrollIndicators(.hidden)
                     .scrollBounceBehavior(.basedOnSize)
                 }
+                .ignoresSafeArea(.container, edges: .top)
             }
 
             refreshBadge
@@ -613,9 +613,8 @@ struct ReelPage: View {
             Color.black
             GeometryReader { frame in
                 media
-                    .frame(width: min(frame.size.width, frame.size.height * 9 / 16), height: min(frame.size.height, frame.size.width * 16 / 9))
+                    .frame(width: frame.size.width, height: frame.size.height)
                     .clipped()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .contentShape(Rectangle())
             .gesture(
@@ -719,8 +718,8 @@ struct ReelPage: View {
             if let video, !video.failed {
                 ZStack {
                     // The cover shows at once; the video fades in over it.
-                    if !video.ready { RemoteImage(url: reel.coverURL, contentMode: .fit) }
-                    LoopingVideo(player: video.player, fill: false)
+                    if !video.ready { RemoteImage(url: reel.coverURL, contentMode: .fill) }
+                    LoopingVideo(player: video.player, fill: true)
                         .scaleEffect(x: reel.mirror ? -1 : 1, y: 1)
                         .opacity(video.ready ? 1 : 0)
                         .animation(.easeOut(duration: 0.2), value: video.ready)
@@ -1137,9 +1136,8 @@ struct SingleReelView: View {
     @Environment(Player.self) private var music
     var body: some View {
         GeometryReader { geo in
-            // On iPad the reel is a phone-shaped column on a blurred copy of
-            // its cover, like in the feed.
-            let column = geo.size.width < 600 ? geo.size.width : min(560, geo.size.height * 0.66)
+            // Use the same edge-to-edge playback surface as the feed.
+            let column = geo.size.width
             let wide = column < geo.size.width - 1
             ZStack {
                 Color.black
@@ -1152,8 +1150,7 @@ struct SingleReelView: View {
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .clipped()
-        }
-        .overlay(alignment: .topLeading) {
+            .overlay(alignment: .topLeading) {
             Button {
                 if path.isEmpty { dismiss() } else { path.removeLast() }
             } label: {
@@ -1164,8 +1161,10 @@ struct SingleReelView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Back")
-            .padding(.leading, 12).padding(.top, 6)
+            .padding(.leading, 12).padding(.top, geo.safeAreaInsets.top + 6)
         }
+        }
+        .ignoresSafeArea(.container, edges: .top)
         .background(Color.black.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { music.setSuppressed("single-reel", active: true) }

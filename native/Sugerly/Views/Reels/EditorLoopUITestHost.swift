@@ -10,7 +10,7 @@ struct EditorLoopUITestHost: View {
     var body: some View {
         VStack {
             Text(status).accessibilityIdentifier("editor-export-result")
-            Text(Self.fullFrameFits ? "Whole frame visible" : "Framing failed").accessibilityIdentifier("editor-framing-result")
+            Text(Self.formatsFillCanvas ? "All formats fill canvas" : "Framing failed").accessibilityIdentifier("editor-framing-result")
             Button("Import again") {
                 Task {
                     if let url = Bundle.main.url(forResource: "LandscapeFixture", withExtension: "mp4"), await doc.openVideo(url) { status = "Imported again" }
@@ -27,15 +27,21 @@ struct EditorLoopUITestHost: View {
         }
         .onDisappear { doc.player.teardown() }
     }
-    private static let fullFrameFits: Bool = {
+    private static let formatsFillCanvas: Bool = {
         let size = CGSize(width: 108, height: 192)
-        let source = CIImage(color: CIColor(red: 1, green: 0, blue: 0)).cropped(to: CGRect(x: 0, y: 0, width: 200, height: 100))
-        let framed = VideoCrop.fit(source, size)
-        var pixels = [UInt8](repeating: 0, count: 108 * 192 * 4)
-        pixels.withUnsafeMutableBytes { buffer in
-            CIContext().render(framed, toBitmap: buffer.baseAddress!, rowBytes: 108 * 4, bounds: CGRect(origin: .zero, size: size), format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB())
+        for sourceSize in [CGSize(width: 1080, height: 1920), CGSize(width: 1920, height: 1080), CGSize(width: 1080, height: 1080), CGSize(width: 1080, height: 2560), CGSize(width: 720, height: 480)] {
+            let source = CIImage(color: CIColor(red: 1, green: 0, blue: 0)).cropped(to: CGRect(origin: CGPoint(x: 17, y: 29), size: sourceSize))
+            let framed = LiveLook.frame(source, size: size, look: ReelLook(), crop: nil)
+            var pixels = [UInt8](repeating: 0, count: 108 * 192 * 4)
+            pixels.withUnsafeMutableBytes { buffer in
+                CIContext().render(framed, toBitmap: buffer.baseAddress!, rowBytes: 108 * 4, bounds: CGRect(origin: .zero, size: size), format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB())
+            }
+            for (x, y) in [(1, 1), (106, 1), (1, 190), (106, 190), (54, 96)] {
+                let offset = (y * 108 + x) * 4
+                if pixels[offset] < 240 || pixels[offset + 3] < 240 { return false }
+            }
         }
-        return pixels[(96 * 108 + 54) * 4] > 200 && pixels[(2 * 108 + 54) * 4] < 20
+        return true
     }()
 
     private func export() async {

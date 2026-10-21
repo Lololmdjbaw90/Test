@@ -42,7 +42,7 @@ final class LiveLook: @unchecked Sendable {
         var img = source
         if let crop { img = VideoCrop.cut(img, crop) }
         img = img.transformed(by: CGAffineTransform(translationX: -img.extent.minX, y: -img.extent.minY))
-        img = VideoCrop.fit(img, size)
+        img = VideoCrop.fill(img, size)
         if !look.isNeutral { img = look.apply(img) }
         return img
     }
