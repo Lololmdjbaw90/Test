@@ -803,6 +803,8 @@ struct MenuDrawer: View {
                         .padding(.top, top)
                         .padding(.bottom, min(bottom, 34))
                         .frame(width: width, height: height)
+                        .clipped()
+                        .contentShape(Rectangle())
                         .background { DrawerBackdrop() }
                         .accessibilityIdentifier("menu-drawer-panel")
                         // A strip along the right edge to swipe it shut (not

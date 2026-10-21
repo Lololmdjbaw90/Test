@@ -59,6 +59,7 @@ struct AccountView: View, Equatable {
             }
             .scrollBounceBehavior(.basedOnSize)
             .scrollIndicators(.hidden)
+            .clipped()
         }
         .tint(Theme.main)
         .environment(\.flat, true)
