@@ -9,7 +9,7 @@ on:
   # commits, and a second Mac build would just use up minutes).
   push:
     branches:
-      - "claude/**"
+      - "feature/app-redesign"
     paths:
       - "native/**"
       - ".github/workflows/ios-native.yml"

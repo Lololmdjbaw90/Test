@@ -9,7 +9,7 @@ on:
         default: DesignPreviewTests/testAppearanceOptionsAndProfilePresets
         type: string
   push:
-    branches: [codex/social-editor-polish]
+    branches: [feature/social-editor-polish]
     paths: [.github/workflows/design-previews.yml]
 jobs:
   preview:

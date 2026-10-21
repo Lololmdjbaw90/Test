@@ -34,12 +34,12 @@ struct BunnyItem: Identifiable, Equatable {
     var tileFocus: UnitPoint { slot == .top ? UnitPoint(x: 0.5, y: 0.7) : UnitPoint(x: 0.5, y: 0.3) }
 
     static let builtIn: [BunnyItem] = [
-        BunnyItem(id: "body-fox", name: "Fox", slot: .body, asset: "BunnyBodyFox", hue: 340),
+        BunnyItem(id: "body-fox", name: "Fox", slot: .body, asset: "BunnyBodyFox", outlineAsset: "BunnyBodyFoxOutline", hue: 340),
         BunnyItem(id: "body-monkey", name: "Monkey", slot: .body, asset: "BunnyBodyMonkey", outlineAsset: "BunnyBodyMonkeyOutline", hue: 340),
         BunnyItem(id: "body-lamb", name: "Lamb", slot: .body, asset: "BunnyBodyLamb", outlineAsset: "BunnyBodyLambOutline", hue: 340),
         BunnyItem(id: "body-bear", name: "Bear", slot: .body, asset: "BunnyBodyBear", outlineAsset: "BunnyBodyBearOutline", hue: 340),
         BunnyItem(id: "body-deer", name: "Deer", slot: .body, asset: "BunnyBodyDeer", outlineAsset: "BunnyBodyDeerOutline", hue: 340),
-        BunnyItem(id: "body-cat", name: "Cat", slot: .body, asset: "BunnyBodyCat", outlineAsset: "BunnyBodyCatOutline", hue: 340),
+        BunnyItem(id: "body-cat", name: "Cat", slot: .body, asset: "BunnyBodyCatFur", outlineAsset: "BunnyBodyCatInk", hue: 340),
 
         BunnyItem(id: "maid", name: "Maid", slot: .top, asset: "BunnyItemMaid", hue: 245),
         BunnyItem(id: "frills", name: "Frills", slot: .top, asset: "BunnyItemFrills", hue: 194),
@@ -199,10 +199,14 @@ struct BunnyItemLayer: View {
 
     var body: some View {
         ZStack {
-            picture
-                .hueRotation(.degrees(turn))
-                .saturation(tint?.saturation ?? 1)
-                .brightness(tint?.brightness ?? 0)
+            if item.slot == .body, !item.uploaded, let tint {
+                BunnyLayer(item.asset, tint)
+            } else {
+                picture
+                    .hueRotation(.degrees(item.slot == .body ? (tint?.hue ?? 0) : turn))
+                    .saturation(tint?.saturation ?? 1)
+                    .brightness(tint?.brightness ?? 0)
+            }
             if !item.outlineAsset.isEmpty {
                 BunnyImages.image(item.outlineAsset).resizable().interpolation(.high)
             }

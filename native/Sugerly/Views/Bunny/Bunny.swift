@@ -336,8 +336,38 @@ enum BunnyImages {
     }
 
     nonisolated static func load(_ name: String) -> UIImage {
+        if name == "BunnyBodyCatFur" || name == "BunnyBodyCatInk" {
+            return catLayer(ink: name == "BunnyBodyCatInk")
+        }
         guard let full = UIImage(named: name) else { return UIImage() }
         return full.preparingThumbnail(of: pixels) ?? full
+    }
+
+    // The short-eared cat was supplied as one finished picture. Separate
+    // its dark ink at decode time so fur uses the bunny's exact colour path.
+    // This runs once per cached layer, never while animating the figure.
+    nonisolated private static func catLayer(ink: Bool) -> UIImage {
+        guard let source = UIImage(named: "BunnyBodyCat"),
+              let image = (source.preparingThumbnail(of: pixels) ?? source).cgImage else { return UIImage() }
+        let width = image.width, height = image.height
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        let flags = CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue
+        let output: CGImage? = bytes.withUnsafeMutableBytes { storage in
+            guard let context = CGContext(data: storage.baseAddress, width: width, height: height,
+                                          bitsPerComponent: 8, bytesPerRow: width * 4,
+                                          space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: flags),
+                  let pixels = storage.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return nil }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            for i in stride(from: 0, to: width * height * 4, by: 4) {
+                let alpha = Int(pixels[i + 3])
+                let isInk = max(Int(pixels[i]), Int(pixels[i + 1]), Int(pixels[i + 2])) * 100 < alpha * 68
+                if alpha == 0 || isInk != ink {
+                    pixels[i] = 0; pixels[i + 1] = 0; pixels[i + 2] = 0; pixels[i + 3] = 0
+                }
+            }
+            return context.makeImage()
+        }
+        return output.map { UIImage(cgImage: $0) } ?? UIImage()
     }
 
     static func prepare(_ look: BunnyLook) async {
