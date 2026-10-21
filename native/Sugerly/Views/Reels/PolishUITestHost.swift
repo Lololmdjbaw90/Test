@@ -70,6 +70,11 @@ struct PolishUITestHost: View {
                 NavigationStack(path: $path) {
                     GalleryView(path: $path, initialArtworks: [art])
                 }
+            } else if tab == 8 {
+                NewCommissionView(existing: Commission([
+                    "id": "fixture-listing", "title": "Pet portraits", "description": "A local editing fixture",
+                    "tiers": [["name": "Sketch", "price": 10], ["name": "Colour", "price": 20], ["name": "Portrait", "price": 30]]
+                ]), initialSamples: [UIImage(systemName: "star.fill"), UIImage(systemName: "heart.fill"), UIImage(systemName: "moon.fill")].compactMap { $0 }) {}
             } else if tab == 6 {
                 EditProfileView()
             } else if tab == 7 {
@@ -91,7 +96,7 @@ struct PolishUITestHost: View {
             model.me = UserProfile(["id": "fixture-user", "email": "test@example.invalid", "display_name": "Mimi", "coins": 1280, "xp": 340])
             if preview {
                 let args = ProcessInfo.processInfo.arguments
-                tab = args.contains("--preview-profile") ? 6 : args.contains("--preview-appearance") ? 7 : args.contains("--preview-community") ? 2 : args.contains("--preview-chats") ? 5 : 4
+                tab = args.contains("--preview-commission") ? 8 : args.contains("--preview-profile") ? 6 : args.contains("--preview-appearance") ? 7 : args.contains("--preview-community") ? 2 : args.contains("--preview-chats") ? 5 : 4
                 posts.posts = [
                     Post(["id": "sample-post", "user_email": "luna@example.invalid", "user_display_name": "Luna", "title": "Little things, big smiles", "content": "Made time to draw today. What are you working on? #art", "created_date": FS.nowISO()]),
                     Post(["id": "sample-post-2", "user_email": "kai@example.invalid", "user_display_name": "Kai", "title": "Your daily reminder", "content": "You don’t have to finish everything today. A little progress counts too.", "created_date": FS.nowISO()]),
