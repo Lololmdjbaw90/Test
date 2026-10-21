@@ -780,9 +780,12 @@ struct MenuDrawer: View {
     var body: some View {
         GeometryReader { geo in
             let width = min(geo.size.width * 0.86, 400)
-            let top = geo.safeAreaInsets.top
-            let bottom = geo.safeAreaInsets.bottom
-            let height = geo.size.height + top + bottom
+            let windowInsets = UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap(\.windows).first(where: \.isKeyWindow)?.safeAreaInsets ?? .zero
+            let top = max(geo.safeAreaInsets.top, windowInsets.top)
+            let bottom = max(geo.safeAreaInsets.bottom, windowInsets.bottom)
+            let height = geo.size.height
             ZStack(alignment: .leading) {
                 Color.black
                     .opacity(open ? 0.3 * Double(1 - min(1, drag / max(width, 1))) : 0)
@@ -820,9 +823,9 @@ struct MenuDrawer: View {
                 }
             }
             .frame(width: geo.size.width, height: height, alignment: .leading)
-            .offset(y: -top)
             .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.36, dampingFraction: 0.9), value: open)
         }
+        .ignoresSafeArea(.container)
         .ignoresSafeArea(.keyboard)
         // Built while nothing else is going on, so the first open is as
         // smooth as the rest.
@@ -867,7 +870,7 @@ private struct DrawerBackdrop: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        let shape = UnevenRoundedRectangle(bottomTrailingRadius: 32, topTrailingRadius: 32, style: .continuous)
+        let shape = Rectangle()
         let dark = scheme == .dark
         shape.fill(Palette.bg)
             .overlay {
