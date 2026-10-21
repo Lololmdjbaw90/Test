@@ -36,7 +36,10 @@ enum AnimatedImages {
     // maxFrames keeps grids of many GIFs light (thumbnails skip frames).
     static func load(_ url: String, maxPixel: CGFloat = 480, maxFrames: Int = 90, budget: Int = defaultBudget) async -> UIImage? {
         let limited = await MainActor.run { RenderingBudget.shared.limited }
-        let frameLimit = limited ? 1 : maxFrames
+        // Keep a small animation ready so images loaded during recording can
+        // resume afterwards without a reload. The view displays its first frame.
+        let frameLimit = limited ? min(24, maxFrames) : maxFrames
+        let decodeBudget = limited ? min(budget, thumbBudget) : budget
         let key = "\(url)#\(Int(maxPixel))#\(frameLimit)" as NSString
         if let hit = cache.object(forKey: key) { return hit }
         guard let link = URL(string: url) else { return nil }
@@ -55,7 +58,7 @@ enum AnimatedImages {
             await DecodeGate.shared.leave()
             return nil
         }
-        let image = await Task.detached(priority: .userInitiated) { decode(data, maxPixel: maxPixel, maxFrames: frameLimit, budget: budget) }.value
+        let image = await Task.detached(priority: .userInitiated) { decode(data, maxPixel: maxPixel, maxFrames: frameLimit, budget: decodeBudget) }.value
         await DecodeGate.shared.leave()
         if let image { cache.setObject(image, forKey: key, cost: cost(image)) }
         return image
