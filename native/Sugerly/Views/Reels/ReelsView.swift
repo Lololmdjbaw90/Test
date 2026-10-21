@@ -268,7 +268,6 @@ struct ReelsView: View {
                     .scrollIndicators(.hidden)
                     .scrollBounceBehavior(.basedOnSize)
                 }
-                .ignoresSafeArea(.container, edges: .top)
             }
 
             refreshBadge
@@ -1134,13 +1133,10 @@ struct SingleReelView: View {
     var loadContent = true
     @Environment(\.dismiss) private var dismiss
     @Environment(Player.self) private var music
-    private var topInset: CGFloat {
-        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows).first(where: \.isKeyWindow)?.safeAreaInsets.top ?? 0
-    }
     var body: some View {
         GeometryReader { geo in
-            // Use the same edge-to-edge playback surface as the feed.
+            // On iPad the reel is a phone-shaped column on a blurred copy of
+            // its cover, like in the feed.
             let column = geo.size.width
             let wide = column < geo.size.width - 1
             ZStack {
@@ -1154,7 +1150,8 @@ struct SingleReelView: View {
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .clipped()
-            .overlay(alignment: .topLeading) {
+        }
+        .overlay(alignment: .topLeading) {
             Button {
                 if path.isEmpty { dismiss() } else { path.removeLast() }
             } label: {
@@ -1165,10 +1162,8 @@ struct SingleReelView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Back")
-            .padding(.leading, 12).padding(.top, max(topInset, geo.safeAreaInsets.top) + 6)
+            .padding(.leading, 12).padding(.top, 6)
         }
-        }
-        .ignoresSafeArea(.container, edges: .top)
         .background(Color.black.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { music.setSuppressed("single-reel", active: true) }
