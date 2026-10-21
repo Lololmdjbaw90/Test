@@ -28,7 +28,7 @@ final class NavigationInteractionTests: XCTestCase {
         // padding/backgrounds; inspect the screenshot for edge coverage.
         XCTAssertFalse(app.buttons["Open test chat"].isHittable, "The drawer must block the page behind it")
         let logout = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'Log out'")).firstMatch
-        let scroll = panel.scrollViews.firstMatch
+        let scroll = app.scrollViews.firstMatch
         for _ in 0..<6 where !logout.isHittable { scroll.swipeUp() }
         XCTAssertTrue(logout.isHittable, "Bottom menu actions must be reachable")
         let shot = XCTAttachment(screenshot: app.screenshot())
