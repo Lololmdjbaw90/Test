@@ -32,10 +32,10 @@ final class CommissionEditingTests: XCTestCase {
         XCTAssertEqual(names.count, 1)
         XCTAssertEqual(names.firstMatch.value as? String, "Portrait")
         app.swipeUp()
-        let add = app.buttons["Add a size"]
-        XCTAssertTrue(add.waitForExistence(timeout: 3))
-        for _ in 0..<3 where !add.isHittable { app.swipeUp() }
-        add.tap()
+        let addSize = app.buttons["Add a size"]
+        XCTAssertTrue(addSize.waitForExistence(timeout: 3))
+        for _ in 0..<3 where !addSize.isHittable { app.swipeUp() }
+        addSize.tap()
         XCTAssertEqual(names.count, 2)
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "commission-after-deletions"; shot.lifetime = .keepAlways; add(shot)
