@@ -1134,6 +1134,10 @@ struct SingleReelView: View {
     var loadContent = true
     @Environment(\.dismiss) private var dismiss
     @Environment(Player.self) private var music
+    private var topInset: CGFloat {
+        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows).first(where: \.isKeyWindow)?.safeAreaInsets.top ?? 0
+    }
     var body: some View {
         GeometryReader { geo in
             // Use the same edge-to-edge playback surface as the feed.
@@ -1161,7 +1165,7 @@ struct SingleReelView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Back")
-            .padding(.leading, 12).padding(.top, geo.safeAreaInsets.top + 6)
+            .padding(.leading, 12).padding(.top, max(topInset, geo.safeAreaInsets.top) + 6)
         }
         }
         .ignoresSafeArea(.container, edges: .top)
