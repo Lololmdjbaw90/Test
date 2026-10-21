@@ -410,7 +410,7 @@ struct BunnyMakerView: View {
             VStack(spacing: 6) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 18, style: .continuous).fill(on ? Theme.soft : Palette.surface2)
-                    BunnyItemLayer(item: item, tint: look.tint(item.slot == .top ? .outfit : .accessory))
+                    BunnyItemLayer(item: item, tint: look.tint(item.slot == .body ? .fur : item.slot == .top ? .outfit : .accessory))
                         .aspectRatio(BunnyArt.aspect, contentMode: .fit)
                         .scaleEffect(item.tileZoom, anchor: item.tileFocus)
                 }

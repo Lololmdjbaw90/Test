@@ -888,8 +888,8 @@ private struct DrawerBackdrop: View {
             .background(alignment: .trailing) {
                 LinearGradient(colors: [.black.opacity(dark ? 0.3 : 0.12), .black.opacity(0)], startPoint: .leading, endPoint: .trailing)
                     .frame(width: 22)
-                    .padding(.vertical, 24)
                     .offset(x: 22)
+                    .allowsHitTesting(false)
             }
             .ignoresSafeArea()
     }

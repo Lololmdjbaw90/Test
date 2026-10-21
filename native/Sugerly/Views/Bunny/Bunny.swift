@@ -343,7 +343,7 @@ enum BunnyImages {
     static func prepare(_ look: BunnyLook) async {
         var names = ["BunnyFur", "BunnyOutline", "BunnyBow", "BunnyCollar", look.face.image, look.face.eyes]
         names += BunnyTop.allCases.compactMap { $0.piece?.rawValue }
-        names += BunnyCatalog.shared.all.filter { !$0.asset.isEmpty }.map(\.asset)
+        names += BunnyCatalog.shared.all.flatMap { [$0.asset, $0.outlineAsset] }.filter { !$0.isEmpty }
         let missing = names.filter { cache[$0] == nil }
         let ready = await Task.detached(priority: .userInitiated) {
             missing.map { ($0, load($0)) }
@@ -358,6 +358,9 @@ enum BunnyImages {
     static func warmUp(_ look: BunnyLook = BunnyLook()) {
         var names = ["BunnyFur", "BunnyOutline", "BunnyBow", "BunnyCollar", look.face.image, look.face.eyes]
         if let piece = look.top.piece { names.append(piece.rawValue) }
+        if let body = BunnyItem.builtIn.first(where: { $0.id == look.bodyItem }) {
+            names += [body.asset, body.outlineAsset].filter { !$0.isEmpty }
+        }
         for id in [look.wear, look.head] {
             if let asset = BunnyItem.builtIn.first(where: { $0.id == id })?.asset { names.append(asset) }
         }
