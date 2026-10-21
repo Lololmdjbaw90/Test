@@ -14,6 +14,7 @@ struct PolishUITestHost: View {
     @State private var slideSeconds: [Double] = []
     @State private var playhead = 0.0
     @State private var editor: TextSticker?
+    private var preview: Bool { ProcessInfo.processInfo.arguments.contains("--design-preview") }
     @State private var tab = 0
     @State private var likes = false
     @State private var action = "Ready"
@@ -31,13 +32,16 @@ struct PolishUITestHost: View {
 
     var body: some View {
         VStack(spacing: 12) {
+            if !preview {
             Picker("Screen", selection: $tab) {
                 Text("Editor").tag(0)
                 Text("Fanart").tag(1)
                 Text("Community").tag(2)
                 Text("Wall").tag(3)
                 Text("Home").tag(4)
+                Text("Chats").tag(5)
             }.pickerStyle(.segmented).padding()
+            }
             if ProcessInfo.processInfo.arguments.contains("--check-performance-policy") {
                 Text(PerformanceFixture.result).font(.caption2).accessibilityIdentifier("performance-policy")
             }
@@ -66,6 +70,8 @@ struct PolishUITestHost: View {
                 NavigationStack(path: $path) {
                     GalleryView(path: $path, initialArtworks: [art])
                 }
+            } else if tab == 5 {
+                NavigationStack(path: $path) { ChatListView(path: $path) }
             } else {
                 NavigationStack(path: $path) {
                     HomeView(path: $path, compose: { _ in }, loadContent: false)
@@ -78,7 +84,21 @@ struct PolishUITestHost: View {
         .environment(posts).environment(notes).environment(player).environment(chats)
         .environment(VoiceEngine.shared).environment(CallCenter.shared)
         .onAppear {
-            model.me = UserProfile(["id": "fixture-user", "email": "test@example.invalid", "display_name": "Mimi"])
+            model.me = UserProfile(["id": "fixture-user", "email": "test@example.invalid", "display_name": "Mimi", "coins": 1280, "xp": 340])
+            if preview {
+                let args = ProcessInfo.processInfo.arguments
+                tab = args.contains("--preview-community") ? 2 : args.contains("--preview-chats") ? 5 : 4
+                posts.posts = [
+                    Post(["id": "sample-post", "user_email": "luna@example.invalid", "user_display_name": "Luna", "title": "Little things, big smiles", "content": "Made time to draw today. What are you working on? #art", "created_date": FS.nowISO()]),
+                    Post(["id": "sample-post-2", "user_email": "kai@example.invalid", "user_display_name": "Kai", "title": "Your daily reminder", "content": "You don’t have to finish everything today. A little progress counts too.", "created_date": FS.nowISO()]),
+                    Post(["id": "sample-post-3", "user_email": "bea@example.invalid", "user_display_name": "Bea", "title": "Sketchbook check-in", "content": "Pink skies or peach skies? Help me choose! #sketchbook", "created_date": FS.nowISO()])
+                ]
+                chats.conversations = ["Luna", "Kai", "Art friends", "Bea"].enumerated().map { i, name in
+                    let email = name.lowercased().replacingOccurrences(of: " ", with: "") + "@example.invalid"
+                    let last = Message(["id": "preview-message-\(i)", "user_email": email, "user_display_name": name, "content": ["That looks so cute!!", "Want to draw together later?", "Bea: Just shared my new sketch", "Thanks for the inspiration ♡"][i], "created_date": Dates.iso(Date().addingTimeInterval(-Double(i + 1) * 180)), "member_emails": ["test@example.invalid", email]])
+                    return Conversation(id: "preview-chat-\(i)", members: ["test@example.invalid", email], isGroup: i == 2, groupName: i == 2 ? name : "", last: last, unread: i == 0 ? 2 : 0)
+                }
+            }
         }
         .sheet(item: $editor) { sticker in
             TextStickerEditor(sticker: sticker) { updated in

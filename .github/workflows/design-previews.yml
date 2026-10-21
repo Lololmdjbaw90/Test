@@ -1,0 +1,32 @@
+name: Capture design previews
+on:
+  workflow_dispatch:
+jobs:
+  preview:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - name: Select Xcode and generate project
+        run: |
+          XC=$(ls -d /Applications/Xcode_26*.app | grep -vi beta | sort -V | tail -1)
+          sudo xcode-select -s "$XC"
+          brew install xcodegen
+          cd native && xcodegen generate
+      - name: Capture iPhone screens
+        env:
+          TEST_FILTER: DesignPreviewTests
+        run: bash scripts/test-native-interactions.sh
+      - name: Export screenshots
+        if: always()
+        run: |
+          if [ -d native/InteractionTests.xcresult ]; then
+            xcrun xcresulttool export attachments --path native/InteractionTests.xcresult --output-path native/design-previews
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: design-previews
+          path: |
+            native/design-previews
+            native/simulator-test.log
