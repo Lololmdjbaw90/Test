@@ -115,10 +115,10 @@ struct MessageMedia: View {
 
     var body: some View {
         if Media.isSticker(url) {
-            AnimatedThumb(url: url, fill: false, maxPixel: 280, maxFrames: 48)
+            AnimatedThumb(url: url, fill: false, maxPixel: 280, maxFrames: 36, budget: AnimatedImages.thumbBudget)
                 .frame(width: 140, height: 140)
         } else {
-            ArtImage(url: url, tallest: tallest, widest: widest)
+            ArtImage(url: url, tallest: tallest, widest: widest, maxPixel: 480, maxFrames: 36, animationBudget: AnimatedImages.thumbBudget)
                 .frame(width: width)
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .shadow(color: Palette.shadow, radius: 8, y: 3)

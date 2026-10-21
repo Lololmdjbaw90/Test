@@ -12,6 +12,7 @@ import AVFoundation
 struct ChatView: View {
     let conversation: Conversation
     var loadMessages = true
+    var previewMessages: [Message] = []
     @Environment(AppModel.self) private var model
     @Environment(ChatStore.self) private var chats
     @Environment(CallCenter.self) private var calls
@@ -142,7 +143,7 @@ struct ChatView: View {
             recorder.cancel()
         }
         .task {
-            guard loadMessages else { loaded = true; return }
+            guard loadMessages else { messages = Array(previewMessages.suffix(50)); hasOlder = previewMessages.count > 50; loaded = true; return }
             restoreCache()
             await poll()
         }

@@ -245,10 +245,13 @@ struct ArtImage: View {
     var url: String
     var tallest: CGFloat = 0.62 // width / height
     var widest: CGFloat = 1.8
+    var maxPixel: CGFloat = 720
+    var maxFrames = 90
+    var animationBudget = AnimatedImages.defaultBudget
     @State private var image: UIImage?
 
     var body: some View {
-        let shown = image ?? (AnimatedImages.looksAnimated(url) ? AnimatedImages.cached(url, maxPixel: 720) : MemoryImages.get(url))
+        let shown = image ?? (AnimatedImages.looksAnimated(url) ? AnimatedImages.cached(url, maxPixel: maxPixel, maxFrames: maxFrames) : MemoryImages.get(url))
         let natural: CGFloat = shown.map { $0.size.width / Swift.max(1, $0.size.height) } ?? 0.8
         let ratio: CGFloat = Swift.min(widest, Swift.max(tallest, natural))
         Color.clear
@@ -272,7 +275,7 @@ struct ArtImage: View {
             .task(id: url) {
                 guard !url.isEmpty, image == nil else { return }
                 if AnimatedImages.looksAnimated(url) {
-                    if let loaded = await AnimatedImages.load(url, maxPixel: 720) { withAnimation(.easeOut(duration: 0.2)) { image = loaded } }
+                    if let loaded = await AnimatedImages.load(url, maxPixel: maxPixel, maxFrames: maxFrames, budget: animationBudget) { withAnimation(.easeOut(duration: 0.2)) { image = loaded } }
                     return
                 }
                 if let loaded = await ImagePipeline.shared.load(url) {

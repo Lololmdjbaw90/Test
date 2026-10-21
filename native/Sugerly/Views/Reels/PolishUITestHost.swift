@@ -70,6 +70,11 @@ struct PolishUITestHost: View {
                 NavigationStack(path: $path) {
                     GalleryView(path: $path, initialArtworks: [art])
                 }
+            } else if tab == 9 {
+                NavigationStack {
+                    ChatView(conversation: Conversation(id: "stress-chat", members: ["test@example.invalid", "friend@example.invalid"], isGroup: true, groupName: "History test", last: nil, unread: 0), loadMessages: false,
+                        previewMessages: (0..<400).map { i in Message(["id": "history-\(i)", "content": "History message \(i)", "user_email": i % 2 == 0 ? "test@example.invalid" : "friend@example.invalid", "created_date": Dates.iso(Date(timeIntervalSince1970: 1_790_000_000 + Double(i)))]) })
+                }
             } else if tab == 8 {
                 NewCommissionView(existing: Commission([
                     "id": "fixture-listing", "title": "Pet portraits", "description": "A local editing fixture",
@@ -96,7 +101,7 @@ struct PolishUITestHost: View {
             model.me = UserProfile(["id": "fixture-user", "email": "test@example.invalid", "display_name": "Mimi", "coins": 1280, "xp": 340])
             if preview {
                 let args = ProcessInfo.processInfo.arguments
-                tab = args.contains("--preview-commission") ? 8 : args.contains("--preview-profile") ? 6 : args.contains("--preview-appearance") ? 7 : args.contains("--preview-community") ? 2 : args.contains("--preview-chats") ? 5 : 4
+                tab = args.contains("--preview-chat-history") ? 9 : args.contains("--preview-commission") ? 8 : args.contains("--preview-profile") ? 6 : args.contains("--preview-appearance") ? 7 : args.contains("--preview-community") ? 2 : args.contains("--preview-chats") ? 5 : 4
                 posts.posts = [
                     Post(["id": "sample-post", "user_email": "luna@example.invalid", "user_display_name": "Luna", "title": "Little things, big smiles", "content": "Made time to draw today. What are you working on? #art", "created_date": FS.nowISO()]),
                     Post(["id": "sample-post-2", "user_email": "kai@example.invalid", "user_display_name": "Kai", "title": "Your daily reminder", "content": "You don’t have to finish everything today. A little progress counts too.", "created_date": FS.nowISO()]),
@@ -123,14 +128,16 @@ private enum PerformanceFixture {
         let data = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(data, "com.compuserve.gif" as CFString, 2, nil) else { return "GIF fixture failed" }
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 16, height: 16))
-        for color in [UIColor.red, UIColor.blue] {
+        for (index, color) in [UIColor.red, UIColor.blue].enumerated() {
             let image = renderer.image { context in color.setFill(); context.fill(CGRect(x: 0, y: 0, width: 16, height: 16)) }
             guard let cg = image.cgImage else { return "GIF frame failed" }
-            CGImageDestinationAddImage(destination, cg, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 0.1]] as CFDictionary)
+            CGImageDestinationAddImage(destination, cg, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: index == 0 ? 0.02 : 10_000_000]] as CFDictionary)
         }
         guard CGImageDestinationFinalize(destination),
               let poster = AnimatedImages.decode(data as Data, maxPixel: 16, maxFrames: 1), poster.images == nil,
               let animated = AnimatedImages.decode(data as Data, maxPixel: 16, maxFrames: 2), (animated.images?.count ?? 0) >= 2 else { return "GIF playback policy failed" }
+        let links = UserProfile(["website": "example.com\nhttps://portfolio.example.com\njavascript://bad.com\nexample.com"])
+        guard links.profileLinks.count == 2, ProfileLinks.url("javascript://bad.com") == nil else { return "Profile link validation failed" }
         guard !Motion.ambient else { return "Decorative animations still running" }
         guard ImagePipeline.cacheKey("fixture", maxPixel: 96) != ImagePipeline.cacheKey("fixture") else { return "Thumbnail cache collision" }
         return "Performance fixtures passed"

@@ -434,7 +434,12 @@ struct BunnyMakerView: View {
         .modifier(ChoicePop(index: index))
         .disabled(purchasing)
         .overlay(alignment: .topTrailing) {
-            if isAdmin && item.uploaded {
+            if item.id.hasPrefix("personal-") {
+                Button(role: .destructive) { Task { await removePersonal(item) } } label: {
+                    Image(systemName: "trash.circle.fill").font(.system(size: 24))
+                        .foregroundStyle(Theme.main, Palette.surface).frame(width: 44, height: 44)
+                }.accessibilityLabel("Remove my \(item.name)")
+            } else if isAdmin && item.uploaded {
                 Menu {
                     Button { editing = item } label: { Label("Rename / price", systemImage: "pencil") }
                     Button(role: .destructive) { deleting = item } label: { Label("Delete item", systemImage: "trash") }
@@ -670,6 +675,21 @@ struct BunnyMakerView: View {
                 .buttonStyle(OutlineButtonStyle(fullWidth: true))
             }
         }
+    }
+
+    private func removePersonal(_ item: BunnyItem) async {
+        guard let me = model.me else { return }
+        do {
+            let docs = me.bunnyItemsJSON.data(using: .utf8).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [Doc] } ?? []
+            let next = docs.filter { $0.str("id") != item.id }
+            let json = String(decoding: try JSONSerialization.data(withJSONObject: next), as: UTF8.self)
+            try await model.updateMe(["bunny_items": json])
+            for slot in [BunnySlot.top, .head] { look.setLayers(look.layers(slot).filter { $0.id != item.id }, slot) }
+            if look.bodyItem == item.id { look.bodyItem = "" }
+            if look.faceItem == item.id { look.faceItem = "" }
+            if look.collarItem == item.id { look.collarItem = "" }
+            model.showToast("Removed from your wardrobe", icon: "tshirt.fill")
+        } catch { model.showToast(error.localizedDescription, error: true) }
     }
 
     private func publishBunny() async {

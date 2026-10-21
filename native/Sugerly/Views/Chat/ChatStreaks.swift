@@ -294,6 +294,7 @@ struct StreakWatch: ViewModifier {
     }
 
     private func noteNew(_ old: Int, _ new: Int) {
+        guard enabled else { return }
         let everything: Bool = old == 0 || new - old > 20
         let fresh: [Message] = everything ? messages : Array(messages.suffix(20))
         ChatStreaks.shared.note(fresh, me: me)
