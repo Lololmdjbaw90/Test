@@ -10,7 +10,7 @@ struct MorphDots: View {
 
     var body: some View {
         Group {
-            if reduceMotion {
+            if reduceMotion || RenderingBudget.shared.limited {
                 HStack(spacing: dot * 0.55) {
                     ForEach(0..<3, id: \.self) { _ in Circle().fill(.tint).frame(width: dot, height: dot) }
                 }
@@ -75,10 +75,10 @@ struct BufferingSweep: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 60, paused: reduceMotion)) { context in
+        TimelineView(.animation(minimumInterval: 1 / 60, paused: reduceMotion || RenderingBudget.shared.limited)) { context in
             Canvas { gc, size in
                 let bar = size.height
-                if reduceMotion {
+                if reduceMotion || RenderingBudget.shared.limited {
                     gc.fill(Path(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: bar / 2), with: .color(.white.opacity(0.55)))
                     return
                 }
@@ -109,7 +109,7 @@ struct ReelSkeleton: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion || RenderingBudget.shared.limited)) { context in
             // One slow breath every 2.4 s, worked out from the clock.
             let breath = reduceMotion ? 0.5 : (1 - cos(context.date.timeIntervalSince(start) * .pi * 2 / 2.4)) / 2
             let sketch = Color.white.opacity(0.1 + 0.06 * breath)

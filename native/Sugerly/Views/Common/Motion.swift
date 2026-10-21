@@ -40,7 +40,7 @@ enum Motion {
     /// from anywhere; off the main thread it answers "no".
     static var reduced: Bool {
         guard Thread.isMainThread else { return false }
-        return MainActor.assumeIsolated { UIAccessibility.isReduceMotionEnabled }
+        return MainActor.assumeIsolated { UIAccessibility.isReduceMotionEnabled || RenderingBudget.shared.limited }
     }
 
     /// Decorative loops are disabled in production as well as tests. Several

@@ -35,7 +35,9 @@ enum AnimatedImages {
 
     // maxFrames keeps grids of many GIFs light (thumbnails skip frames).
     static func load(_ url: String, maxPixel: CGFloat = 480, maxFrames: Int = 90, budget: Int = defaultBudget) async -> UIImage? {
-        let key = "\(url)#\(Int(maxPixel))#\(maxFrames)" as NSString
+        let limited = await MainActor.run { RenderingBudget.shared.limited }
+        let frameLimit = limited ? 1 : maxFrames
+        let key = "\(url)#\(Int(maxPixel))#\(frameLimit)" as NSString
         if let hit = cache.object(forKey: key) { return hit }
         guard let link = URL(string: url) else { return nil }
         var request = URLRequest(url: link)
@@ -53,7 +55,7 @@ enum AnimatedImages {
             await DecodeGate.shared.leave()
             return nil
         }
-        let image = await Task.detached(priority: .userInitiated) { decode(data, maxPixel: maxPixel, maxFrames: maxFrames, budget: budget) }.value
+        let image = await Task.detached(priority: .userInitiated) { decode(data, maxPixel: maxPixel, maxFrames: frameLimit, budget: budget) }.value
         await DecodeGate.shared.leave()
         if let image { cache.setObject(image, forKey: key, cost: cost(image)) }
         return image
@@ -215,6 +217,10 @@ struct AnimatedImageView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> Box {
         let box = Box()
+        #if DEBUG
+        box.isAccessibilityElement = true
+        box.accessibilityIdentifier = "decoded-gif-animation"
+        #endif
         box.imageView.contentMode = fill ? .scaleAspectFill : .scaleAspectFit
         box.imageView.image = image
         if box.window != nil { box.imageView.startAnimating() }
@@ -318,6 +324,14 @@ struct FullGIF: View {
     @State private var loadedURL = ""
 
     var body: some View {
+        if RenderingBudget.shared.limited {
+            RemoteImage(url: url, contentMode: fill ? .fill : .fit)
+        } else {
+            playback
+        }
+    }
+
+    private var playback: some View {
         let shown = loadedURL == url ? data : nil
         Color.clear
             .overlay {
@@ -344,12 +358,12 @@ struct LoadedImage: View {
     let image: UIImage
     var fill = true
     var body: some View {
-        if image.images != nil {
+        if image.images != nil && !RenderingBudget.shared.limited {
             AnimatedImageView(image: image, fill: fill)
         } else if fill {
-            Image(uiImage: image).resizable().scaledToFill()
+            Image(uiImage: image.images?.first ?? image).resizable().scaledToFill()
         } else {
-            Image(uiImage: image).resizable().scaledToFit()
+            Image(uiImage: image.images?.first ?? image).resizable().scaledToFit()
         }
     }
 }

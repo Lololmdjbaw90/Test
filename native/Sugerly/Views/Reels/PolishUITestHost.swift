@@ -45,7 +45,9 @@ struct PolishUITestHost: View {
             if ProcessInfo.processInfo.arguments.contains("--check-performance-policy") {
                 Text(PerformanceFixture.result).font(.caption2).accessibilityIdentifier("performance-policy")
             }
-            if tab == 0 {
+            if ProcessInfo.processInfo.arguments.contains("--check-recording-policy") {
+                RecordingPerformanceFixture()
+            } else if tab == 0 {
                 Text(stickers.first.map { String(format: "%.2f,%.2f", $0.start, $0.end ?? 10) } ?? "Deleted")
                     .accessibilityIdentifier("timing-value")
                 Text(StickerFont.allCases.allSatisfy { UIFont(name: $0.uiName, size: 16) != nil } ? "Fonts loaded" : "Missing font")
@@ -121,6 +123,27 @@ struct PolishUITestHost: View {
         }
     }
 }
+private struct RecordingPerformanceFixture: View {
+    private let budget = RenderingBudget.shared
+    private static let gif: UIImage = {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 32, height: 32))
+        let frames = [UIColor.systemPink, UIColor.systemTeal].map { color in
+            renderer.image { context in color.setFill(); context.fill(CGRect(x: 0, y: 0, width: 32, height: 32)) }
+        }
+        return UIImage.animatedImage(with: frames, duration: 0.4)!
+    }()
+    var body: some View {
+        VStack(spacing: 16) {
+            Text(budget.limited ? "Recording budget active" : "Normal rendering").accessibilityIdentifier("recording-budget-state")
+            LoadedImage(image: Self.gif, fill: false).frame(width: 64, height: 64)
+            Button("Start recording simulation") { budget.simulateRecording(true) }
+            Button("Stop recording simulation") { budget.simulateRecording(false) }
+        }
+        .onAppear { budget.simulateRecording(false) }
+        .onDisappear { budget.simulateRecording(false) }
+    }
+}
+
 // Exercise the real image decoders without network access or private accounts.
 @MainActor
 private enum PerformanceFixture {
