@@ -17,6 +17,21 @@ final class AppearanceInteractionTests: XCTestCase {
         add(shot)
     }
 
+    func testCreatorSaleRequiresRightsAndShowsCoinPrice() {
+        let open = app.buttons["Open creator shop"]
+        XCTAssertTrue(open.waitForExistence(timeout: 5))
+        open.tap()
+        let publish = app.buttons["List item"].firstMatch
+        XCTAssertTrue(publish.waitForExistence(timeout: 5))
+        XCTAssertFalse(publish.isEnabled)
+        let rights = app.switches["I made this artwork and have the rights to sell it"]
+        for _ in 0..<3 where !rights.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        XCTAssertTrue(rights.exists)
+        rights.tap()
+        XCTAssertTrue(publish.isEnabled)
+        capture("creator-coin-sale")
+    }
+
     func testTitlesFitAndFollowThemeAfterSearch() {
         XCTAssertTrue(app.buttons["Mint"].waitForExistence(timeout: 10))
         capture("outlined-titles-rose")
