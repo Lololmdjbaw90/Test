@@ -1116,3 +1116,22 @@ enum Cropping {
         return out as Data
     }
 }
+
+// Presets use the existing profile fields, so the same look is visible to
+// other people and remains editable using the individual colour controls.
+struct ProfileThemePreset: Identifiable {
+    let id: String
+    let name: String
+    let banner: String
+    let accent: String
+    let pattern: String
+
+    static let all = [
+        ProfileThemePreset(id: "strawberry", name: "Strawberry", banner: "#FFD9E8", accent: "#DB5C91", pattern: "hearts"),
+        ProfileThemePreset(id: "lavender", name: "Lavender", banner: "#E9DEFF", accent: "#8B65CE", pattern: "stars"),
+        ProfileThemePreset(id: "mint", name: "Mint soda", banner: "#D6F5E9", accent: "#248B77", pattern: "dots"),
+        ProfileThemePreset(id: "peach", name: "Peach picnic", banner: "#FFE3CE", accent: "#C86B42", pattern: "checks"),
+        ProfileThemePreset(id: "sky", name: "Daydream", banner: "#DDEFFF", accent: "#417FBE", pattern: "waves"),
+        ProfileThemePreset(id: "night", name: "Moonlight", banner: "#332A55", accent: "#AC96E2", pattern: "stars")
+    ]
+}

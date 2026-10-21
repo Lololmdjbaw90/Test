@@ -68,11 +68,13 @@ private struct PatternBackgroundModifier: ViewModifier {
                     // A new id for each look, so a freshly picked pattern (or
                     // colour, or dark mode) starts moving again straight away.
                     PatternBackground(kind: kind, animated: !still && !paused && scenePhase == .active)
-                        .id("\(kind.rawValue)-\(still)-\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)")
+                        .id("\(kind.rawValue)-\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)")
+                        .transition(.opacity)
                         .ignoresSafeArea()
                         .accessibilityHidden(true)
                 }
             }
+            .animation(.easeInOut(duration: 0.4), value: choice)
     }
 }
 
@@ -88,8 +90,9 @@ struct HeaderWallpaper: View {
     var body: some View {
         let kind = AppBackground(rawValue: choice) ?? .dots
         if kind != .off {
-            PatternBackground(kind: kind, animated: !still && scenePhase == .active && Motion.ambient)
-                .id("\(kind.rawValue)-\(still)-\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)")
+            PatternBackground(kind: kind, animated: !still && scenePhase == .active)
+                .id("\(kind.rawValue)-\(scheme == .dark)-\(Theme.accent.rawValue)-\(Theme.custom?.main ?? 0)")
+                .transition(.opacity)
                 .mask {
                     LinearGradient(stops: [
                         .init(color: .clear, location: 0),
@@ -100,8 +103,11 @@ struct HeaderWallpaper: View {
                 }
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
+                .animation(reduceWallpaperMotion ? nil : .easeInOut(duration: 0.4), value: choice)
         }
     }
+
+    private var reduceWallpaperMotion: Bool { UIAccessibility.isReduceMotionEnabled }
 }
 
 // Nothing moves behind a sheet or menu (it would only slow down what's on top).
@@ -345,13 +351,25 @@ struct PatternBackground: View {
     @State private var art: [String: UIImage] = [:]
     @State private var artSize: CGSize = .zero
 
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.backgroundPaused) private var paused
+    @AppStorage("sugerly.background.speed") private var speed = 1.5
+    @AppStorage("sugerly.background.intensity") private var intensity = 1.0
+    @State private var lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+    private static let bitmapCache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = 24
+        cache.totalCostLimit = 24 * 1024 * 1024
+        return cache
+    }()
+
     private struct Colors {
         var dark: Bool
         var main: Color
         var light: Color
     }
 
-    private var moving: Bool { animated && !reduceMotion && Motion.ambient }
+    private var moving: Bool { animated && !reduceMotion && !paused && !lowPower && scenePhase == .active }
 
     var body: some View {
         let colors = Colors(dark: scheme == .dark, main: Theme.main, light: Theme.light)
@@ -389,12 +407,17 @@ struct PatternBackground: View {
             }
             .frame(width: size.width, height: size.height, alignment: .topLeading)
             .clipped()
-            .task(id: moving ? size : .zero) {
-                guard moving, size != artSize || art.isEmpty else { return }
+            .opacity(min(1, max(0.15, intensity)))
+            .task(id: "\(size)-\(kind.rawValue)-\(Theme.mainHex)-\(Theme.lightHex)-\(scheme == .dark)") {
+                await Task.yield()
+                guard !Task.isCancelled else { return }
                 draw(size, colors)
             }
         }
         .background(Palette.bg)
+        .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
+            lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        }
     }
 
     // What each moving layer draws.
@@ -434,11 +457,17 @@ struct PatternBackground: View {
         }
         var next: [String: UIImage] = [:]
         for (name, full) in layers {
+            let key = "\(name)-\(full)-\(Theme.mainHex)-\(Theme.lightHex)-\(c.dark)" as NSString
+            if let cached = Self.bitmapCache.object(forKey: key) { next[name] = cached; continue }
             let paint = Self.painter(name, size, c)
             let renderer = ImageRenderer(content: Canvas { ctx, s in paint(&ctx, s) }.frame(width: full.width, height: full.height))
-            renderer.scale = displayScale
+            // Patterns are soft decoration; 1.5x keeps their texture small.
+            renderer.scale = min(displayScale, 1.5)
             renderer.isOpaque = false
-            if let image = renderer.uiImage { next[name] = image }
+            if let image = renderer.uiImage {
+                next[name] = image
+                Self.bitmapCache.setObject(image, forKey: key, cost: (image.cgImage?.bytesPerRow ?? 0) * (image.cgImage?.height ?? 0))
+            }
         }
         art = next
         artSize = size
@@ -447,8 +476,11 @@ struct PatternBackground: View {
     @ViewBuilder
     private func sliding(_ name: String, dx: CGFloat, dy: CGFloat, duration: Double, size: CGSize, _ c: Colors) -> some View {
         if moving, let image = art[name] {
-            LayerMover(image: image, dx: dx, dy: abs(dy), duration: duration)
+            LayerMover(image: image, dx: dx, dy: abs(dy), duration: duration * min(3, max(0.7, speed)))
                 .frame(width: size.width, height: size.height)
+        } else if let image = art[name] {
+            Image(uiImage: image).resizable()
+                .frame(width: size.width + dx, height: size.height + abs(dy))
         } else {
             let paint = Self.painter(name, size, c)
             Canvas { ctx, s in paint(&ctx, s) }
@@ -460,8 +492,8 @@ struct PatternBackground: View {
     private func twinkle(size: CGSize, _ c: Colors) -> some View {
         if moving, let even = art["stars-even"], let odd = art["stars-odd"] {
             ZStack {
-                LayerMover(image: even, duration: 1.6, fade: true, startFaded: false)
-                LayerMover(image: odd, duration: 1.6, fade: true, startFaded: true)
+                LayerMover(image: even, duration: 3.2 * speed, fade: true, startFaded: false)
+                LayerMover(image: odd, duration: 3.2 * speed, fade: true, startFaded: true)
             }
             .frame(width: size.width, height: size.height)
         } else {
@@ -950,12 +982,19 @@ private struct LayerMover: UIViewRepresentable {
         func update(image: UIImage, dx: CGFloat, dy: CGFloat, duration: Double, fade: Bool, startFaded: Bool) {
             let changed = image !== self.image || dx != self.dx || dy != self.dy || duration != self.duration || fade != self.fade || startFaded != self.startFaded
             guard changed else { return }
+            let replacingImage = self.image != nil && self.image !== image
             self.image = image
             self.dx = dx
             self.dy = dy
             self.duration = duration
             self.fade = fade
             self.startFaded = startFaded
+            if replacingImage && !UIAccessibility.isReduceMotionEnabled {
+                let fade = CATransition()
+                fade.type = .fade
+                fade.duration = 0.35
+                content.add(fade, forKey: "wallpaper-fade")
+            }
             content.contents = image.cgImage
             content.contentsScale = image.scale
             setNeedsLayout()

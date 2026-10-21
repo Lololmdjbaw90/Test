@@ -10,8 +10,8 @@ import UIKit
 extension View {
     /// The first page of a tab: your picture on the left (your account), the
     /// bell and the + on the right, and the music / call bar at the bottom.
-    func rootBar(create: Bool = true, search: (() -> Void)? = nil) -> some View {
-        modifier(RootBar(create: create, search: search))
+    func rootBar(create: Bool = true, search: (() -> Void)? = nil, message: (() -> Void)? = nil) -> some View {
+        modifier(RootBar(create: create, search: search, message: message))
     }
 
     /// The music player and the call bar, just above the tab bar.
@@ -25,6 +25,7 @@ extension View {
 private struct RootBar: ViewModifier {
     var create: Bool
     var search: (() -> Void)?
+    var message: (() -> Void)?
     @Environment(AppModel.self) private var model
     @Environment(NotificationsStore.self) private var notes
     @State private var bellTaps = 0
@@ -59,7 +60,9 @@ private struct RootBar: ViewModifier {
             .buttonStyle(BouncyStyle(scale: 0.88, sound: false))
             .accessibilityLabel("Notifications")
             .accessibilityValue(notes.unread > 0 ? "\(notes.unread) new" : "")
-            if create {
+            if let message {
+                PinkCircleButton(icon: "square.and.pencil", label: "New message", action: message)
+            } else if create {
                 PinkCircleButton(icon: "plus", label: "Create") { model.showCreate = true }
             }
         }
@@ -81,30 +84,45 @@ private struct PlainToolbar<Leading: View, Trailing: View>: ViewModifier {
     // The app's real light / dark look, read from the page.
     @Environment(\.colorScheme) private var scheme
 
+    @AppStorage("sugerly.topbar.style") private var style = "soft"
+
+    private var bar: some View {
+        HStack(spacing: 6) {
+            leading
+            Spacer(minLength: 4)
+            BrandLogo(height: 28)
+                .accessibilityLabel("Sugerly")
+            Spacer(minLength: 4)
+            trailing
+        }
+        .environment(\.colorScheme, scheme)
+        .environment(\.barScheme, scheme)
+        .environment(\.unifiedBar, true)
+        .padding(.horizontal, 8)
+        .frame(width: min(UIScreen.main.bounds.width - 32, 728), height: 48)
+        .background(style == "tinted" ? Theme.soft : Palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
+            .strokeBorder(style == "outline" ? Theme.main.opacity(0.5) : Palette.border, lineWidth: 1))
+        .accessibilityIdentifier("unified-top-bar")
+    }
+
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            // iOS 26 turns the top bar's buttons dark when dark pictures
-            // scroll underneath it, which made the bell and the menu button
-            // go black in light mode. They keep the app's own look instead.
-            // Setting the light / dark look on them wasn't enough (their
-            // colours still followed iOS), so they also paint with colours
-            // fixed to the app's look (see barScheme).
             content.toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    leading.environment(\.colorScheme, scheme).environment(\.barScheme, scheme)
-                }
-                .sharedBackgroundVisibility(.hidden)
-                ToolbarItem(placement: .topBarTrailing) {
-                    trailing.environment(\.colorScheme, scheme).environment(\.barScheme, scheme)
-                }
-                .sharedBackgroundVisibility(.hidden)
+                ToolbarItem(placement: .principal) { bar }
+                    .sharedBackgroundVisibility(.hidden)
             }
         } else {
-            content.toolbar {
-                ToolbarItem(placement: .topBarLeading) { leading }
-                ToolbarItem(placement: .topBarTrailing) { trailing }
-            }
+            content.toolbar { ToolbarItem(placement: .principal) { bar } }
         }
+    }
+}
+
+private struct UnifiedBarKey: EnvironmentKey { static let defaultValue = false }
+private extension EnvironmentValues {
+    var unifiedBar: Bool {
+        get { self[UnifiedBarKey.self] }
+        set { self[UnifiedBarKey.self] = newValue }
     }
 }
 
@@ -132,6 +150,7 @@ extension Color {
 
 // A round top bar button: a white (or dark) circle with a thin edge.
 private struct BarIcon: View {
+    @Environment(\.unifiedBar) private var unified
     let icon: String
     var alert = false
     var bounce = 0
@@ -145,9 +164,10 @@ private struct BarIcon: View {
             .contentTransition(.symbolEffect(.replace))
             .symbolEffect(.bounce, value: bounce)
             .frame(width: 34, height: 34)
-            .background(Palette.surface.fixed(barScheme), in: Circle())
-            .overlay(Circle().strokeBorder(Palette.border.fixed(barScheme), lineWidth: 1))
-            .contentShape(Circle())
+            .background(Palette.surface.fixed(barScheme).opacity(unified ? 0 : 1), in: Circle())
+            .overlay(Circle().strokeBorder(Palette.border.fixed(barScheme).opacity(unified ? 0 : 1), lineWidth: 1))
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
     }
 }
 
@@ -219,7 +239,8 @@ struct PinkCircleButton: View {
                         .overlay(Circle().strokeBorder(Palette.rim(0.25).fixed(barScheme), lineWidth: 1))
                         .shadow(color: Theme.glow(0.3).fixed(barScheme), radius: 6, y: 3)
                 }
-                .contentShape(Circle())
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(BouncyStyle(scale: 0.86))
         .accessibilityLabel(label)
@@ -231,6 +252,7 @@ struct PinkCircleButton: View {
 // picture is the pill's round end (no edge curving around it, which looked
 // like a frame).
 struct AccountButton: View {
+    @Environment(\.unifiedBar) private var unified
     @Environment(AppModel.self) private var model
     @Environment(\.barScheme) private var barScheme
 
@@ -238,17 +260,18 @@ struct AccountButton: View {
         Button {
             model.showMenu = true
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.main.fixed(barScheme))
-                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: 34)
+                Avatar(url: model.me?.picture ?? "", name: model.me?.displayName ?? "", size: unified ? 28 : 34)
             }
-            .padding(.leading, 12)
+            .padding(.leading, unified ? 4 : 12)
             .frame(height: 34)
-            .background(Palette.surface.fixed(barScheme), in: Capsule())
-            .shadow(color: .black.opacity(0.08), radius: 5, y: 1)
-            .contentShape(Capsule())
+            .background(Palette.surface.fixed(barScheme).opacity(unified ? 0 : 1), in: Capsule())
+            .shadow(color: .black.opacity(unified ? 0 : 0.08), radius: 5, y: 1)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
         }
         // (No click: the menu opening makes its own sound.)
         .buttonStyle(BouncyStyle(scale: 0.9, sound: false))

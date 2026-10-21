@@ -297,10 +297,7 @@ struct ChatListView: View {
         // The page colour stays put while the list fades in.
         .sugarBackground()
         .quietTitle(section == 0 ? "Chats" : "Servers")
-        .plainToolbar(leading: { AccountButton() }, trailing: {
-            PinkCircleButton(icon: "square.and.pencil", label: "New message") { starting = true }
-        })
-        .bottomDock()
+        .rootBar(create: false, message: { starting = true })
         .sheet(isPresented: $starting) {
             NewChatView { email in
                 starting = false

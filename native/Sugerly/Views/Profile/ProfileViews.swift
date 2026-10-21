@@ -700,6 +700,7 @@ struct EditProfileView: View {
             ProfileLookPreview(name: name, picture: model.me?.picture ?? "", nameStyle: nameStyle, nameColor: nameColor,
                                bannerColor: bannerColor, profileColor: profileColor, pattern: pattern,
                                effect: effect, effectColor: effectColor, effectAmount: effectAmount, nitro: nitro)
+            profileThemes
             NameStyleRow(name: name, selection: $nameStyle, nitro: nitro, shop: $shop)
             ProfileSwatchRow(title: "Name colour", selection: $nameColor)
             ProfileSwatchRow(title: "Banner colour", selection: $bannerColor)
@@ -857,6 +858,46 @@ struct EditProfileView: View {
             .background(NitroStyle.gradient, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
         .buttonStyle(BouncyStyle(scale: 0.97))
+    }
+
+    private var profileThemes: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Profile theme").font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
+            Text("Pick a starting look, then make its colours and pattern your own.")
+                .font(.jakarta(12)).foregroundStyle(Palette.text2)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 10)], spacing: 10) {
+                ForEach(ProfileThemePreset.all) { preset in
+                    let selected = bannerColor == preset.banner && profileColor == preset.accent && pattern == preset.pattern
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            bannerColor = preset.banner
+                            profileColor = preset.accent
+                            nameColor = preset.accent
+                            pattern = preset.pattern
+                        }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 8) {
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(LinearGradient(colors: [ProfileColors.color(preset.banner) ?? Theme.light, ProfileColors.color(preset.accent) ?? Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .overlay { BannerPatternView(pattern: preset.pattern).clipShape(RoundedRectangle(cornerRadius: 12)) }
+                                .frame(height: 48)
+                            HStack {
+                                Text(preset.name).font(.jakarta(13, .bold)).lineLimit(1)
+                                Spacer(minLength: 2)
+                                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                            }
+                            .foregroundStyle(selected ? Theme.main : Palette.text)
+                        }
+                        .padding(10)
+                        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18))
+                        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(selected ? Theme.main : Palette.border, lineWidth: selected ? 2 : 1))
+                    }
+                    .buttonStyle(SoftPressStyle())
+                    .accessibilityLabel("\(preset.name) profile theme")
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                }
+            }
+        }
     }
 
     private var patternSection: some View {
@@ -1475,10 +1516,13 @@ struct SettingsView: View {
 
 // Settings → Appearance: theme, colour cards (with your own colours) and
 // the Home background.
-private struct AppearanceSettings: View {
+struct AppearanceSettings: View {
     @Environment(AppModel.self) private var model
     @State private var ownColours = false
     @State private var seeded = false
+    @AppStorage("sugerly.topbar.style") private var barStyle = "soft"
+    @AppStorage("sugerly.background.speed") private var backgroundSpeed = 1.5
+    @AppStorage("sugerly.background.intensity") private var backgroundIntensity = 1.0
 
     private var themeChoice: Binding<String> {
         Binding(get: {
@@ -1530,6 +1574,32 @@ private struct AppearanceSettings: View {
             }
             .padding(.vertical, 4)
             .buttonStyle(.borderless)
+            VStack(alignment: .leading, spacing: 10) {
+                IconRow(title: "Top bar", detail: "One shared home for your menu and notifications.", icon: "rectangle.topthird.inset.filled")
+                Picker("Top bar style", selection: $barStyle) {
+                    Text("Soft").tag("soft")
+                    Text("Outlined").tag("outline")
+                    Text("Tinted").tag("tinted")
+                }.pickerStyle(.segmented)
+            }.padding(.vertical, 4)
+            VStack(alignment: .leading, spacing: 10) {
+                IconRow(title: "Wallpaper feel", detail: "Adjust the colour strength and gentle movement.", icon: "slider.horizontal.3")
+                HStack {
+                    Text("Colour strength").font(.jakarta(13, .semibold))
+                    Spacer()
+                    Text("\(Int(backgroundIntensity * 100))%")
+                        .font(.jakarta(12)).monospacedDigit().foregroundStyle(Palette.muted)
+                }
+                Slider(value: $backgroundIntensity, in: 0.15...1, step: 0.05).tint(Theme.main)
+                    .accessibilityLabel("Wallpaper colour strength")
+                Picker("Wallpaper motion", selection: $backgroundSpeed) {
+                    Text("Dreamy").tag(2.5)
+                    Text("Gentle").tag(1.5)
+                    Text("Regular").tag(1.0)
+                }.pickerStyle(.segmented)
+                Text("Movement pauses automatically in Low Power Mode and with Reduce Motion.")
+                    .font(.jakarta(12)).foregroundStyle(Palette.muted)
+            }.padding(.vertical, 4)
             VStack(alignment: .leading, spacing: 12) {
                 IconRow(title: "Background", detail: "A moving pattern at the top of Home.", icon: "sparkles")
                 BackgroundPicker()

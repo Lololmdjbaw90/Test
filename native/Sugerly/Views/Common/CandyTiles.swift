@@ -289,18 +289,8 @@ private struct QuietTitle: ViewModifier {
     let title: String
 
     func body(content: Content) -> some View {
-        let page = content
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-        if #available(iOS 26.0, *) {
-            page.toolbar {
-                ToolbarItem(placement: .principal) { BrandLogo(height: 30) }
-                    .sharedBackgroundVisibility(.hidden)
-            }
-        } else {
-            page.toolbar {
-                ToolbarItem(placement: .principal) { BrandLogo(height: 30) }
-            }
-        }
+        // The page itself has its accessible PageTitle. The shared toolbar
+        // owns the brand, preventing two competing principal items.
+        content.navigationTitle("").navigationBarTitleDisplayMode(.inline)
     }
 }
