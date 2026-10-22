@@ -1,6 +1,23 @@
 import XCTest
+import UIKit
 
 final class HomeInteractionTests: XCTestCase {
+    func testColorfulHomeSidebarInLandscape() throws {
+        guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("Wide iPad layout") }
+        let app = XCUIApplication()
+        app.launchArguments = ["--polish-ui-test"]
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+        app.launch()
+        app.buttons["Home"].tap()
+        XCTAssertTrue(app.staticTexts["A little inspiration"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["home-compose-post"].exists)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "colorful-home-landscape"
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
     func testHomeSectionsRemainVisibleAfterScrollingAndReturning() {
         continueAfterFailure = false
         let app = XCUIApplication()
