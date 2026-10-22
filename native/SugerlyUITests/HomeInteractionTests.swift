@@ -6,11 +6,17 @@ final class HomeInteractionTests: XCTestCase {
         guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("Wide iPad layout") }
         let app = XCUIApplication()
         app.launchArguments = ["--polish-ui-test"]
+        app.launch()
         XCUIDevice.shared.orientation = .landscapeLeft
         defer { XCUIDevice.shared.orientation = .portrait }
-        app.launch()
         app.buttons["Home"].tap()
-        XCTAssertTrue(app.staticTexts["A little inspiration"].firstMatch.waitForExistence(timeout: 5))
+        let inspiration = app.staticTexts["A little inspiration"].firstMatch
+        expectation(for: NSPredicate { _, _ in
+            let bounds = app.windows.firstMatch.frame
+            return bounds.width > bounds.height && inspiration.isHittable
+        }, evaluatedWith: app)
+        waitForExpectations(timeout: 15)
+        XCTAssertTrue(inspiration.exists)
         XCTAssertTrue(app.buttons["home-compose-post"].exists)
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "colorful-home-landscape"
