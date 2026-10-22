@@ -289,14 +289,12 @@ struct HomeView: View {
         }
         .scrollIndicators(.hidden)
         .appearFade()
-        // Your moving pattern (Settings → Background) at the top of Home,
-        // fading into the page.
+        .accessibilityIdentifier("home-feed")
+        .sideRails(760, homeStyle: true)
+        // One continuous wallpaper behind the feed and transparent side extras.
         .background(alignment: .top) {
             HeaderWallpaper().frame(height: 440).ignoresSafeArea(edges: .top)
         }
-        .sugarBackground()
-        .accessibilityIdentifier("home-feed")
-        .sideRails(760, homeStyle: true)
         .sugarBackground()
         .onAppear { bunny.use(model.me?.email ?? "") }
         .onChange(of: model.me?.email) { _, email in bunny.use(email ?? "") }

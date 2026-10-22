@@ -499,15 +499,20 @@ extension Font {
 struct SugarCard: ViewModifier {
     var radius: CGFloat = 18
     var padding: CGFloat = 0
+    @Environment(\.transparentRailCards) private var transparent
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: min(radius, 22), style: .continuous)
         content
             .padding(padding)
             .background {
-                shape.fill(Palette.surface)
-                    .softShadow(Palette.shadow, radius: 6, y: 2)
+                if !transparent {
+                    shape.fill(Palette.surface)
+                        .softShadow(Palette.shadow, radius: 6, y: 2)
+                }
             }
-            .overlay(shape.strokeBorder(Palette.border.opacity(0.8), lineWidth: 1))
+            .overlay {
+                if !transparent { shape.strokeBorder(Palette.border.opacity(0.8), lineWidth: 1) }
+            }
     }
 }
 

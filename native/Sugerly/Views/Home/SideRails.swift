@@ -30,19 +30,30 @@ private struct SideRailsLayout: ViewModifier {
         let column = max(320, min(width, available - rails - 32))
         HStack(alignment: .top, spacing: gap) {
             if showLeft {
-                Group { if homeStyle { HomeSideRail(personal: false) } else { SideRail(kind: .explore) } }
-                    .frame(width: rail).padding(.top, 12)
+                railContent(.explore).frame(width: rail)
             }
             content
                 .frame(maxWidth: showLeft || showRight ? column : width)
                 .environment(\.railsShown, showRight)
             if showRight {
-                Group { if homeStyle { HomeSideRail(personal: true) } else { SideRail(kind: showLeft ? .you : .both) } }
-                    .frame(width: rail).padding(.top, 12)
+                railContent(showLeft ? .you : .both).frame(width: rail)
             }
         }
         .frame(maxWidth: .infinity)
         .onGeometryChange(for: CGFloat.self, of: { $0.size.width }, action: { available = $0 })
+    }
+
+    @ViewBuilder private func railContent(_ kind: SideRail.Kind) -> some View {
+        if homeStyle {
+            ScrollView {
+                SideRail(kind: kind).padding(.top, 12)
+            }
+            .scrollIndicators(.hidden)
+            .environment(\.transparentRailCards, true)
+            .accessibilityIdentifier("home-side-extras")
+        } else {
+            SideRail(kind: kind).padding(.top, 12)
+        }
     }
 }
 
@@ -276,75 +287,14 @@ struct InlineExtras: View {
     }
 }
 
-// Small, colorful notes beside Home; no full-height white sidebar surfaces.
-private struct HomeSideRail: View {
-    var personal: Bool
-    @Environment(AppModel.self) private var model
-    private let swatches: [UInt32] = [0xFFB3C8, 0xCDB8FF, 0xB6F0DA, 0xFFD166]
 
-    var body: some View {
-        VStack(spacing: 16) {
-            if personal, let me = model.me {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 10) {
-                        Avatar(url: me.picture, name: me.displayName, size: 44)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Your little corner").font(.display(23))
-                            Text(me.displayName).font(.jakarta(13, .semibold)).lineLimit(1)
-                        }
-                    }
-                    Label("\(me.coins) coins", systemImage: "sparkle")
-                    Label("\(me.dailyStreak)-day streak", systemImage: "flame.fill")
-                }
-                .font(.jakarta(14, .medium))
-                .homeNote(Theme.soft)
-            }
-            VStack(alignment: .leading, spacing: 12) {
-                Label("A little inspiration", systemImage: "paintbrush.pointed.fill").font(.display(24))
-                Text(DayPick.pick(["Draw a tiny creature having a very big day.", "Turn your favorite snack into a character.", "Sketch a cozy place you wish existed.", "Make something using just four colors."]))
-                    .font(.jakarta(14, .medium)).fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 8) {
-                    ForEach(swatches, id: \.self) { hex in
-                        Button { UIPasteboard.general.string = String(format: "#%06X", hex) } label: {
-                            Circle().fill(Color(hex: hex)).frame(height: 34)
-                                .overlay(Circle().strokeBorder(.white.opacity(0.7), lineWidth: 2))
-                        }
-                        .buttonStyle(BouncyStyle(scale: 0.95))
-                        .accessibilityLabel(String(format: "Copy #%06X", hex))
-                    }
-                }
-            }
-            .homeNote(Color(hex: personal ? 0xE6F5FF : 0xFFF0DC))
-            VStack(alignment: .leading, spacing: 10) {
-                Image(systemName: personal ? "heart.fill" : "sparkles").font(.system(size: 25)).foregroundStyle(Theme.main)
-                Text(personal ? "Progress counts too" : "Stay a little curious").font(.display(25))
-                Text(personal ? "Your rough sketches and little experiments belong here too." : "Try a new color, leave a kind comment, or save something that inspires you.")
-                    .font(.jakarta(14, .medium)).fixedSize(horizontal: false, vertical: true)
-            }
-            .homeNote(Color(hex: personal ? 0xF5E9FF : 0xE5F8EF))
-        }
-        .foregroundStyle(Palette.text)
-        .accessibilityIdentifier("home-colorful-sidebar")
-    }
+private struct TransparentRailCardsKey: EnvironmentKey {
+    static let defaultValue = false
 }
 
-private extension View {
-    func homeNote(_ color: Color) -> some View {
-        modifier(HomeNoteStyle(color: color))
-    }
-}
-
-private struct HomeNoteStyle: ViewModifier {
-    let color: Color
-    @Environment(\.colorScheme) private var scheme
-    func body(content: Content) -> some View {
-        content.padding(18)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                let shape = RoundedRectangle(cornerRadius: 25, style: .continuous)
-                shape.fill(Palette.surface2)
-                shape.fill(color.opacity(scheme == .dark ? 0.18 : 1))
-            }
-            .overlay(RoundedRectangle(cornerRadius: 25).strokeBorder(Theme.main.opacity(0.12), lineWidth: 1))
+extension EnvironmentValues {
+    var transparentRailCards: Bool {
+        get { self[TransparentRailCardsKey.self] }
+        set { self[TransparentRailCardsKey.self] = newValue }
     }
 }
