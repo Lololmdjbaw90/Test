@@ -27,6 +27,7 @@ enum Giphy {
     }
 
     static func fetch(stickers: Bool, query: String, offset: Int, key: String) async -> [GifItem] {
+        guard ProviderMedia.giphyEnabled else { return [] }
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard var comps = URLComponents(string: "https://api.giphy.com/v1/\(stickers ? "stickers" : "gifs")/\(q.isEmpty ? "trending" : "search")") else { return [] }
         var items = [URLQueryItem(name: "api_key", value: key), URLQueryItem(name: "limit", value: "30"),
@@ -148,7 +149,7 @@ struct GifPickerSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var sizeClass
-    @State private var tab = 0
+    @State private var tab = 2
     @State private var query = ""
     @State private var items: [GifItem] = []
     @State private var loading = false
@@ -162,8 +163,8 @@ struct GifPickerSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 12) {
-                SectionSwitch(options: [("GIFs", "photo.stack.fill"), ("Stickers", "face.smiling.inverse"), ("Mine", "heart.fill")], selection: $tab)
-                if tab < 2 { SearchField(text: $query, placeholder: tab == 0 ? "Search GIPHY" : "Search stickers") }
+                if ProviderMedia.giphyEnabled { SectionSwitch(options: [("GIFs", "photo.stack.fill"), ("Stickers", "face.smiling.inverse"), ("Mine", "heart.fill")], selection: $tab) }
+                if ProviderMedia.giphyEnabled && tab < 2 { SearchField(text: $query, placeholder: tab == 0 ? "Search GIPHY" : "Search stickers") }
                 ScrollView {
                     if tab == 2 { mine } else { results }
                 }
@@ -269,8 +270,8 @@ struct GifPickerSheet: View {
     // MARK: Mine
 
     private var mine: some View {
-        let stickers = model.me?.stickers ?? []
-        let gifs = model.me?.myGifs ?? []
+        let stickers = (model.me?.stickers ?? []).filter { ProviderMedia.allows($0) }
+        let gifs = (model.me?.myGifs ?? []).filter { ProviderMedia.allows($0) }
         let grid = [GridItem(.adaptive(minimum: sizeClass == .regular ? 110 : 90), spacing: 8)]
         return VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 10) {

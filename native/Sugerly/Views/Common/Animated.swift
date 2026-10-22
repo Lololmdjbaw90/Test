@@ -30,11 +30,13 @@ enum AnimatedImages {
     }
 
     static func cached(_ url: String, maxPixel: CGFloat, maxFrames: Int = 90) -> UIImage? {
-        cache.object(forKey: "\(url)#\(Int(maxPixel))#\(maxFrames)" as NSString)
+        guard ProviderMedia.allows(url) else { return nil }
+        return cache.object(forKey: "\(url)#\(Int(maxPixel))#\(maxFrames)" as NSString)
     }
 
     // maxFrames keeps grids of many GIFs light (thumbnails skip frames).
     static func load(_ url: String, maxPixel: CGFloat = 480, maxFrames: Int = 90, budget: Int = defaultBudget) async -> UIImage? {
+        guard ProviderMedia.allows(url) else { return nil }
         let limited = await MainActor.run { RenderingBudget.shared.limited }
         // Keep a small animation ready so images loaded during recording can
         // resume afterwards without a reload. The view displays its first frame.
@@ -145,9 +147,10 @@ enum AnimatedImages {
         return c
     }()
 
-    static func file(_ url: String) -> Data? { files.object(forKey: url as NSString) as Data? }
+    static func file(_ url: String) -> Data? { ProviderMedia.allows(url) ? files.object(forKey: url as NSString) as Data? : nil }
 
     static func loadFile(_ url: String) async -> Data? {
+        guard ProviderMedia.allows(url) else { return nil }
         if let hit = file(url) { return hit }
         guard let link = URL(string: url) else { return nil }
         var request = URLRequest(url: link)

@@ -504,7 +504,8 @@ final class EditorModel {
 
     // MARK: sound
 
-    func setSound(_ track: Track?) {
+    func setSound(_ selection: Track?) {
+        let track = selection.flatMap { ProviderMedia.allows($0) ? $0 : nil }
         sound = track
         player.setMusic(track, volume: soundVolume)
     }

@@ -126,6 +126,7 @@ actor ImagePipeline {
     }
 
     func load(_ url: String, maxPixel: CGFloat = 1400) async -> UIImage? {
+        guard ProviderMedia.allows(url) else { return nil }
         let key = Self.cacheKey(url, maxPixel: maxPixel)
         if let hit = MemoryImages.get(key) { return hit }
         if let task = running[key] { return await task.value }
@@ -548,7 +549,9 @@ struct SensitiveCover: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        if Self.isSensitive(url) && !showAll && !revealed {
+        if !ProviderMedia.allows(url) {
+            Palette.surface2.overlay(Image(systemName: "photo").foregroundStyle(Palette.muted))
+        } else if Self.isSensitive(url) && !showAll && !revealed {
             if compact {
                 content.blur(radius: 6, opaque: true)
             } else {

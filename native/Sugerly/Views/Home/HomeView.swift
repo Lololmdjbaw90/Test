@@ -344,7 +344,7 @@ struct HomeView: View {
         // instead of popping.
         do {
             if let nextArt { artworks = nextArt.map(Artwork.init) }
-            if let nextTracks { tracks = nextTracks.map(Track.init) }
+            if let nextTracks { tracks = nextTracks.map(Track.init).filter { ProviderMedia.allows($0) } }
             if let nextServers { servers = nextServers.map(Server.init) }
             if let nextReels { reels = nextReels.map(Reel.init) }
             loaded = true

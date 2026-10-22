@@ -953,6 +953,7 @@ struct ReelPage: View {
 
     // The reel's song (Deezer preview links expire, so get a fresh one).
     private func startSound() {
+        guard ProviderMedia.allowsReelMusic(source: reel.musicSource, url: reel.musicURL) else { return }
         guard !reel.musicTitle.isEmpty else { return }
         if let sound { sound.play(); return }
         let wanted = reel.id
@@ -1075,6 +1076,7 @@ struct ReelPage: View {
     }
 
     private var soundName: String {
+        if !ProviderMedia.allowsReelMusic(source: reel.musicSource, url: reel.musicURL) { return "Catalog audio unavailable" }
         if !reel.musicTitle.isEmpty { return "\(reel.musicTitle)\(reel.musicArtist.isEmpty ? "" : " · \(reel.musicArtist)")" }
         return "Original sound · \(author?.displayName ?? reel.authorName)"
     }
@@ -1090,6 +1092,7 @@ struct ReelPage: View {
 
     // "Use this sound": the song (with a fresh preview link) or the video's own sound.
     private func takeSound() async {
+        guard ProviderMedia.allowsReelMusic(source: reel.musicSource, url: reel.musicURL) else { return }
         var link = reel.musicURL
         var id = "reel_\(reel.id)"
         if reel.musicSource.hasPrefix("deezer:"), let dz = reel.musicSource.split(separator: ":").last {

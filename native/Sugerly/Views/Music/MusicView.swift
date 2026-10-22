@@ -9,6 +9,7 @@ enum Deezer {
     static let genres: [(Int, String)] = [(0, "Top"), (132, "Pop"), (116, "Hip-Hop"), (113, "Dance"), (165, "R&B"), (152, "Rock"), (197, "Latin"), (106, "Electro"), (16, "K-Pop")]
 
     static func page(genre: Int, query: String, index: Int, limit: Int = 25) async throws -> (tracks: [Track], more: Bool) {
+        guard ProviderMedia.catalogMusicEnabled else { return ([], false) }
         let q = query.trimmingCharacters(in: .whitespaces)
         var comps = URLComponents(string: q.isEmpty ? "https://api.deezer.com/chart/\(genre)/tracks" : "https://api.deezer.com/search")!
         comps.queryItems = [URLQueryItem(name: "index", value: "\(index)"), URLQueryItem(name: "limit", value: "\(limit)")] + (q.isEmpty ? [] : [URLQueryItem(name: "q", value: q)])
@@ -69,7 +70,7 @@ struct MusicView: View {
                 }
                 if let pick = tracks.first { hero(pick) }
                 appleMusicCard
-                chartsSection
+                if ProviderMedia.catalogMusicEnabled { chartsSection }
                 if !tracks.isEmpty {
                     SectionHeader(icon: "music.note.list", title: "All tracks")
                     // Rows are built as they scroll into view (hundreds of songs
@@ -199,7 +200,7 @@ struct MusicView: View {
 
     private func loadUploads() async {
         guard let docs = try? await FS.query("MusicReview", orderBy: "created_date", limit: 300) else { return }
-        let list = docs.map(Track.init).filter { !$0.audioURL.isEmpty }
+        let list = docs.map(Track.init).filter { !$0.audioURL.isEmpty && ProviderMedia.allows($0) }
         await Self.prefetch(list.prefix(30).map(\.coverURL))
         withAnimation(Motion.pick(.smooth(duration: 0.4))) { tracks = list }
     }

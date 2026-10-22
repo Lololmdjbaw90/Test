@@ -983,6 +983,8 @@ struct TrimBar: View {
 struct SoundPicker: View {
     var onPick: (Track) -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppModel.self) private var model
+    @State private var loading = true
     @State private var query = ""
     @State private var tracks: [Track] = []
     @State private var preview: AVPlayer?
@@ -991,7 +993,7 @@ struct SoundPicker: View {
     var body: some View {
         VStack(spacing: 12) {
             Text("Add a sound").font(.display(26)).foregroundStyle(Palette.text).padding(.top, 20)
-            Text("30-second previews by Deezer").font(.jakarta(11)).foregroundStyle(Palette.muted)
+            Text("Your uploaded audio — use tracks you own or have licensed.").font(.jakarta(11)).foregroundStyle(Palette.muted)
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
                 TextField("Search songs or artists", text: $query).font(.jakarta(15))
@@ -1001,7 +1003,8 @@ struct SoundPicker: View {
             .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
             ScrollView {
                 LazyVStack(spacing: 6) {
-                    if tracks.isEmpty { SugarLoader().padding(30) }
+                    if loading { SugarLoader().padding(30) }
+                    else if tracks.isEmpty { Text("Upload an original track in Music, then choose it here.").font(.jakarta(14)).foregroundStyle(Palette.muted).padding(30) }
                     ForEach(tracks) { t in
                         HStack(spacing: 12) {
                             Button {
@@ -1035,7 +1038,14 @@ struct SoundPicker: View {
         .sugarBackground()
         .task(id: query) {
             if !query.isEmpty { try? await Task.sleep(for: .milliseconds(350)) }
-            tracks = (try? await Deezer.page(genre: 0, query: query, index: 0, limit: 30).tracks) ?? []
+            loading = true
+            defer { loading = false }
+            guard let email = model.me?.email, !email.isEmpty else { tracks = []; return }
+            let docs = (try? await FS.query("MusicReview", orderBy: "created_date", limit: 300)) ?? []
+            tracks = docs.map(Track.init).filter {
+                $0.authorEmail == email && ProviderMedia.allows($0) && !$0.audioURL.isEmpty &&
+                (query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) || $0.artist.localizedCaseInsensitiveContains(query))
+            }
         }
         .onDisappear { preview?.pause() }
     }

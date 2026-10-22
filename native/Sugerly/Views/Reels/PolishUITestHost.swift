@@ -45,6 +45,9 @@ struct PolishUITestHost: View {
                 Text("Chats").tag(5)
             }.pickerStyle(.segmented).padding()
             }
+            if ProcessInfo.processInfo.arguments.contains("--check-provider-policy") {
+                Text(ProviderReleaseFixture.result).accessibilityIdentifier("provider-policy")
+            }
             if ProcessInfo.processInfo.arguments.contains("--check-performance-policy") {
                 Text(PerformanceFixture.result).font(.caption2).accessibilityIdentifier("performance-policy")
             }
@@ -173,5 +176,14 @@ private enum PerformanceFixture {
         guard ImagePipeline.cacheKey("fixture", maxPixel: 96) != ImagePipeline.cacheKey("fixture") else { return "Thumbnail cache collision" }
         return "Performance fixtures passed"
     }()
+}
+enum ProviderReleaseFixture {
+    static var result: String {
+        let blocked = ["https://media.giphy.com/a.gif#sticker", "https://i.giphy.com/a.webp", "https://cdn-images.dzcdn.net/a.jpg", "https://api.deezer.com/track/1"]
+        let local = ["https://firebasestorage.googleapis.com/v0/b/app/o/user.gif", "https://sugerly.netlify.app/art.png", "file:///tmp/original.mov"]
+        let old = Track(id: "deezer_123", title: "Old draft", artist: "", audioURL: "https://example.com/audio.mp3", coverURL: "", external: nil)
+        let passes = !ProviderMedia.giphyEnabled && !ProviderMedia.catalogMusicEnabled && blocked.allSatisfy { !ProviderMedia.allows($0) } && local.allSatisfy { ProviderMedia.allows($0) } && !ProviderMedia.allows(old) && !ProviderMedia.allowsReelMusic(source: "deezer:123", url: "https://example.com/audio.mp3")
+        return passes ? "Provider release policy passed" : "Provider release policy failed"
+    }
 }
 #endif
