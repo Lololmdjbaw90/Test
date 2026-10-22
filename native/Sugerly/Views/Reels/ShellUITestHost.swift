@@ -37,6 +37,7 @@ struct ShellUITestHost: View {
                             destination(route, on: entry.0)
                         }
                 }
+                .tabPageEntrance(active: nav.tab == entry.0)
                 .tabItem { Label(entry.1, systemImage: entry.2) }
                 .tag(entry.0)
             }

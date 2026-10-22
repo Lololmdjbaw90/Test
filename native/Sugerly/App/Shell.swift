@@ -411,6 +411,7 @@ private struct HomeTab: View {
         NavigationStack(path: path) {
             HomeView(path: path, compose: { nav.composer = $0 })
                 .sugarRoutes(path)
+                .tabPageEntrance(active: nav.tab == .home)
         }
     }
 }
@@ -422,6 +423,7 @@ private struct CommunityTab: View {
         NavigationStack(path: path) {
             CommunityView(path: path, compose: { nav.composer = .post })
                 .sugarRoutes(path)
+                .tabPageEntrance(active: nav.tab == .community)
         }
     }
 }
@@ -433,6 +435,7 @@ private struct GalleryTab: View {
         NavigationStack(path: path) {
             GalleryView(path: path, isRoot: true)
                 .sugarRoutes(path)
+                .tabPageEntrance(active: nav.tab == .gallery)
         }
     }
 }
@@ -445,6 +448,7 @@ private struct ReelsTab: View {
         NavigationStack(path: path) {
             ReelsView(visible: nav.tab == .reels && nav.reels.isEmpty && !calls.showScreen, path: path, create: { nav.composer = .reel })
                 .sugarRoutes(path)
+                .tabPageEntrance(active: nav.tab == .reels)
         }
     }
 }
@@ -456,6 +460,7 @@ private struct ChatTab: View {
         NavigationStack(path: path) {
             ChatListView(path: path)
                 .sugarRoutes(path)
+                .tabPageEntrance(active: nav.tab == .chat)
         }
     }
 }
