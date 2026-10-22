@@ -380,7 +380,7 @@ struct CommunityView: View {
                     .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 16).frame(minHeight: 44)
                     .background {
                         Capsule().fill(Theme.candy)
-                            .shadow(color: Theme.glow(0.28), radius: 6, y: 3)
+                            .budgetShadow(color: Theme.glow(0.28), radius: 6, y: 3)
                     }
             }
             .padding(.horizontal, 12).padding(.vertical, 8)
@@ -423,7 +423,7 @@ struct CommunityView: View {
                     .background {
                         if on {
                             Capsule().fill(f.candy.gradient)
-                                .shadow(color: f.candy.color.softGlow(0.3), radius: 5, y: 2)
+                                .budgetShadow(color: f.candy.color.softGlow(0.3), radius: 5, y: 2)
                                 .matchedGeometryEffect(id: "feed", in: feedPill)
                         }
                     }
@@ -438,7 +438,7 @@ struct CommunityView: View {
         .background {
             Capsule().fill(.ultraThinMaterial)
                 .overlay(Capsule().fill(Palette.surface.opacity(0.78)))
-                .shadow(color: Palette.shadow, radius: 12, y: 5)
+                .budgetShadow(color: Palette.shadow, radius: 12, y: 5)
         }
         .overlay(Capsule().strokeBorder(Palette.border.opacity(0.8), lineWidth: 1).allowsHitTesting(false))
         .sensoryFeedback(.selection, trigger: feed)
@@ -484,7 +484,7 @@ struct CommunityView: View {
             .padding(.horizontal, 14).frame(height: 34)
             .background {
                 if on {
-                    Capsule().fill(Theme.candy).shadow(color: Theme.glow(0.25), radius: 5, y: 2)
+                    Capsule().fill(Theme.candy).budgetShadow(color: Theme.glow(0.25), radius: 5, y: 2)
                 } else {
                     Capsule().fill(Palette.surface).overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
                 }
@@ -542,9 +542,12 @@ struct CommunityView: View {
                         let candy = Candy.allCases[i % Candy.allCases.count]
                         let reason = person.following.contains(model.me?.email ?? "") ? "Follows you" : person.isOnline ? "Recently active" : "New on Sugerly"
                         VStack(spacing: 6) {
-                            Avatar(url: person.picture, name: person.displayName, size: 76, online: person.isOnline)
+                            Avatar(url: person.picture, name: person.displayName, size: 76)
                                 .padding(3)
                                 .overlay(Circle().strokeBorder(candy.gradient, lineWidth: 3))
+                                .overlay(alignment: .bottomTrailing) {
+                                    PresenceBadge(presence: person.presenceNow, online: person.isOnline, size: 76).padding(3)
+                                }
                                 .padding(.top, 6)
                             Text(person.displayName).font(.jakarta(15, .semibold)).foregroundStyle(Palette.text).lineLimit(1)
                             Text(reason).font(.jakarta(13)).foregroundStyle(Palette.muted)
@@ -924,7 +927,7 @@ struct PostCard: View {
                     Image(systemName: "heart.fill")
                         .font(.system(size: 96))
                         .foregroundStyle(Theme.gradient)
-                        .shadow(color: Palette.shadow, radius: 12)
+                        .budgetShadow(color: Palette.shadow, radius: 12)
                         .scaleEffect(heart ? 1 : 0.3)
                         .opacity(heart ? 1 : 0)
                 }
@@ -1233,7 +1236,7 @@ struct CommentsScreen<Header: View>: View {
         .frame(maxWidth: .infinity)
         .background {
             Palette.surface
-                .shadow(color: Palette.shadow, radius: 10, y: -4)
+                .budgetShadow(color: Palette.shadow, radius: 10, y: -4)
                 .ignoresSafeArea(edges: .bottom)
         }
     }
@@ -1333,7 +1336,7 @@ struct SendButton: View {
                 .foregroundStyle(.white)
                 .frame(width: 42, height: 42)
                 .background(Theme.candy, in: Circle())
-                .shadow(color: Theme.glow(enabled ? 0.32 : 0), radius: 8, y: 3)
+                .budgetShadow(color: Theme.glow(enabled ? 0.32 : 0), radius: 8, y: 3)
                 .scaleEffect(enabled ? 1 : 0.88)
                 .opacity(enabled ? 1 : 0.4)
         }
@@ -1773,7 +1776,7 @@ struct SugarField: View {
         .padding(.vertical, 14)
         .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(focused ? Theme.main.opacity(0.5) : Palette.border, lineWidth: focused ? 1.5 : 1))
-        .shadow(color: focused ? Theme.glow(0.16) : Palette.shadow.opacity(0.5), radius: focused ? 10 : 6, y: 3)
+        .budgetShadow(color: focused ? Theme.glow(0.16) : Palette.shadow.opacity(0.5), radius: focused ? 10 : 6, y: 3)
         .animation(.snappy(duration: 0.2), value: focused)
     }
 }
@@ -1819,7 +1822,7 @@ struct PhotoPickerCard: View {
                                     .foregroundStyle(.white)
                                     .frame(width: 56, height: 56)
                                     .background(Theme.candy, in: Circle())
-                                    .shadow(color: Theme.glow(0.28), radius: 8, y: 4)
+                                    .budgetShadow(color: Theme.glow(0.28), radius: 8, y: 4)
                                 Text("Add a picture").font(.jakarta(16, .bold)).foregroundStyle(Palette.text)
                                 Text("Choose one from your photos").font(.jakarta(13)).foregroundStyle(Palette.muted)
                             }
@@ -1828,7 +1831,7 @@ struct PhotoPickerCard: View {
                         .frame(height: 190)
                         .background(Theme.pastel, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.rim(0.55), lineWidth: 1))
-                        .shadow(color: Palette.shadow, radius: 10, y: 4)
+                        .budgetShadow(color: Palette.shadow, radius: 10, y: 4)
                         .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                     }
                     .buttonStyle(BouncyStyle(scale: 0.97))
@@ -1893,7 +1896,7 @@ struct PhotoPickerCard: View {
                         Label("Edit", systemImage: "wand.and.stars").font(.jakarta(13, .semibold)).foregroundStyle(.white)
                             .padding(.horizontal, 14).frame(height: 36)
                             .background(Theme.candy, in: Capsule())
-                            .shadow(color: Theme.glow(0.28), radius: 6, y: 3)
+                            .budgetShadow(color: Theme.glow(0.28), radius: 6, y: 3)
                     }
                     .buttonStyle(BouncyStyle())
                 }

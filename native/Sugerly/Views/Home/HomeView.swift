@@ -44,7 +44,7 @@ struct DailyRewardButton: View {
                     if status.claimed {
                         shape.fill(Palette.success.opacity(0.12))
                     } else {
-                        shape.fill(Candy.lemon.gradient).shadow(color: Candy.lemon.color.softGlow(0.35), radius: 6, y: 3)
+                        shape.fill(Candy.lemon.gradient).budgetShadow(color: Candy.lemon.color.softGlow(0.35), radius: 6, y: 3)
                     }
                 }
                 .contentTransition(.symbolEffect(.replace))
@@ -76,7 +76,7 @@ struct DailyRewardButton: View {
                     .padding(.horizontal, 14).frame(height: 36)
                     .background {
                         Capsule().fill(Theme.candy)
-                            .shadow(color: Theme.glow(0.3), radius: 6, y: 3)
+                            .budgetShadow(color: Theme.glow(0.3), radius: 6, y: 3)
                     }
                 }
                 .buttonStyle(BouncyStyle(scale: 0.9))
@@ -89,11 +89,11 @@ struct DailyRewardButton: View {
         .background {
             let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
             if status.claimed {
-                shape.fill(Palette.surface).shadow(color: Palette.shadow, radius: 10, y: 4)
+                shape.fill(Palette.surface).budgetShadow(color: Palette.shadow, radius: 10, y: 4)
             } else {
                 // A reward is waiting: warm cream, like a little present.
                 shape.fill(LinearGradient(colors: [Palette.cream, Palette.ivory], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .shadow(color: Palette.gold.opacity(0.18), radius: 10, y: 4)
+                    .budgetShadow(color: Palette.gold.opacity(0.18), radius: 10, y: 4)
             }
         }
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(status.claimed ? Palette.border : Palette.gold.opacity(0.25), lineWidth: 1))
@@ -156,8 +156,8 @@ struct DailyRewardSheet: View {
                     .animation(reduceMotion ? nil : .spring(response: 0.45, dampingFraction: 0.75), value: bounce)
                     .contentTransition(.symbolEffect(.replace))
             }
-            .padding(.top, 34)
-            .overlay { RewardBurst(trigger: reward == nil ? 0 : 1).frame(width: 280, height: 280) }
+            .frame(height: 180)
+            .overlay { RewardBurst(trigger: reward == nil ? 0 : 1).frame(width: 172, height: 172) }
 
             Text(reward == nil ? "Daily reward" : "+\(reward ?? 0) coins").font(.display(34)).foregroundStyle(Palette.text)
                 .contentTransition(.numericText())
@@ -366,7 +366,7 @@ struct HomeView: View {
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
             .background(Color(hex: site.announcementColor), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .shadow(color: Color(hex: site.announcementColor).softGlow(0.25), radius: 10, y: 4)
+            .budgetShadow(color: Color(hex: site.announcementColor).softGlow(0.25), radius: 10, y: 4)
             .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
@@ -504,7 +504,7 @@ struct HomeView: View {
                     }
                     .overlay { TwinkleField(colors: [.white, UIColor(hex: 0xFFF1A8)]).clipShape(shape) }
                     .overlay { ShineSweep(every: 4.8, strength: 0.3).clipShape(shape) }
-                    .shadow(color: Theme.glow(0.32), radius: 14, y: 6)
+                    .budgetShadow(color: Theme.glow(0.32), radius: 14, y: 6)
             }
         }
         .buttonStyle(BouncyStyle(scale: 0.97))
@@ -596,7 +596,7 @@ struct HomeView: View {
                             .frame(width: 120, height: 200)
                             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                             .zoomSource("reel-" + reel.id)
-                            .shadow(color: Palette.shadow, radius: 8, y: 4)
+                            .budgetShadow(color: Palette.shadow, radius: 8, y: 4)
                         }
                         .buttonStyle(BouncyStyle(scale: 0.95))
                         .swipeFade()
@@ -643,7 +643,7 @@ struct HomeView: View {
                             .frame(width: 200, height: 260)
                             .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                             .zoomSource("art-" + art.id)
-                            .shadow(color: Palette.shadow, radius: 10, y: 5)
+                            .budgetShadow(color: Palette.shadow, radius: 10, y: 5)
                         }
                         .buttonStyle(BouncyStyle(scale: 0.96))
                         .swipeFade()
@@ -787,7 +787,7 @@ struct TrackRow: View {
                 }
                 .frame(width: 52, height: 52)
                 .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-                .shadow(color: current ? Theme.pink.opacity(0.4) : .clear, radius: 8, y: 4)
+                .budgetShadow(color: current ? Theme.pink.opacity(0.4) : .clear, radius: 8, y: 4)
             }
             .buttonStyle(BouncyStyle())
             VStack(alignment: .leading, spacing: 2) {

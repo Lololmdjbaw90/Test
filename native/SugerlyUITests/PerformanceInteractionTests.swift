@@ -15,6 +15,10 @@ final class PerformanceInteractionTests: XCTestCase {
         app.buttons["Stop recording simulation"].tap()
         XCTAssertTrue(app.otherElements["decoded-gif-animation"].firstMatch.waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["recording-budget-state"].label, "Normal rendering")
+        app.buttons["Start scene capture"].tap()
+        XCTAssertEqual(app.staticTexts["recording-budget-state"].label, "Recording budget active")
+        app.buttons["Stop scene capture"].tap()
+        XCTAssertEqual(app.staticTexts["recording-budget-state"].label, "Normal rendering")
     }
 
     func testProductionMotionPolicyAndHomeScrolling() {

@@ -175,7 +175,7 @@ struct BunnyMakerView: View {
                         .animation(Motion.playful, value: shuffles)
                         .frame(width: 44, height: 44)
                         .background(.white.opacity(0.9), in: Circle())
-                        .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
+                        .budgetShadow(color: .black.opacity(0.12), radius: 6, y: 3)
                 }
                 .buttonStyle(BouncyStyle(scale: 0.88))
                 .padding(14)
@@ -212,7 +212,7 @@ struct BunnyMakerView: View {
                         .background {
                             if on {
                                 Capsule().fill(item.candy.gradient)
-                                    .shadow(color: item.candy.color.softGlow(0.35), radius: 6, y: 3)
+                                    .budgetShadow(color: item.candy.color.softGlow(0.35), radius: 6, y: 3)
                             } else {
                                 Capsule().fill(Palette.surface)
                                     .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
@@ -310,7 +310,7 @@ struct BunnyMakerView: View {
                         .clipShape(Circle())
                         .overlay(Circle().strokeBorder(on ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.border), lineWidth: on ? 3 : 1))
                         .scaleEffect(on ? 1.06 : 1)
-                        .shadow(color: on ? Theme.glow(0.3) : .clear, radius: 8, y: 3)
+                        .budgetShadow(color: on ? Theme.glow(0.3) : .clear, radius: 8, y: 3)
                         Text(face.label).font(.jakarta(12, on ? .bold : .medium))
                             .foregroundStyle(on ? Palette.text : Palette.text2).lineLimit(1)
                     }
@@ -551,7 +551,7 @@ struct BunnyMakerView: View {
                             .overlay {
                                 if on {
                                     Image(systemName: "checkmark").font(.system(size: 16, weight: .heavy)).foregroundStyle(.white)
-                                        .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+                                        .budgetShadow(color: .black.opacity(0.25), radius: 2, y: 1)
                                         .transition(.scale.combined(with: .opacity))
                                 }
                             }
@@ -559,7 +559,7 @@ struct BunnyMakerView: View {
                             .padding(4)
                             .overlay(Circle().strokeBorder(on ? Color(hex: tint.swatch) : .clear, lineWidth: 3))
                             .scaleEffect(on ? 1.06 : 1)
-                            .shadow(color: Color(hex: tint.swatch).softGlow(on ? 0.45 : 0.18), radius: on ? 8 : 4, y: 3)
+                            .budgetShadow(color: Color(hex: tint.swatch).softGlow(on ? 0.45 : 0.18), radius: on ? 8 : 4, y: 3)
                         Text(tint.name).font(.jakarta(12, on ? .bold : .medium))
                             .foregroundStyle(on ? Palette.text : Palette.text2)
                             .lineLimit(1).minimumScaleFactor(0.8)

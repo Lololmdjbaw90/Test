@@ -222,7 +222,7 @@ private struct PickedGlow: ViewModifier {
     let on: Bool
     func body(content: Content) -> some View {
         if on {
-            content.shadow(color: Theme.main.opacity(0.6), radius: 10)
+            content.budgetShadow(color: Theme.main.opacity(0.6), radius: 10)
         } else {
             content
         }
@@ -428,11 +428,11 @@ struct StickerLabel: View {
                 .clipShape(RoundedRectangle(cornerRadius: max(0, fontSize * TextSticker.frameCorner - edge), style: .continuous))
                 .padding(edge)
                 .background(Color.white, in: RoundedRectangle(cornerRadius: fontSize * TextSticker.frameCorner, style: .continuous))
-                .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
+                .budgetShadow(color: .black.opacity(0.25), radius: 6, y: 3)
         } else if let image = sticker.image {
             Image(uiImage: image).resizable().scaledToFit()
                 .frame(width: fontSize)
-                .shadow(color: .black.opacity(0.25), radius: 5, y: 2)
+                .budgetShadow(color: .black.opacity(0.25), radius: 5, y: 2)
         } else if sticker.isEmoji {
             Text(sticker.text).font(.system(size: fontSize)).fixedSize()
         } else {
@@ -454,8 +454,8 @@ struct StickerLabel: View {
                         RoundedRectangle(cornerRadius: size * 0.5, style: .continuous).fill(Color(hex: sticker.color))
                     }
                 }
-                .shadow(color: sticker.style == .glow ? glow : shadowColor, radius: sticker.style == .glow ? size * 0.22 : 4)
-                .shadow(color: sticker.style == .glow ? glow : .clear, radius: sticker.style == .glow ? size * 0.6 : 0)
+                .budgetShadow(color: sticker.style == .glow ? glow : shadowColor, radius: sticker.style == .glow ? size * 0.22 : 4)
+                .budgetShadow(color: sticker.style == .glow ? glow : .clear, radius: sticker.style == .glow ? size * 0.6 : 0)
                 .fixedSize()
         }
     }
@@ -495,12 +495,12 @@ struct OutlineText: ViewModifier {
     func body(content: Content) -> some View {
         if on {
             content
-                .shadow(color: color, radius: 0, x: width, y: width)
-                .shadow(color: color, radius: 0, x: -width, y: -width)
-                .shadow(color: color, radius: 0, x: width, y: -width)
-                .shadow(color: color, radius: 0, x: -width, y: width)
-                .shadow(color: color, radius: 0, x: width, y: 0)
-                .shadow(color: color, radius: 0, x: -width, y: 0)
+                .budgetShadow(color: color, radius: 0, x: width, y: width)
+                .budgetShadow(color: color, radius: 0, x: -width, y: -width)
+                .budgetShadow(color: color, radius: 0, x: width, y: -width)
+                .budgetShadow(color: color, radius: 0, x: -width, y: width)
+                .budgetShadow(color: color, radius: 0, x: width, y: 0)
+                .budgetShadow(color: color, radius: 0, x: -width, y: 0)
         } else {
             content
         }

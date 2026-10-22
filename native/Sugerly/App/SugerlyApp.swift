@@ -57,6 +57,7 @@ struct SugerlyApp: App {
                     .sugarProgress()
                 #endif
             }
+            .modifier(CaptureBudgetObserver())
             .dynamicTypeSize(...DynamicTypeSize.xxLarge)
         }
     }

@@ -30,13 +30,13 @@ struct LoginView: View {
             VStack(spacing: 22) {
                 // The badge pops in, then everything else rises after it.
                 AppBadge(size: 104)
-                    .shadow(color: Theme.glow(0.25), radius: 16, y: 8)
+                    .budgetShadow(color: Theme.glow(0.25), radius: 16, y: 8)
                     .padding(.top, 40)
                     .scaleEffect(appeared || Motion.reduced ? 1 : 0.6)
                     .opacity(appeared ? 1 : 0)
                     .animation(Motion.reduced ? nil : Motion.playful, value: appeared)
                 BrandLogo(height: 64)
-                    .shadow(color: Palette.shadow, radius: 12)
+                    .budgetShadow(color: Palette.shadow, radius: 12)
                     .padding(.top, -8)
                     .accessibilityLabel("Sugerly")
                     .stagger(appeared, 1)
@@ -208,7 +208,7 @@ struct LoginView: View {
         .frame(minHeight: 54)
         .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.main.opacity(0.25), lineWidth: 1.5))
-        .shadow(color: Palette.shadow, radius: 12, y: 4)
+        .budgetShadow(color: Palette.shadow, radius: 12, y: 4)
     }
 
     private func submit() async {

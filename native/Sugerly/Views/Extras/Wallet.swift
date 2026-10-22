@@ -128,7 +128,7 @@ struct WalletPage: View {
             let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
             shape.fill(LinearGradient(colors: [Palette.cream, Palette.ivory, Palette.blush], startPoint: .topLeading, endPoint: .bottomTrailing))
                 .overlay(shape.fill(LinearGradient(colors: [Palette.rim(0.35), .clear], startPoint: .top, endPoint: .center)))
-                .shadow(color: Palette.gold.opacity(0.16), radius: 14, y: 6)
+                .budgetShadow(color: Palette.gold.opacity(0.16), radius: 14, y: 6)
         }
         .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.rim(0.6), lineWidth: 1))
     }

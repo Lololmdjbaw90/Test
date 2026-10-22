@@ -9,10 +9,15 @@ final class RenderingBudget {
     static let shared = RenderingBudget()
     private(set) var recording = false
     private(set) var limited = false
+    @ObservationIgnored private var capturedScenes: Set<UUID> = []
+    func sceneCapture(_ captured: Bool, id: UUID) {
+        if captured { capturedScenes.insert(id) } else { capturedScenes.remove(id) }
+        refresh()
+    }
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     #if DEBUG
     @ObservationIgnored private var recordingOverride: Bool?
-    func simulateRecording(_ value: Bool) { recordingOverride = value; refresh() }
+    func simulateRecording(_ value: Bool?) { recordingOverride = value; refresh() }
     #endif
 
     private init() {
@@ -26,12 +31,33 @@ final class RenderingBudget {
     }
 
     private func refresh() {
-        var captured = UIScreen.screens.contains { $0.isCaptured }
+        var captured = !capturedScenes.isEmpty || UIScreen.screens.contains { $0.isCaptured }
         #if DEBUG
         captured = recordingOverride ?? captured
         #endif
         recording = captured
         let heat = ProcessInfo.processInfo.thermalState
         limited = captured || ProcessInfo.processInfo.isLowPowerModeEnabled || heat == .serious || heat == .critical
+    }
+}
+
+// Observe the scene, including a recording already running before app launch.
+struct CaptureBudgetObserver: ViewModifier {
+    @Environment(\.isSceneCaptured) private var captured
+    @State private var id = UUID()
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: captured, initial: true) { _, value in
+                RenderingBudget.shared.sceneCapture(value, id: id)
+            }
+            .onDisappear { RenderingBudget.shared.sceneCapture(false, id: id) }
+    }
+}
+
+extension View {
+    // Keep colors and a small offset shadow; omit the blur kernel during capture.
+    func budgetShadow(color: Color = .black.opacity(0.33), radius: CGFloat, x: CGFloat = 0, y: CGFloat = 0) -> some View {
+        shadow(color: RenderingBudget.shared.limited ? color.opacity(0.45) : color,
+               radius: RenderingBudget.shared.limited ? 0 : radius, x: x, y: y)
     }
 }

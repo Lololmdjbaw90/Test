@@ -290,7 +290,7 @@ struct ReelsView: View {
                     .buttonStyle(SoftPressStyle())
                 }
             }
-            .shadow(color: .black.opacity(0.4), radius: 6)
+            .budgetShadow(color: .black.opacity(0.4), radius: 6)
             .frame(maxWidth: .infinity)
             .opacity(pull > 8 || refreshing ? 0 : 1)
             .animation(.easeOut(duration: 0.15), value: pull > 8 || refreshing)
@@ -633,7 +633,7 @@ struct ReelPage: View {
             LinearGradient(colors: [.black.opacity(0.35), .clear, .clear, .black.opacity(0.7)], startPoint: .top, endPoint: .bottom)
                 .allowsHitTesting(false)
             if paused {
-                Image(systemName: "play.fill").font(.system(size: 60)).foregroundStyle(.white.opacity(0.85)).shadow(radius: 10)
+                Image(systemName: "play.fill").font(.system(size: 60)).foregroundStyle(.white.opacity(0.85)).budgetShadow(radius: 10)
                     .transition(.pop)
                     .allowsHitTesting(false)
             }
@@ -858,7 +858,7 @@ struct ReelPage: View {
                 .buttonStyle(BouncyStyle(scale: 0.95))
             }
         }
-        .shadow(color: .black.opacity(0.45), radius: 4)
+        .budgetShadow(color: .black.opacity(0.45), radius: 4)
     }
 
     private var actions: some View {
@@ -911,7 +911,7 @@ struct ReelPage: View {
                 bubbleLabel(icon, tint: tint)
                 if let count {
                     Text("\(count)").font(.jakarta(13, .heavy)).foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.4), radius: 3)
+                        .budgetShadow(color: .black.opacity(0.4), radius: 3)
                         .contentTransition(.numericText())
                 }
             }
@@ -926,7 +926,7 @@ struct ReelPage: View {
             .symbolEffect(.bounce, value: tint)
             .frame(width: 44, height: 44)
             .contentShape(Rectangle())
-            .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
+            .budgetShadow(color: .black.opacity(0.6), radius: 2, y: 1)
     }
 
     // Get the video ready (buffered, paused) before you swipe to it.
@@ -1270,17 +1270,17 @@ struct ReelTextLayer: View {
                 base.foregroundStyle(Color(hex: color))
                     .padding(.horizontal, size * 0.55).padding(.vertical, size * 0.18)
                     .background(Color(hex: bg).opacity(0.94), in: RoundedRectangle(cornerRadius: size * 0.45, style: .continuous))
-                    .shadow(color: .black.opacity(0.18), radius: size * 0.3, y: size * 0.08)
+                    .budgetShadow(color: .black.opacity(0.18), radius: size * 0.3, y: size * 0.08)
             case "outline":
                 base.foregroundStyle(Color(hex: color)).modifier(OutlineText(on: true, color: Color(hex: contrast)))
             case "neon":
                 base.foregroundStyle(.white)
-                    .shadow(color: Color(hex: color), radius: size * 0.22)
-                    .shadow(color: Color(hex: color), radius: size * 0.5)
+                    .budgetShadow(color: Color(hex: color), radius: size * 0.22)
+                    .budgetShadow(color: Color(hex: color), radius: size * 0.5)
             case "shadow":
-                base.foregroundStyle(Color(hex: color)).shadow(color: Color(hex: contrast), radius: 0, x: size * 0.07, y: size * 0.07)
+                base.foregroundStyle(Color(hex: color)).budgetShadow(color: Color(hex: contrast), radius: 0, x: size * 0.07, y: size * 0.07)
             default:
-                base.foregroundStyle(Color(hex: color)).shadow(color: .black.opacity(0.55), radius: size * 0.3, y: size * 0.05)
+                base.foregroundStyle(Color(hex: color)).budgetShadow(color: .black.opacity(0.55), radius: size * 0.3, y: size * 0.05)
             }
         }
         .frame(maxWidth: width * 0.92)

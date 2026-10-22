@@ -896,7 +896,7 @@ struct BackgroundPicker: View {
                                 .frame(width: 74, height: 104)
                                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                                 .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(on ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.border), lineWidth: on ? 3 : 1))
-                                .shadow(color: on ? Theme.main.opacity(0.3) : .clear, radius: 8, y: 3)
+                                .budgetShadow(color: on ? Theme.main.opacity(0.3) : .clear, radius: 8, y: 3)
                                 Label(kind.label, systemImage: kind.icon).labelStyle(.titleOnly)
                                     .font(.jakarta(11, .bold)).foregroundStyle(on ? Theme.main : Palette.text2)
                             }

@@ -1,6 +1,7 @@
 import AudioToolbox
 import Foundation
 
+// Offline-rendered Earshot sounds, with synthesized fallbacks.
 // Soft, bubbly sounds for the whole app: taps, tabs, switches, likes,
 // sending, new messages, sheets opening and closing, and little chimes for
 // "done" and "oops". They're made in code (short sine "pops" and bells),
@@ -40,13 +41,18 @@ enum TapSound {
         ready = true
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         for kind in Kind.allCases {
-            let url = dir.appendingPathComponent("sugerly-\(kind.rawValue)-v2.wav")
+            let url = bundled(kind.rawValue) ?? dir.appendingPathComponent("sugerly-\(kind.rawValue)-v2.wav")
             if !FileManager.default.fileExists(atPath: url.path) {
                 try? wav(samples(kind)).write(to: url)
             }
             var id: SystemSoundID = 0
             if AudioServicesCreateSystemSoundID(url as CFURL, &id) == noErr { ids[kind] = id }
         }
+    }
+
+    static func bundled(_ name: String) -> URL? {
+        Bundle.main.url(forResource: name, withExtension: "wav")
+            ?? Bundle.main.url(forResource: name, withExtension: "wav", subdirectory: "Sounds")
     }
 
     static let rate = 44_100.0
@@ -147,7 +153,7 @@ enum RewardSound {
 
     static func play() {
         if id == 0 {
-            let url = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            let url = TapSound.bundled("reward") ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
                 .appendingPathComponent("sugerly-reward-v1.wav")
             if !FileManager.default.fileExists(atPath: url.path) { try? TapSound.wav(samples()).write(to: url) }
             AudioServicesCreateSystemSoundID(url as CFURL, &id)

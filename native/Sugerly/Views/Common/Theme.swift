@@ -243,7 +243,7 @@ private struct SoftShadow: ViewModifier {
         if flat {
             content
         } else {
-            content.shadow(color: color, radius: radius, x: x, y: y)
+            content.budgetShadow(color: color, radius: radius, x: x, y: y)
         }
     }
 }
@@ -540,7 +540,7 @@ extension View {
     func glassPill(cornerRadius: CGFloat = 22) -> some View {
         let shape = RoundedRectangle(cornerRadius: min(cornerRadius, 22), style: .continuous)
         return self
-            .background { shape.fill(Palette.surface).shadow(color: Palette.shadow, radius: 12, y: 4) }
+            .background { shape.fill(Palette.surface).budgetShadow(color: Palette.shadow, radius: 12, y: 4) }
             .overlay(shape.strokeBorder(Palette.border, lineWidth: 1))
     }
 
@@ -582,7 +582,7 @@ private struct GradientButtonBody: View {
                 shape.fill(Theme.candy)
                     .overlay { if enabled { ShineSweep(every: 4.2).clipShape(shape) } }
                     .overlay(shape.strokeBorder(Palette.rim(0.22), lineWidth: 1))
-                    .shadow(color: Theme.glow(enabled ? (pressed ? 0.12 : 0.28) : 0), radius: pressed ? 4 : 10, y: pressed ? 2 : 5)
+                    .budgetShadow(color: Theme.glow(enabled ? (pressed ? 0.12 : 0.28) : 0), radius: pressed ? 4 : 10, y: pressed ? 2 : 5)
             }
             .opacity(enabled ? (pressed ? 0.92 : 1) : 0.45)
             .scaleEffect(pressed && !Motion.reduced ? 0.965 : 1)
@@ -606,7 +606,7 @@ struct OutlineButtonStyle: ButtonStyle {
             // edge, so it stands out on tinted pages too.
             .background {
                 RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Palette.surface)
-                    .shadow(color: Palette.shadow, radius: 6, y: 2)
+                    .budgetShadow(color: Palette.shadow, radius: 6, y: 2)
             }
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.main.opacity(0.2), lineWidth: 1))
             .opacity(configuration.isPressed ? 0.8 : 1)
@@ -635,7 +635,7 @@ struct Chip: View {
             .background {
                 if active {
                     Capsule().fill(Theme.candy)
-                        .shadow(color: Theme.glow(0.25), radius: 6, y: 3)
+                        .budgetShadow(color: Theme.glow(0.25), radius: 6, y: 3)
                         .transition(.scale(scale: 0.85).combined(with: .opacity))
                 } else {
                     Capsule().fill(Palette.surface2)
@@ -671,9 +671,9 @@ struct SectionHeader: View {
                 .background {
                     let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
                     if let candy = Candy.matching(icon) {
-                        shape.fill(candy.gradient).shadow(color: candy.color.softGlow(0.3), radius: 5, y: 2)
+                        shape.fill(candy.gradient).budgetShadow(color: candy.color.softGlow(0.3), radius: 5, y: 2)
                     } else {
-                        shape.fill(Theme.candy).shadow(color: Theme.glow(0.28), radius: 5, y: 2)
+                        shape.fill(Theme.candy).budgetShadow(color: Theme.glow(0.28), radius: 5, y: 2)
                     }
                 }
                 .accessibilityHidden(true)
@@ -1004,9 +1004,9 @@ struct RewardBurst: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation(paused: start == nil)) { timeline in
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: start == nil || RenderingBudget.shared.limited)) { timeline in
             Canvas { context, size in
-                guard let start else { return }
+                guard !RenderingBudget.shared.limited, let start else { return }
                 let t = timeline.date.timeIntervalSince(start)
                 guard t >= 0, t < 1.3 else { return }
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
@@ -1047,7 +1047,7 @@ struct RewardBurst: View {
         .allowsHitTesting(false)
         .accessibilityHidden(true)
         .task(id: trigger) {
-            guard trigger > 0, !reduceMotion else { return }
+            guard trigger > 0, !reduceMotion, !RenderingBudget.shared.limited else { start = nil; return }
             start = .now
             try? await Task.sleep(for: .seconds(1.4))
             start = nil

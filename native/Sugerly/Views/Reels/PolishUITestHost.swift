@@ -125,6 +125,7 @@ struct PolishUITestHost: View {
 }
 private struct RecordingPerformanceFixture: View {
     private let budget = RenderingBudget.shared
+    @State private var captureID = UUID()
     private static let gif: UIImage = {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 32, height: 32))
         let frames = [UIColor.systemPink, UIColor.systemTeal].map { color in
@@ -138,9 +139,11 @@ private struct RecordingPerformanceFixture: View {
             LoadedImage(image: Self.gif, fill: false).frame(width: 64, height: 64)
             Button("Start recording simulation") { budget.simulateRecording(true) }
             Button("Stop recording simulation") { budget.simulateRecording(false) }
+            Button("Start scene capture") { budget.simulateRecording(nil); budget.sceneCapture(true, id: captureID) }
+            Button("Stop scene capture") { budget.sceneCapture(false, id: captureID) }
         }
         .onAppear { budget.simulateRecording(false) }
-        .onDisappear { budget.simulateRecording(false) }
+        .onDisappear { budget.sceneCapture(false, id: captureID); budget.simulateRecording(nil) }
     }
 }
 

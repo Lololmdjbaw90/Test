@@ -187,7 +187,7 @@ struct ServerSettingsView: View {
                 Button { editingRole = RoleDraft(role) } label: {
                     HStack(spacing: 12) {
                         Circle().fill(role.tint).frame(width: 16, height: 16)
-                            .shadow(color: role.tint.opacity(0.5), radius: 4)
+                            .budgetShadow(color: role.tint.opacity(0.5), radius: 4)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(role.name).font(.jakarta(15, .bold)).foregroundStyle(role.tint)
                             Text("\(store.members.filter { $0.roles.contains(role.id) }.count) members · \(role.permissions.filter(\.value).count) permissions")
@@ -317,7 +317,7 @@ struct RoleEditor: View {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(spacing: 12) {
                         Circle().fill(Color(hex: ReelText.hex(draft.color))).frame(width: 40, height: 40)
-                            .shadow(color: Color(hex: ReelText.hex(draft.color)).opacity(0.5), radius: 8)
+                            .budgetShadow(color: Color(hex: ReelText.hex(draft.color)).opacity(0.5), radius: 8)
                         Text(draft.name.isEmpty ? "Role" : draft.name).font(.display(28)).foregroundStyle(Color(hex: ReelText.hex(draft.color)))
                     }
                     SugarField(placeholder: "Role name", text: $draft.name)

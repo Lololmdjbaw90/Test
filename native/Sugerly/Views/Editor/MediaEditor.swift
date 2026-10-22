@@ -140,7 +140,7 @@ struct MediaEditor: View {
             .background {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(Color.black)
-                    .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
+                    .budgetShadow(color: .black.opacity(0.5), radius: 18, y: 8)
             }
             .overlay(alignment: .topTrailing) {
                 if tool == nil {
@@ -312,7 +312,7 @@ struct ToolRail: View {
                                 .minimumScaleFactor(0.5)
                         }
                         .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.55), radius: 3, y: 1)
+                        .budgetShadow(color: .black.opacity(0.55), radius: 3, y: 1)
                         .frame(width: 58)
                     }
                     .buttonStyle(BouncyStyle(scale: 0.86))
@@ -519,7 +519,7 @@ private struct FiltersPanel: View {
                             .frame(width: 60, height: 80)
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white, lineWidth: on ? 3 : 0))
-                            .shadow(color: on ? Theme.pink.opacity(0.45) : .clear, radius: 8, y: 4)
+                            .budgetShadow(color: on ? Theme.pink.opacity(0.45) : .clear, radius: 8, y: 4)
                             Text(f.rawValue)
                                 .font(.jakarta(11, on ? .heavy : .bold))
                                 .foregroundStyle(.white.opacity(on ? 1 : 0.65))
@@ -795,7 +795,7 @@ private struct PlaybackBar: View {
                     Capsule().fill(Theme.gradient).frame(width: max(6, w * p), height: 6)
                     Circle().fill(.white)
                         .frame(width: knob, height: knob)
-                        .shadow(color: .black.opacity(0.3), radius: 3)
+                        .budgetShadow(color: .black.opacity(0.3), radius: 3)
                         .offset(x: min(max(0, w * p - knob / 2), w - knob))
                 }
                 .frame(width: w, height: 32)

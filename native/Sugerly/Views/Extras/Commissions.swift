@@ -378,7 +378,7 @@ struct CommissionsView: View {
         .padding(5)
         .background(Palette.surface, in: Capsule())
         .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
-        .shadow(color: Palette.shadow, radius: 8, y: 3)
+        .budgetShadow(color: Palette.shadow, radius: 8, y: 3)
         .sensoryFeedback(.selection, trigger: tab)
     }
 
@@ -652,7 +652,7 @@ struct OrderRow: View {
         .padding(12)
         .background(Palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(needsMe ? Theme.main.opacity(0.45) : Palette.border, lineWidth: needsMe ? 1.5 : 1))
-        .shadow(color: Palette.shadow, radius: 6, y: 2)
+        .budgetShadow(color: Palette.shadow, radius: 6, y: 2)
     }
 }
 

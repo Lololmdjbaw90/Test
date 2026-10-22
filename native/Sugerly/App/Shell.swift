@@ -956,7 +956,7 @@ struct CreateSheet: View {
                     }
                     .overlay(shape.fill(LinearGradient(colors: [Palette.rim(0.35), .clear], startPoint: .top, endPoint: .center)).padding(1))
                     .overlay { ShineSweep(every: 4 + Double(index) * 0.7, strength: 0.3).clipShape(shape) }
-                    .shadow(color: candy.color.softGlow(0.35), radius: 10, y: 5)
+                    .budgetShadow(color: candy.color.softGlow(0.35), radius: 10, y: 5)
             }
         }
         .buttonStyle(BouncyStyle(scale: 0.95))

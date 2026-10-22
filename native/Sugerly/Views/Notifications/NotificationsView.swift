@@ -881,7 +881,7 @@ struct AdminView: View {
                     Button { defaultAccent = a.rawValue } label: {
                         Circle().fill(a.gradient).frame(width: 36, height: 36)
                             .overlay(Circle().strokeBorder(.white, lineWidth: defaultAccent == a.rawValue ? 3 : 0))
-                            .shadow(color: a.main.opacity(defaultAccent == a.rawValue ? 0.5 : 0), radius: 6)
+                            .budgetShadow(color: a.main.opacity(defaultAccent == a.rawValue ? 0.5 : 0), radius: 6)
                     }
                     .buttonStyle(BouncyStyle())
                 }
@@ -1160,7 +1160,7 @@ struct AdminView: View {
                     Text("Claim reward").font(.jakarta(14, .bold)).foregroundStyle(.white)
                         .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 18).frame(height: 44)
                         .background(LinearGradient(colors: [secondary, primary], startPoint: .topLeading, endPoint: .bottomTrailing), in: Capsule())
-                        .shadow(color: primary.opacity(0.45), radius: 10, y: 5)
+                        .budgetShadow(color: primary.opacity(0.45), radius: 10, y: 5)
                     Text("Follow").font(.jakarta(14, .bold)).foregroundStyle(primary)
                         .padding(.horizontal, 18).frame(height: 44)
                         .overlay(Capsule().strokeBorder(primary.opacity(0.35), lineWidth: 1.5))
@@ -1177,7 +1177,7 @@ struct AdminView: View {
                     Button { withMotion(Motion.standard) { primary = Color(hex: p); secondary = Color(hex: s) } } label: {
                         VStack(spacing: 6) {
                             Circle().fill(LinearGradient(colors: [Color(hex: s), Color(hex: p)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                .frame(width: 44, height: 44).shadow(color: Color(hex: p).opacity(0.4), radius: 6, y: 3)
+                                .frame(width: 44, height: 44).budgetShadow(color: Color(hex: p).opacity(0.4), radius: 6, y: 3)
                             Text(name).font(.jakarta(11, .semibold)).foregroundStyle(Palette.text2)
                         }
                     }

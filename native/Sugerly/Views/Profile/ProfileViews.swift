@@ -186,7 +186,7 @@ struct ProfileContent: View {
             .padding(.top, 8)
 
             Avatar(url: person.picture, name: person.displayName, size: 112)
-                .shadow(color: .black.opacity(0.22), radius: 16, y: 8)
+                .budgetShadow(color: .black.opacity(0.22), radius: 16, y: 8)
                 .overlay(alignment: .bottomTrailing) {
                     PresenceBadge(presence: isMe ? (Presence(rawValue: person.presence) ?? .online) : person.presenceNow, size: 112)
                 }
@@ -462,7 +462,7 @@ struct ProfileContent: View {
                                 .aspectRatio(9 / 16, contentMode: .fit)
                                 .overlay { RemoteImage(url: reel.coverURL.isEmpty ? (reel.isVideo ? "" : reel.pictures.first ?? "") : reel.coverURL) }
                                 .overlay(alignment: .bottomLeading) {
-                                    Label("\(reel.views)", systemImage: "play.fill").font(.jakarta(11, .bold)).foregroundStyle(.white).shadow(radius: 3).padding(6)
+                                    Label("\(reel.views)", systemImage: "play.fill").font(.jakarta(11, .bold)).foregroundStyle(.white).budgetShadow(radius: 3).padding(6)
                                 }
                                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
@@ -630,9 +630,9 @@ private struct ProfileIconStyle: ButtonStyle {
             .frame(width: 46, height: 46)
             .background {
                 if let candy {
-                    shape.fill(candy.gradient).shadow(color: candy.color.softGlow(0.35), radius: 6, y: 3)
+                    shape.fill(candy.gradient).budgetShadow(color: candy.color.softGlow(0.35), radius: 6, y: 3)
                 } else {
-                    shape.fill(Palette.surface).shadow(color: Palette.shadow, radius: 6, y: 2)
+                    shape.fill(Palette.surface).budgetShadow(color: Palette.shadow, radius: 6, y: 2)
                 }
             }
             .overlay(shape.strokeBorder(candy == nil ? Theme.main.opacity(0.2) : Color.white.opacity(0.35), lineWidth: 1))

@@ -63,7 +63,7 @@ struct MorphPill: View {
                     Capsule().fill(Theme.soft)
                         .overlay(Capsule().strokeBorder(Theme.main.opacity(0.22), lineWidth: 1))
                     Capsule().fill(Theme.gradient)
-                        .shadow(color: Palette.shadow, radius: 6, y: 3)
+                        .budgetShadow(color: Palette.shadow, radius: 6, y: 3)
                         .opacity(on ? 0 : 1)
                 }
             }

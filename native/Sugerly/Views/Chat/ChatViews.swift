@@ -503,7 +503,7 @@ struct SectionSwitch: View {
                         .background {
                             if selection == i {
                                 Capsule().fill(Palette.surface)
-                                    .shadow(color: Palette.shadow, radius: 4, y: 1)
+                                    .budgetShadow(color: Palette.shadow, radius: 4, y: 1)
                                     .matchedGeometryEffect(id: "pill", in: pill)
                             }
                         }

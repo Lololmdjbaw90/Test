@@ -107,7 +107,7 @@ struct PageHero: View {
                             .lineLimit(1)
                             .padding(.horizontal, 14).frame(height: 34)
                             .background(.white, in: Capsule())
-                            .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+                            .budgetShadow(color: .black.opacity(0.1), radius: 4, y: 2)
                     }
                     .buttonStyle(BouncyStyle(scale: 0.93))
                     .padding(.top, 4)
@@ -192,7 +192,7 @@ struct PageTitle: View {
                 .frame(width: 44, height: 44)
                 .background(Theme.gradient, in: sticker)
                 .overlay(sticker.strokeBorder(.white.opacity(0.4), lineWidth: 1.5))
-                .shadow(color: Theme.glow(0.35), radius: 6, y: 3)
+                .budgetShadow(color: Theme.glow(0.35), radius: 6, y: 3)
                 .rotationEffect(.degrees(shown ? -7 : 0))
             VStack(alignment: .leading, spacing: 5) {
                 StickerTitle(text: title)
@@ -214,7 +214,7 @@ struct PageTitle: View {
                         .background {
                             Capsule().fill(Palette.surface)
                                 .matchedGeometryEffect(id: "search", in: morph)
-                                .shadow(color: Palette.shadow, radius: 6, y: 2)
+                                .budgetShadow(color: Palette.shadow, radius: 6, y: 2)
                         }
                         .overlay(Capsule().strokeBorder(Theme.main.opacity(0.2), lineWidth: 1))
                 }
@@ -250,7 +250,7 @@ struct PageTitle: View {
             .background {
                 Capsule().fill(Palette.surface)
                     .matchedGeometryEffect(id: "search", in: morph)
-                    .shadow(color: Palette.shadow, radius: 6, y: 2)
+                    .budgetShadow(color: Palette.shadow, radius: 6, y: 2)
             }
             .overlay(Capsule().strokeBorder(Theme.main.opacity(0.25), lineWidth: 1))
             Button("Cancel", action: close)

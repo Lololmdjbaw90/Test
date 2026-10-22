@@ -115,7 +115,7 @@ struct MusicView: View {
                     .frame(width: 120, height: 120)
                     .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.rim(0.4), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.3), radius: 14, y: 8)
+                    .budgetShadow(color: .black.opacity(0.3), radius: 14, y: 8)
                     .rotationEffect(.degrees(playing ? 0 : -3))
                 if playing {
                     EqualizerBars(height: 16)
@@ -139,7 +139,7 @@ struct MusicView: View {
                         .contentTransition(.symbolEffect(.replace))
                         .padding(.horizontal, 20).frame(height: 42)
                         .background(.white, in: Capsule())
-                        .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+                        .budgetShadow(color: .black.opacity(0.15), radius: 6, y: 3)
                 }
                 .buttonStyle(BouncyStyle())
                 .padding(.top, 4)
@@ -157,7 +157,7 @@ struct MusicView: View {
             }
             .clipShape(shape)
             .overlay(shape.strokeBorder(Palette.rim(0.25), lineWidth: 1))
-            .shadow(color: Palette.shadow, radius: 12, y: 8)
+            .budgetShadow(color: Palette.shadow, radius: 12, y: 8)
         }
         .motion(Motion.playful, value: playing)
     }

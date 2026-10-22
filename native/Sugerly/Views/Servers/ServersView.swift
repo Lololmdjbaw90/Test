@@ -172,7 +172,7 @@ struct ServerList: View {
                             .font(.jakarta(13, .bold)).foregroundStyle(.white)
                             .padding(.horizontal, 14).frame(height: 34)
                             .background {
-                                Capsule().fill(Theme.candy).shadow(color: Theme.glow(0.28), radius: 6, y: 3)
+                                Capsule().fill(Theme.candy).budgetShadow(color: Theme.glow(0.28), radius: 6, y: 3)
                             }
                     }
                     .buttonStyle(BouncyStyle(scale: 0.9))
@@ -380,7 +380,7 @@ struct ServerHubView: View {
                 ForEach(mine) { server in
                     railButton(active: selected == server.id) {
                         ServerIcon(server: server, size: 50, corner: selected == server.id ? 16 : 25)
-                            .shadow(color: selected == server.id ? Theme.main.opacity(0.35) : .clear, radius: 8, y: 3)
+                            .budgetShadow(color: selected == server.id ? Theme.main.opacity(0.35) : .clear, radius: 8, y: 3)
                     } action: { open(server) }
                     .contextMenu {
                         Button { UIPasteboard.general.string = "\(Servers.site)/CommunityChat?id=\(server.id)"; model.showToast("Invite link copied", icon: "link") } label: { Label("Copy invite link", systemImage: "link") }
@@ -540,7 +540,7 @@ struct ServerCard: View {
                         } else {
                             Text("Join").font(.jakarta(12, .heavy)).foregroundStyle(.white)
                                 .padding(.horizontal, 14).frame(height: 30).background(Theme.gradient, in: Capsule())
-                                .shadow(color: Palette.shadow, radius: 6, y: 3)
+                                .budgetShadow(color: Palette.shadow, radius: 6, y: 3)
                                 .transition(.blurSwap)
                         }
                     }
@@ -655,7 +655,7 @@ struct ServerPanel: View {
             .overlay(alignment: .bottomLeading) {
                 ServerIcon(server: store.server, size: 60)
                     .overlay(RoundedRectangle(cornerRadius: 19, style: .continuous).strokeBorder(Palette.bg, lineWidth: 4))
-                    .shadow(color: Palette.shadow, radius: 10, y: 4)
+                    .budgetShadow(color: Palette.shadow, radius: 10, y: 4)
                     .offset(x: 12, y: 30)
             }
             HStack(alignment: .top) {

@@ -406,7 +406,7 @@ struct ReelSeekBar: View {
                 }
                 if dragging != nil {
                     Circle().fill(.white).frame(width: 14, height: 14)
-                        .shadow(radius: 3)
+                        .budgetShadow(radius: 3)
                         .offset(x: geo.size.width * shown - 7)
                 }
             }
@@ -416,7 +416,7 @@ struct ReelSeekBar: View {
                 if let dragging {
                     Text("\(Self.clock(dragging * video.duration)) / \(Self.clock(video.duration))")
                         .font(.jakarta(20, .heavy)).monospacedDigit().foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.5), radius: 6)
+                        .budgetShadow(color: .black.opacity(0.5), radius: 6)
                         .offset(y: -44)
                         .transition(.opacity)
                 }
@@ -461,7 +461,7 @@ struct HeartBurstView: View {
         Image(systemName: "heart.fill")
             .font(.system(size: 96))
             .foregroundStyle(Theme.gradient)
-            .shadow(color: Palette.shadow, radius: 12)
+            .budgetShadow(color: Palette.shadow, radius: 12)
             .rotationEffect(.degrees(burst.angle))
             .scaleEffect(phase == 0 ? 0.6 : phase == 1 ? 1.1 : 1.3)
             .opacity(phase == 0 ? 0 : phase == 2 ? 0 : 1)

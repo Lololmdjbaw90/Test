@@ -121,7 +121,7 @@ struct MessageMedia: View {
             ArtImage(url: url, tallest: tallest, widest: widest, maxPixel: 480, maxFrames: 36, animationBudget: AnimatedImages.thumbBudget)
                 .frame(width: width)
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .shadow(color: Palette.shadow, radius: 8, y: 3)
+                .budgetShadow(color: Palette.shadow, radius: 8, y: 3)
         }
     }
 }
@@ -492,7 +492,7 @@ struct StickerMakerView: View {
                         VStack(spacing: 10) {
                             Image(systemName: "photo.badge.plus").font(.system(size: 22, weight: .semibold)).foregroundStyle(.white)
                                 .frame(width: 56, height: 56).background(Theme.candy, in: Circle())
-                                .shadow(color: Theme.glow(0.28), radius: 8, y: 4)
+                                .budgetShadow(color: Theme.glow(0.28), radius: 8, y: 4)
                             Text("Pick a photo").font(.jakarta(16, .bold)).foregroundStyle(Palette.text)
                             Text("We'll cut out the subject for you").font(.jakarta(13)).foregroundStyle(Palette.muted)
                         }
@@ -695,7 +695,7 @@ struct GifMakerView: View {
                         VStack(spacing: 10) {
                             Image(systemName: "film.stack.fill").font(.system(size: 22, weight: .semibold)).foregroundStyle(.white)
                                 .frame(width: 56, height: 56).background(Theme.candy, in: Circle())
-                                .shadow(color: Theme.glow(0.28), radius: 8, y: 4)
+                                .budgetShadow(color: Theme.glow(0.28), radius: 8, y: 4)
                             Text("Pick photos or a video").font(.jakarta(16, .bold)).foregroundStyle(Palette.text)
                             Text("Photos become frames · videos use the first 4 seconds").font(.jakarta(13)).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
                         }

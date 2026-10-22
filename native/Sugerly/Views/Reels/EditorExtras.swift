@@ -226,7 +226,7 @@ struct DrawingLayer: View {
                 let w = s.width * size.width
                 if s.neon {
                     ctx.drawLayer { layer in
-                        layer.addFilter(.shadow(color: Color(hex: s.color), radius: w * 0.9))
+                        layer.addFilter(.budgetShadow(color: Color(hex: s.color), radius: w * 0.9))
                         layer.stroke(path, with: .color(Color(hex: s.color)), style: StrokeStyle(lineWidth: w, lineCap: .round, lineJoin: .round))
                     }
                     ctx.stroke(path, with: .color(.white), style: StrokeStyle(lineWidth: w * 0.45, lineCap: .round, lineJoin: .round))

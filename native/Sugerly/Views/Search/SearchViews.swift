@@ -210,7 +210,7 @@ struct PersonBubble: View {
             let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
             // A soft blush wash at the top of the card.
             shape.fill(LinearGradient(colors: [Palette.blush, Palette.surface], startPoint: .top, endPoint: .center))
-                .shadow(color: Palette.shadow, radius: 10, y: 4)
+                .budgetShadow(color: Palette.shadow, radius: 10, y: 4)
         }
         .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
     }
@@ -273,7 +273,7 @@ struct SearchField: View {
         .frame(height: 48)
         .background(Palette.surface, in: Capsule())
         .overlay(Capsule().strokeBorder(focused ? Theme.main.opacity(0.5) : Palette.border, lineWidth: focused ? 1.5 : 1))
-        .shadow(color: focused ? Theme.main.opacity(0.15) : .clear, radius: 10, y: 4)
+        .budgetShadow(color: focused ? Theme.main.opacity(0.15) : .clear, radius: 10, y: 4)
         .motion(Motion.standard, value: focused)
         .onAppear { if autofocus { focused = true } }
     }

@@ -55,36 +55,36 @@ struct NameText: View {
     var body: some View {
         switch active {
         case "glow-pink":
-            base.foregroundStyle(Color(hex: 0xE86D98)).shadow(color: Color(hex: 0xE86D98).opacity(0.6), radius: size * 0.3)
+            base.foregroundStyle(Color(hex: 0xE86D98)).budgetShadow(color: Color(hex: 0xE86D98).opacity(0.6), radius: size * 0.3)
         case "glow-purple":
-            base.foregroundStyle(Color(hex: 0xA67CF7)).shadow(color: Color(hex: 0xA67CF7).opacity(0.6), radius: size * 0.3)
+            base.foregroundStyle(Color(hex: 0xA67CF7)).budgetShadow(color: Color(hex: 0xA67CF7).opacity(0.6), radius: size * 0.3)
         case "italic-serif":
             Text(name).font(.system(size: size, weight: .semibold, design: .serif)).italic().foregroundStyle(own)
         case "glow-mint":
-            base.foregroundStyle(Color(hex: 0x2FAF8F)).shadow(color: Color(hex: 0x3FD1AB).opacity(0.6), radius: size * 0.3)
+            base.foregroundStyle(Color(hex: 0x2FAF8F)).budgetShadow(color: Color(hex: 0x3FD1AB).opacity(0.6), radius: size * 0.3)
         case "glow-sky":
-            base.foregroundStyle(Color(hex: 0x4A9BE8)).shadow(color: Color(hex: 0x7CBEFF).opacity(0.65), radius: size * 0.3)
+            base.foregroundStyle(Color(hex: 0x4A9BE8)).budgetShadow(color: Color(hex: 0x7CBEFF).opacity(0.65), radius: size * 0.3)
         case "cute":
             Text(name).font(.cute(size * 1.1)).foregroundStyle(ProfileColors.color(tint) ?? Theme.main)
         case "pop":
-            base.foregroundStyle(own).shadow(color: (ProfileColors.color(tint) ?? Theme.main).opacity(0.45), radius: 0, x: 2, y: 2)
+            base.foregroundStyle(own).budgetShadow(color: (ProfileColors.color(tint) ?? Theme.main).opacity(0.45), radius: 0, x: 2, y: 2)
         case "rainbow":
             base.foregroundStyle(LinearGradient(colors: [Color(hex: 0xFF7AA2), Color(hex: 0xFFB38A), Color(hex: 0xFFD166), Color(hex: 0x5EC8B8), Color(hex: 0x7CBEFF), Color(hex: 0xB19CFF)], startPoint: .leading, endPoint: .trailing))
         case "sunset":
             base.foregroundStyle(LinearGradient(colors: [Color(hex: 0xFF8A5C), Color(hex: 0xF25F8C), Color(hex: 0xA65CF2)], startPoint: .leading, endPoint: .trailing))
-                .shadow(color: Color(hex: 0xF25F8C).opacity(0.35), radius: size * 0.2)
+                .budgetShadow(color: Color(hex: 0xF25F8C).opacity(0.35), radius: size * 0.2)
         case "bold-serif":
             Text(name).font(.system(size: size, weight: .heavy, design: .serif)).foregroundStyle(Theme.main)
         case "glow-gold":
             base.foregroundStyle(LinearGradient(colors: [Color(hex: 0xF5C04A), Color(hex: 0xE6A31C)], startPoint: .top, endPoint: .bottom))
-                .shadow(color: Color(hex: 0xF0A020).opacity(0.55), radius: size * 0.32)
+                .budgetShadow(color: Color(hex: 0xF0A020).opacity(0.55), radius: size * 0.32)
         case "aurora":
             AuroraName(text: base, still: still)
         case "neon":
             base.foregroundStyle(.white)
-                .shadow(color: .white.opacity(0.9), radius: 1)
-                .shadow(color: Color(hex: 0xEE8FAE), radius: size * 0.25)
-                .shadow(color: Color(hex: 0xD9577F), radius: size * 0.5)
+                .budgetShadow(color: .white.opacity(0.9), radius: 1)
+                .budgetShadow(color: Color(hex: 0xEE8FAE), radius: size * 0.25)
+                .budgetShadow(color: Color(hex: 0xD9577F), radius: size * 0.5)
         default:
             base.foregroundStyle(own)
         }
@@ -123,7 +123,7 @@ struct NitroBadge: View {
         .padding(.horizontal, compact ? 5 : 10)
         .padding(.vertical, compact ? 3 : 5)
         .background(NitroStyle.gradient, in: Capsule())
-        .shadow(color: Color(hex: 0x8B5CF6).opacity(0.35), radius: 6, y: 2)
+        .budgetShadow(color: Color(hex: 0x8B5CF6).opacity(0.35), radius: 6, y: 2)
         .accessibilityLabel("MimiPlus")
     }
 }
@@ -233,7 +233,7 @@ struct ProfileEffectLayer: View {
                 }
             } symbols: {
                 Image(systemName: icon).font(.system(size: 14, weight: .bold)).foregroundStyle(tint)
-                    .shadow(color: .black.opacity(0.12), radius: 2)
+                    .budgetShadow(color: .black.opacity(0.12), radius: 2)
                     .tag(0)
             }
         }
@@ -478,7 +478,7 @@ struct NitroShopView: View {
                 Text("MimiPlus")
                     .font(.custom("LilitaOne", size: 38, relativeTo: .largeTitle))
                     .foregroundStyle(.white)
-                    .shadow(color: Color(hex: 0x5B21B6).opacity(0.35), radius: 6, y: 3)
+                    .budgetShadow(color: Color(hex: 0x5B21B6).opacity(0.35), radius: 6, y: 3)
                     .lineLimit(1).minimumScaleFactor(0.7)
                 Text(statusText)
                     .font(.jakarta(13, .semibold))
@@ -563,7 +563,7 @@ struct NitroShopView: View {
         .background(Palette.surface)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
-        .shadow(color: Palette.shadow, radius: 10, y: 4)
+        .budgetShadow(color: Palette.shadow, radius: 10, y: 4)
         .accessibilityElement(children: .combine)
     }
 
@@ -630,7 +630,7 @@ struct NitroShopView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(shape.fill(Palette.surface).overlay(shape.fill(Self.violet.opacity(on ? 0.07 : 0))))
             .overlay(shape.strokeBorder(on ? AnyShapeStyle(NitroStyle.gradient) : AnyShapeStyle(Palette.border), lineWidth: on ? 2.5 : 1))
-            .shadow(color: on ? Self.violet.opacity(0.22) : Palette.shadow, radius: on ? 12 : 6, y: 4)
+            .budgetShadow(color: on ? Self.violet.opacity(0.22) : Palette.shadow, radius: on ? 12 : 6, y: 4)
             .overlay(alignment: .top) {
                 if best {
                     Text("BEST VALUE")
@@ -821,7 +821,7 @@ struct GemHeart: View {
             sparkles
             Image("MimiHeart").resizable().scaledToFit()
                 .frame(width: size * 0.62)
-                .shadow(color: Color(hex: 0x9D174D).opacity(0.3), radius: 8, y: 5)
+                .budgetShadow(color: Color(hex: 0x9D174D).opacity(0.3), radius: 8, y: 5)
                 .phaseAnimator(moving ? [false, true] : [false]) { content, up in
                     content.offset(y: up ? -size * 0.03 : size * 0.015)
                 } animation: { _ in .easeInOut(duration: 1.8) }

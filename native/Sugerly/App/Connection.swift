@@ -59,7 +59,7 @@ struct OfflineNotice: View {
         .padding(.vertical, 8)
         .background(Palette.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
-        .shadow(color: Palette.shadow, radius: 12, y: 8)
+        .budgetShadow(color: Palette.shadow, radius: 12, y: 8)
         .frame(maxWidth: 520)
         .padding(.horizontal, 16)
         .accessibilityElement(children: .combine)

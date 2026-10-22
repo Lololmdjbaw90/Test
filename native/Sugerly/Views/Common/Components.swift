@@ -63,7 +63,7 @@ struct Avatar: View {
             Text(String(name.first ?? "?").uppercased())
                 .font(.display(size * 0.45))
                 .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
+                .budgetShadow(color: .black.opacity(0.1), radius: 2, y: 1)
         }
     }
 }
@@ -85,7 +85,7 @@ struct PresenceBadge: View {
             Circle().fill(Palette.success)
                 .frame(width: max(9, size * 0.27), height: max(9, size * 0.27))
                 .overlay(Circle().strokeBorder(Palette.surface, lineWidth: max(2, size * 0.05)))
-                .shadow(color: Palette.success.opacity(0.5), radius: 3)
+                .budgetShadow(color: Palette.success.opacity(0.5), radius: 3)
         }
     }
 }
@@ -108,7 +108,7 @@ struct ToastView: View {
         .padding(.vertical, 8)
         .background(Palette.surface, in: Capsule())
         .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
-        .shadow(color: Palette.shadow, radius: 12, y: 8)
+        .budgetShadow(color: Palette.shadow, radius: 12, y: 8)
         .padding(.horizontal, 20)
         .sensoryFeedback(toast.error ? .error : .success, trigger: toast.id)
     }
@@ -560,7 +560,7 @@ struct SensitiveCover: ViewModifier {
                             Text("Tap to show").font(.jakarta(11, .semibold)).opacity(0.85)
                         }
                         .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.35), radius: 4)
+                        .budgetShadow(color: .black.opacity(0.35), radius: 4)
                         .padding(8)
                     }
                     .contentShape(Rectangle())

@@ -237,7 +237,7 @@ struct PinkCircleButton: View {
                 .background {
                     Circle().fill(Theme.candy)
                         .overlay(Circle().strokeBorder(Palette.rim(0.25).fixed(barScheme), lineWidth: 1))
-                        .shadow(color: Theme.glow(0.3).fixed(barScheme), radius: 6, y: 3)
+                        .budgetShadow(color: Theme.glow(0.3).fixed(barScheme), radius: 6, y: 3)
                 }
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
@@ -269,7 +269,7 @@ struct AccountButton: View {
             .padding(.leading, unified ? 4 : 12)
             .frame(height: 34)
             .background(Palette.surface.fixed(barScheme).opacity(unified ? 0 : 1), in: Capsule())
-            .shadow(color: .black.opacity(unified ? 0 : 0.08), radius: 5, y: 1)
+            .budgetShadow(color: .black.opacity(unified ? 0 : 0.08), radius: 5, y: 1)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
@@ -324,7 +324,7 @@ private struct MenuHintBubble: View {
             .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.main.opacity(0.25), lineWidth: 1))
         }
-        .shadow(color: Palette.shadow, radius: 12, y: 6)
+        .budgetShadow(color: Palette.shadow, radius: 12, y: 6)
         .padding(.leading, 12)
         .padding(.top, 2)
         .contentShape(Rectangle())
@@ -475,7 +475,7 @@ struct TitleSwitch: View {
                         .background {
                             if selection == i {
                                 Capsule().fill(Palette.surface)
-                                    .shadow(color: Palette.shadow, radius: 2, y: 1)
+                                    .budgetShadow(color: Palette.shadow, radius: 2, y: 1)
                                     .matchedGeometryEffect(id: "pill", in: pill)
                             }
                         }
