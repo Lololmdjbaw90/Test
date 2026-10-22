@@ -185,7 +185,7 @@ private struct CompactTabBar: ViewModifier {
     var enabled = true
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            content.tabBarMinimizeBehavior(enabled ? .onScrollDown : .never)
+            content.tabBarMinimizeBehavior(enabled && !RenderingBudget.shared.limited ? .onScrollDown : .never)
         } else {
             content
         }

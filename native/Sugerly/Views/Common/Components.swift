@@ -185,6 +185,7 @@ struct RemoteImage: View {
     var contentMode: ContentMode = .fill
     // Banners: GIFs play at full quality instead of a shrunk copy.
     var live = false
+    var maxPixel: CGFloat = 1400
     @State private var image: UIImage?
     @State private var failed = false
 
@@ -199,7 +200,7 @@ struct RemoteImage: View {
     }
 
     @ViewBuilder private var still: some View {
-        let shown = image ?? (animated ? AnimatedImages.cached(url, maxPixel: 720) : MemoryImages.get(url))
+        let shown = image ?? (animated ? AnimatedImages.cached(url, maxPixel: min(720, maxPixel)) : MemoryImages.get(ImagePipeline.cacheKey(url, maxPixel: maxPixel)))
         Group {
             if let shown {
                 if contentMode == .fill {
@@ -217,14 +218,14 @@ struct RemoteImage: View {
             }
         }
         .modifier(SensitiveCover(url: url))
-        .task(id: url) {
+        .task(id: "\(url)#\(Int(maxPixel))") {
             guard !url.isEmpty else { return }
             if animated {
-                if let loaded = await AnimatedImages.load(url, maxPixel: 720) { withAnimation(.easeOut(duration: 0.2)) { image = loaded } } else { failed = true }
+                if let loaded = await AnimatedImages.load(url, maxPixel: min(720, maxPixel)) { withAnimation(.easeOut(duration: 0.2)) { image = loaded } } else { failed = true }
                 return
             }
-            if MemoryImages.get(url) != nil { image = MemoryImages.get(url); return }
-            let loaded = await ImagePipeline.shared.load(url)
+            if let cached = MemoryImages.get(ImagePipeline.cacheKey(url, maxPixel: maxPixel)) { image = cached; return }
+            let loaded = await ImagePipeline.shared.load(url, maxPixel: maxPixel)
             if let loaded {
                 withAnimation(.easeOut(duration: 0.2)) { image = loaded }
             } else {
@@ -251,7 +252,7 @@ struct ArtImage: View {
     @State private var image: UIImage?
 
     var body: some View {
-        let shown = image ?? (AnimatedImages.looksAnimated(url) ? AnimatedImages.cached(url, maxPixel: maxPixel, maxFrames: maxFrames) : MemoryImages.get(url))
+        let shown = image ?? (AnimatedImages.looksAnimated(url) ? AnimatedImages.cached(url, maxPixel: maxPixel, maxFrames: maxFrames) : MemoryImages.get(ImagePipeline.cacheKey(url, maxPixel: maxPixel)))
         let natural: CGFloat = shown.map { $0.size.width / Swift.max(1, $0.size.height) } ?? 0.8
         let ratio: CGFloat = Swift.min(widest, Swift.max(tallest, natural))
         Color.clear
@@ -260,7 +261,7 @@ struct ArtImage: View {
             .overlay {
                 if let shown {
                     ZStack {
-                        if abs(ratio - natural) > 0.01 && shown.images == nil {
+                        if abs(ratio - natural) > 0.01 && shown.images == nil && !RenderingBudget.shared.limited {
                             Image(uiImage: shown).resizable().scaledToFill().blur(radius: 22).opacity(0.55)
                         }
                         LoadedImage(image: shown, fill: false)
@@ -278,7 +279,7 @@ struct ArtImage: View {
                     if let loaded = await AnimatedImages.load(url, maxPixel: maxPixel, maxFrames: maxFrames, budget: animationBudget) { withAnimation(.easeOut(duration: 0.2)) { image = loaded } }
                     return
                 }
-                if let loaded = await ImagePipeline.shared.load(url) {
+                if let loaded = await ImagePipeline.shared.load(url, maxPixel: maxPixel) {
                     withAnimation(.easeOut(duration: 0.2)) { image = loaded }
                 }
             }

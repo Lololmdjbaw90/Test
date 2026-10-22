@@ -187,7 +187,7 @@ struct ChartsMini: View {
                 Button { player.play(t, in: tracks) } label: {
                     HStack(spacing: 10) {
                         Text("\(i + 1)").font(.jakarta(12, .heavy)).foregroundStyle(i < 3 ? Theme.main : Palette.muted).frame(width: 16)
-                        RemoteImage(url: t.coverURL).frame(width: 36, height: 36).clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        RemoteImage(url: t.coverURL, maxPixel: 128).frame(width: 36, height: 36).clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                         VStack(alignment: .leading, spacing: 1) {
                             Text(t.title).font(.jakarta(13, .bold)).foregroundStyle(Palette.text).lineLimit(1)
                             Text(t.artist).font(.jakarta(11)).foregroundStyle(Palette.muted).lineLimit(1)

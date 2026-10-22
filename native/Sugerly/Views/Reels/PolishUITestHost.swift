@@ -32,6 +32,9 @@ struct PolishUITestHost: View {
 
     var body: some View {
         VStack(spacing: 12) {
+            if ProcessInfo.processInfo.arguments.contains("--record-home-scroll") {
+                Text(RenderingBudget.shared.recording ? "Recording budget active" : "Normal rendering").accessibilityIdentifier("home-recording-state")
+            }
             if !preview {
             Picker("Screen", selection: $tab) {
                 Text("Editor").tag(0)
@@ -100,6 +103,7 @@ struct PolishUITestHost: View {
         .environment(posts).environment(notes).environment(player).environment(chats)
         .environment(VoiceEngine.shared).environment(CallCenter.shared)
         .onAppear {
+            if ProcessInfo.processInfo.arguments.contains("--record-home-scroll") { RenderingBudget.shared.simulateRecording(true) }
             model.me = UserProfile(["id": "fixture-user", "email": "test@example.invalid", "display_name": "Mimi", "coins": 1280, "xp": 340])
             if preview {
                 let args = ProcessInfo.processInfo.arguments

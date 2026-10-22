@@ -283,7 +283,9 @@ struct HomeView: View {
             .padding(.horizontal, sizeClass == .regular ? 24 : 16)
             .padding(.top, 8)
             .padding(.bottom, 28)
-            .sideRails(760)
+        }
+        .transaction { transaction in
+            if RenderingBudget.shared.limited { transaction.animation = nil; transaction.disablesAnimations = true }
         }
         .scrollIndicators(.hidden)
         .appearFade()
@@ -294,6 +296,7 @@ struct HomeView: View {
         }
         .sugarBackground()
         .accessibilityIdentifier("home-feed")
+        .sideRails(760)
         .onAppear { bunny.use(model.me?.email ?? "") }
         .onChange(of: model.me?.email) { _, email in bunny.use(email ?? "") }
         .quietTitle("Home")
@@ -554,7 +557,7 @@ struct HomeView: View {
                             .padding(14)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                     } else {
-                        RemoteImage(url: post.imageURL)
+                        RemoteImage(url: post.imageURL, maxPixel: 640)
                     }
                 }
                 .clipped()
@@ -582,7 +585,7 @@ struct HomeView: View {
                     ForEach(reels) { reel in
                         Button { path.append(.reel(reel)) } label: {
                             ZStack(alignment: .bottomLeading) {
-                                RemoteImage(url: reel.coverURL.isEmpty ? (reel.pictures.first ?? "") : reel.coverURL)
+                                RemoteImage(url: reel.coverURL.isEmpty ? (reel.pictures.first ?? "") : reel.coverURL, maxPixel: 480)
                                 LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .center, endPoint: .bottom)
                                 HStack(spacing: 4) {
                                     Image(systemName: "play.fill")
@@ -627,7 +630,7 @@ struct HomeView: View {
                     ForEach(Array(list)) { art in
                         Button { path.append(.artwork(art)) } label: {
                             ZStack(alignment: .bottomLeading) {
-                                RemoteImage(url: art.imageURL).frame(width: 200, height: 260)
+                                RemoteImage(url: art.imageURL, maxPixel: 640).frame(width: 200, height: 260)
                                 LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .center, endPoint: .bottom)
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(art.title).font(.display(20)).foregroundStyle(.white).lineLimit(1)
@@ -778,7 +781,7 @@ struct TrackRow: View {
             }
             Button { player.play(track, in: list) } label: {
                 ZStack {
-                    RemoteImage(url: track.coverURL)
+                    RemoteImage(url: track.coverURL, maxPixel: 160)
                     if track.coverURL.isEmpty { Theme.gradient }
                     Color.black.opacity(0.25)
                     Image(systemName: player.isPlaying(track) ? "pause.fill" : "play.fill")
