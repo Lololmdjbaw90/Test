@@ -24,3 +24,7 @@ Provider references:
 
 No purchase, licensing agreement, or rights document has been fabricated or
 submitted. Resolve these items before checking Apple's content-rights box.
+
+## First-release restriction — build 162
+
+At the owner’s request, native catalog browsing and provider playback/loading are disabled by a compile-time policy for every account and region. Deezer reel playback/reuse and legacy draft selections are blocked. GIPHY search is hidden; provider URLs are blocked before image/GIF download. Own uploads and local GIF/sticker creation remain. No provider approval is claimed. Policy and editor playback regression checks accompany the build.

@@ -1,24 +1,24 @@
-DRAFT FOR UPDATED REVIEW — physical QA and media permissions are still being completed. Please use the final selected build and completed information when resubmitting.
+Sugerly 1.0 — updated review information
 
 1. Physical-device recording
-Attached: Sugerly-physical-walkthrough.mp4, supplied by the developer on 22 October 2026 (2 minutes 43 seconds). It shows registration, Community/Fanart browsing, reporting, blocking (the menu changes to Unblock around 1:24), and disposable-account deletion. It begins inside the app. A supplement/replacement must show launch from the Home Screen, an explicit login flow and paid/coin-unlocked features. Build 160 is selected for review. Exact iPad Pro model/iPadOS version and physical testing of this updated build are still to be confirmed.
+Attached: Sugerly-physical-walkthrough.mp4 (2:43), recorded on an iPad Pro 12.9-inch (5th generation), reporting iPadOS 27.0. It demonstrates registration, Community/Fanart browsing, reporting, blocking (Unblock appears around 1:24), and disposable-account deletion. It begins with the app already open; it is not a launch-from-Home-Screen recording and does not clearly show login or coin unlocks. It predates this updated build. The device's OS release channel/build was not captured. Updated automated simulator checks do not establish physical-device frame rates.
 
 2. Purpose and audience
-Sugerly is a consumer social app for artists and art enthusiasts aged 13 and older, subject to the higher minimum age applicable locally. Users share artwork and works in progress, receive feedback, discover creators, post reels, join communities and chat. Bunny customization and earned-coin rewards add personal expression.
+Sugerly is a consumer social app for artists and art enthusiasts, aged 13+ or the higher local minimum. People share artwork and works in progress, receive feedback, discover creators, post reels, join communities and chat. Bunny customization and earned-coin rewards support personal expression.
 
 3. Access and main features
-Use the demo account in the private Sign-in Information fields; its credentials were successfully verified on 22 October 2026. Basic browsing does not require sample files or an Apple Music subscription.
-Home shows artwork, posts, discovery and daily rewards. Community contains conversations; Fanart contains artwork. Open an item to like, save or comment; its overflow menu offers Report. A user profile's overflow menu offers Block/Unblock.
-The create (+) menu opens posts, artwork and reels. Import your own photos/video, edit text/timing and preview. Chats and community servers are accessible from navigation/the menu.
-Menu > Customize bunny offers bodies, faces, clothing and colors. Creator items can be listed for earned coins. Menu > MimiPlus offers optional extras unlocked with earned coins. The native app does not sell coins for real money; creator coins are not cash withdrawals.
-Artists require admin portfolio approval before opening commissions. US-storefront commission card checkout uses Stripe; an approved demo artist account is needed to review artist-only screens.
-Deletion: Menu > Settings > Delete account, then confirm using the disposable account password. Keep the reviewer account active.
+Use the demo credentials in the private Sign-in Information fields (verified on 22 October 2026). No sample files or music subscription are required for the core social features.
+Home shows discovery, posts and daily rewards. Community contains conversations; Fanart contains artwork. Open content to like, save or comment. Use its overflow menu to Report; a user's profile menu provides Block/Unblock.
+The create (+) menu opens posts, artwork and reels. Import your own photos/video; edit text/timing and preview. Reels support original video audio and the user's own uploaded tracks. Chats and community servers are accessible from navigation/the menu. The GIF/sticker picker offers user-created media and local creation tools.
+Menu > Customize bunny offers bodies, faces, clothing and colors. Creator items may be listed for earned coins. Menu > MimiPlus has optional earned-coin extras. The native app does not sell coins for real money or provide coin cash withdrawals.
+Artists need admin portfolio approval to open commissions. Commission card checkout uses Stripe and is available only on the US storefront. Artist-only commission setup requires an approved artist account; the ordinary review account is not an admin.
+Account deletion: Menu > Settings > Delete account, then confirm with the disposable account password. Please keep the supplied review account active.
 
 4. External services
-Firebase Authentication, Cloud Firestore, Firebase Storage and Cloud Functions provide accounts, content and backend APIs. Netlify hosts the website/fallback functions. Apple APNs/PushKit and CallKit handle incoming calls; WebRTC transports calls and ReplayKit supports screen broadcasts, with STUN/TURN relay support. Deezer provides music metadata/previews; optional Apple Music playback uses MusicKit; GIPHY provides GIFs/stickers. Stripe processes commission checkout. Google Gemini via Firebase provides applicable moderation/caption assistance. The configured email and relay providers must be confirmed before the final service list is submitted.
+Firebase Authentication, Cloud Firestore, Storage and Cloud Functions provide accounts, content and backend APIs. Netlify hosts the website/fallback functions. APNs/PushKit and CallKit support incoming calls; WebRTC transports calls; ReplayKit supports screen broadcasts. Google/Cloudflare STUN and configured TURN relays support connectivity. Stripe processes eligible commission checkout. Google Gemini via Firebase supports applicable moderation/caption assistance. Optional Apple Music playback uses MusicKit with user authorization/subscription; it does not export Apple Music into reels.
 
-5. Regions
-Core social navigation is the same across supported storefronts. Commission card checkout is enabled only on the United States storefront and is unavailable elsewhere. Music catalogs and provider content can vary by region and subscription. App Store Connect currently selects all 175 countries/regions, including mainland China; regional availability/compliance still needs a final review before release.
+5. Regional differences
+Core social features are consistent across supported storefronts. Stripe commission checkout is restricted to the United States storefront. Optional Apple Music availability depends on Apple's region/subscription support. Deezer and GIPHY are disabled for every account and region in this release.
 
-6. Protected material
-Sugerly is a social/art app, not a regulated professional service. Users must own or have permission for uploads; report/block controls are provided. Bundled fonts have OFL licenses; procedural Earshot UI sounds include an MIT license. These do not establish distribution or synchronization rights for unrelated songs, artwork or GIF exports. Applicable provider authorizations/rights documents remain to be verified before making a rights declaration.
+6. Third-party material
+Deezer catalog browsing, previews, saved catalog playback and reel sound reuse are disabled pending authorization. GIPHY search and provider media loading are disabled pending integration review. Creating a developer key is not represented as a music/GIF rights clearance. Original uploads remain subject to ownership/permission requirements and moderation/reporting. Bundled fonts include OFL licenses; generated Earshot UI effects include an MIT license. Sugerly does not provide a regulated professional service.
