@@ -1,6 +1,6 @@
-# Third-party material inventory — unresolved rights
+# Third-party material inventory â€” unresolved rights
 
-Source audit, 1 October 2026. This inventory identifies integrations; it does
+Source audit, updated 22 October 2026. This inventory identifies integrations; it does
 not establish authorization outside the license files actually present.
 
 | Material | Where it appears | Evidence found / action needed |
@@ -11,6 +11,7 @@ not establish authorization outside the license files actually present.
 | Deezer tracks, album covers and previews | Music, Home, reel sound picker/playback | API URLs and preview playback found. No separate commercial music synchronization/distribution authorization found. Verify the provider's terms and obtain authorization for any use beyond permitted previews; otherwise remove/restrict that use. Selecting a chart song for a reel needs particular attention. |
 | Apple Music songs and artwork | Optional MusicKit playback | MusicKit is used with user authorization/subscription. Verify Apple Music identity/developer terms; this does not authorize exporting songs into user videos. |
 | GIPHY GIFs/stickers | Chats, comments, profile and reel editor | API integration and textual attribution found. Confirm production approval, required logo/source attribution, and that editing/export use is permitted; API access alone is not unlimited redistribution rights. |
+| UI effects rendered with Earshot 0.3.0 | Reward, likes, messages and switches | Generated offline from procedural forge bank entries. MIT license bundled in `native/Sugerly/Resources/Sounds/Earshot-LICENSE.txt`; generation source and sound IDs documented. This does not clear unrelated songs or artwork. |
 | User art, fanart, photos, music and videos | Community, Fanart, reels, chats | Upload ownership clauses and report/block controls exist. No per-upload licenses can be proved from repository source. Use owned original content in review screenshots and demo accounts. |
 | Logos, icons and other bundled graphics | Splash, Home, profile assets, App Store images | Asset files exist; verify their provenance and retain any author permissions. Do not infer ownership solely from files being bundled. |
 

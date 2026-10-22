@@ -164,6 +164,7 @@ private enum PerformanceFixture {
               let animated = AnimatedImages.decode(data as Data, maxPixel: 16, maxFrames: 2), (animated.images?.count ?? 0) >= 2 else { return "GIF playback policy failed" }
         let links = UserProfile(["website": "legacy.example.com", "websites": ["example.com", "https://portfolio.example.com", "javascript://bad.com", "example.com"]])
         guard links.profileLinks.count == 2, ProfileLinks.url("javascript://bad.com") == nil else { return "Profile link validation failed" }
+        guard ["toggle", "toggleOff", "like", "send", "receive", "chime", "error", "reward"].allSatisfy({ TapSound.bundled($0) != nil }) else { return "Bundled sounds missing" }
         guard !Motion.ambient else { return "Decorative animations still running" }
         guard ImagePipeline.cacheKey("fixture", maxPixel: 96) != ImagePipeline.cacheKey("fixture") else { return "Thumbnail cache collision" }
         return "Performance fixtures passed"

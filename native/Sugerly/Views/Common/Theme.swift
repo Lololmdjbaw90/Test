@@ -1010,7 +1010,7 @@ struct RewardBurst: View {
                 let t = timeline.date.timeIntervalSince(start)
                 guard t >= 0, t < 1.3 else { return }
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
-                let reach = min(size.width, size.height) / 2
+                let reach = max(0, min(size.width, size.height) / 2 - 20)
 
                 var glow = context
                 glow.opacity = 0.55 * max(0, 1 - t / 0.9)
