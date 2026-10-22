@@ -283,6 +283,8 @@ struct HomeView: View {
             .padding(.horizontal, sizeClass == .regular ? 24 : 16)
             .padding(.top, 8)
             .padding(.bottom, 28)
+            .frame(maxWidth: 800)
+            .frame(maxWidth: .infinity)
         }
         .transaction { transaction in
             if RenderingBudget.shared.limited { transaction.animation = nil; transaction.disablesAnimations = true }
@@ -296,7 +298,6 @@ struct HomeView: View {
         }
         .sugarBackground()
         .accessibilityIdentifier("home-feed")
-        .sideRails(760)
         .onAppear { bunny.use(model.me?.email ?? "") }
         .onChange(of: model.me?.email) { _, email in bunny.use(email ?? "") }
         .quietTitle("Home")
