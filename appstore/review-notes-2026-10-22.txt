@@ -1,0 +1,30 @@
+DRAFT — complete the three fields in brackets and resolve the rights/QA checks before sending. Put the completed text in both the App Review reply and App Review Information > Notes.
+
+1. Physical-device demonstration
+Recording: [ATTACH RECORDING OR INSERT ACCESSIBLE LINK]
+Device/OS: [EXACT IPAD MODEL AND IPADOS VERSION]
+App version/build: [FINAL PHYSICALLY TESTED BUILD]
+The supplied 22 October recording demonstrates signup, social browsing, reporting, blocking and account deletion. A replacement/supplement is needed to clearly show launch from the Home Screen, login and paid/coin-unlocked features on the final selected build. Do not assert those have been recorded until they have.
+
+2. Purpose and audience
+Sugerly is a consumer social app for artists and art enthusiasts aged 13 and older, subject to the higher minimum age applicable locally. Users share artwork and work in progress, receive feedback, discover creators, post reels, join communities and chat. Bunny customization and earned-coin rewards add personal expression.
+
+3. Access and main features
+Use the demo credentials in the private Sign-in Information fields. Verify those credentials immediately before submission. No sample files or Apple Music subscription are needed for basic browsing.
+Home: current artwork, posts, rewards and discovery.
+Community/Fanart: open a post or artwork to like, save or comment. Its overflow menu opens Report. A user's profile overflow menu offers Block/Unblock.
+Create (+): create posts, artwork or reels; import your own photo/video, edit text/timing and preview.
+Chats: open an existing conversation or select a person to start one. Servers offer community channels.
+Menu > Customize bunny: choose a body, face, clothes and colors. Creator items can be listed for earned coins.
+Menu > MimiPlus: optional extras unlocked with earned coins; coins have no cash withdrawal and are not sold for real money in the native app.
+Commissions: artists must receive admin portfolio approval before opening commissions. Card checkout uses Stripe on the US storefront. Review access to artist-only screens needs a separately approved demo artist account if those screens are being demonstrated.
+Delete account: Menu > Settings > Delete account; confirm using the disposable account's password. Do not delete the review account.
+
+4. External services
+Firebase Authentication, Cloud Firestore, Firebase Storage and Cloud Functions provide accounts, stored content and backend APIs. Netlify hosts the website and fallback functions. Apple APNs/PushKit and CallKit handle call notifications; WebRTC transports calls, ReplayKit supports screen broadcasts, with STUN/TURN relay support. Deezer supplies track metadata/previews; Apple Music/MusicKit supports optional authorized playback; GIPHY supplies GIFs/stickers. Stripe processes commission checkout. Google Gemini via Firebase is used for applicable moderation/caption assistance. Confirm the configured email and TURN providers before describing either as active.
+
+5. Regions
+Core social features use the same navigation across supported storefronts. Commission card checkout is enabled only on the US storefront; it is unavailable elsewhere. Music catalogs and provider content may vary by region and subscription. Verify the actual country availability in App Store Connect; source code does not prove that selection.
+
+6. Protected material
+Sugerly is a social/art app, not a regulated professional service. Users must own or have permission to upload their content, and report/block controls are available. Bundled fonts have OFL licenses, and procedural Earshot UI sounds include the MIT license. Those licenses do not establish rights to third-party songs, artwork or GIF exports. Attach any applicable provider authorizations/rights documents; do not claim these are secured without evidence.
