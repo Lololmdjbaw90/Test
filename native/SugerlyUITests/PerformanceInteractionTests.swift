@@ -1,6 +1,16 @@
 import XCTest
 
 final class PerformanceInteractionTests: XCTestCase {
+    func testFirstReleaseBlocksCatalogProvidersAndPreservesOwnMedia() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--polish-ui-test", "--check-provider-policy"]
+        app.launch()
+        let result = app.staticTexts["provider-policy"]
+        XCTAssertTrue(result.waitForExistence(timeout: 5))
+        XCTAssertEqual(result.label, "Provider release policy passed")
+    }
+
+
     func testProductionMotionPolicyAndHomeScrolling() {
         continueAfterFailure = false
         let app = XCUIApplication()

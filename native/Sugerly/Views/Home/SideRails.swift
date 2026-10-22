@@ -62,7 +62,7 @@ struct SideRail: View {
             case .explore:
                 PaletteOfTheDay()
                 ArtTipCard()
-                ChartsMini()
+                Group { if ProviderMedia.catalogMusicEnabled { ChartsMini() } }
             case .you:
                 YouCard()
                 InviteCard(compact: true)
@@ -71,7 +71,7 @@ struct SideRail: View {
                 InviteCard(compact: true)
                 PaletteOfTheDay()
                 ArtTipCard()
-                ChartsMini()
+                Group { if ProviderMedia.catalogMusicEnabled { ChartsMini() } }
             }
         }
     }
@@ -262,7 +262,7 @@ struct InlineExtras: View {
                     ArtTipCard()
                 case .bottom:
                     InviteCard()
-                    ChartsMini()
+                    Group { if ProviderMedia.catalogMusicEnabled { ChartsMini() } }
                 }
             }
         }

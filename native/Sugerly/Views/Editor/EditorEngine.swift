@@ -240,7 +240,8 @@ final class EditorPlayer {
 
     func setOriginalVolume(_ volume: Double) { av.volume = Float(volume) }
 
-    func setMusic(_ track: Track?, volume: Double) {
+    func setMusic(_ selection: Track?, volume: Double) {
+        let track = selection.flatMap { ProviderMedia.allows($0) ? $0 : nil }
         music?.pause()
         music = nil
         guard let track, let url = URL(string: track.audioURL) else { return }

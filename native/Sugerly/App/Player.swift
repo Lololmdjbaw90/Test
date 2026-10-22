@@ -54,7 +54,8 @@ final class Player {
     func isPlaying(_ t: Track) -> Bool { isCurrent(t) && playing }
 
     func play(_ t: Track, in list: [Track]) {
-        queue = list
+        guard ProviderMedia.allows(t) else { return }
+        queue = list.filter { ProviderMedia.allows($0) }
         if isCurrent(t), player != nil { toggle(); return }
         start(t)
     }
@@ -67,6 +68,7 @@ final class Player {
     }
 
     private func start(_ t: Track) {
+        guard ProviderMedia.allows(t) else { return }
         guard let url = URL(string: t.audioURL), !t.audioURL.isEmpty else { return }
         AppleMusic.shared.stop()
         activateSession()
@@ -112,6 +114,7 @@ final class Player {
     }
 
     private func recover(_ t: Track) async {
+        guard ProviderMedia.allows(t) else { return }
         guard isCurrent(t), t.id.hasPrefix("deezer_"), !refreshed.contains(t.id) else { pause(); return }
         refreshed.insert(t.id)
         let id = t.id.replacingOccurrences(of: "deezer_", with: "")
