@@ -330,9 +330,21 @@ private struct HomeSideRail: View {
 
 private extension View {
     func homeNote(_ color: Color) -> some View {
-        padding(18)
+        modifier(HomeNoteStyle(color: color))
+    }
+}
+
+private struct HomeNoteStyle: ViewModifier {
+    let color: Color
+    @Environment(\.colorScheme) private var scheme
+    func body(content: Content) -> some View {
+        content.padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(color, in: RoundedRectangle(cornerRadius: 25, style: .continuous))
+            .background {
+                let shape = RoundedRectangle(cornerRadius: 25, style: .continuous)
+                shape.fill(Palette.surface2)
+                shape.fill(color.opacity(scheme == .dark ? 0.18 : 1))
+            }
             .overlay(RoundedRectangle(cornerRadius: 25).strokeBorder(Theme.main.opacity(0.12), lineWidth: 1))
     }
 }
