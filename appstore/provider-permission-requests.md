@@ -1,6 +1,6 @@
 # Provider permission requests — prepared 22 October 2026
 
-These are requests for clarification/approval, not licenses. Nothing below has been sent. Do not sign an agreement, accept a price, or claim approval based on this document.
+These are requests for clarification/approval, not licenses. The Deezer inquiry was sent on 22 October 2026 after owner authorization; the form confirmed successful delivery. Reply address: Sugerly’s published support inbox. No approval or license has been received. The GIPHY request has not been sent. Do not sign an agreement, accept a price, or claim approval based on this document.
 
 ## GIPHY
 
@@ -50,7 +50,7 @@ Keep the agreement/approval, legal entity/account and app identifiers, approved 
 
 ## Findings verified in source
 
-- Native Giphy.key has a hardcoded fallback whose ownership was not established by repository records; the website uses an owner-supplied configuration/environment key. A shared key cannot be assumed to satisfy current platform/placement rules.
+- The owner signed into GIPHY on 22 October 2026. Its existing app, named Sugarly (app ID 664372), contains the same key as the native fallback. Ownership is now confirmed. The dashboard identifies it as a free beta iOS SDK key, while this client uses direct REST API requests. REST API setup, attribution/caching and placement requirements remain under review.
 - GifItem currently discards creator/source metadata, while the picker shows text-only branding.
 - Native image/GIF infrastructure caches media; the provider documentation limits caching to approved integrations.
 - Deezer chart previews are selectable for reels and expire/refresh by track ID. No synchronization license was found in the repository.
