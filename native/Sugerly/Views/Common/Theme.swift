@@ -455,22 +455,23 @@ extension Font.TextStyle {
 }
 
 extension UIFont {
-    /// The top bars' titles: the iPhone's own letters, semibold.
+    /// Rounded navigation lettering, including native back-button titles.
     static func rounded(_ size: CGFloat, _ weight: UIFont.Weight = .semibold) -> UIFont {
-        UIFont.systemFont(ofSize: size * 0.9, weight: weight == .heavy || weight == .black ? .semibold : weight)
+        let base = UIFont.systemFont(ofSize: size * 0.9, weight: weight == .heavy || weight == .black ? .semibold : weight)
+        guard let descriptor = base.fontDescriptor.withDesign(.rounded) else { return base }
+        return UIFont(descriptor: descriptor, size: base.pointSize)
     }
 }
 
 extension Font {
-    // Headings: the iPhone's own letters, bold but not shouty, a little
-    // smaller than the size asked for (the old fonts ran large). Grows with
-    // the text size picked in iPhone Settings.
+    // Bubblegum headings use the bundled OFL font. Keep the established
+    // sizing so cards and buttons retain their compact layout.
     static func display(_ size: CGFloat, relativeTo style: Font.TextStyle = .title) -> Font {
-        .system(size: grown(size * 0.82, style, limit: 1.12), weight: .bold)
+        .custom("BubblegumSans-Regular", fixedSize: grown(size * 0.82, style, limit: 1.12))
     }
-    // Small accents (greetings): the same letters, a touch lighter.
+    // A matching playful accent for greetings.
     static func cute(_ size: CGFloat, relativeTo style: Font.TextStyle = .title) -> Font {
-        .system(size: grown(size * 0.8, style, limit: 1.12), weight: .semibold)
+        .custom("BubblegumSans-Regular", fixedSize: grown(size * 0.8, style, limit: 1.12))
     }
     // Text grows with the iPhone's text size, but only so far: past that,
     // labels, chips and buttons got cut off ("45 c…") or pushed off the
@@ -478,9 +479,8 @@ extension Font {
     static func grown(_ size: CGFloat, _ style: Font.TextStyle, limit: CGFloat = 1.15) -> CGFloat {
         min(UIFontMetrics(forTextStyle: style.uiKit).scaledValue(for: size), (size * limit).rounded())
     }
-    // Everything else: the iPhone's own text font. (Named after the old
-    // font so every screen picks it up.) Extra-heavy weights are calmed to
-    // semibold / bold.
+    // Rounded, readable body lettering across chats, forms, labels and buttons.
+    // The shared helper keeps existing screens consistent.
     static func jakarta(_ size: CGFloat, _ weight: Font.Weight = .regular, relativeTo style: Font.TextStyle = .body) -> Font {
         let calm: Font.Weight
         switch weight {
@@ -488,7 +488,7 @@ extension Font {
         case .bold: calm = .semibold
         default: calm = weight
         }
-        return .system(size: grown(size, style), weight: calm)
+        return .system(size: grown(size, style), weight: calm, design: .rounded)
     }
 }
 
