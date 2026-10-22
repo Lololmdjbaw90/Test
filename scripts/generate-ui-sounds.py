@@ -28,6 +28,7 @@ def main():
             n = min(len(wave), int(cap * 48000))
             wave = wave[:n]
             fade = np.minimum(1, np.arange(n - 1, -1, -1) / 2400)
+            fade *= np.exp(-(8 if name == "chime" else 6) * np.arange(n) / 48000)
             wave = wave * (fade[:, None] if wave.ndim == 2 else fade)
         assert np.isfinite(wave).all() and np.max(np.abs(wave)) < .3
         sf.write(OUT / f"{name}.wav", wave, 48000, subtype="PCM_16")
