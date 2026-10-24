@@ -185,7 +185,7 @@ enum ReelAudio {
 // the rest of the app: a deep night version of it behind and around the
 // videos (never plain black), and the same night as soft see-through glass
 // for the buttons. Gradients run top to bottom.
-enum ReelLook {
+enum ReelTone {
     static var night: Color { Color(hex: Palette.mix(Theme.partnerHex, 0x000000, 0.8)) }
     static var dusk: Color { Color(hex: Palette.mix(Theme.mainHex, 0x000000, 0.62)) }
     static var glass: Color { night.opacity(0.42) }
@@ -211,7 +211,7 @@ private struct ReelTabBar: ViewModifier {
         } else {
             content
                 .toolbarBackground(.visible, for: .tabBar)
-                .toolbarBackground(ReelLook.night.opacity(0.7), for: .tabBar)
+                .toolbarBackground(ReelTone.night.opacity(0.7), for: .tabBar)
                 .toolbarColorScheme(.dark, for: .tabBar)
         }
     }
@@ -255,7 +255,7 @@ struct ReelsView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            ReelLook.backdrop.ignoresSafeArea()
+            ReelTone.backdrop.ignoresSafeArea()
             if loading && reels.isEmpty {
                 ReelSkeleton().transition(.opacity)
             } else if shown.isEmpty {
@@ -291,7 +291,7 @@ struct ReelsView: View {
                                     if wide {
                                         RemoteImage(url: reel.coverURL.isEmpty ? (reel.pictures.first ?? "") : reel.coverURL)
                                             .blur(radius: 40)
-                                            .overlay(ReelLook.night.opacity(0.5))
+                                            .overlay(ReelTone.night.opacity(0.5))
                                     }
                                     ReelPage(reel: reel, active: visible && activeId == reel.id, near: abs(i - activeIndex) <= 1, path: $path,
                                              insets: pageInsets, loadContent: initialReels == nil,
@@ -410,7 +410,7 @@ struct ReelsView: View {
                 Button { withMotion(Motion.standard) { feed = id; activeId = shown.first?.id } } label: {
                     Text(title)
                         .font(.jakarta(15, .heavy))
-                        .foregroundStyle(feed == id ? ReelLook.ink : Color.white.opacity(0.88))
+                        .foregroundStyle(feed == id ? ReelTone.ink : Color.white.opacity(0.88))
                         .padding(.horizontal, 16)
                         .frame(height: 34)
                         .background { feedBubble(feed == id) }
@@ -421,7 +421,7 @@ struct ReelsView: View {
             }
         }
         .padding(3)
-        .background(ReelLook.glass, in: Capsule())
+        .background(ReelTone.glass, in: Capsule())
         .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
     }
 
@@ -451,7 +451,7 @@ struct ReelsView: View {
             }
             .foregroundStyle(.white)
             .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 14).frame(height: 34)
-            .background(ReelLook.glass, in: Capsule())
+            .background(ReelTone.glass, in: Capsule())
             .opacity(refreshing ? 1 : Double(progress))
             .scaleEffect(refreshing ? 1 : 0.85 + 0.15 * progress)
             .padding(.top, 8)
@@ -677,7 +677,7 @@ struct ReelPage: View {
 
     var body: some View {
         ZStack {
-            ReelLook.backdrop
+            ReelTone.backdrop
             GeometryReader { frame in
                 // The reel's 9:16 stage, with its text stickers on it.
                 let stage = Self.stage(frame.size, fill: fillsScreen)
@@ -703,7 +703,7 @@ struct ReelPage: View {
             )
             .onLongPressGesture(minimumDuration: 0.45) { sharing = true }
             .accessibilityIdentifier("reel-media")
-            ReelLook.shade
+            ReelTone.shade
                 .allowsHitTesting(false)
             if paused {
                 Image(systemName: "play.fill").font(.system(size: 60)).foregroundStyle(.white.opacity(0.85)).shadow(radius: 10)
@@ -717,7 +717,7 @@ struct ReelPage: View {
                         Spacer()
                         Button { withMotion(Motion.standard) { clearMode = false } } label: {
                             Label("Show", systemImage: "eye.fill").font(.jakarta(13, .bold)).foregroundStyle(.white)
-                                .padding(.horizontal, 14).frame(height: 36).background(ReelLook.glass, in: Capsule())
+                                .padding(.horizontal, 14).frame(height: 36).background(ReelTone.glass, in: Capsule())
                         }
                         .padding(.trailing, 16).padding(.top, insets.top + (showBack ? 8 : 50))
                     }
@@ -825,7 +825,7 @@ struct ReelPage: View {
                             } label: { Label("Try again", systemImage: "arrow.clockwise") }
                                 .buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
                         }
-                        .padding(14).background(ReelLook.night.opacity(0.75), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .padding(14).background(ReelTone.night.opacity(0.75), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     }
                 }
                 .ignoresSafeArea()
@@ -853,7 +853,7 @@ struct ReelPage: View {
                 HStack {
                     Button { if path.isEmpty { dismiss() } else { path.removeLast() } } label: {
                         Image(systemName: "chevron.left").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
-                            .frame(width: 44, height: 44).background(ReelLook.glass, in: Circle())
+                            .frame(width: 44, height: 44).background(ReelTone.glass, in: Circle())
                             .overlay(Circle().strokeBorder(.white.opacity(0.18), lineWidth: 1))
                     }
                     Spacer()
@@ -866,7 +866,7 @@ struct ReelPage: View {
                     Label("Tap for sound", systemImage: "speaker.slash.fill")
                         .font(.jakarta(14, .bold)).foregroundStyle(.white)
                         .padding(.horizontal, 16).frame(height: 38)
-                        .background(ReelLook.glass, in: Capsule())
+                        .background(ReelTone.glass, in: Capsule())
                         .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
                 }
                 .buttonStyle(BouncyStyle())
@@ -919,7 +919,7 @@ struct ReelPage: View {
                 Label(relation, systemImage: "sparkles")
                     .font(.jakarta(12, .bold)).foregroundStyle(.white)
                     .padding(.horizontal, 12).frame(height: 28)
-                    .background(ReelLook.glass, in: Capsule())
+                    .background(ReelTone.glass, in: Capsule())
                     .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
             }
             if !reel.caption.isEmpty {
@@ -943,12 +943,12 @@ struct ReelPage: View {
                     }
                     .font(.jakarta(14, .medium)).foregroundStyle(.white.opacity(0.95))
                     .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(ReelLook.glass, in: Capsule())
+                    .background(ReelTone.glass, in: Capsule())
                 }
                 .buttonStyle(BouncyStyle(scale: 0.95))
             }
         }
-        .shadow(color: ReelLook.night.opacity(0.5), radius: 3, y: 1)
+        .shadow(color: ReelTone.night.opacity(0.5), radius: 3, y: 1)
     }
 
     private var actions: some View {
@@ -959,7 +959,7 @@ struct ReelPage: View {
                     .overlay(alignment: .bottom) {
                         if (!following || justFollowed) && reel.authorEmail != me {
                             Image(systemName: justFollowed ? "checkmark" : "plus").font(.system(size: 11, weight: .heavy))
-                                .foregroundStyle(justFollowed ? ReelLook.ink : .white)
+                                .foregroundStyle(justFollowed ? ReelTone.ink : .white)
                                 .frame(width: 22, height: 22)
                                 .background(justFollowed ? AnyShapeStyle(Color.white) : AnyShapeStyle(Theme.gradient), in: Circle())
                                 .overlay(Circle().strokeBorder(.white, lineWidth: 1.5))
@@ -1002,7 +1002,7 @@ struct ReelPage: View {
                 bubbleLabel(icon, tint: tint)
                 if let count {
                     Text("\(count)").font(.jakarta(13, .heavy)).foregroundStyle(.white)
-                        .shadow(color: ReelLook.night.opacity(0.6), radius: 2, y: 1)
+                        .shadow(color: ReelTone.night.opacity(0.6), radius: 2, y: 1)
                         .contentTransition(.numericText())
                 }
             }
@@ -1018,7 +1018,7 @@ struct ReelPage: View {
             .foregroundStyle(.white)
             .symbolEffect(.bounce, value: tint)
             .frame(width: 48, height: 48)
-            .background(tint ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(ReelLook.glass), in: Circle())
+            .background(tint ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(ReelTone.glass), in: Circle())
             .overlay(Circle().strokeBorder(.white.opacity(tint ? 0.4 : 0.16), lineWidth: 1))
     }
 
@@ -1241,11 +1241,11 @@ struct SingleReelView: View {
             let card: CGFloat = Swift.min(column, room * 9 / 16)
             let lift: CGFloat = wide ? (safe.top - safe.bottom) / 2 : 0
             ZStack {
-                ReelLook.backdrop
+                ReelTone.backdrop
                 if wide {
                     RemoteImage(url: reel.coverURL.isEmpty ? (reel.pictures.first ?? "") : reel.coverURL)
                         .blur(radius: 40)
-                        .overlay(ReelLook.night.opacity(0.5))
+                        .overlay(ReelTone.night.opacity(0.5))
                 }
                 ReelPage(reel: reel, active: true, path: $path, showBack: false, insets: wide ? EdgeInsets() : safe, loadContent: loadContent)
                     .frame(width: card, height: room)
@@ -1262,14 +1262,14 @@ struct SingleReelView: View {
             } label: {
                 Image(systemName: "chevron.left").font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(.white).frame(width: 44, height: 44)
-                    .background(ReelLook.glass, in: Circle())
+                    .background(ReelTone.glass, in: Circle())
                     .overlay(Circle().strokeBorder(.white.opacity(0.18), lineWidth: 1))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Back")
             .padding(.leading, 12).padding(.top, 6)
         }
-        .background(ReelLook.backdrop.ignoresSafeArea())
+        .background(ReelTone.backdrop.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { music.setSuppressed("single-reel", active: true) }
         .onDisappear { music.setSuppressed("single-reel", active: false) }
@@ -1301,7 +1301,7 @@ struct MusicDisc: View {
     var body: some View {
         Avatar(url: picture, name: name, size: 30)
             .padding(10)
-            .background(Circle().fill(LinearGradient(colors: [ReelLook.dusk, ReelLook.night], startPoint: .top, endPoint: .bottom)))
+            .background(Circle().fill(LinearGradient(colors: [ReelTone.dusk, ReelTone.night], startPoint: .top, endPoint: .bottom)))
             .overlay(Circle().strokeBorder(.white.opacity(0.2), lineWidth: 1))
             .rotationEffect(.degrees(angle))
             .task(id: spinning) {
