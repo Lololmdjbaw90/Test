@@ -399,6 +399,124 @@ struct CoinIcon: View {
 @Observable
 private final class NitroPlanSelection {
     var plan = NitroStyle.plans[0].id
+    var chosen: NitroStyle.Plan { NitroStyle.plans.first { $0.id == plan } ?? NitroStyle.plans[0] }
+}
+
+private let nitroViolet = Color(hex: 0x8B5CF6)
+
+// The plan cards: a plain tap switches instantly (no springs, no changing
+// shadows), and only these and the buy bar redraw.
+private struct NitroPlanCards: View {
+    let selection: NitroPlanSelection
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ForEach(NitroStyle.plans) { p in card(p) }
+        }
+    }
+
+    private func card(_ p: NitroStyle.Plan) -> some View {
+        let on = selection.plan == p.id
+        let best = p.days > 30
+        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+        return Button {
+            selection.plan = p.id
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(p.title).font(.jakarta(15, .bold))
+                    Spacer(minLength: 4)
+                    Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(on ? nitroViolet : Palette.borderStrong)
+                }
+                HStack(alignment: .center, spacing: 6) {
+                    CoinIcon(size: 22)
+                    Text("\(p.cost)")
+                        .font(.custom("LilitaOne", size: 30, relativeTo: .title))
+                        .monospacedDigit()
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                }
+                Text(p.note).font(.jakarta(12, .bold)).foregroundStyle(best ? Palette.success : Palette.muted)
+            }
+            .foregroundStyle(Palette.text)
+            .padding(14)
+            .padding(.top, best ? 4 : 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(shape.fill(Palette.surface).overlay(shape.fill(nitroViolet.opacity(on ? 0.08 : 0))))
+            .overlay(shape.strokeBorder(on ? nitroViolet : Palette.border, lineWidth: on ? 2.5 : 1))
+            .overlay(alignment: .top) {
+                if best {
+                    Text("BEST VALUE")
+                        .font(.jakarta(10, .heavy)).tracking(0.5)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10).frame(height: 20)
+                        .background(nitroViolet, in: Capsule())
+                        .offset(y: -10)
+                }
+            }
+            .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("mimiplus-plan-\(p.id)")
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}
+
+// The buy button (and how many coins are still needed), always at the bottom.
+private struct NitroBuyBar: View {
+    let selection: NitroPlanSelection
+    let coins: Int
+    let nitro: Bool
+    let busy: Bool
+    var buy: () -> Void
+
+    var body: some View {
+        let chosen = selection.chosen
+        VStack(spacing: 10) {
+            if coins < chosen.cost { progress(chosen) }
+            Button(action: buy) {
+                HStack(spacing: 8) {
+                    if busy { ProgressView().tint(.white) } else if coins < chosen.cost {
+                        Text("You need \(chosen.cost - coins) more coins")
+                    } else {
+                        CoinIcon(size: 20)
+                        Text("\(nitro ? "Add \(chosen.title)" : "Get MimiPlus") · \(chosen.cost)")
+                    }
+                }
+            }
+            .buttonStyle(GradientButtonStyle(height: 52))
+            .accessibilityIdentifier("mimiplus-purchase")
+            .disabled(busy || coins < chosen.cost)
+            .opacity(coins < chosen.cost ? 0.55 : 1)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .frame(maxWidth: 640)
+        .frame(maxWidth: .infinity)
+        .background {
+            Rectangle().fill(Palette.bg)
+                .overlay(alignment: .top) { Rectangle().fill(Palette.border).frame(height: 1) }
+                .ignoresSafeArea(edges: .bottom)
+        }
+    }
+
+    private func progress(_ chosen: NitroStyle.Plan) -> some View {
+        let part = min(1, Double(coins) / Double(max(1, chosen.cost)))
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("\(coins) / \(chosen.cost) coins").font(.jakarta(13, .semibold)).foregroundStyle(Palette.text).monospacedDigit()
+                Spacer()
+                Text("\(Int(part * 100))%").font(.jakarta(12, .bold)).foregroundStyle(nitroViolet).monospacedDigit()
+            }
+            Capsule().fill(Palette.surface2)
+                .frame(height: 8)
+                .overlay(alignment: .leading) {
+                    Capsule().fill(nitroViolet).scaleEffect(x: max(0.04, part), anchor: .leading)
+                }
+        }
+    }
 }
 
 private struct NitroSelectionSection<Content: View>: View {
@@ -418,7 +536,9 @@ struct NitroShopView: View {
     private var me: UserProfile? { model.me }
     private var coins: Int { me?.coins ?? 0 }
     private var nitro: Bool { me?.isNitro ?? false }
-    private var chosen: NitroStyle.Plan { NitroStyle.plans.first { $0.id == selection.plan } ?? NitroStyle.plans[0] }
+    // Read only when buying (not while drawing), so switching plans redraws
+    // just the plan cards and the buy bar.
+    private var chosen: NitroStyle.Plan { selection.chosen }
     private static let violet = Color(hex: 0x8B5CF6)
 
     private struct Perk {
@@ -442,7 +562,7 @@ struct NitroShopView: View {
                     hero
                     if nitro { activeCard }
                     preview
-                    NitroSelectionSection { plans }
+                    plans
                     perksGrid
                     walletLink
                 }
@@ -451,7 +571,9 @@ struct NitroShopView: View {
                 .frame(maxWidth: 640)
                 .frame(maxWidth: .infinity)
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) { NitroSelectionSection { buyBar } }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                NitroBuyBar(selection: selection, coins: coins, nitro: nitro, busy: busy == "nitro") { buyNitro() }
+            }
             .sugarBackground()
             .overlay { ConfettiBurst(trigger: burst) }
             .navigationTitle("MimiPlus")
@@ -587,115 +709,12 @@ struct NitroShopView: View {
         VStack(alignment: .leading, spacing: 10) {
             ListHeader(title: nitro ? "ADD MORE TIME" : "PICK A PLAN").padding(.leading, 6)
             HStack(spacing: 12) {
-                ForEach(NitroStyle.plans) { p in planCard(p) }
+                NitroPlanCards(selection: selection)
             }
             .padding(.top, 8)
             Text("It never renews by itself. When the time runs out, your profile simply goes back to the free looks.")
                 .font(.jakarta(12)).foregroundStyle(Palette.muted)
                 .padding(.horizontal, 6)
-        }
-    }
-
-    private func planCard(_ p: NitroStyle.Plan) -> some View {
-        let on = selection.plan == p.id
-        let best = p.days > 30
-        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
-        return Button {
-            guard selection.plan != p.id else { return }
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) { selection.plan = p.id }
-        } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text(p.title).font(.jakarta(15, .bold))
-                    Spacer(minLength: 4)
-                    Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(on ? Self.violet : Palette.borderStrong)
-                        .contentTransition(.symbolEffect(.replace))
-                }
-                HStack(alignment: .center, spacing: 6) {
-                    CoinIcon(size: 22)
-                    Text("\(p.cost)")
-                        .font(.custom("LilitaOne", size: 30, relativeTo: .title))
-                        .monospacedDigit()
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                }
-                Text(p.note).font(.jakarta(12, .bold)).foregroundStyle(best ? Palette.success : Palette.muted)
-            }
-            .foregroundStyle(Palette.text)
-            .padding(14)
-            .padding(.top, best ? 4 : 0)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(shape.fill(Palette.surface).overlay(shape.fill(Self.violet.opacity(on ? 0.07 : 0))))
-            .overlay(shape.strokeBorder(on ? AnyShapeStyle(NitroStyle.gradient) : AnyShapeStyle(Palette.border), lineWidth: on ? 2.5 : 1))
-            .shadow(color: on ? Self.violet.opacity(0.22) : Palette.shadow, radius: on ? 12 : 6, y: 4)
-            .overlay(alignment: .top) {
-                if best {
-                    Text("BEST VALUE")
-                        .font(.jakarta(10, .heavy)).tracking(0.5)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10).frame(height: 20)
-                        .background(NitroStyle.gradient, in: Capsule())
-                        .offset(y: -10)
-                }
-            }
-        }
-        .buttonStyle(BouncyStyle(scale: 0.96))
-        .accessibilityIdentifier("mimiplus-plan-\(p.id)")
-        .accessibilityAddTraits(on ? .isSelected : [])
-    }
-
-    // The button stays at the bottom while you look around.
-    private var buyBar: some View {
-        VStack(spacing: 10) {
-            if coins < chosen.cost { progress.transition(.opacity) }
-            Button { buyNitro() } label: {
-                HStack(spacing: 8) {
-                    if busy == "nitro" { ProgressView().tint(.white) } else if coins < chosen.cost {
-                        Text("You need \(chosen.cost - coins) more coins")
-                    } else {
-                        CoinIcon(size: 20)
-                        Text("\(nitro ? "Add \(chosen.title)" : "Get MimiPlus") · \(chosen.cost)")
-                    }
-                }
-                .contentTransition(.numericText())
-            }
-            .buttonStyle(GradientButtonStyle(height: 52))
-            .accessibilityIdentifier("mimiplus-purchase")
-            .disabled(busy != nil || coins < chosen.cost)
-            .opacity(coins < chosen.cost ? 0.55 : 1)
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
-        .frame(maxWidth: 640)
-        .frame(maxWidth: .infinity)
-        .background {
-            Rectangle().fill(.ultraThinMaterial)
-                .overlay(Palette.bg.opacity(0.55))
-                .overlay(alignment: .top) { Rectangle().fill(Palette.border).frame(height: 1) }
-                .ignoresSafeArea(edges: .bottom)
-        }
-    }
-
-    private var progress: some View {
-        let part = min(1, Double(coins) / Double(max(1, chosen.cost)))
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("\(coins) / \(chosen.cost) coins").font(.jakarta(13, .semibold)).foregroundStyle(Palette.text).monospacedDigit()
-                    .contentTransition(.numericText())
-                Spacer()
-                Text("\(Int(part * 100))%").font(.jakarta(12, .bold)).foregroundStyle(Self.violet).monospacedDigit()
-            }
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Palette.surface2)
-                    Capsule().fill(NitroStyle.gradient).frame(width: max(8, geo.size.width * part))
-                }
-            }
-            .frame(height: 8)
         }
     }
 

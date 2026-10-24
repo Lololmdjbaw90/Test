@@ -38,7 +38,7 @@ private enum StickerTitleArt {
     }()
 
     static func image(_ title: String, accent: UInt32) -> UIImage {
-        let key = "\(title)-\(accent)" as NSString
+        let key = "v2-\(title)-\(accent)" as NSString
         if let cached = cache.object(forKey: key) { return cached }
         let font = UIFont(name: "LilitaOne", size: fontSize)
             ?? UIFont.systemFont(ofSize: fontSize, weight: .heavy)
@@ -60,12 +60,18 @@ private enum StickerTitleArt {
             }
         }
         guard !letters.isEmpty else { return UIImage() }
-        let bounds = letters.boundingBoxOfPath
-        let padding: CGFloat = 9
+        // The outline is a real shape (the letters grown by a round edge),
+        // filled rather than stroked, so no stray stroke bits poke out
+        // where the letters' own outlines overlap. Generous room all round
+        // so nothing is ever cut off.
+        let edge: CGFloat = 5.5
+        let padding: CGFloat = edge + 6
         let depth: CGFloat = 4
+        let bounds = letters.boundingBoxOfPath
         var transform = CGAffineTransform(a: 1, b: 0, c: 0, d: -1,
                                          tx: padding - bounds.minX, ty: padding + bounds.maxY)
         let path = letters.copy(using: &transform)!
+        let outline = path.copy(strokingWithWidth: edge * 2, lineCap: .round, lineJoin: .round, miterLimit: 1)
         let canvas = CGSize(width: ceil(bounds.width + padding * 2),
                             height: ceil(bounds.height + padding * 2 + depth))
         let format = UIGraphicsImageRendererFormat()
@@ -81,28 +87,29 @@ private enum StickerTitleArt {
         }
         let image = UIGraphicsImageRenderer(size: canvas, format: format).image { renderer in
             let context = renderer.cgContext
-            context.setLineJoin(.round)
-            context.setLineCap(.round)
-            context.setLineWidth(11)
-            // A small solid extrusion, rather than a blurred glow.
-            context.saveGState()
-            context.translateBy(x: 0, y: depth)
-            context.addPath(path)
-            context.setFillColor(mixed(0, 0.65).cgColor)
-            context.setStrokeColor(mixed(0, 0.65).cgColor)
-            context.drawPath(using: .fillStroke)
-            context.restoreGState()
-            context.addPath(path)
-            context.setStrokeColor(mixed(0, 0.48).cgColor)
-            context.strokePath()
-            context.addPath(path)
-            context.clip()
-            let colors = [mixed(1, 0.8).cgColor, mixed(1, 0.38).cgColor]
-            if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors as CFArray, locations: [0, 1]) {
-                context.drawLinearGradient(gradient, start: CGPoint(x: 0, y: padding),
-                                           end: CGPoint(x: 0, y: canvas.height - padding), options: [])
+            func fill(_ shape: CGPath, _ color: UIColor, dy: CGFloat = 0) {
+                context.saveGState()
+                context.translateBy(x: 0, y: dy)
+                context.addPath(shape)
+                context.addPath(path)
+                context.setFillColor(color.cgColor)
+                context.fillPath(using: .winding)
+                context.restoreGState()
             }
-            context.setFillColor(base.withAlphaComponent(0.17).cgColor)
+            // A small solid edge underneath, then the dark outline.
+            fill(outline, mixed(0, 0.65), dy: depth)
+            fill(outline, mixed(0, 0.5))
+            // The letters: mostly white, a soft blush of your colour at the
+            // bottom, and faint dots.
+            context.saveGState()
+            context.addPath(path)
+            context.clip(using: .winding)
+            let colors = [UIColor.white.cgColor, mixed(1, 0.93).cgColor, mixed(1, 0.7).cgColor]
+            if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors as CFArray, locations: [0, 0.55, 1]) {
+                context.drawLinearGradient(gradient, start: CGPoint(x: 0, y: padding),
+                                           end: CGPoint(x: 0, y: canvas.height - padding - depth), options: [])
+            }
+            context.setFillColor(base.withAlphaComponent(0.1).cgColor)
             let spacing: CGFloat = 10
             for y in stride(from: padding, through: canvas.height, by: spacing) {
                 for x in stride(from: padding, through: canvas.width, by: spacing) {
@@ -111,6 +118,7 @@ private enum StickerTitleArt {
                     context.fillPath()
                 }
             }
+            context.restoreGState()
         }
         cache.setObject(image, forKey: key,
                         cost: Int(canvas.width * canvas.height * format.scale * format.scale * 4))
