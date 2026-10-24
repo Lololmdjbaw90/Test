@@ -44,7 +44,7 @@ struct AccountView: View, Equatable {
     var body: some View {
         VStack(spacing: 0) {
             header
-            ScrollView {
+            FadingScroll {
                 VStack(alignment: .leading, spacing: 18) {
                     if let me = model.me { profileCard(me) }
                     walletCard
@@ -356,5 +356,38 @@ struct AccountView: View, Equatable {
             .foregroundStyle(Palette.muted)
             .frame(maxWidth: .infinity)
             .padding(.top, 2)
+    }
+}
+
+// The menu's list fades out softly under the title (once you've scrolled)
+// and at the bottom, instead of being cut off sharp. Only this small view
+// redraws when the top fade comes and goes, not the whole menu.
+private struct FadingScroll<Content: View>: View {
+    let content: Content
+    @State private var scrolled = false
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        ScrollView {
+            content
+                .onGeometryChange(for: Bool.self) { proxy in
+                    proxy.frame(in: .scrollView).minY < -2
+                } action: { now in
+                    scrolled = now
+                }
+        }
+        .mask {
+            VStack(spacing: 0) {
+                LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                    .frame(height: scrolled ? 26 : 0)
+                Rectangle()
+                LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(height: 30)
+            }
+            .animation(.easeOut(duration: 0.18), value: scrolled)
+        }
     }
 }
