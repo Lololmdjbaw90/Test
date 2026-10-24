@@ -92,7 +92,7 @@ struct DailyRewardButton: View {
                 shape.fill(Palette.surface).shadow(color: Palette.shadow, radius: 10, y: 4)
             } else {
                 // A reward is waiting: warm cream, like a little present.
-                shape.fill(LinearGradient(colors: [Palette.cream, Palette.ivory], startPoint: .topLeading, endPoint: .bottomTrailing))
+                shape.fill(LinearGradient(colors: [Palette.cream, Palette.ivory], startPoint: .top, endPoint: .bottom))
                     .shadow(color: Palette.gold.opacity(0.18), radius: 10, y: 4)
             }
         }
@@ -545,7 +545,7 @@ struct HomeView: View {
 
     private func pickCard(_ post: Post) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Rectangle().fill(post.imageURL.isEmpty ? AnyShapeStyle(LinearGradient(colors: [Theme.light.opacity(0.35), Palette.surface2], startPoint: .topLeading, endPoint: .bottomTrailing)) : AnyShapeStyle(Palette.surface2))
+            Rectangle().fill(post.imageURL.isEmpty ? AnyShapeStyle(LinearGradient(colors: [Theme.light.opacity(0.35), Palette.surface2], startPoint: .top, endPoint: .bottom)) : AnyShapeStyle(Palette.surface2))
                 .aspectRatio(0.85, contentMode: .fit)
                 .overlay {
                     if post.imageURL.isEmpty {

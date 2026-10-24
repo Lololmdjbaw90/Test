@@ -525,7 +525,7 @@ struct BunnyMakerView: View {
                 } label: {
                     VStack(spacing: 6) {
                         Circle()
-                            .fill(LinearGradient(colors: [Color(hex: Palette.mix(tint.swatch, 0xFFFFFF, 0.35)), Color(hex: tint.swatch)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .fill(LinearGradient(colors: [Color(hex: Palette.mix(tint.swatch, 0xFFFFFF, 0.35)), Color(hex: tint.swatch)], startPoint: .top, endPoint: .bottom))
                             .overlay(Circle().fill(LinearGradient(colors: [.white.opacity(0.55), .clear], startPoint: .top, endPoint: .center)).padding(3))
                             .overlay {
                                 if on {

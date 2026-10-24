@@ -184,9 +184,9 @@ struct ProfileContent: View {
 
     @ViewBuilder private var bannerGradient: some View {
         if let c = ProfileColors.color(person.bannerColor) {
-            LinearGradient(colors: [c, accent ?? Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing)
+            LinearGradient(colors: [c, accent ?? Theme.main], startPoint: .top, endPoint: .bottom)
         } else if person.isNitro {
-            LinearGradient(colors: [Color(hex: 0x8B5CF6), Color(hex: 0xC084FC), Color(hex: 0xEE8FAE), Color(hex: 0x7CBEFF)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            LinearGradient(colors: [Color(hex: 0x8B5CF6), Color(hex: 0xC084FC), Color(hex: 0xEE8FAE), Color(hex: 0x7CBEFF)], startPoint: .top, endPoint: .bottom)
         } else {
             // No banner yet: the palette — cream, blush and rose.
             Theme.pastel
@@ -793,7 +793,7 @@ struct EditProfileView: View {
     private var bannerGradient: some View {
         let c = ProfileColors.color(bannerColor)
         return Group {
-            if let c { LinearGradient(colors: [c, Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing) }
+            if let c { LinearGradient(colors: [c, Theme.main], startPoint: .top, endPoint: .bottom) }
             else if nitro { NitroStyle.gradient }
             else { Theme.gradient }
         }
@@ -878,7 +878,7 @@ struct EditProfileView: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 8) {
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(LinearGradient(colors: [ProfileColors.color(preset.banner) ?? Theme.light, ProfileColors.color(preset.accent) ?? Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .fill(LinearGradient(colors: [ProfileColors.color(preset.banner) ?? Theme.light, ProfileColors.color(preset.accent) ?? Theme.main], startPoint: .top, endPoint: .bottom))
                                 .overlay { BannerPatternView(pattern: preset.pattern).clipShape(RoundedRectangle(cornerRadius: 12)) }
                                 .frame(height: 48)
                             HStack {
@@ -1005,7 +1005,7 @@ struct MyColorsPicker: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Your own colours").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2).padding(.top, 6)
             HStack(spacing: 14) {
-                Circle().fill(LinearGradient(colors: [sub, main], startPoint: .topLeading, endPoint: .bottomTrailing))
+                Circle().fill(LinearGradient(colors: [sub, main], startPoint: .top, endPoint: .bottom))
                     .frame(width: 54, height: 54)
                     .overlay(Circle().strokeBorder(.white, lineWidth: inUse ? 3 : 0))
                     .overlay { if inUse { Image(systemName: "checkmark").font(.system(size: 17, weight: .bold)).foregroundStyle(.white) } }
@@ -1207,7 +1207,7 @@ private struct ProfileLookPreview: View {
             Text("Preview").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
             ZStack(alignment: .bottomLeading) {
                 ZStack {
-                    LinearGradient(colors: [bannerTint ?? Theme.light, accentTint ?? Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    LinearGradient(colors: [bannerTint ?? Theme.light, accentTint ?? Theme.main], startPoint: .top, endPoint: .bottom)
                     if !pattern.isEmpty { BannerPatternView(pattern: pattern) }
                     if !effect.isEmpty && nitro { ProfileEffectLayer(effect: effect, color: effectColor, amount: effectAmount) }
                 }

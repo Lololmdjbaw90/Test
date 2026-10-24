@@ -721,7 +721,7 @@ struct ChatVideoThumb: View {
         Button { watching = true } label: {
             ZStack {
                 if cover.isEmpty {
-                    LinearGradient(colors: [Theme.light, Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    LinearGradient(colors: [Theme.light, Theme.main], startPoint: .top, endPoint: .bottom)
                 } else {
                     RemoteImage(url: cover)
                 }

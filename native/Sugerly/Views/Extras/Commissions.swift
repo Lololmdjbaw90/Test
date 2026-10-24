@@ -752,7 +752,7 @@ struct SetUpPayoutsNotice: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "banknote.fill").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
                 .frame(width: 42, height: 42)
-                .background(LinearGradient(colors: [Palette.gold.opacity(0.75), Palette.gold], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background(LinearGradient(colors: [Palette.gold.opacity(0.75), Palette.gold], startPoint: .top, endPoint: .bottom), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             VStack(alignment: .leading, spacing: 4) {
                 Text("Set up payouts first").font(.jakarta(15, .heavy)).foregroundStyle(Palette.text)
                 Text("Add the PayPal email where Sugerly should send your money. You can accept paid requests once it's saved.")

@@ -59,7 +59,7 @@ struct Avatar: View {
 
     private var initial: some View {
         ZStack {
-            LinearGradient(colors: [Theme.light, Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing)
+            LinearGradient(colors: [Theme.light, Theme.main], startPoint: .top, endPoint: .bottom)
             Text(String(name.first ?? "?").uppercased())
                 .font(.display(size * 0.45))
                 .foregroundStyle(.white)
@@ -235,7 +235,7 @@ struct RemoteImage: View {
 
     private var placeholder: some View {
         Rectangle().fill(Palette.surface2)
-            .overlay { LinearGradient(colors: [Theme.main.opacity(0.06), .clear], startPoint: .topLeading, endPoint: .bottomTrailing) }
+            .overlay { LinearGradient(colors: [Theme.main.opacity(0.06), .clear], startPoint: .top, endPoint: .bottom) }
     }
 }
 

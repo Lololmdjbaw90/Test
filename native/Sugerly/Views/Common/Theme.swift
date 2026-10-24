@@ -47,7 +47,7 @@ enum Palette {
     // white cards and the candy colours stand out (pink on pink on pink
     // looked messy). Cards: clean white. Fields, chips and tracks: a soft
     // warm grey with a hint of your colour. Hairlines: barely there. Text: plum.
-    static var bg: Color { pastel(0xFFFFFF, 0.015, dark: 0x131114, 0.05) }
+    static var bg: Color { pastel(0xF7F4F3, 0.1, dark: 0x131114, 0.05) }
     static var surface: Color { pastel(0xFFFFFF, 0.0, dark: 0x1D191C, 0.06) }
     static var surface2: Color { pastel(0xF4F0EF, 0.12, dark: 0x29232A, 0.07) }
     static var border: Color { pastel(0xEEE8E7, 0.10, dark: 0x352D33, 0.08) }
@@ -347,7 +347,7 @@ enum Theme {
     // A juicy wash for hero cards: peachy light → your pastel → a touch of
     // its purple partner.
     static var pastel: LinearGradient {
-        LinearGradient(colors: [Palette.heroA, Palette.heroB, Palette.heroC], startPoint: .topLeading, endPoint: .bottomTrailing)
+        LinearGradient(colors: [Palette.heroA, Palette.heroB, Palette.heroC], startPoint: .top, endPoint: .bottom)
     }
     // A juicy candy fill for main buttons: a lighter, warmer top-left into
     // the accent, then its purple partner bottom-right. In dark mode it's
@@ -356,7 +356,7 @@ enum Theme {
         let top = Palette.swatch(Palette.mix(Palette.turn(mainHex, 12), 0xFFFFFF, 0.2), 1, Palette.mix(mainHex, 0xFFFFFF, 0.06), 1)
         let middle = Palette.swatch(mainHex, 1, Palette.mix(mainHex, 0x000000, 0.06), 1)
         let bottom = Palette.swatch(partnerHex, 1, Palette.mix(partnerHex, 0x000000, 0.14), 1)
-        return LinearGradient(colors: [top, middle, bottom], startPoint: .topLeading, endPoint: .bottomTrailing)
+        return LinearGradient(colors: [top, middle, bottom], startPoint: .top, endPoint: .bottom)
     }
     // The soft rosy glow under candy buttons and chips. On dark pages it's a
     // plain shadow instead (a pink glow there looks like neon).
@@ -365,7 +365,7 @@ enum Theme {
     }
     // Progress bars: pastel into the accent into its partner.
     static var progress: LinearGradient {
-        LinearGradient(colors: [light, main, partner], startPoint: .leading, endPoint: .trailing)
+        LinearGradient(colors: [light, main, partner], startPoint: .top, endPoint: .bottom)
     }
     static let lavender = Color(hex: 0xB19CFF)
     static var background: Color { Palette.bg }

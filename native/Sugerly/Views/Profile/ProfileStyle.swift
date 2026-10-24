@@ -69,9 +69,9 @@ struct NameText: View {
         case "pop":
             base.foregroundStyle(own).shadow(color: (ProfileColors.color(tint) ?? Theme.main).opacity(0.45), radius: 0, x: 2, y: 2)
         case "rainbow":
-            base.foregroundStyle(LinearGradient(colors: [Color(hex: 0xFF7AA2), Color(hex: 0xFFB38A), Color(hex: 0xFFD166), Color(hex: 0x5EC8B8), Color(hex: 0x7CBEFF), Color(hex: 0xB19CFF)], startPoint: .leading, endPoint: .trailing))
+            base.foregroundStyle(LinearGradient(colors: [Color(hex: 0xFF7AA2), Color(hex: 0xFFB38A), Color(hex: 0xFFD166), Color(hex: 0x5EC8B8), Color(hex: 0x7CBEFF), Color(hex: 0xB19CFF)], startPoint: .top, endPoint: .bottom))
         case "sunset":
-            base.foregroundStyle(LinearGradient(colors: [Color(hex: 0xFF8A5C), Color(hex: 0xF25F8C), Color(hex: 0xA65CF2)], startPoint: .leading, endPoint: .trailing))
+            base.foregroundStyle(LinearGradient(colors: [Color(hex: 0xFF8A5C), Color(hex: 0xF25F8C), Color(hex: 0xA65CF2)], startPoint: .top, endPoint: .bottom))
                 .shadow(color: Color(hex: 0xF25F8C).opacity(0.35), radius: size * 0.2)
         case "bold-serif":
             Text(name).font(.system(size: size, weight: .heavy, design: .serif)).foregroundStyle(Theme.main)
@@ -107,7 +107,7 @@ private struct AuroraName: View {
             let phase = CGFloat(t.truncatingRemainder(dividingBy: 5) / 5)
             text.foregroundStyle(LinearGradient(
                 colors: [Color(hex: 0xEE8FAE), Color(hex: 0xB19CFF), Color(hex: 0x7CBEFF), Color(hex: 0xEE8FAE), Color(hex: 0xB19CFF)],
-                startPoint: UnitPoint(x: -phase, y: 0.5), endPoint: UnitPoint(x: 2 - phase, y: 0.5)))
+                startPoint: UnitPoint(x: 0.5, y: -phase), endPoint: UnitPoint(x: 0.5, y: 2 - phase)))
         }
     }
 }
@@ -129,7 +129,7 @@ struct NitroBadge: View {
 }
 
 enum NitroStyle {
-    static let gradient = LinearGradient(colors: [Color(hex: 0x8B5CF6), Color(hex: 0xC084FC), Color(hex: 0xEE8FAE)], startPoint: .topLeading, endPoint: .bottomTrailing)
+    static let gradient = LinearGradient(colors: [Color(hex: 0x8B5CF6), Color(hex: 0xC084FC), Color(hex: 0xEE8FAE)], startPoint: .top, endPoint: .bottom)
     static let cost = 800
     static let xpBoostCost = 150
 
@@ -348,7 +348,7 @@ struct BannerPatternPicker: View {
                 Button { withMotion(Motion.standard) { selection = item.id } } label: {
                     VStack(spacing: 6) {
                         ZStack {
-                            LinearGradient(colors: [light, tint], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            LinearGradient(colors: [light, tint], startPoint: .top, endPoint: .bottom)
                             if !item.id.isEmpty { BannerPatternView(pattern: item.id) }
                         }
                         .frame(height: 54)

@@ -289,7 +289,7 @@ struct NotificationsPage: View {
                 .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(width: 19, height: 19)
-                .background(LinearGradient(colors: tint(type), startPoint: .topLeading, endPoint: .bottomTrailing), in: Circle())
+                .background(LinearGradient(colors: tint(type), startPoint: .top, endPoint: .bottom), in: Circle())
                 .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
                 .offset(x: 4, y: 4)
         }
@@ -1159,7 +1159,7 @@ struct AdminView: View {
                 HStack(spacing: 10) {
                     Text("Claim reward").font(.jakarta(14, .bold)).foregroundStyle(.white)
                         .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 18).frame(height: 44)
-                        .background(LinearGradient(colors: [secondary, primary], startPoint: .topLeading, endPoint: .bottomTrailing), in: Capsule())
+                        .background(LinearGradient(colors: [secondary, primary], startPoint: .top, endPoint: .bottom), in: Capsule())
                         .shadow(color: primary.opacity(0.45), radius: 10, y: 5)
                     Text("Follow").font(.jakarta(14, .bold)).foregroundStyle(primary)
                         .padding(.horizontal, 18).frame(height: 44)
@@ -1176,7 +1176,7 @@ struct AdminView: View {
                 ForEach(presets, id: \.0) { name, p, s in
                     Button { withMotion(Motion.standard) { primary = Color(hex: p); secondary = Color(hex: s) } } label: {
                         VStack(spacing: 6) {
-                            Circle().fill(LinearGradient(colors: [Color(hex: s), Color(hex: p)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                            Circle().fill(LinearGradient(colors: [Color(hex: s), Color(hex: p)], startPoint: .top, endPoint: .bottom))
                                 .frame(width: 44, height: 44).shadow(color: Color(hex: p).opacity(0.4), radius: 6, y: 3)
                             Text(name).font(.jakarta(11, .semibold)).foregroundStyle(Palette.text2)
                         }

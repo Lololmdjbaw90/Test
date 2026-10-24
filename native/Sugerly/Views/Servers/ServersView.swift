@@ -93,12 +93,12 @@ struct ServerIcon: View {
         let radius = corner ?? size * 0.32
         ZStack {
             RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(LinearGradient(colors: [Theme.light.opacity(0.35), Theme.soft], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .fill(LinearGradient(colors: [Theme.light.opacity(0.35), Theme.soft], startPoint: .top, endPoint: .bottom))
             if !server.iconURL.isEmpty {
                 RemoteImage(url: server.iconURL)
             } else {
                 // Initials on the accent gradient (no emoji icons).
-                LinearGradient(colors: [Theme.light, Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing)
+                LinearGradient(colors: [Theme.light, Theme.main], startPoint: .top, endPoint: .bottom)
                 Text(ServerIcon.initials(server.name)).font(.display(size * 0.38)).foregroundStyle(.white)
             }
         }
@@ -587,7 +587,7 @@ struct ServerPanel: View {
                     }
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(LinearGradient(colors: [Palette.cream, Palette.blush.opacity(0.7)], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .background(LinearGradient(colors: [Palette.cream, Palette.blush.opacity(0.7)], startPoint: .top, endPoint: .bottom), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .transition(.opacity)
                 }
                 if !store.loaded {
@@ -857,7 +857,7 @@ struct CreateServerView: View {
                 HStack(spacing: 14) {
                     PhotosPicker(selection: $icon, matching: .images) {
                         ZStack {
-                            LinearGradient(colors: [Theme.light, Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            LinearGradient(colors: [Theme.light, Theme.main], startPoint: .top, endPoint: .bottom)
                             if let iconImage { Image(uiImage: iconImage).resizable().scaledToFill() }
                             else { Text(ServerIcon.initials(name.isEmpty ? "Server" : name)).font(.display(28)).foregroundStyle(.white) }
                         }

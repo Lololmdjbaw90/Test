@@ -414,7 +414,7 @@ struct FilterStrip: View {
                         Button { pick(filter) } label: {
                             VStack(spacing: 5) {
                                 Circle()
-                                    .fill(LinearGradient(colors: filter.swatch, startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    .fill(LinearGradient(colors: filter.swatch, startPoint: .top, endPoint: .bottom))
                                     .overlay {
                                         if filter == .none {
                                             Image(systemName: "circle.slash")

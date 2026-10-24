@@ -95,9 +95,9 @@ struct HeaderWallpaper: View {
                 .transition(.opacity)
                 .mask {
                     LinearGradient(stops: [
-                        .init(color: .clear, location: 0),
-                        .init(color: .black.opacity(0.8), location: 0.36),
-                        .init(color: .black.opacity(0.7), location: 0.5),
+                        .init(color: .black.opacity(0.55), location: 0),
+                        .init(color: .black, location: 0.3),
+                        .init(color: .black.opacity(0.9), location: 0.6),
                         .init(color: .clear, location: 1),
                     ], startPoint: .top, endPoint: .bottom)
                 }
@@ -188,9 +188,9 @@ private struct SugarBackground: ViewModifier {
         content.background {
             ZStack(alignment: .top) {
                 Palette.bg
-                AuroraLayer().opacity(dark ? 1 : 0.2)
+                AuroraLayer()
                 LinearGradient(stops: [
-                    .init(color: Theme.light.opacity(dark ? 0.12 : 0.08), location: 0),
+                    .init(color: Theme.light.opacity(dark ? 0.16 : 0.45), location: 0),
                     .init(color: Palette.bg.opacity(0), location: 1),
                 ], startPoint: .top, endPoint: .bottom)
                 .frame(height: 260)
@@ -509,7 +509,7 @@ struct PatternBackground: View {
 
     // Soft base: blush at the bottom (like the pictures), deep plum in dark mode.
     private func base(_ c: Colors) -> some View {
-        LinearGradient(colors: [c.dark ? Color(hex: 0x140A11) : Color.white.opacity(0.92), c.dark ? c.main.opacity(0.28) : c.light.opacity(0.15)],
+        LinearGradient(colors: [c.dark ? Color(hex: 0x140A11) : Color.white.opacity(0.92), c.dark ? c.main.opacity(0.3) : c.light.opacity(0.7)],
                        startPoint: .top, endPoint: .bottom)
     }
 
@@ -729,8 +729,8 @@ struct PatternBackground: View {
 
     // A soft sky: your pastel, a little deeper towards the bottom.
     private static func sky(_ context: inout GraphicsContext, _ size: CGSize, _ c: Colors) {
-        let top = c.dark ? c.main.opacity(0.16) : c.light.opacity(0.08)
-        let bottom = c.dark ? c.main.opacity(0.3) : c.light.opacity(0.16)
+        let top = c.dark ? c.main.opacity(0.18) : c.light.opacity(0.35)
+        let bottom = c.dark ? c.main.opacity(0.32) : c.light.opacity(0.65)
         context.fill(Path(CGRect(origin: .zero, size: size)), with: .linearGradient(Gradient(colors: [top, bottom]), startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height)))
     }
 

@@ -117,7 +117,7 @@ struct ServerSettingsView: View {
                         RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Theme.soft)
                         if let iconImage { Image(uiImage: iconImage).resizable().scaledToFill() }
                         else if !store.server.iconURL.isEmpty { RemoteImage(url: store.server.iconURL) }
-                        else { LinearGradient(colors: [Theme.light, Theme.main], startPoint: .topLeading, endPoint: .bottomTrailing).overlay(Text(ServerIcon.initials(name)).font(.display(26)).foregroundStyle(.white)) }
+                        else { LinearGradient(colors: [Theme.light, Theme.main], startPoint: .top, endPoint: .bottom).overlay(Text(ServerIcon.initials(name)).font(.display(26)).foregroundStyle(.white)) }
                     }
                     .frame(width: 72, height: 72)
                     .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))

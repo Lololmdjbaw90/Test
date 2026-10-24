@@ -513,7 +513,7 @@ private struct FiltersPanel: View {
                                 if let base {
                                     Image(uiImage: FilterThumbs.make(base, f)).resizable().scaledToFill()
                                 } else {
-                                    LinearGradient(colors: f.swatch, startPoint: .topLeading, endPoint: .bottomTrailing)
+                                    LinearGradient(colors: f.swatch, startPoint: .top, endPoint: .bottom)
                                 }
                             }
                             .frame(width: 60, height: 80)
