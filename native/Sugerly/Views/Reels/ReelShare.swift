@@ -399,7 +399,8 @@ struct ReelSeekBar: View {
             ZStack(alignment: .leading) {
                 Capsule().fill(.white.opacity(0.25))
                 if video.ready || dragging != nil {
-                    Capsule().fill(.white).frame(width: max(0, geo.size.width * shown))
+                    // Your colour, like the XP bar on Home.
+                    Capsule().fill(Theme.progress).frame(width: max(0, geo.size.width * shown))
                 } else {
                     // Still loading: a light sweeps along the bar.
                     BufferingSweep()

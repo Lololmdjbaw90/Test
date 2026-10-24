@@ -37,8 +37,9 @@ final class ReelVideo {
     var failed = false
     var ready = false
     var portrait = true
-    // About phone-shaped (9:16): fills the whole screen, edge to edge.
-    var tall = true
+    // The video's own size (nil until it's known), so the feed can fill
+    // the screen with it.
+    var naturalSize: CGSize?
     private var statusObservation: NSKeyValueObservation?
     private var sizeObservation: NSKeyValueObservation?
     private var preparation: Task<Void, Never>?
@@ -124,9 +125,17 @@ final class ReelVideo {
             Task { @MainActor in
                 guard size.width > 0, size.height > 0 else { return }
                 self?.portrait = size.height >= size.width * 1.1
-                self?.tall = size.height >= size.width * 1.55
+                self?.naturalSize = size
             }
         }
+    }
+
+    // Close to a phone screen's shape (about 9:16 up to a tall 9:21): those
+    // fill the screen; anything wider or much taller is shown whole.
+    nonisolated static func phoneShaped(_ size: CGSize) -> Bool {
+        guard size.width > 0 else { return true }
+        let shape = size.height / size.width
+        return shape >= 1.7 && shape <= 2.4
     }
 
     func play(fromStart: Bool = false) {
@@ -182,21 +191,25 @@ enum ReelAudio {
 }
 
 // The Reels screen's colours, made from your theme colour so it sits with
-// the rest of the app: a deep night version of it behind and around the
-// videos (never plain black), and the same night as soft see-through glass
-// for the buttons. Gradients run top to bottom.
+// Home: buttons and labels are the same white chips with your colour on
+// them as Home's cards and round buttons (dark ones in dark mode), and
+// behind the reels is a deep version of your colour (never plain black).
+// Gradients run top to bottom.
 enum ReelTone {
-    static var night: Color { Color(hex: Palette.mix(Theme.partnerHex, 0x000000, 0.8)) }
-    static var dusk: Color { Color(hex: Palette.mix(Theme.mainHex, 0x000000, 0.62)) }
-    static var glass: Color { night.opacity(0.42) }
-    // Your colour, deep enough to read on a white pill.
-    static var ink: Color { Color(hex: Palette.mix(Theme.mainHex, 0x000000, 0.22)) }
+    static var night: Color { Color(hex: Palette.mix(Theme.partnerHex, 0x000000, 0.72)) }
+    static var dusk: Color { Color(hex: Palette.mix(Theme.mainHex, 0x000000, 0.5)) }
+    static var chip: Color { Palette.surface.opacity(0.94) }
+    static var chipLine: Color { Color.white.opacity(0.55) }
+    // Your colour, deep enough to read on a white chip (light on a dark one).
+    static var ink: Color {
+        Palette.swatch(Palette.mix(Theme.mainHex, 0x000000, 0.22), 1, Palette.mix(Theme.mainHex, 0xFFFFFF, 0.35), 1)
+    }
     static var backdrop: LinearGradient {
         LinearGradient(colors: [dusk, night], startPoint: .top, endPoint: .bottom)
     }
     // Over the video, so the header and the white writing always read.
     static var shade: LinearGradient {
-        LinearGradient(stops: [.init(color: night.opacity(0.5), location: 0), .init(color: .clear, location: 0.2),
+        LinearGradient(stops: [.init(color: night.opacity(0.35), location: 0), .init(color: .clear, location: 0.18),
                                .init(color: .clear, location: 0.55), .init(color: night.opacity(0.78), location: 1)],
                        startPoint: .top, endPoint: .bottom)
     }
@@ -336,7 +349,7 @@ struct ReelsView: View {
                         Image(systemName: "camera.fill").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
                             .frame(width: 42, height: 42)
                             .background(Theme.gradient, in: Circle())
-                            .overlay(Circle().strokeBorder(.white.opacity(0.3), lineWidth: 1))
+                            .overlay(Circle().strokeBorder(ReelTone.chipLine, lineWidth: 1.5))
                     }
                     .buttonStyle(BouncyStyle())
                     .accessibilityLabel("Make a reel")
@@ -402,15 +415,15 @@ struct ReelsView: View {
         Self.cache = reels
     }
 
-    // Following / For you: a little glass pill with a white bubble on the
-    // one you're on (like the tab bar's), sliding across when you switch.
+    // Following / For you: a white pill like Home's top bar, with a bubble
+    // of your colour on the one you're on, sliding across when you switch.
     private var feedSwitch: some View {
         HStack(spacing: 2) {
             ForEach([("following", "Following"), ("foryou", "For you")], id: \.0) { id, title in
                 Button { withMotion(Motion.standard) { feed = id; activeId = shown.first?.id } } label: {
                     Text(title)
                         .font(.jakarta(15, .heavy))
-                        .foregroundStyle(feed == id ? ReelTone.ink : Color.white.opacity(0.88))
+                        .foregroundStyle(feed == id ? Color.white : ReelTone.ink.opacity(0.7))
                         .padding(.horizontal, 16)
                         .frame(height: 34)
                         .background { feedBubble(feed == id) }
@@ -421,14 +434,14 @@ struct ReelsView: View {
             }
         }
         .padding(3)
-        .background(ReelTone.glass, in: Capsule())
-        .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+        .background(ReelTone.chip, in: Capsule())
+        .overlay(Capsule().strokeBorder(ReelTone.chipLine, lineWidth: 1))
     }
 
     @ViewBuilder
     private func feedBubble(_ on: Bool) -> some View {
         if on {
-            Capsule().fill(.white).matchedGeometryEffect(id: "line", in: feedLine)
+            Capsule().fill(Theme.gradient).matchedGeometryEffect(id: "line", in: feedLine)
         }
     }
 
@@ -439,7 +452,7 @@ struct ReelsView: View {
             let progress = min(1, pull / pullToRefresh)
             HStack(spacing: 8) {
                 if refreshing {
-                    ProgressView().tint(.white).controlSize(.small)
+                    ProgressView().tint(ReelTone.ink).controlSize(.small)
                 } else {
                     Image(systemName: "arrow.down")
                         .font(.system(size: 13, weight: .bold))
@@ -449,9 +462,9 @@ struct ReelsView: View {
                 Text(refreshing ? "Refreshing…" : armed ? "Release to refresh" : "Pull to refresh")
                     .font(.jakarta(14, .bold))
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(ReelTone.ink)
             .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 14).frame(height: 34)
-            .background(ReelTone.glass, in: Capsule())
+            .background(ReelTone.chip, in: Capsule())
             .opacity(refreshing ? 1 : Double(progress))
             .scaleEffect(refreshing ? 1 : 0.85 + 0.15 * progress)
             .padding(.top, 8)
@@ -662,6 +675,8 @@ struct ReelPage: View {
     @State private var justFollowed = false
     @State private var scrubbing = false
     @State private var lastProgress: Double = 0
+    @State private var coverSize: CGSize?
+    @State private var soft: UIImage?
     @AppStorage("sugerly.reels.muted") private var muted = false
     @AppStorage("sugerly.reels.speed") private var playSpeed = 1.0
     @AppStorage("sugerly.reels.autoscroll") private var autoScroll = false
@@ -679,15 +694,28 @@ struct ReelPage: View {
         ZStack {
             ReelTone.backdrop
             GeometryReader { frame in
-                // The reel's 9:16 stage, with its text stickers on it.
-                let stage = Self.stage(frame.size, fill: fillsScreen)
+                // The reel's stage (its own shape, with its text stickers on
+                // it), covering the screen when it's phone-shaped.
+                let stage: CGSize = Self.stage(frame.size, content: shownSize, fill: fillsScreen)
+                let bars: Bool = stage.width < frame.size.width - 1 || stage.height < frame.size.height - 1
                 ZStack {
-                    media
-                    if !reel.texts.isEmpty {
-                        ReelTextLayer(texts: reel.texts, active: active).allowsHitTesting(false)
+                    if bars, let soft {
+                        // Not phone-shaped: a soft blurred copy of it fills
+                        // the screen around it, so there are no empty bars.
+                        Color.clear
+                            .overlay { Image(uiImage: soft).resizable().scaledToFill() }
+                            .clipped()
+                            .overlay(ReelTone.night.opacity(0.25))
+                            .transition(.opacity)
                     }
+                    ZStack {
+                        media
+                        if !reel.texts.isEmpty {
+                            ReelTextLayer(texts: reel.texts, active: active).allowsHitTesting(false)
+                        }
+                    }
+                    .frame(width: stage.width, height: stage.height)
                 }
-                .frame(width: stage.width, height: stage.height)
                 .frame(width: frame.size.width, height: frame.size.height)
                 .clipped()
             }
@@ -716,8 +744,8 @@ struct ReelPage: View {
                     HStack {
                         Spacer()
                         Button { withMotion(Motion.standard) { clearMode = false } } label: {
-                            Label("Show", systemImage: "eye.fill").font(.jakarta(13, .bold)).foregroundStyle(.white)
-                                .padding(.horizontal, 14).frame(height: 36).background(ReelTone.glass, in: Capsule())
+                            Label("Show", systemImage: "eye.fill").font(.jakarta(13, .bold)).foregroundStyle(ReelTone.ink)
+                                .padding(.horizontal, 14).frame(height: 36).background(ReelTone.chip, in: Capsule())
                         }
                         .padding(.trailing, 16).padding(.top, insets.top + (showBack ? 8 : 50))
                     }
@@ -767,6 +795,7 @@ struct ReelPage: View {
             sound?.isMuted = now
         }
         .task(id: reel.id) { if loadContent { await refreshComments() } }
+        .task(id: coverKey) { await loadCover() }
         .sheet(isPresented: $comments, onDismiss: { Task { await refreshComments() } }) {
             NavigationStack {
                 CommentsScreen(collection: "CommunityComment", field: "post_id", targetId: "reel_\(reel.id)", ownerEmail: reel.authorEmail, link: "/Reels?r=\(reel.id)", disabled: reel.commentsOff) {
@@ -784,18 +813,40 @@ struct ReelPage: View {
         .sheet(item: $reporting) { target in ReportSheet(target: target) }
     }
 
-    // Phone-shaped videos fill the whole screen edge to edge (a little comes
-    // off the sides, like TikTok). Photos and wider videos are shown whole on
-    // the backdrop.
-    private var fillsScreen: Bool {
-        reel.isVideo && video?.failed != true && (video?.tall ?? true)
+    // Phone-shaped videos and photos fill the whole screen edge to edge (a
+    // little may come off the sides, like TikTok). Other shapes are shown
+    // whole on a blurred copy of themselves. Until the video's size is known
+    // it goes by the cover picture (most reels are phone-shaped).
+    private var shownSize: CGSize? {
+        if reel.isVideo, let size = video?.naturalSize { return size }
+        return coverSize ?? MemoryImages.get(coverKey)?.size
     }
 
-    static func stage(_ size: CGSize, fill: Bool) -> CGSize {
+    private var fillsScreen: Bool {
+        if reel.isVideo && video?.failed == true { return false }
+        guard let size = shownSize else { return true }
+        return ReelVideo.phoneShaped(size)
+    }
+
+    // The cover (or a photo reel's first photo): its shape, and the soft copy.
+    private var coverKey: String { reel.isVideo ? reel.coverURL : (reel.pictures.first ?? "") }
+
+    private func loadCover() async {
+        let url = coverKey
+        guard !url.isEmpty, let image = await ImagePipeline.shared.load(url) else { return }
+        coverSize = image.size
+        let made = await SoftCopy.make(image, key: url)
+        withAnimation(.easeOut(duration: 0.2)) { soft = made }
+    }
+
+    static func stage(_ size: CGSize, content: CGSize?, fill: Bool) -> CGSize {
         let w = size.width, h = size.height
-        let cover = CGSize(width: max(w, h * 9 / 16), height: max(h, w * 16 / 9))
-        // (Never more than a little off the sides.)
-        if fill && cover.width <= w * 1.3 && cover.height <= h * 1.3 { return cover }
+        if fill {
+            let shape: CGFloat = content.map { $0.height / max(1, $0.width) } ?? 16 / 9
+            let cover = CGSize(width: max(w, h / shape), height: max(h, w * shape))
+            // (Never more than a little off the edges.)
+            if cover.width <= w * 1.3 && cover.height <= h * 1.3 { return cover }
+        }
         return CGSize(width: min(w, h * 9 / 16), height: min(h, w * 16 / 9))
     }
 
@@ -806,7 +857,7 @@ struct ReelPage: View {
                 ZStack {
                     // The cover shows at once; the video fades in over it.
                     if !video.ready { RemoteImage(url: reel.coverURL, contentMode: .fit) }
-                    LoopingVideo(player: video.player, fill: video.tall)
+                    LoopingVideo(player: video.player, fill: false)
                         .scaleEffect(x: reel.mirror ? -1 : 1, y: 1)
                         .opacity(video.ready ? 1 : 0)
                         .animation(.easeOut(duration: 0.2), value: video.ready)
@@ -817,7 +868,7 @@ struct ReelPage: View {
                     if video?.failed == true {
                         VStack(spacing: 10) {
                             Label("This video didn't load", systemImage: "exclamationmark.triangle.fill")
-                                .font(.jakarta(13, .semibold)).foregroundStyle(.white)
+                                .font(.jakarta(13, .semibold)).foregroundStyle(ReelTone.ink)
                             Button {
                                 ReelVideo.drop(reel.id)
                                 video = nil
@@ -825,7 +876,7 @@ struct ReelPage: View {
                             } label: { Label("Try again", systemImage: "arrow.clockwise") }
                                 .buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
                         }
-                        .padding(14).background(ReelTone.night.opacity(0.75), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .padding(14).background(ReelTone.chip, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     }
                 }
                 .ignoresSafeArea()
@@ -852,9 +903,9 @@ struct ReelPage: View {
             if showBack {
                 HStack {
                     Button { if path.isEmpty { dismiss() } else { path.removeLast() } } label: {
-                        Image(systemName: "chevron.left").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
-                            .frame(width: 44, height: 44).background(ReelTone.glass, in: Circle())
-                            .overlay(Circle().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+                        Image(systemName: "chevron.left").font(.system(size: 17, weight: .bold)).foregroundStyle(ReelTone.ink)
+                            .frame(width: 44, height: 44).background(ReelTone.chip, in: Circle())
+                            .overlay(Circle().strokeBorder(ReelTone.chipLine, lineWidth: 1))
                     }
                     Spacer()
                 }
@@ -864,10 +915,10 @@ struct ReelPage: View {
             if muted && active {
                 Button { withMotion(Motion.standard) { muted = false } } label: {
                     Label("Tap for sound", systemImage: "speaker.slash.fill")
-                        .font(.jakarta(14, .bold)).foregroundStyle(.white)
+                        .font(.jakarta(14, .bold)).foregroundStyle(ReelTone.ink)
                         .padding(.horizontal, 16).frame(height: 38)
-                        .background(ReelTone.glass, in: Capsule())
-                        .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+                        .background(ReelTone.chip, in: Capsule())
+                        .overlay(Capsule().strokeBorder(ReelTone.chipLine, lineWidth: 1))
                 }
                 .buttonStyle(BouncyStyle())
                 .padding(.top, showBack ? 10 : insets.top + 50)
@@ -917,10 +968,10 @@ struct ReelPage: View {
             .buttonStyle(SoftPressStyle())
             if let relation {
                 Label(relation, systemImage: "sparkles")
-                    .font(.jakarta(12, .bold)).foregroundStyle(.white)
+                    .font(.jakarta(12, .bold)).foregroundStyle(ReelTone.ink)
                     .padding(.horizontal, 12).frame(height: 28)
-                    .background(ReelTone.glass, in: Capsule())
-                    .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+                    .background(ReelTone.chip, in: Capsule())
+                    .overlay(Capsule().strokeBorder(ReelTone.chipLine, lineWidth: 1))
             }
             if !reel.caption.isEmpty {
                 Button { withMotion(Motion.standard) { captionOpen.toggle() } } label: {
@@ -941,9 +992,9 @@ struct ReelPage: View {
                         Text(soundName).lineLimit(1)
                         Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).opacity(0.7)
                     }
-                    .font(.jakarta(14, .medium)).foregroundStyle(.white.opacity(0.95))
+                    .font(.jakarta(14, .semibold)).foregroundStyle(ReelTone.ink)
                     .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(ReelTone.glass, in: Capsule())
+                    .background(ReelTone.chip, in: Capsule())
                 }
                 .buttonStyle(BouncyStyle(scale: 0.95))
             }
@@ -994,8 +1045,9 @@ struct ReelPage: View {
         }
     }
 
-    // A round button of night glass with an optional count under it; when
-    // it's on (liked, saved) it fills with your colour, like the + elsewhere.
+    // A round white button with your colour's icon, like Home's search
+    // button, and an optional count under it; when it's on (liked, saved)
+    // it fills with your colour, like the + on Home.
     private func bubble(_ icon: String, count: Int? = nil, tint: Bool = false, run: @escaping () -> Void) -> some View {
         Button(action: run) {
             VStack(spacing: 5) {
@@ -1015,11 +1067,11 @@ struct ReelPage: View {
         // you swipe.)
         Image(systemName: icon)
             .font(.system(size: 20, weight: .bold))
-            .foregroundStyle(.white)
+            .foregroundStyle(tint ? Color.white : ReelTone.ink)
             .symbolEffect(.bounce, value: tint)
             .frame(width: 48, height: 48)
-            .background(tint ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(ReelTone.glass), in: Circle())
-            .overlay(Circle().strokeBorder(.white.opacity(tint ? 0.4 : 0.16), lineWidth: 1))
+            .background(tint ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(ReelTone.chip), in: Circle())
+            .overlay(Circle().strokeBorder(ReelTone.chipLine, lineWidth: 1))
     }
 
     // Get the video ready (buffered, paused) before you swipe to it.
@@ -1261,9 +1313,9 @@ struct SingleReelView: View {
                 if path.isEmpty { dismiss() } else { path.removeLast() }
             } label: {
                 Image(systemName: "chevron.left").font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.white).frame(width: 44, height: 44)
-                    .background(ReelTone.glass, in: Circle())
-                    .overlay(Circle().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+                    .foregroundStyle(ReelTone.ink).frame(width: 44, height: 44)
+                    .background(ReelTone.chip, in: Circle())
+                    .overlay(Circle().strokeBorder(ReelTone.chipLine, lineWidth: 1))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Back")
@@ -1273,6 +1325,31 @@ struct SingleReelView: View {
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { music.setSuppressed("single-reel", active: true) }
         .onDisappear { music.setSuppressed("single-reel", active: false) }
+    }
+}
+
+// A tiny, very blurred copy of a reel's picture, for behind reels that
+// aren't phone-shaped. Made once per picture off the main thread and kept,
+// so while you swipe it's just a still picture.
+enum SoftCopy {
+    private static let cache = NSCache<NSString, UIImage>()
+    private static let context = CIContext(options: [.cacheIntermediates: false])
+
+    static func make(_ image: UIImage, key: String) async -> UIImage? {
+        if let hit = cache.object(forKey: key as NSString) { return hit }
+        let made = await Task.detached(priority: .utility) { blur(image) }.value
+        if let made { cache.setObject(made, forKey: key as NSString) }
+        return made
+    }
+
+    private static func blur(_ image: UIImage) -> UIImage? {
+        let side: CGFloat = 64
+        let k = side / max(1, max(image.size.width, image.size.height))
+        let small = CGSize(width: max(1, (image.size.width * k).rounded()), height: max(1, (image.size.height * k).rounded()))
+        guard let cg = EditorModel.fill(image, to: small).cgImage else { return nil }
+        let base = CIImage(cgImage: cg)
+        let soft = base.clampedToExtent().applyingGaussianBlur(sigma: 4).cropped(to: base.extent)
+        return context.createCGImage(soft, from: base.extent).map { UIImage(cgImage: $0) }
     }
 }
 
