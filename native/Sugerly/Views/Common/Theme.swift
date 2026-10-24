@@ -72,11 +72,14 @@ enum Palette {
     static let ivory = Color.dynamic(light: ivoryHex, dark: 0x2B2D24)
     // Your blush: a light tint of your colour, for small highlights.
     static var blush: Color { pastel(0xFFFFFF, 0.30, dark: 0x2A2227, 0.14) }
+    // The foot of the bunny's tile: a deeper blush.
+    static var sceneBottom: Color { pastel(0xFFFFFF, 0.55, dark: 0x2A2227, 0.24) }
 
     // The three stops of a hero card: a fresh, clear run from a pale tint of
-    // your pastel into a juicier shade of it. In dark mode, deep plum shades
-    // of your colour.
-    static var heroA: Color { hero(light: mix(0xFFFFFF, Theme.peachHex, 0.42), 0.12) }
+    // your pastel into a juicier shade of it (all your theme's own colour,
+    // no peach, so the card matches). In dark mode, deep plum shades of
+    // your colour.
+    static var heroA: Color { hero(light: mix(0xFFFFFF, Theme.lightHex, 0.4), 0.12) }
     static var heroB: Color { hero(light: mix(0xFFFFFF, Theme.lightHex, 0.75), 0.22) }
     static var heroC: Color { hero(light: mix(Theme.lightHex, Theme.partnerHex, 0.45), 0.34) }
 
@@ -394,23 +397,34 @@ enum Theme {
     static var pastel: LinearGradient {
         LinearGradient(colors: [Palette.heroA, Palette.heroB, Palette.heroC], startPoint: .top, endPoint: .bottom)
     }
-    // A juicy candy fill for main buttons: a lighter, warmer top-left into
-    // the accent, then its purple partner bottom-right. In dark mode it's
-    // a touch deeper, so it doesn't glow.
+    // A juicy candy fill for main buttons: a lighter top into your colour,
+    // then a little way towards its partner at the bottom. It stays close to
+    // your colour (big hue turns went muddy with some themes), and a very
+    // light colour is taken deeper so buttons are never glaring and white
+    // writing on them reads. In dark mode it's a touch deeper, so it
+    // doesn't glow.
     static var candy: LinearGradient {
-        let top = Palette.swatch(Palette.mix(Palette.turn(mainHex, 12), 0xFFFFFF, 0.2), 1, Palette.mix(mainHex, 0xFFFFFF, 0.06), 1)
-        let middle = Palette.swatch(mainHex, 1, Palette.mix(mainHex, 0x000000, 0.06), 1)
-        let bottom = Palette.swatch(partnerHex, 1, Palette.mix(partnerHex, 0x000000, 0.14), 1)
+        let base = buttonHex
+        let low = Palette.mix(base, partnerHex, 0.45)
+        let top = Palette.swatch(Palette.mix(base, 0xFFFFFF, 0.2), 1, Palette.mix(base, 0xFFFFFF, 0.06), 1)
+        let middle = Palette.swatch(base, 1, Palette.mix(base, 0x000000, 0.06), 1)
+        let bottom = Palette.swatch(Palette.mix(low, 0x000000, 0.05), 1, Palette.mix(low, 0x000000, 0.16), 1)
         return LinearGradient(colors: [top, middle, bottom], startPoint: .top, endPoint: .bottom)
     }
+
+    // Your colour for filled buttons: as it is, unless it's so light that
+    // it glares (then a deeper shade of it).
+    static var buttonHex: UInt32 { ColorTone.calm(mainHex, brightest: 0.3) }
     // The soft rosy glow under candy buttons and chips. On dark pages it's a
     // plain shadow instead (a pink glow there looks like neon).
     static func glow(_ opacity: Double) -> Color {
         Palette.swatch(mainHex, opacity, 0x000000, opacity > 0 ? 0.32 : 0)
     }
-    // Progress bars: pastel into the accent into its partner.
+    // Progress and slider bars: pastel into the accent into its partner,
+    // filling left to right (the one exception to top-to-bottom gradients,
+    // see DESIGN_RULES.md).
     static var progress: LinearGradient {
-        LinearGradient(colors: [light, main, partner], startPoint: .top, endPoint: .bottom)
+        LinearGradient(colors: [light, main, partner], startPoint: .leading, endPoint: .trailing)
     }
     static let lavender = Color(hex: 0xB19CFF)
     static var background: Color { Palette.bg }

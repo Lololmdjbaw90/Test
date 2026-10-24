@@ -2,8 +2,10 @@
 
 1. **Gradients go top to bottom only.** Never left→right, right→left or
    diagonal (`.leading`/`.trailing`/`.topLeading`/`.bottomTrailing`…). Use
-   `startPoint: .top, endPoint: .bottom`. (Moving shines and the menu's edge
-   shadow are not colour gradients and are the only exceptions.)
+   `startPoint: .top, endPoint: .bottom`. Exceptions: **slider and progress
+   bars** (the XP bar, the video progress line, wallet bars…) fill **left to
+   right** (`startPoint: .leading, endPoint: .trailing`, `Theme.progress`);
+   moving shines and the menu's edge shadow aren't colour gradients.
 2. **Backgrounds must be clearly visible.** Never wash page backgrounds,
    wallpapers or patterns out to near-white. Keep the page tint, the colour
    glows and the pattern strong enough to see at a glance.

@@ -729,7 +729,9 @@ struct BunnySceneView: View {
     var body: some View {
         let moving = animated && !reduceMotion && Motion.ambient
         ZStack {
-            LinearGradient(colors: [Palette.surface, Theme.soft, Theme.main.opacity(0.18)], startPoint: .top, endPoint: .bottom)
+            // Solid shades of your theme (see-through ones let whatever was
+            // behind the tile show through and it stopped matching).
+            LinearGradient(colors: [Palette.surface, Palette.blush, Palette.sceneBottom], startPoint: .top, endPoint: .bottom)
             TimelineView(.animation(minimumInterval: 1 / 30, paused: !moving)) { timeline in
                 let t = moving ? timeline.date.timeIntervalSinceReferenceDate : 0
                 Canvas { ctx, size in Self.motif(scene, &ctx, size, t) }

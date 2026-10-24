@@ -73,28 +73,98 @@ struct ThemeCard: View {
 
 // The icon tiles as a family of your theme: each kind of place keeps its
 // own spot on the colour wheel next to your colour (so Music and Servers
-// still look different), all at the same softness. "Rainbow" in Settings
-// brings back the classic fixed colours.
+// still look different), all at the same softness and the same lightness
+// to the eye, so none glares. "Rainbow" in Settings brings back the classic
+// fixed colours.
 enum CandyFamily {
-    nonisolated(unsafe) private static var made: [Int: (UInt32, UInt32)] = [:]
+    nonisolated(unsafe) private static var made: [UInt32: [Double]] = [:]
     private static let lock = NSLock()
+    // The tiles' turns from your colour, in Candy's index order (berry,
+    // peach, lemon, mint, sky, grape).
+    private static let turns: [Double] = [0, 30, 58, -95, -60, -30]
 
-    static func stops(turn degrees: Double, index: Int, around main: UInt32) -> (UInt32, UInt32) {
-        let key = Int(main) * 8 + index
+    static func stops(turn _: Double, index: Int, around main: UInt32) -> (UInt32, UInt32) {
+        let hue = hues(main)[index]
+        // Golds need a little more light and colour not to look olive.
+        let gold = max(0, 1 - abs(hue - 46) / 30)
+        let top = ColorTone.tone(hue: hue, saturation: 0.34 + 0.12 * gold, luminance: 0.58 + 0.08 * gold)
+        let bottom = ColorTone.tone(hue: hue, saturation: 0.56 + 0.2 * gold, luminance: 0.3 + 0.12 * gold)
+        return (top, bottom)
+    }
+
+    // Each tile's hue: its turn from your colour, kept out of the muddy
+    // yellow-greens and at least 18° from the tiles before it, so no two
+    // look the same.
+    private static func hues(_ main: UInt32) -> [Double] {
         lock.lock()
         defer { lock.unlock() }
-        if let hit = made[key] { return hit }
+        if let hit = made[main] { return hit }
         var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         UIColor(hex: main).getHue(&h, saturation: &s, brightness: &b, alpha: &a)
-        var hue = Double(h) + degrees / 360
-        hue -= floor(hue)
-        // Yellows and greens look much lighter than blues at the same
-        // strength: take them a little deeper so the family looks even.
-        let distance = min(abs(hue * 360 - 95), 360 - abs(hue * 360 - 95))
-        let bright = max(0, 1 - distance / 70)
-        let top = UIColor(hue: hue, saturation: 0.4 + 0.08 * bright, brightness: 1 - 0.06 * bright, alpha: 1).rgbHex
-        let bottom = UIColor(hue: hue, saturation: 0.64 + 0.14 * bright, brightness: 0.92 - 0.2 * bright, alpha: 1).rgbHex
-        made[key] = (top, bottom)
-        return (top, bottom)
+        var chosen: [Double] = []
+        for turn in turns {
+            var hue = wrap(Double(h) * 360 + turn)
+            var tries = 0
+            while tries < 12 && (muddy(hue) || chosen.contains(where: { gap($0, hue) < 18 })) {
+                hue = wrap(hue + (turn < 0 ? -14 : 14))
+                tries += 1
+            }
+            chosen.append(hue)
+        }
+        made[main] = chosen
+        return chosen
+    }
+
+    private static func wrap(_ hue: Double) -> Double {
+        let w = hue.truncatingRemainder(dividingBy: 360)
+        return w < 0 ? w + 360 : w
+    }
+    private static func muddy(_ hue: Double) -> Bool { hue > 58 && hue < 100 }
+    private static func gap(_ a: Double, _ b: Double) -> Double {
+        let d = abs(a - b)
+        return min(d, 360 - d)
+    }
+}
+
+// Lightness as the eye sees it (yellow looks far lighter than blue at the
+// same strength), for colours that never glare.
+enum ColorTone {
+    nonisolated(unsafe) private static var calmed: [Int: UInt32] = [:]
+    private static let lock = NSLock()
+
+    static func luminance(_ hex: UInt32) -> Double {
+        func lin(_ v: UInt32) -> Double {
+            let c = Double(v & 0xFF) / 255
+            return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * lin(hex >> 16) + 0.7152 * lin(hex >> 8) + 0.0722 * lin(hex)
+    }
+
+    // The colour at this hue and strength that's about this light.
+    static func tone(hue: Double, saturation: Double, luminance target: Double) -> UInt32 {
+        var low = 0.15, high = 1.0
+        for _ in 0..<16 {
+            let mid = (low + high) / 2
+            let hex = UIColor(hue: hue / 360, saturation: saturation, brightness: mid, alpha: 1).rgbHex
+            if luminance(hex) < target { low = mid } else { high = mid }
+        }
+        return UIColor(hue: hue / 360, saturation: saturation, brightness: (low + high) / 2, alpha: 1).rgbHex
+    }
+
+    // The colour as it is, or a deeper shade of it if it's lighter than
+    // `brightest` (so a very light colour doesn't glare on a button).
+    static func calm(_ hex: UInt32, brightest: Double) -> UInt32 {
+        let key = Int(hex) * 100 + Int(brightest * 100)
+        lock.lock()
+        defer { lock.unlock() }
+        if let hit = calmed[key] { return hit }
+        var out = hex
+        var step = 0
+        while luminance(out) > brightest && step < 20 {
+            out = Palette.mix(hex, 0x000000, Double(step + 1) * 0.04)
+            step += 1
+        }
+        calmed[key] = out
+        return out
     }
 }
