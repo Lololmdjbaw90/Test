@@ -1102,7 +1102,9 @@ struct ChatWallpaper: View {
 
     var body: some View {
         Canvas { context, size in
-            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(scheme == .dark ? Color(hex: 0x120910) : Color(hex: 0xFFF1F6)))
+            // A pale wash of your theme (a deep one in dark mode).
+            let paper = scheme == .dark ? Palette.mix(0x120910, Theme.mainHex, 0.08) : Palette.mix(0xFFFFFF, Theme.lightHex, 0.2)
+            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(hex: paper)))
             let gap: CGFloat = 64
             var row = 0
             var y: CGFloat = 10

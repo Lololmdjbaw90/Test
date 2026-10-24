@@ -4,8 +4,10 @@ import UIKit
 // Sugerly's look: soft pastel pages built from one palette — cream
 // (FCF0D6), ivory (F8FBE6), blush (FAD0DC), pink (F6BDCC) and rose (F9B0C4) —
 // with a deeper rose for buttons and links so text stays easy to read, plum
-// text instead of black, and the iPhone's own fonts. Pick another accent in
-// Settings and the pinks follow it; the cream stays.
+// text instead of black, and the iPhone's own fonts. Pick another theme in
+// Settings (Themes.swift) and the whole app is recoloured from it: pages,
+// cards, text, tiles and dark screens. Use Theme / Palette colours rather
+// than fixed ones so everything follows.
 
 extension UIColor {
     convenience init(hex: UInt32, alpha: CGFloat = 1) {
@@ -43,18 +45,27 @@ enum Palette {
     static let pinkHex: UInt32 = 0xF6BDCC
     static let roseHex: UInt32 = 0xF9B0C4
 
-    // Pages: a calm warm off-white with only a breath of your pastel, so
-    // white cards and the candy colours stand out (pink on pink on pink
-    // looked messy). Cards: clean white. Fields, chips and tracks: a soft
-    // warm grey with a hint of your colour. Hairlines: barely there. Text: plum.
-    static var bg: Color { pastel(0xF7F4F3, 0.1, dark: 0x131114, 0.05) }
-    static var surface: Color { pastel(0xFFFFFF, 0.0, dark: 0x1D191C, 0.06) }
-    static var surface2: Color { pastel(0xF4F0EF, 0.12, dark: 0x29232A, 0.07) }
-    static var border: Color { pastel(0xEEE8E7, 0.10, dark: 0x352D33, 0.08) }
-    static var borderStrong: Color { pastel(0xE2DAD9, 0.18, dark: 0x473B43, 0.10) }
-    static var text: Color { ink(0x2B1D24, 0.10, dark: 0xFBF1F4, 0.04) }
-    static var text2: Color { ink(0x5E4A53, 0.12, dark: 0xD6C3CB, 0.05) }
-    static var muted: Color { ink(0x95838B, 0.12, dark: 0x9C8891, 0.06) }
+    // Everything takes your theme's colour (a full recolour, not just the
+    // buttons). Pages: a clear pastel of your theme, so white cards stand
+    // out on it. Cards: clean white. Fields, chips and tracks: a softer
+    // shade of your pastel. Hairlines: a light line of it. Text: a deep ink
+    // of your colour instead of black. In dark mode, deep shades of it.
+    static var bg: Color { pastel(0xF7F4F3, 0.28, dark: 0x131114, 0.09) }
+    static var surface: Color { pastel(0xFFFFFF, 0.0, dark: 0x1D191C, 0.1) }
+    static var surface2: Color { pastel(0xF4F0EF, 0.24, dark: 0x29232A, 0.12) }
+    static var border: Color { pastel(0xEEE8E7, 0.22, dark: 0x352D33, 0.13) }
+    static var borderStrong: Color { pastel(0xE2DAD9, 0.32, dark: 0x473B43, 0.16) }
+    static var text: Color { ink(0x2B1D24, 0.18, dark: 0xFBF1F4, 0.06) }
+    static var text2: Color { ink(0x5E4A53, 0.2, dark: 0xD6C3CB, 0.08) }
+    static var muted: Color { ink(0x8A7882, 0.22, dark: 0x9C8891, 0.1) }
+
+    // Dark screens (the camera, calls, Reels): a deep night of your theme,
+    // never plain black.
+    static var nightTop: Color { Color(hex: mix(Theme.mainHex, 0x000000, 0.8)) }
+    static var nightBottom: Color { Color(hex: mix(Theme.partnerHex, 0x000000, 0.9)) }
+    static var night: LinearGradient {
+        LinearGradient(colors: [nightTop, nightBottom], startPoint: .top, endPoint: .bottom)
+    }
 
     // Cream and ivory for warm touches (coins, rewards, highlights).
     static let cream = Color.dynamic(light: creamHex, dark: 0x3A3023)
@@ -172,12 +183,42 @@ enum Tone {
 
 // Juicy candy colours for the little icon tiles that take you places (Home's
 // shortcuts, the "new post / reel / drawing / song" buttons, menus). Each
-// place keeps its own colour everywhere: music is always sky, servers mint,
-// people grape, rewards lemon, posts berry, reels peach.
+// place keeps its own colour everywhere: music is always "sky", servers
+// "mint", people "grape", rewards "lemon", posts "berry", reels "peach". With
+// a theme (the default) they're a family of your theme's colour; "Rainbow"
+// in Settings gives the classic fixed colours.
 enum Candy: CaseIterable {
     case berry, peach, lemon, mint, sky, grape
 
     private var stops: (UInt32, UInt32) {
+        if ThemeStore.shared.rainbowTiles { return rainbow }
+        return CandyFamily.stops(turn: turn, index: index, around: Theme.mainHex)
+    }
+
+    // Where each sits on the colour wheel from your colour.
+    private var turn: Double {
+        switch self {
+        case .berry: return 0
+        case .peach: return 30
+        case .lemon: return 58
+        case .grape: return -30
+        case .sky: return -60
+        case .mint: return -95
+        }
+    }
+
+    private var index: Int {
+        switch self {
+        case .berry: return 0
+        case .peach: return 1
+        case .lemon: return 2
+        case .mint: return 3
+        case .sky: return 4
+        case .grape: return 5
+        }
+    }
+
+    private var rainbow: (UInt32, UInt32) {
         switch self {
         case .berry: return (0xFF8DB4, 0xEC4F86)
         case .peach: return (0xFFB487, 0xF27D45)
@@ -308,6 +349,10 @@ final class ThemeStore {
     var accent: Accent = .rose
     var customMain: UInt32?
     var customLight: UInt32?
+    // The icon tiles in the classic rainbow instead of your theme's family.
+    var rainbowTiles = UserDefaults.standard.bool(forKey: "sugerly.tiles.rainbow") {
+        didSet { UserDefaults.standard.set(rainbowTiles, forKey: "sugerly.tiles.rainbow") }
+    }
 }
 
 enum Theme {

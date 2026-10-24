@@ -10,7 +10,8 @@ import WebRTC
 struct CallBackdrop: View {
     var body: some View {
         ZStack {
-            LinearGradient(colors: [Color(hex: 0x2A1320), Color(hex: 0x12080E)], startPoint: .top, endPoint: .bottom)
+            // A deep night of your theme.
+            Palette.night
             RadialGradient(colors: [Theme.main.opacity(0.3), .clear], center: .init(x: 0.5, y: 0.3), startRadius: 10, endRadius: 360)
         }
         .ignoresSafeArea()

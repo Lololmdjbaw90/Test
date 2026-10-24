@@ -749,7 +749,7 @@ struct PatternBackground: View {
         ]
         let period: CGFloat = 340
         let floor = size.height - 125 * k
-        let style = CloudArt.Style(fill: c.dark ? Color(hex: 0x3A2632) : .white,
+        let style = CloudArt.Style(fill: c.dark ? Color(hex: Palette.mix(0x342A31, Theme.mainHex, 0.14)) : .white,
                                    shade: c.dark ? c.main.opacity(0.32) : c.light.opacity(0.75))
         var layer = context
         layer.opacity = near ? 1 : (c.dark ? 0.6 : 0.75)
@@ -771,7 +771,7 @@ struct PatternBackground: View {
 
     // A fluffy bank of clouds along the bottom.
     private static func cloudBank(_ context: inout GraphicsContext, _ size: CGSize, _ c: Colors) {
-        let style = CloudArt.Style(fill: c.dark ? Color(hex: 0x3A2632) : .white,
+        let style = CloudArt.Style(fill: c.dark ? Color(hex: Palette.mix(0x342A31, Theme.mainHex, 0.14)) : .white,
                                    shade: c.dark ? c.main.opacity(0.32) : c.light.opacity(0.75))
         let k = cloudScale(size.width)
         var bank = Path()

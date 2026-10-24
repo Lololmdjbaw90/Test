@@ -257,7 +257,7 @@ struct RecorderView: View {
                         .scaleEffect(1.15)
                         .overlay(Color.black.opacity(0.3))
                 } else {
-                    LinearGradient(colors: [Color(hex: 0x2A1320), Color(hex: 0x12080E)], startPoint: .top, endPoint: .bottom)
+                    Palette.night
                 }
             }
             .clipped()
@@ -266,7 +266,7 @@ struct RecorderView: View {
 
     private func notice(icon: String, title: String, text: String, settings: Bool) -> some View {
         ZStack {
-            LinearGradient(colors: [Color(hex: 0x2A1320), Color(hex: 0x12080E)], startPoint: .top, endPoint: .bottom)
+            Palette.night
             VStack(spacing: 12) {
                 Image(systemName: icon).font(.system(size: 40)).foregroundStyle(Theme.gradient)
                 Text(title).font(.display(24)).foregroundStyle(.white).multilineTextAlignment(.center)

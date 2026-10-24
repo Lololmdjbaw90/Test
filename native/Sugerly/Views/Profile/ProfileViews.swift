@@ -1524,6 +1524,10 @@ struct AppearanceSettings: View {
     @AppStorage("sugerly.background.speed") private var backgroundSpeed = 1.5
     @AppStorage("sugerly.background.intensity") private var backgroundIntensity = 1.0
 
+    private var tileStyle: Binding<Bool> {
+        Binding(get: { ThemeStore.shared.rainbowTiles }, set: { ThemeStore.shared.rainbowTiles = $0 })
+    }
+
     private var themeChoice: Binding<String> {
         Binding(get: {
             let theme = model.me?.theme ?? ""
@@ -1536,8 +1540,8 @@ struct AppearanceSettings: View {
     var body: some View {
         Section {
             VStack(alignment: .leading, spacing: 12) {
-                IconRow(title: "Theme", icon: "moon.stars.fill")
-                Picker("Theme", selection: themeChoice) {
+                IconRow(title: "Mode", icon: "moon.stars.fill")
+                Picker("Mode", selection: themeChoice) {
                     Text("Light").tag("light")
                     Text("Dark").tag("dark")
                     Text("Auto").tag("system")
@@ -1546,19 +1550,19 @@ struct AppearanceSettings: View {
             }
             .padding(.vertical, 4)
             VStack(alignment: .leading, spacing: 12) {
-                IconRow(title: "Colour", detail: "The logo and Mimi change colour to match.", icon: "drop.fill")
+                IconRow(title: "Theme", detail: "Recolours the whole app: pages, cards, buttons, tiles, the logo and Mimi.", icon: "paintpalette.fill")
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 6) {
-                    ForEach(Accent.allCases) { accent in
-                        let picked = model.accent == accent && model.myColors == nil
+                    ForEach(SugarTheme.all) { theme in
+                        let picked = theme.isPicked(accent: model.accent, mine: model.myColors)
                         Button {
                             ownColours = false
-                            Task { try? await model.updateMe(["accent": accent.rawValue, "accent_main": "", "accent_sub": ""]) }
+                            Task { try? await model.updateMe(theme.fields) }
                         } label: {
-                            AccentCard(accent: accent, picked: picked, height: 84)
+                            ThemeCard(theme: theme, picked: picked)
                         }
                         .buttonStyle(BouncyStyle(scale: 0.94))
                         .sensoryFeedback(.selection, trigger: picked)
-                        .accessibilityLabel(accent.label)
+                        .accessibilityLabel(theme.name)
                         .accessibilityAddTraits(picked ? .isSelected : [])
                     }
                     Button { withMotion(Motion.standard) { ownColours.toggle() } } label: {
@@ -1574,6 +1578,13 @@ struct AppearanceSettings: View {
             }
             .padding(.vertical, 4)
             .buttonStyle(.borderless)
+            VStack(alignment: .leading, spacing: 10) {
+                IconRow(title: "Icon tiles", detail: "Shades of your theme, or the classic rainbow.", icon: "square.grid.2x2.fill")
+                Picker("Icon tiles", selection: tileStyle) {
+                    Text("Theme").tag(false)
+                    Text("Rainbow").tag(true)
+                }.pickerStyle(.segmented)
+            }.padding(.vertical, 4)
             VStack(alignment: .leading, spacing: 10) {
                 IconRow(title: "Top bar", detail: "One shared home for your menu and notifications.", icon: "rectangle.topthird.inset.filled")
                 Picker("Top bar style", selection: $barStyle) {
@@ -1617,7 +1628,8 @@ struct AppearanceSettings: View {
     // The last colour card: Mimi in your own colours once you've made them,
     // a little paint palette before that.
     private var ownColourCard: some View {
-        let own = model.myColors != nil
+        // (A preset theme is saved as own colours too; that one's picked above.)
+        let own = model.myColors != nil && SugarTheme.matching(model.myColors) == nil
         return AccentCard(title: "Your own", main: own ? Theme.main : Color(hex: 0xB19CFF),
                           light: own ? Theme.light : Color(hex: 0xFFB3CB), picked: own, height: 84) {
             if own {

@@ -19,7 +19,7 @@ struct WelcomeSetupView: View {
     @State private var cropping: CropJob?
     @State private var interests: [String] = []
     @State private var theme = "light"
-    @State private var accent: Accent = .rose
+    @State private var chosen: SugarTheme = SugarTheme.all[0]
     @State private var follows: Set<String> = []
     @State private var saving = false
     @State private var error: String?
@@ -98,14 +98,14 @@ struct WelcomeSetupView: View {
         ZStack(alignment: .top) {
             Palette.bg
             LinearGradient(stops: [
-                .init(color: accent.light.opacity(scheme == .dark ? 0.18 : 0.5), location: 0),
+                .init(color: Color(hex: chosen.light).opacity(scheme == .dark ? 0.18 : 0.5), location: 0),
                 .init(color: Palette.cream.opacity(scheme == .dark ? 0.05 : 0.45), location: 0.5),
                 .init(color: .clear, location: 1),
             ], startPoint: .top, endPoint: .bottom)
             .frame(height: 440)
         }
         .ignoresSafeArea()
-        .animation(.easeInOut(duration: 0.6), value: accent)
+        .animation(.easeInOut(duration: 0.6), value: chosen)
     }
 
     private var topBar: some View {
@@ -303,19 +303,26 @@ struct WelcomeSetupView: View {
             }
             .stagger(appeared, 1)
             VStack(alignment: .leading, spacing: 8) {
-                Text("Colour").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
-                HStack(spacing: 8) {
-                    ForEach(Accent.allCases) { a in
-                        let on = accent == a
-                        Button { pick(a) } label: {
-                            AccentCard(accent: a, picked: on, height: 80)
+                Text("Theme").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
+                // Every theme recolours the whole app; swipe for more.
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(SugarTheme.all) { t in
+                            let on = chosen == t
+                            Button { pick(t) } label: {
+                                ThemeCard(theme: t, picked: on).frame(width: 92)
+                            }
+                            .buttonStyle(BouncyStyle(scale: 0.94))
+                            .sensoryFeedback(.selection, trigger: on)
+                            .accessibilityLabel(t.name)
+                            .accessibilityAddTraits(on ? .isSelected : [])
                         }
-                        .buttonStyle(BouncyStyle(scale: 0.94))
-                        .sensoryFeedback(.selection, trigger: on)
-                        .accessibilityLabel(a.label)
-                        .accessibilityAddTraits(on ? .isSelected : [])
                     }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
                 }
+                .scrollIndicators(.hidden)
+                .padding(.horizontal, -6)
             }
             .stagger(appeared, 2)
             // A little preview card in the chosen look.
@@ -490,7 +497,8 @@ struct WelcomeSetupView: View {
         bio = me.bio
         interests = me.interests
         theme = me.theme.isEmpty ? "light" : me.theme
-        accent = Accent(rawValue: me.accent) ?? .rose
+        let classic = Accent(rawValue: me.accent) ?? .rose
+        chosen = SugarTheme.matching(model.myColors) ?? SugarTheme.all.first { $0.accent == classic } ?? SugarTheme.all[0]
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(80))
             appeared = true
@@ -509,12 +517,12 @@ struct WelcomeSetupView: View {
         }
     }
 
-    private func pick(_ a: Accent) {
+    private func pick(_ t: SugarTheme) {
         withAnimation(.easeInOut(duration: 0.45)) {
-            accent = a
-            // Show the colour everywhere straight away.
-            Theme.accent = a
-            Theme.custom = nil
+            chosen = t
+            // Show the theme everywhere straight away.
+            Theme.accent = t.accent ?? .rose
+            Theme.custom = t.accent == nil ? (main: t.main, light: t.light) : nil
         }
     }
 
@@ -566,9 +574,10 @@ struct WelcomeSetupView: View {
         do {
             var fields: Doc = [
                 "display_name": trimmed, "full_name": trimmed, "search_name": trimmed.lowercased(),
-                "bio": String(about.prefix(200)), "interests": interests, "theme": theme, "accent": accent.rawValue,
+                "bio": String(about.prefix(200)), "interests": interests, "theme": theme,
                 "onboarding_completed": true,
             ]
+            fields.merge(chosen.fields) { _, new in new }
             if let picture, let data = ImageTools.jpeg(picture, maxSide: 800) {
                 fields["profile_picture"] = try await StorageClient.upload(data, contentType: "image/jpeg", fileExtension: "jpg")
             }
