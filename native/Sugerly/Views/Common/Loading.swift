@@ -114,7 +114,7 @@ struct ReelSkeleton: View {
             let breath = reduceMotion ? 0.5 : (1 - cos(context.date.timeIntervalSince(start) * .pi * 2 / 2.4)) / 2
             let sketch = Color.white.opacity(0.1 + 0.06 * breath)
             ZStack(alignment: .bottom) {
-                LinearGradient(colors: [Color(hex: 0x1C1519), Color(hex: 0x0E0B0D)], startPoint: .top, endPoint: .bottom)
+                ReelLook.backdrop
                 RadialGradient(colors: [Theme.main.opacity(0.06 + 0.1 * breath), .clear], center: .center, startRadius: 10, endRadius: 320)
                 HStack(alignment: .bottom, spacing: 16) {
                     VStack(alignment: .leading, spacing: 10) {

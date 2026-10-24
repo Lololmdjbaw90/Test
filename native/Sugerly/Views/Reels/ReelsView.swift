@@ -37,6 +37,8 @@ final class ReelVideo {
     var failed = false
     var ready = false
     var portrait = true
+    // About phone-shaped (9:16): fills the whole screen, edge to edge.
+    var tall = true
     private var statusObservation: NSKeyValueObservation?
     private var sizeObservation: NSKeyValueObservation?
     private var preparation: Task<Void, Never>?
@@ -120,7 +122,9 @@ final class ReelVideo {
         sizeObservation = player.observe(\.currentItem?.presentationSize, options: [.initial, .new]) { [weak self] p, _ in
             let size = p.currentItem?.presentationSize ?? .zero
             Task { @MainActor in
-                if size.width > 0, size.height > 0 { self?.portrait = size.height >= size.width * 1.1 }
+                guard size.width > 0, size.height > 0 else { return }
+                self?.portrait = size.height >= size.width * 1.1
+                self?.tall = size.height >= size.width * 1.55
             }
         }
     }
@@ -177,6 +181,42 @@ enum ReelAudio {
     }
 }
 
+// The Reels screen's colours, made from your theme colour so it sits with
+// the rest of the app: a deep night version of it behind and around the
+// videos (never plain black), and the same night as soft see-through glass
+// for the buttons. Gradients run top to bottom.
+enum ReelLook {
+    static var night: Color { Color(hex: Palette.mix(Theme.partnerHex, 0x000000, 0.8)) }
+    static var dusk: Color { Color(hex: Palette.mix(Theme.mainHex, 0x000000, 0.62)) }
+    static var glass: Color { night.opacity(0.42) }
+    // Your colour, deep enough to read on a white pill.
+    static var ink: Color { Color(hex: Palette.mix(Theme.mainHex, 0x000000, 0.22)) }
+    static var backdrop: LinearGradient {
+        LinearGradient(colors: [dusk, night], startPoint: .top, endPoint: .bottom)
+    }
+    // Over the video, so the header and the white writing always read.
+    static var shade: LinearGradient {
+        LinearGradient(stops: [.init(color: night.opacity(0.5), location: 0), .init(color: .clear, location: 0.2),
+                               .init(color: .clear, location: 0.55), .init(color: night.opacity(0.78), location: 1)],
+                       startPoint: .top, endPoint: .bottom)
+    }
+}
+
+// Before iOS 26 the tab bar over the reels is the same night glass. (iOS 26
+// draws its own floating glass bar, which matches every other page.)
+private struct ReelTabBar: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content
+        } else {
+            content
+                .toolbarBackground(.visible, for: .tabBar)
+                .toolbarBackground(ReelLook.night.opacity(0.7), for: .tabBar)
+                .toolbarColorScheme(.dark, for: .tabBar)
+        }
+    }
+}
+
 struct ReelsView: View {
     let visible: Bool
     @Binding var path: [Route]
@@ -215,7 +255,7 @@ struct ReelsView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Color.black.ignoresSafeArea()
+            ReelLook.backdrop.ignoresSafeArea()
             if loading && reels.isEmpty {
                 ReelSkeleton().transition(.opacity)
             } else if shown.isEmpty {
@@ -226,30 +266,41 @@ struct ReelsView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
+                // The reels fill the whole screen, under the clock and the
+                // tab bar (the writing and buttons keep clear of both). The
+                // reader keeps to the safe area so it can say how big the
+                // clock and tab bar are; only the scrolling goes edge to edge.
                 GeometryReader { geo in
                     let list = shown
                     let activeIndex = list.firstIndex { $0.id == activeId } ?? 0
+                    let safe: EdgeInsets = geo.safeAreaInsets
+                    let width: CGFloat = geo.size.width + safe.leading + safe.trailing
+                    let height: CGFloat = geo.size.height + safe.top + safe.bottom
+                    // On iPad (or any wide screen) the reel is a phone-shaped
+                    // card in the middle, on a blurred copy of its cover.
+                    let column: CGFloat = Swift.min(width, height * 0.6)
+                    let wide: Bool = column < width - 1
+                    let room: CGFloat = wide ? geo.size.height : height
+                    let card: CGFloat = Swift.min(column, room * 9 / 16)
+                    let lift: CGFloat = wide ? (safe.top - safe.bottom) / 2 : 0
+                    let pageInsets: EdgeInsets = wide ? EdgeInsets() : safe
                     ScrollView(.vertical) {
                         LazyVStack(spacing: 0) {
                             ForEach(Array(list.enumerated()), id: \.element.id) { i, reel in
-                                // On iPad (or any wide screen) the reel is a phone-shaped
-                                // column in the middle, on a blurred copy of its cover.
-                                let column = Swift.min(geo.size.width, geo.size.height * 0.6)
                                 ZStack {
-                                    if column < geo.size.width - 1 {
+                                    if wide {
                                         RemoteImage(url: reel.coverURL.isEmpty ? (reel.pictures.first ?? "") : reel.coverURL)
                                             .blur(radius: 40)
-                                            .overlay(Color.black.opacity(0.45))
+                                            .overlay(ReelLook.night.opacity(0.5))
                                     }
                                     ReelPage(reel: reel, active: visible && activeId == reel.id, near: abs(i - activeIndex) <= 1, path: $path,
-                                             insets: geo.safeAreaInsets, loadContent: initialReels == nil,
+                                             insets: pageInsets, loadContent: initialReels == nil,
                                              onNext: { advance(from: reel.id) }, onHide: { hide($0) })
-                                        .frame(width: min(column, geo.size.height * 9 / 16))
-                                        .containerRelativeFrame(.vertical)
-                                        .clipShape(RoundedRectangle(cornerRadius: column < geo.size.width - 1 ? 28 : 0, style: .continuous))
-                                        .padding(.vertical, column < geo.size.width - 1 ? 0 : 0)
+                                        .frame(width: card, height: room)
+                                        .clipShape(RoundedRectangle(cornerRadius: wide ? 28 : 0, style: .continuous))
+                                        .offset(y: lift)
                                 }
-                                .frame(width: geo.size.width)
+                                .frame(width: width)
                                 .containerRelativeFrame(.vertical)
                                 .clipped()
                                 .id(reel.id)
@@ -270,48 +321,32 @@ struct ReelsView: View {
                     .accessibilityIdentifier("reel-feed")
                     .scrollIndicators(.hidden)
                     .scrollBounceBehavior(.basedOnSize)
+                    .ignoresSafeArea()
                 }
             }
 
             refreshBadge
-            HStack(spacing: 22) {
-                ForEach([("following", "Following"), ("foryou", "For you")], id: \.0) { id, title in
-                    Button { withMotion(Motion.standard) { feed = id; activeId = shown.first?.id } } label: {
-                        VStack(spacing: 4) {
-                            Text(title).font(.jakarta(17, .bold)).foregroundStyle(.white.opacity(feed == id ? 1 : 0.6))
-                                .scaleEffect(feed == id ? 1 : 0.94)
-                            // One little line that slides to the tab you're on.
-                            ZStack {
-                                if feed == id {
-                                    Capsule().fill(.white).frame(width: 24, height: 3)
-                                        .matchedGeometryEffect(id: "line", in: feedLine)
-                                }
-                            }
-                            .frame(width: 24, height: 3)
-                        }
+            feedSwitch
+                .frame(maxWidth: .infinity)
+                .opacity(pull > 8 || refreshing ? 0 : 1)
+                .animation(.easeOut(duration: 0.15), value: pull > 8 || refreshing)
+                .overlay(alignment: .trailing) {
+                    // Like the + on the other pages: your colour, round.
+                    Button(action: create) {
+                        Image(systemName: "camera.fill").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                            .frame(width: 42, height: 42)
+                            .background(Theme.gradient, in: Circle())
+                            .overlay(Circle().strokeBorder(.white.opacity(0.3), lineWidth: 1))
                     }
-                    .buttonStyle(SoftPressStyle())
+                    .buttonStyle(BouncyStyle())
+                    .accessibilityLabel("Make a reel")
+                    .padding(.trailing, 16)
                 }
-            }
-            .shadow(color: .black.opacity(0.4), radius: 6)
-            .frame(maxWidth: .infinity)
-            .opacity(pull > 8 || refreshing ? 0 : 1)
-            .animation(.easeOut(duration: 0.15), value: pull > 8 || refreshing)
-            .overlay(alignment: .trailing) {
-                Button(action: create) {
-                    Image(systemName: "camera.fill").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
-                        .frame(width: 42, height: 42).background(.white.opacity(0.18), in: Circle())
-                }
-                .buttonStyle(BouncyStyle())
-                .padding(.trailing, 16)
-            }
-            .padding(.top, 6)
+                .padding(.top, 6)
         }
         .toolbar(.hidden, for: .navigationBar)
-        // A dark tab bar over the videos (the reel's buttons sit just above it).
-        .toolbarBackground(.visible, for: .tabBar)
-        .toolbarBackground(Color.black.opacity(0.55), for: .tabBar)
-        .toolbarColorScheme(.dark, for: .tabBar)
+        // The reel's buttons sit just above the tab bar.
+        .modifier(ReelTabBar())
         .task {
             if let initialReels {
                 if reels.isEmpty { reels = initialReels; activeId = initialReels.first?.id }
@@ -367,6 +402,36 @@ struct ReelsView: View {
         Self.cache = reels
     }
 
+    // Following / For you: a little glass pill with a white bubble on the
+    // one you're on (like the tab bar's), sliding across when you switch.
+    private var feedSwitch: some View {
+        HStack(spacing: 2) {
+            ForEach([("following", "Following"), ("foryou", "For you")], id: \.0) { id, title in
+                Button { withMotion(Motion.standard) { feed = id; activeId = shown.first?.id } } label: {
+                    Text(title)
+                        .font(.jakarta(15, .heavy))
+                        .foregroundStyle(feed == id ? ReelLook.ink : Color.white.opacity(0.88))
+                        .padding(.horizontal, 16)
+                        .frame(height: 34)
+                        .background { feedBubble(feed == id) }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(SoftPressStyle())
+                .accessibilityAddTraits(feed == id ? .isSelected : [])
+            }
+        }
+        .padding(3)
+        .background(ReelLook.glass, in: Capsule())
+        .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+    }
+
+    @ViewBuilder
+    private func feedBubble(_ on: Bool) -> some View {
+        if on {
+            Capsule().fill(.white).matchedGeometryEffect(id: "line", in: feedLine)
+        }
+    }
+
     // The "pull to refresh" pill that replaces the tabs while you pull.
     @ViewBuilder
     private var refreshBadge: some View {
@@ -386,7 +451,7 @@ struct ReelsView: View {
             }
             .foregroundStyle(.white)
             .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 14).frame(height: 34)
-            .background(.black.opacity(0.35), in: Capsule())
+            .background(ReelLook.glass, in: Capsule())
             .opacity(refreshing ? 1 : Double(progress))
             .scaleEffect(refreshing ? 1 : 0.85 + 0.15 * progress)
             .padding(.top, 8)
@@ -612,12 +677,19 @@ struct ReelPage: View {
 
     var body: some View {
         ZStack {
-            Color.black
+            ReelLook.backdrop
             GeometryReader { frame in
-                media
-                    .frame(width: min(frame.size.width, frame.size.height * 9 / 16), height: min(frame.size.height, frame.size.width * 16 / 9))
-                    .clipped()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // The reel's 9:16 stage, with its text stickers on it.
+                let stage = Self.stage(frame.size, fill: fillsScreen)
+                ZStack {
+                    media
+                    if !reel.texts.isEmpty {
+                        ReelTextLayer(texts: reel.texts, active: active).allowsHitTesting(false)
+                    }
+                }
+                .frame(width: stage.width, height: stage.height)
+                .frame(width: frame.size.width, height: frame.size.height)
+                .clipped()
             }
             .contentShape(Rectangle())
             .gesture(
@@ -631,10 +703,7 @@ struct ReelPage: View {
             )
             .onLongPressGesture(minimumDuration: 0.45) { sharing = true }
             .accessibilityIdentifier("reel-media")
-            if !reel.texts.isEmpty {
-                ReelTextLayer(texts: reel.texts, active: active).allowsHitTesting(false)
-            }
-            LinearGradient(colors: [.black.opacity(0.35), .clear, .clear, .black.opacity(0.7)], startPoint: .top, endPoint: .bottom)
+            ReelLook.shade
                 .allowsHitTesting(false)
             if paused {
                 Image(systemName: "play.fill").font(.system(size: 60)).foregroundStyle(.white.opacity(0.85)).shadow(radius: 10)
@@ -648,7 +717,7 @@ struct ReelPage: View {
                         Spacer()
                         Button { withMotion(Motion.standard) { clearMode = false } } label: {
                             Label("Show", systemImage: "eye.fill").font(.jakarta(13, .bold)).foregroundStyle(.white)
-                                .padding(.horizontal, 14).frame(height: 36).background(.black.opacity(0.4), in: Capsule())
+                                .padding(.horizontal, 14).frame(height: 36).background(ReelLook.glass, in: Capsule())
                         }
                         .padding(.trailing, 16).padding(.top, insets.top + (showBack ? 8 : 50))
                     }
@@ -715,6 +784,21 @@ struct ReelPage: View {
         .sheet(item: $reporting) { target in ReportSheet(target: target) }
     }
 
+    // Phone-shaped videos fill the whole screen edge to edge (a little comes
+    // off the sides, like TikTok). Photos and wider videos are shown whole on
+    // the backdrop.
+    private var fillsScreen: Bool {
+        reel.isVideo && video?.failed != true && (video?.tall ?? true)
+    }
+
+    static func stage(_ size: CGSize, fill: Bool) -> CGSize {
+        let w = size.width, h = size.height
+        let cover = CGSize(width: max(w, h * 9 / 16), height: max(h, w * 16 / 9))
+        // (Never more than a little off the sides.)
+        if fill && cover.width <= w * 1.3 && cover.height <= h * 1.3 { return cover }
+        return CGSize(width: min(w, h * 9 / 16), height: min(h, w * 16 / 9))
+    }
+
     @ViewBuilder
     private var media: some View {
         if reel.isVideo {
@@ -722,7 +806,7 @@ struct ReelPage: View {
                 ZStack {
                     // The cover shows at once; the video fades in over it.
                     if !video.ready { RemoteImage(url: reel.coverURL, contentMode: .fit) }
-                    LoopingVideo(player: video.player, fill: false)
+                    LoopingVideo(player: video.player, fill: video.tall)
                         .scaleEffect(x: reel.mirror ? -1 : 1, y: 1)
                         .opacity(video.ready ? 1 : 0)
                         .animation(.easeOut(duration: 0.2), value: video.ready)
@@ -741,7 +825,7 @@ struct ReelPage: View {
                             } label: { Label("Try again", systemImage: "arrow.clockwise") }
                                 .buttonStyle(GradientButtonStyle(height: 40, fullWidth: false))
                         }
-                        .padding(14).background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .padding(14).background(ReelLook.night.opacity(0.75), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     }
                 }
                 .ignoresSafeArea()
@@ -769,8 +853,8 @@ struct ReelPage: View {
                 HStack {
                     Button { if path.isEmpty { dismiss() } else { path.removeLast() } } label: {
                         Image(systemName: "chevron.left").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
-                            .frame(width: 44, height: 44).background(.white.opacity(0.2), in: Circle())
-                            .overlay(Circle().strokeBorder(.white.opacity(0.3), lineWidth: 1))
+                            .frame(width: 44, height: 44).background(ReelLook.glass, in: Circle())
+                            .overlay(Circle().strokeBorder(.white.opacity(0.18), lineWidth: 1))
                     }
                     Spacer()
                 }
@@ -782,7 +866,8 @@ struct ReelPage: View {
                     Label("Tap for sound", systemImage: "speaker.slash.fill")
                         .font(.jakarta(14, .bold)).foregroundStyle(.white)
                         .padding(.horizontal, 16).frame(height: 38)
-                        .background(Color(hex: 0x2A1620).opacity(0.55), in: Capsule())
+                        .background(ReelLook.glass, in: Capsule())
+                        .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
                 }
                 .buttonStyle(BouncyStyle())
                 .padding(.top, showBack ? 10 : insets.top + 50)
@@ -834,8 +919,8 @@ struct ReelPage: View {
                 Label(relation, systemImage: "sparkles")
                     .font(.jakarta(12, .bold)).foregroundStyle(.white)
                     .padding(.horizontal, 12).frame(height: 28)
-                    .background(.white.opacity(0.2), in: Capsule())
-                    .overlay(Capsule().strokeBorder(.white.opacity(0.25), lineWidth: 1))
+                    .background(ReelLook.glass, in: Capsule())
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
             }
             if !reel.caption.isEmpty {
                 Button { withMotion(Motion.standard) { captionOpen.toggle() } } label: {
@@ -858,28 +943,28 @@ struct ReelPage: View {
                     }
                     .font(.jakarta(14, .medium)).foregroundStyle(.white.opacity(0.95))
                     .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(.white.opacity(0.14), in: Capsule())
+                    .background(ReelLook.glass, in: Capsule())
                 }
                 .buttonStyle(BouncyStyle(scale: 0.95))
             }
         }
-        .shadow(color: .black.opacity(0.45), radius: 4)
+        .shadow(color: ReelLook.night.opacity(0.5), radius: 3, y: 1)
     }
 
     private var actions: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 12) {
             Button { path.append(.person(reel.authorEmail)) } label: {
-                Avatar(url: author?.picture ?? reel.authorPicture, name: author?.displayName ?? reel.authorName, size: 54, nitro: author?.isNitro ?? false)
-                    .overlay(Circle().strokeBorder(.white, lineWidth: 2.5))
+                Avatar(url: author?.picture ?? reel.authorPicture, name: author?.displayName ?? reel.authorName, size: 48, nitro: author?.isNitro ?? false)
+                    .overlay(Circle().strokeBorder(.white, lineWidth: 2))
                     .overlay(alignment: .bottom) {
                         if (!following || justFollowed) && reel.authorEmail != me {
-                            Image(systemName: justFollowed ? "checkmark" : "plus").font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(justFollowed ? Theme.main : .white)
-                                .frame(width: 24, height: 24)
+                            Image(systemName: justFollowed ? "checkmark" : "plus").font(.system(size: 11, weight: .heavy))
+                                .foregroundStyle(justFollowed ? ReelLook.ink : .white)
+                                .frame(width: 22, height: 22)
                                 .background(justFollowed ? AnyShapeStyle(Color.white) : AnyShapeStyle(Theme.gradient), in: Circle())
                                 .overlay(Circle().strokeBorder(.white, lineWidth: 1.5))
                                 .contentTransition(.symbolEffect(.replace))
-                                .offset(y: 11)
+                                .offset(y: 10)
                                 .onTapGesture { follow() }
                                 .transition(.pop)
                         }
@@ -909,14 +994,15 @@ struct ReelPage: View {
         }
     }
 
-    // Round frosted button with an optional count under it (like the website).
+    // A round button of night glass with an optional count under it; when
+    // it's on (liked, saved) it fills with your colour, like the + elsewhere.
     private func bubble(_ icon: String, count: Int? = nil, tint: Bool = false, run: @escaping () -> Void) -> some View {
         Button(action: run) {
             VStack(spacing: 5) {
                 bubbleLabel(icon, tint: tint)
                 if let count {
                     Text("\(count)").font(.jakarta(13, .heavy)).foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.4), radius: 3)
+                        .shadow(color: ReelLook.night.opacity(0.6), radius: 2, y: 1)
                         .contentTransition(.numericText())
                 }
             }
@@ -925,15 +1011,15 @@ struct ReelPage: View {
     }
 
     private func bubbleLabel(_ icon: String, tint: Bool) -> some View {
+        // (No frosted blur or soft shadow: plain fills stay smooth while
+        // you swipe.)
         Image(systemName: icon)
-            .font(.system(size: 22, weight: .bold))
-            .foregroundStyle(tint ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Color.white))
+            .font(.system(size: 20, weight: .bold))
+            .foregroundStyle(.white)
             .symbolEffect(.bounce, value: tint)
-            .frame(width: 54, height: 54)
-            .background(.white.opacity(0.2), in: Circle())
-            .background(.ultraThinMaterial.opacity(0.5), in: Circle())
-            .overlay(Circle().strokeBorder(.white.opacity(0.35), lineWidth: 1))
-            .shadow(color: .black.opacity(0.15), radius: 6, y: 2)
+            .frame(width: 48, height: 48)
+            .background(tint ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(ReelLook.glass), in: Circle())
+            .overlay(Circle().strokeBorder(.white.opacity(tint ? 0.4 : 0.16), lineWidth: 1))
     }
 
     // Get the video ready (buffered, paused) before you swipe to it.
@@ -1142,23 +1228,33 @@ struct SingleReelView: View {
     @Environment(Player.self) private var music
     var body: some View {
         GeometryReader { geo in
-            // On iPad the reel is a phone-shaped column on a blurred copy of
-            // its cover, like in the feed.
-            let column = Swift.min(geo.size.width, geo.size.height * 0.6)
-            let wide = column < geo.size.width - 1
+            // The reel fills the whole screen (the reader keeps to the safe
+            // area so it knows the clock's and home bar's size). On iPad
+            // it's a phone-shaped card on a blurred copy of its cover, like
+            // in the feed.
+            let safe: EdgeInsets = geo.safeAreaInsets
+            let width: CGFloat = geo.size.width + safe.leading + safe.trailing
+            let height: CGFloat = geo.size.height + safe.top + safe.bottom
+            let column: CGFloat = Swift.min(width, height * 0.6)
+            let wide: Bool = column < width - 1
+            let room: CGFloat = wide ? geo.size.height : height
+            let card: CGFloat = Swift.min(column, room * 9 / 16)
+            let lift: CGFloat = wide ? (safe.top - safe.bottom) / 2 : 0
             ZStack {
-                Color.black
+                ReelLook.backdrop
                 if wide {
                     RemoteImage(url: reel.coverURL.isEmpty ? (reel.pictures.first ?? "") : reel.coverURL)
                         .blur(radius: 40)
-                        .overlay(Color.black.opacity(0.45))
+                        .overlay(ReelLook.night.opacity(0.5))
                 }
-                ReelPage(reel: reel, active: true, path: $path, showBack: false, insets: geo.safeAreaInsets, loadContent: loadContent)
-                    .frame(width: column, height: geo.size.height)
+                ReelPage(reel: reel, active: true, path: $path, showBack: false, insets: wide ? EdgeInsets() : safe, loadContent: loadContent)
+                    .frame(width: card, height: room)
                     .clipShape(RoundedRectangle(cornerRadius: wide ? 28 : 0, style: .continuous))
+                    .offset(y: lift)
             }
-            .frame(width: geo.size.width, height: geo.size.height)
+            .frame(width: width, height: height)
             .clipped()
+            .ignoresSafeArea()
         }
         .overlay(alignment: .topLeading) {
             Button {
@@ -1166,14 +1262,14 @@ struct SingleReelView: View {
             } label: {
                 Image(systemName: "chevron.left").font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(.white).frame(width: 44, height: 44)
-                    .background(.black.opacity(0.4), in: Circle())
-                    .overlay(Circle().strokeBorder(.white.opacity(0.25), lineWidth: 1))
+                    .background(ReelLook.glass, in: Circle())
+                    .overlay(Circle().strokeBorder(.white.opacity(0.18), lineWidth: 1))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Back")
             .padding(.leading, 12).padding(.top, 6)
         }
-        .background(Color.black.ignoresSafeArea())
+        .background(ReelLook.backdrop.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { music.setSuppressed("single-reel", active: true) }
         .onDisappear { music.setSuppressed("single-reel", active: false) }
@@ -1205,8 +1301,8 @@ struct MusicDisc: View {
     var body: some View {
         Avatar(url: picture, name: name, size: 30)
             .padding(10)
-            .background(Circle().fill(LinearGradient(colors: [Color(hex: 0x333333), Color(hex: 0x0A0A0A)], startPoint: .top, endPoint: .bottom)))
-            .overlay(Circle().strokeBorder(.white.opacity(0.15), lineWidth: 1))
+            .background(Circle().fill(LinearGradient(colors: [ReelLook.dusk, ReelLook.night], startPoint: .top, endPoint: .bottom)))
+            .overlay(Circle().strokeBorder(.white.opacity(0.2), lineWidth: 1))
             .rotationEffect(.degrees(angle))
             .task(id: spinning) {
                 while spinning && !Task.isCancelled {
