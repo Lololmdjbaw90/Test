@@ -489,7 +489,10 @@ struct BunnyMakerView: View {
                         Image(systemName: "circle.slash").font(.system(size: 22, weight: .semibold)).foregroundStyle(Palette.muted)
                     } else {
                         ZStack {
-                            ForEach(pieces, id: \.self) { piece in BunnyLayer(piece, look.tint(.outfit)) }
+                            ForEach(pieces, id: \.self) { piece in
+                                BunnyImages.image(piece.rawValue).resizable().interpolation(.high)
+                                    .bunnyDye(look.tint(.outfit), anchor: BunnyDye.anchor(piece.rawValue, BunnyImages.uiImage(piece.rawValue)))
+                            }
                             if pieces.contains(.sailor) { BunnyLayer("BunnyCollar", look.tint(.collar)) }
                         }
                         .aspectRatio(BunnyArt.aspect, contentMode: .fit)

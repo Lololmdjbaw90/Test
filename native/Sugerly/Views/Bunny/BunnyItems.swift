@@ -201,6 +201,9 @@ struct BunnyItemLayer: View {
         ZStack {
             if item.slot == .body, !item.uploaded, let tint {
                 BunnyLayer(item.asset, tint)
+            } else if item.slot == .top || item.slot == .head {
+                // Clothes and accessories are dyed (see BunnyDye).
+                picture.bunnyDye(tint, anchor: dyeAnchor)
             } else {
                 picture
                     .hueRotation(.degrees(item.slot == .body ? (tint?.hue ?? 0) : turn))
@@ -211,6 +214,12 @@ struct BunnyItemLayer: View {
                 BunnyImages.image(item.outlineAsset).resizable().interpolation(.high)
             }
         }
+    }
+
+    private var dyeAnchor: Float {
+        if !item.asset.isEmpty { return BunnyDye.anchor(item.asset, BunnyImages.uiImage(item.asset)) }
+        guard let image = BunnyRemoteImages.shared.images[item.url] else { return 0.5 }
+        return BunnyDye.anchor(item.url, image)
     }
 
     private var turn: Double {

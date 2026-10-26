@@ -193,7 +193,7 @@ enum Tone {
 // shortcuts, the "new post / reel / drawing / song" buttons, menus). Each
 // place keeps its own colour everywhere: music is always "sky", servers
 // "mint", people "grape", rewards "lemon", posts "berry", reels "peach". With
-// a theme (the default) they're a family of your theme's colour; "Rainbow"
+// a theme (the default) they're all shades of your theme's colour; "Rainbow"
 // in Settings gives the classic fixed colours.
 enum Candy: CaseIterable {
     case berry, peach, lemon, mint, sky, grape
