@@ -420,13 +420,13 @@ enum Theme {
     // light colour is taken deeper so buttons are never glaring and white
     // writing on them reads. In dark mode it's a touch deeper, so it
     // doesn't glow.
-    // Kept to a gentle lift at the top (the old three-stop candy with a
-    // turn towards the partner colour went muddy with some themes).
     static var candy: LinearGradient {
         let base = buttonHex
-        let top = Palette.swatch(Palette.mix(base, 0xFFFFFF, 0.1), 1, Palette.mix(base, 0xFFFFFF, 0.04), 1)
-        let bottom = Palette.swatch(base, 1, Palette.mix(base, 0x000000, 0.06), 1)
-        return LinearGradient(colors: [top, bottom], startPoint: .top, endPoint: .bottom)
+        let low = Palette.mix(base, partnerHex, 0.45)
+        let top = Palette.swatch(Palette.mix(base, 0xFFFFFF, 0.2), 1, Palette.mix(base, 0xFFFFFF, 0.06), 1)
+        let middle = Palette.swatch(base, 1, Palette.mix(base, 0x000000, 0.06), 1)
+        let bottom = Palette.swatch(Palette.mix(low, 0x000000, 0.05), 1, Palette.mix(low, 0x000000, 0.16), 1)
+        return LinearGradient(colors: [top, middle, bottom], startPoint: .top, endPoint: .bottom)
     }
 
     // Your colour for filled buttons: deep enough that white writing on it
@@ -634,9 +634,9 @@ struct GradientButtonStyle: ButtonStyle {
     }
 }
 
-// The main button: the deep accent with a gentle lift on top, white text
-// and a small shadow in its colour. It squishes when pressed and springs
-// back. (No moving shine: it pulled the eye away from the page.)
+// The main button: a candy pill — the accent with a soft highlight on top,
+// white text and a little shadow in its colour. It squishes when pressed
+// and springs back.
 private struct GradientButtonBody: View {
     let configuration: ButtonStyleConfiguration
     let height: CGFloat
@@ -656,8 +656,9 @@ private struct GradientButtonBody: View {
             .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: min(height, 50))
             .background {
                 shape.fill(Theme.candy)
-                    .overlay(shape.strokeBorder(Palette.rim(0.18), lineWidth: 1))
-                    .shadow(color: Theme.glow(enabled ? (pressed ? 0.1 : 0.22) : 0), radius: pressed ? 3 : 8, y: pressed ? 1 : 4)
+                    .overlay { if enabled { ShineSweep(every: 4.2).clipShape(shape) } }
+                    .overlay(shape.strokeBorder(Palette.rim(0.22), lineWidth: 1))
+                    .shadow(color: Theme.glow(enabled ? (pressed ? 0.12 : 0.28) : 0), radius: pressed ? 4 : 10, y: pressed ? 2 : 5)
             }
             .opacity(enabled ? (pressed ? 0.92 : 1) : 0.45)
             .scaleEffect(pressed && !Motion.reduced ? 0.965 : 1)
@@ -737,18 +738,23 @@ struct SectionHeader: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            // A soft tile in the section's colour with the symbol in that
-            // colour (a quiet label, so the content below is what stands
-            // out). It gives a hop when the section comes into view.
-            let tint = Candy.matching(icon)?.color ?? Theme.main
+            // A little candy badge in the section's colour, which gives a
+            // hop when the section comes into view.
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(tint)
+                .foregroundStyle(.white)
                 .symbolEffect(.bounce, value: shown)
                 .frame(width: 30, height: 30)
-                .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .background {
+                    let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    if let candy = Candy.matching(icon) {
+                        shape.fill(candy.gradient).shadow(color: candy.color.softGlow(0.3), radius: 5, y: 2)
+                    } else {
+                        shape.fill(Theme.candy).shadow(color: Theme.glow(0.28), radius: 5, y: 2)
+                    }
+                }
                 .accessibilityHidden(true)
-            Text(title).font(.display(21)).foregroundStyle(Palette.text)
+            Text(title).font(.display(22)).foregroundStyle(Palette.text)
                 .lineLimit(1).minimumScaleFactor(0.8)
             Spacer(minLength: 8)
             if let action {
