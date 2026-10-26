@@ -151,6 +151,42 @@ enum ColorTone {
         return UIColor(hue: hue / 360, saturation: saturation, brightness: (low + high) / 2, alpha: 1).rgbHex
     }
 
+    // Contrast between two colours (1 to 21), as WCAG measures it.
+    static func contrast(_ a: UInt32, _ b: UInt32) -> Double {
+        let x = luminance(a), y = luminance(b)
+        return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+    }
+
+    // The colour as it is if it reads on `background` at `ratio`; otherwise
+    // the nearest shade that does: deeper (or lighter, for dark pages)
+    // while keeping its hue and a little more of its colour, so a rose stays
+    // a rich rose instead of going dusty.
+    static func readable(_ hex: UInt32, on background: UInt32, ratio: Double = 4.5, lighter: Bool = false) -> UInt32 {
+        let key = ReadableKey(hex: hex, background: background, ratio: Int(ratio * 100), lighter: lighter)
+        lock.lock()
+        defer { lock.unlock() }
+        if let hit = readableMade[key] { return hit }
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(hex: hex).getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        var out = hex
+        var step = 0
+        while contrast(out, background) < ratio && step < 60 {
+            step += 1
+            let t = CGFloat(step)
+            if lighter {
+                out = UIColor(hue: h, saturation: max(0, s * (1 - 0.012 * t)), brightness: min(1, b + (1 - b) * 0.04 * t + 0.004 * t), alpha: 1).rgbHex
+            } else {
+                out = UIColor(hue: h, saturation: min(1, s * (1 + 0.01 * t)), brightness: max(0, b * (1 - 0.012 * t)), alpha: 1).rgbHex
+            }
+        }
+        readableMade[key] = out
+        return out
+    }
+    private struct ReadableKey: Hashable {
+        let hex: UInt32, background: UInt32, ratio: Int, lighter: Bool
+    }
+    nonisolated(unsafe) private static var readableMade: [ReadableKey: UInt32] = [:]
+
     // The colour as it is, or a deeper shade of it if it's lighter than
     // `brightest` (so a very light colour doesn't glare on a button).
     static func calm(_ hex: UInt32, brightest: Double) -> UInt32 {

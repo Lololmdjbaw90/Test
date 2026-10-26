@@ -1,13 +1,13 @@
 import SwiftUI
 import UIKit
 
-// Sugerly's look: soft pastel pages built from one palette — cream
-// (FCF0D6), ivory (F8FBE6), blush (FAD0DC), pink (F6BDCC) and rose (F9B0C4) —
-// with a deeper rose for buttons and links so text stays easy to read, plum
-// text instead of black, and the iPhone's own fonts. Pick another theme in
-// Settings (Themes.swift) and the whole app is recoloured from it: pages,
-// cards, text, tiles and dark screens. Use Theme / Palette colours rather
-// than fixed ones so everything follows.
+// Sugerly's look: a clear pastel page in your theme's colour, clean white
+// cards with a crisp hairline, near-black ink for text, and a rich, deep
+// accent for buttons and links. Every text colour is worked out so it is
+// easy to read (at least 4.5 : 1, the WCAG AA level) on the page, the cards
+// and the fields, for every theme, in light and dark mode. Pick another
+// theme in Settings (Themes.swift) and the whole app is recoloured from it.
+// Use Theme / Palette colours rather than fixed ones so everything follows.
 
 extension UIColor {
     convenience init(hex: UInt32, alpha: CGFloat = 1) {
@@ -50,14 +50,17 @@ enum Palette {
     // out on it. Cards: clean white. Fields, chips and tracks: a softer
     // shade of your pastel. Hairlines: a light line of it. Text: a deep ink
     // of your colour instead of black. In dark mode, deep shades of it.
-    static var bg: Color { pastel(0xF7F4F3, 0.28, dark: 0x131114, 0.09) }
-    static var surface: Color { pastel(0xFFFFFF, 0.0, dark: 0x1D191C, 0.1) }
-    static var surface2: Color { pastel(0xF4F0EF, 0.24, dark: 0x29232A, 0.12) }
-    static var border: Color { pastel(0xEEE8E7, 0.22, dark: 0x352D33, 0.13) }
-    static var borderStrong: Color { pastel(0xE2DAD9, 0.32, dark: 0x473B43, 0.16) }
-    static var text: Color { ink(0x2B1D24, 0.18, dark: 0xFBF1F4, 0.06) }
-    static var text2: Color { ink(0x5E4A53, 0.2, dark: 0xD6C3CB, 0.08) }
-    static var muted: Color { ink(0x8A7882, 0.22, dark: 0x9C8891, 0.1) }
+    // Text is near-black with only a whisper of your colour (tinted plum
+    // ink looked muddy and was hard to read), and the quieter text levels
+    // stay readable: text2 ≈ 7 : 1 and muted ≥ 4.5 : 1 on the page.
+    static var bg: Color { pastel(0xF6F3F5, 0.30, dark: 0x111014, 0.07) }
+    static var surface: Color { pastel(0xFFFFFF, 0.0, dark: 0x1B191F, 0.07) }
+    static var surface2: Color { pastel(0xF3F0F2, 0.16, dark: 0x25222A, 0.09) }
+    static var border: Color { pastel(0xE9E5EA, 0.18, dark: 0x312D36, 0.1) }
+    static var borderStrong: Color { pastel(0xD9D3DB, 0.26, dark: 0x433D49, 0.12) }
+    static var text: Color { ink(0x1E1A21, 0.05, dark: 0xF5F2F7, 0.04) }
+    static var text2: Color { ink(0x4B4550, 0.08, dark: 0xCCC6D1, 0.06) }
+    static var muted: Color { ink(0x625C67, 0.08, dark: 0xA29BA8, 0.08) }
 
     // Dark screens (the camera, calls, Reels): a deep night of your theme,
     // never plain black.
@@ -90,11 +93,13 @@ enum Palette {
         swatch(0xFFFFFF, opacity, 0xFFFFFF, min(0.07, opacity * 0.12))
     }
 
-    static let danger = Color(hex: 0xE5484D)
-    static let success = Color(hex: 0x2E9E6B)
-    static let warning = Color(hex: 0xE09A1A)
+    // Status colours, deep enough to read as text on white and on the page
+    // (and lighter in dark mode, so they read there too).
+    static let danger = Color.dynamic(light: 0xD12F45, dark: 0xFF6B7A)
+    static let success = Color.dynamic(light: 0x16855A, dark: 0x4CCB8E)
+    static let warning = Color.dynamic(light: 0xA86A00, dark: 0xF2B544)
     static let gold = Color(hex: 0xE9A21F)
-    static let shadow = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor.black.withAlphaComponent(0.4) : UIColor(hex: 0x4A2A3A, alpha: 0.07) })
+    static let shadow = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor.black.withAlphaComponent(0.45) : UIColor(hex: 0x2A1E2E, alpha: 0.06) })
 
     // Reading the accent here makes every view that uses a page colour
     // redraw when you pick another accent.
@@ -376,8 +381,20 @@ enum Theme {
             if ThemeStore.shared.customLight != newValue?.light { ThemeStore.shared.customLight = newValue?.light }
         }
     }
-    static var main: Color { custom.map { Color(hex: $0.main) } ?? accent.main }
+    // The accent as it's drawn: your colour, taken just deep enough (light
+    // mode) or light enough (dark mode) that links, icons and accent text
+    // read clearly on the page. White writing on it reads too.
+    static var main: Color {
+        let base = mainHex
+        return Palette.swatch(ColorTone.readable(base, on: pageLightHex), 1,
+                              ColorTone.readable(base, on: pageDarkHex, lighter: true), 1)
+    }
+    // Your theme's colour exactly as picked (saved to your profile, and the
+    // seed every other colour is mixed from).
     static var mainHex: UInt32 { custom?.main ?? accent.mainHex }
+    // The page colours, as plain values for the contrast sums.
+    static var pageLightHex: UInt32 { Palette.mix(0xF6F3F5, lightHex, 0.30) }
+    static var pageDarkHex: UInt32 { Palette.mix(0x111014, mainHex, 0.07) }
     static var lightHex: UInt32 { custom?.light ?? accent.lightHex }
     static var light: Color { custom.map { Color(hex: $0.light) } ?? accent.light }
     static var pink: Color { main }
@@ -403,18 +420,18 @@ enum Theme {
     // light colour is taken deeper so buttons are never glaring and white
     // writing on them reads. In dark mode it's a touch deeper, so it
     // doesn't glow.
+    // Kept to a gentle lift at the top (the old three-stop candy with a
+    // turn towards the partner colour went muddy with some themes).
     static var candy: LinearGradient {
         let base = buttonHex
-        let low = Palette.mix(base, partnerHex, 0.45)
-        let top = Palette.swatch(Palette.mix(base, 0xFFFFFF, 0.2), 1, Palette.mix(base, 0xFFFFFF, 0.06), 1)
-        let middle = Palette.swatch(base, 1, Palette.mix(base, 0x000000, 0.06), 1)
-        let bottom = Palette.swatch(Palette.mix(low, 0x000000, 0.05), 1, Palette.mix(low, 0x000000, 0.16), 1)
-        return LinearGradient(colors: [top, middle, bottom], startPoint: .top, endPoint: .bottom)
+        let top = Palette.swatch(Palette.mix(base, 0xFFFFFF, 0.1), 1, Palette.mix(base, 0xFFFFFF, 0.04), 1)
+        let bottom = Palette.swatch(base, 1, Palette.mix(base, 0x000000, 0.06), 1)
+        return LinearGradient(colors: [top, bottom], startPoint: .top, endPoint: .bottom)
     }
 
-    // Your colour for filled buttons: as it is, unless it's so light that
-    // it glares (then a deeper shade of it).
-    static var buttonHex: UInt32 { ColorTone.calm(mainHex, brightest: 0.3) }
+    // Your colour for filled buttons: deep enough that white writing on it
+    // reads at 4.5 : 1 (light colours like lemon or mint used to fail).
+    static var buttonHex: UInt32 { ColorTone.readable(mainHex, on: 0xFFFFFF) }
     // The soft rosy glow under candy buttons and chips. On dark pages it's a
     // plain shadow instead (a pink glow there looks like neon).
     static func glow(_ opacity: Double) -> Color {
@@ -553,8 +570,8 @@ extension Font {
 
 // MARK: - Building blocks
 
-// A card: the near-white surface, a soft blush hairline and a gentle plum
-// shadow underneath, so it sits lightly on the page.
+// A card: the clean surface with a crisp hairline and a tight, quiet
+// shadow, so it lifts off the tinted page without looking puffy.
 struct SugarCard: ViewModifier {
     var radius: CGFloat = 18
     var padding: CGFloat = 0
@@ -564,9 +581,9 @@ struct SugarCard: ViewModifier {
             .padding(padding)
             .background {
                 shape.fill(Palette.surface)
-                    .softShadow(Palette.shadow, radius: 6, y: 2)
+                    .softShadow(Palette.shadow, radius: 3, y: 1)
             }
-            .overlay(shape.strokeBorder(Palette.border.opacity(0.8), lineWidth: 1))
+            .overlay(shape.strokeBorder(Palette.border, lineWidth: 1))
     }
 }
 
@@ -617,9 +634,9 @@ struct GradientButtonStyle: ButtonStyle {
     }
 }
 
-// The main button: a candy-rose pill — the accent with a soft highlight on
-// top, white text and a little rosy shadow. It squishes when pressed and
-// springs back.
+// The main button: the deep accent with a gentle lift on top, white text
+// and a small shadow in its colour. It squishes when pressed and springs
+// back. (No moving shine: it pulled the eye away from the page.)
 private struct GradientButtonBody: View {
     let configuration: ButtonStyleConfiguration
     let height: CGFloat
@@ -639,9 +656,8 @@ private struct GradientButtonBody: View {
             .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: min(height, 50))
             .background {
                 shape.fill(Theme.candy)
-                    .overlay { if enabled { ShineSweep(every: 4.2).clipShape(shape) } }
-                    .overlay(shape.strokeBorder(Palette.rim(0.22), lineWidth: 1))
-                    .shadow(color: Theme.glow(enabled ? (pressed ? 0.12 : 0.28) : 0), radius: pressed ? 4 : 10, y: pressed ? 2 : 5)
+                    .overlay(shape.strokeBorder(Palette.rim(0.18), lineWidth: 1))
+                    .shadow(color: Theme.glow(enabled ? (pressed ? 0.1 : 0.22) : 0), radius: pressed ? 3 : 8, y: pressed ? 1 : 4)
             }
             .opacity(enabled ? (pressed ? 0.92 : 1) : 0.45)
             .scaleEffect(pressed && !Motion.reduced ? 0.965 : 1)
@@ -649,7 +665,8 @@ private struct GradientButtonBody: View {
     }
 }
 
-// The quieter button: a soft grey fill with the accent colour's text.
+// The quieter button: the card surface with the accent's text and a thin
+// accent edge.
 struct OutlineButtonStyle: ButtonStyle {
     var height: CGFloat = 44
     var fullWidth = false
@@ -667,7 +684,7 @@ struct OutlineButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Palette.surface)
                     .shadow(color: Palette.shadow, radius: 6, y: 2)
             }
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.main.opacity(0.2), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.main.opacity(0.3), lineWidth: 1))
             .opacity(configuration.isPressed ? 0.8 : 1)
             .scaleEffect(configuration.isPressed && !Motion.reduced ? 0.97 : 1)
             .animation(configuration.isPressed ? Motion.press : Motion.release, value: configuration.isPressed)
@@ -720,23 +737,18 @@ struct SectionHeader: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            // A little candy badge in the section's colour, which gives a
-            // hop when the section comes into view.
+            // A soft tile in the section's colour with the symbol in that
+            // colour (a quiet label, so the content below is what stands
+            // out). It gives a hop when the section comes into view.
+            let tint = Candy.matching(icon)?.color ?? Theme.main
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(tint)
                 .symbolEffect(.bounce, value: shown)
                 .frame(width: 30, height: 30)
-                .background {
-                    let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    if let candy = Candy.matching(icon) {
-                        shape.fill(candy.gradient).shadow(color: candy.color.softGlow(0.3), radius: 5, y: 2)
-                    } else {
-                        shape.fill(Theme.candy).shadow(color: Theme.glow(0.28), radius: 5, y: 2)
-                    }
-                }
+                .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                 .accessibilityHidden(true)
-            Text(title).font(.display(22)).foregroundStyle(Palette.text)
+            Text(title).font(.display(21)).foregroundStyle(Palette.text)
                 .lineLimit(1).minimumScaleFactor(0.8)
             Spacer(minLength: 8)
             if let action {

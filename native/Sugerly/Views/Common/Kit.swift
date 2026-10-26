@@ -193,25 +193,25 @@ private struct CompactTabBar: ViewModifier {
 }
 
 enum TabBarLook {
-    // Before iOS 26 (which draws its own floating glass bar): a soft blush
-    // frosted bar, quiet icons, the pink one for the tab you're on, and
-    // pink badges, in Sugerly's font.
+    // Before iOS 26 (which draws its own floating glass bar): a frosted bar,
+    // readable grey icons, your accent for the tab you're on, and red
+    // badges.
     static func apply() {
         guard #unavailable(iOS 26.0) else { return }
         let small = UIFont.systemFont(ofSize: 10, weight: .medium)
         let bold = UIFont.systemFont(ofSize: 10, weight: .semibold)
-        let muted = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x9C8891) : UIColor(hex: 0xA08893) }
+        let muted = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0xA29BA8) : UIColor(hex: 0x6A646F) }
         let bar = UITabBarAppearance()
         bar.configureWithDefaultBackground()
         bar.backgroundEffect = UIBlurEffect(style: .systemThinMaterial)
-        bar.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x1A1418, alpha: 0.82) : UIColor(hex: 0xFBF9F8, alpha: 0.88) }
-        bar.shadowColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x382D33) : UIColor(hex: 0xEEE8E7) }
+        bar.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x1B191F, alpha: 0.86) : UIColor(hex: 0xFFFFFF, alpha: 0.9) }
+        bar.shadowColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x312D36) : UIColor(hex: 0xE9E5EA) }
         for layout in [bar.stackedLayoutAppearance, bar.inlineLayoutAppearance, bar.compactInlineLayoutAppearance] {
             layout.normal.iconColor = muted
             layout.normal.titleTextAttributes = [.foregroundColor: muted, .font: small]
             layout.selected.titleTextAttributes = [.font: bold]
-            layout.normal.badgeBackgroundColor = UIColor(hex: 0xE5484D)
-            layout.selected.badgeBackgroundColor = UIColor(hex: 0xE5484D)
+            layout.normal.badgeBackgroundColor = UIColor(hex: 0xD12F45)
+            layout.selected.badgeBackgroundColor = UIColor(hex: 0xD12F45)
         }
         UITabBar.appearance().standardAppearance = bar
         UITabBar.appearance().scrollEdgeAppearance = bar
