@@ -81,6 +81,37 @@ jobs:
         working-directory: native
         run: grep -E "error:|reasonable time" build.log | head -80 || true
 
+      # Small JPEG copies of the design screenshots, printed into the log so
+      # they can be looked at without downloading the artifact.
+      - name: Print preview screenshots
+        if: always()
+        working-directory: native
+        run: |
+          [ -f test-screenshots/manifest.json ] || exit 0
+          python3 - <<'PY'
+          import base64, json, os, subprocess
+          want = ("compact-home", "compact-community", "compact-chats", "menu-full-screen-bottom",
+                  "outlined-titles-rose", "outlined-titles-mint-dark", "bunny-new-bodies", "appearance-options")
+          found = []
+          def walk(x):
+              if isinstance(x, dict):
+                  name = x.get("suggestedHumanReadableName", "")
+                  if x.get("exportedFileName", "").endswith(".png") and name.startswith(want):
+                      found.append((name, x["exportedFileName"]))
+                  for v in x.values(): walk(v)
+              elif isinstance(x, list):
+                  for v in x: walk(v)
+          walk(json.load(open("test-screenshots/manifest.json")))
+          for name, file in found:
+              out = "/tmp/preview.jpg"
+              subprocess.run(["sips", "-s", "format", "jpeg", "-s", "formatOptions", "50", "--resampleWidth", "300",
+                              os.path.join("test-screenshots", file), "--out", out], capture_output=True)
+              data = base64.b64encode(open(out, "rb").read()).decode()
+              key = name.split("_")[0]
+              for i in range(0, len(data), 3000):
+                  print(f"PREVIEW {key} {i // 3000} {data[i:i + 3000]}")
+          PY
+
       - name: Package the .ipa
         working-directory: native
         run: |
