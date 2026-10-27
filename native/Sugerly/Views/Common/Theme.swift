@@ -583,16 +583,18 @@ struct SugarCard: ViewModifier {
     }
 }
 
-// Frosted glass: the page blurs through a milky, see-through card with a
-// fine frost grain on it, inside a bright frame that runs from white at the
-// top to a hint of your theme colour at the bottom, with a faint glow under
-// it. In the flat look (the menu, long lists) the blur is left off (it would
-// be redrawn on every frame while scrolling) but the card keeps its frost
-// grain, see-through milk and frame, so it still looks frosted.
+// Frosted glass, built to never lag: a milky, see-through card with a fine
+// frost grain, inside a bright frame that runs from white at the top to a
+// hint of your theme colour at the bottom. There's no live blur here: a
+// blur behind every card is redrawn each frame while the page scrolls or
+// its wallpaper moves, which made scrolling stutter. Our pages are soft
+// gradients, so a milky see-through layer looks just as frosted for free.
+// Only a single thing on screen, like the top bar, asks for a real blur
+// (`blur: true`).
 struct GlassFrame: ViewModifier {
     var radius: CGFloat = 18
     var tint: Color? = nil
-    @Environment(\.flat) private var flat
+    var blur = false
     @Environment(\.colorScheme) private var scheme
 
     func body(content: Content) -> some View {
@@ -605,11 +607,10 @@ struct GlassFrame: ViewModifier {
         content
             .background {
                 Group {
-                    if flat {
-                        shape.fill(Palette.surface.opacity(dark ? 0.72 : 0.78)).overlay(shape.fill(milk))
+                    if blur {
+                        shape.fill(.ultraThinMaterial).overlay(shape.fill(milk))
                     } else {
-                        shape.fill(.thinMaterial).overlay(shape.fill(milk))
-                            .softShadow(Theme.main.opacity(dark ? 0.24 : 0.16), radius: 12, y: 5)
+                        shape.fill(Palette.surface.opacity(dark ? 0.55 : 0.58)).overlay(shape.fill(milk))
                     }
                 }
                 .frostGrain(in: shape)
@@ -644,10 +645,11 @@ struct FrostedFill<S: InsettableShape>: ViewModifier {
 }
 
 extension View {
-    /// Lays the frosted-glass grain (FrostGrain.metal) over this view,
-    /// inside `shape`. A still texture: no cost while scrolling.
-    func frostGrain<S: Shape>(in shape: S, strength: Float = 0.035) -> some View {
-        overlay(shape.fill(ShaderLibrary.frostGrain(.float(strength))).allowsHitTesting(false))
+    /// Lays the frosted-glass grain over this view, inside `shape`: one
+    /// small still tile (see FrostNoise), drawn like any picture, so it
+    /// costs nothing while scrolling.
+    func frostGrain<S: Shape>(in shape: S, strength: Double = 0.035) -> some View {
+        overlay(shape.fill(ImagePaint(image: FrostNoise.image)).opacity(strength / FrostNoise.strength).allowsHitTesting(false))
     }
 
     /// See-through frosted glass behind this view, in `shape` (see FrostedFill).
@@ -678,7 +680,7 @@ struct PastelCard: ViewModifier {
 
 extension View {
     func sugarCard(radius: CGFloat = 18, padding: CGFloat = 0) -> some View { modifier(SugarCard(radius: radius, padding: padding)) }
-    func glassFrame(radius: CGFloat = 18, tint: Color? = nil) -> some View { modifier(GlassFrame(radius: radius, tint: tint)) }
+    func glassFrame(radius: CGFloat = 18, tint: Color? = nil, blur: Bool = false) -> some View { modifier(GlassFrame(radius: radius, tint: tint, blur: blur)) }
     func pastelCard(radius: CGFloat = 22, padding: CGFloat = 16) -> some View { modifier(PastelCard(radius: radius, padding: padding)) }
 
     // Floating bits (the music player): the surface with a hairline edge and

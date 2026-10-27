@@ -100,8 +100,9 @@ private struct PlainToolbar<Leading: View, Trailing: View>: ViewModifier {
         .environment(\.unifiedBar, true)
         .padding(.horizontal, 8)
         .frame(width: min(UIScreen.main.bounds.width - 32, 728), height: 48)
-        // Frosted glass, like the cards (the outlined style adds a theme edge).
-        .glassFrame(radius: 22, tint: style == "tinted" ? Theme.soft : nil)
+        // Frosted glass, like the cards, with a real blur since the page scrolls
+        // under it (the outlined style adds a theme edge).
+        .glassFrame(radius: 22, tint: style == "tinted" ? Theme.soft : nil, blur: true)
         .overlay {
             if style == "outline" {
                 RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Theme.main.opacity(0.5), lineWidth: 1)
