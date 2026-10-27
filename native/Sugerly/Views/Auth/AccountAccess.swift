@@ -62,7 +62,7 @@ struct AccessField<Content: View>: View {
         }
         .padding(.horizontal, 16)
         .frame(minHeight: 54)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .frostedFill(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.main.opacity(0.25), lineWidth: 1.5))
     }
 }
@@ -875,7 +875,7 @@ struct BackupCodesSheet: View {
                         .foregroundStyle(Palette.text)
                         .frame(maxWidth: .infinity)
                         .frame(height: 44)
-                        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .frostedFill(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .textSelection(.enabled)
                         .transition(.pop)
                         .animation(Motion.staggered(Motion.enter, i), value: codes)

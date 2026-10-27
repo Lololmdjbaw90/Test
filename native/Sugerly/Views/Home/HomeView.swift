@@ -411,9 +411,8 @@ struct HomeView: View {
                 XPBar(info: info)
             }
             .padding(14)
-            .background(RoundedRectangle(cornerRadius: 24).fill(Theme.pastel))
-            .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(Palette.rim(0.55), lineWidth: 1))
-            .background(RoundedRectangle(cornerRadius: 24).fill(Theme.main.opacity(0.16)).offset(y: 4))
+            // Frosted glass with a soft wash of your colour at the top.
+            .glassFrame(radius: 24, tint: Palette.blush)
             .overlay {
                 // A shine sweeping by (no sparkles: the bunny's tile is the
                 // card's sparkle).
@@ -441,8 +440,7 @@ struct HomeView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12).padding(.vertical, 9)
-            .background(Palette.surface.opacity(0.78), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Palette.rim(0.7), lineWidth: 1))
+            .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(BouncyStyle(scale: 0.94))

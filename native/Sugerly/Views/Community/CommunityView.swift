@@ -436,11 +436,12 @@ struct CommunityView: View {
         }
         .padding(4)
         .background {
-            Capsule().fill(.ultraThinMaterial)
-                .overlay(Capsule().fill(Palette.surface.opacity(0.78)))
-                .shadow(color: Palette.shadow, radius: 12, y: 5)
+            Capsule().fill(.thinMaterial)
+                .overlay(Capsule().fill(Palette.surface.opacity(0.42)))
+                .frostGrain(in: Capsule())
+                .shadow(color: Theme.main.opacity(0.16), radius: 12, y: 5)
         }
-        .overlay(Capsule().strokeBorder(Palette.border.opacity(0.8), lineWidth: 1).allowsHitTesting(false))
+        .overlay(Capsule().strokeBorder(LinearGradient(colors: [Palette.rim(0.95), Theme.main.opacity(0.22)], startPoint: .top, endPoint: .bottom), lineWidth: 1.3).allowsHitTesting(false))
         .sensoryFeedback(.selection, trigger: feed)
         .padding(.vertical, 8)
     }
@@ -1771,7 +1772,7 @@ struct SugarField: View {
         .focused($focused)
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .frostedFill(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(focused ? Theme.main.opacity(0.5) : Palette.border, lineWidth: focused ? 1.5 : 1))
         .shadow(color: focused ? Theme.glow(0.16) : Palette.shadow.opacity(0.5), radius: focused ? 10 : 6, y: 3)
         .animation(.snappy(duration: 0.2), value: focused)
@@ -1959,7 +1960,7 @@ private struct ConversationSurface: ViewModifier {
     @ViewBuilder func body(content: Content) -> some View {
         if flat {
             content
-                .background(Palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .frostedFill(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.border, lineWidth: 1).allowsHitTesting(false))
         } else { content.sugarCard(radius: 22) }

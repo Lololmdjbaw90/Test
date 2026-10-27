@@ -53,7 +53,7 @@ struct MusicView: View {
                     } label: {
                         Image(systemName: "chevron.left").font(.system(size: 17, weight: .bold)).foregroundStyle(Palette.text)
                             .frame(width: 44, height: 44)
-                            .background(Palette.surface, in: Circle())
+                            .frostedFill(in: Circle())
                             .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
                     }
                     .buttonStyle(BouncyStyle())
@@ -171,7 +171,7 @@ struct MusicView: View {
             }
             .padding(.horizontal, 16)
             .frame(height: 46)
-            .background(Palette.surface, in: Capsule())
+            .frostedFill(in: Capsule())
             .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
             if query.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -318,7 +318,7 @@ struct FullSongSheet: View {
                         }
                         .padding(.horizontal, 12)
                         .frame(height: 54)
-                        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .frostedFill(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
                     }
                     .buttonStyle(BouncyStyle())
@@ -429,7 +429,7 @@ private extension View {
     // Each song gets its own light card. (One tall card with a soft shadow
     // round a whole list had to redraw that shadow while you scrolled.)
     func songCard() -> some View {
-        self.background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        self.frostedFill(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
     }
 }

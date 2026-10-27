@@ -190,7 +190,7 @@ struct LoginView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .frostedFill(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.main.opacity(0.18), lineWidth: 1.5))
         }
         .buttonStyle(BouncyStyle(scale: 0.94))
@@ -206,7 +206,7 @@ struct LoginView: View {
         }
         .padding(.horizontal, 16)
         .frame(minHeight: 54)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .frostedFill(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.main.opacity(0.25), lineWidth: 1.5))
         .shadow(color: Palette.shadow, radius: 12, y: 4)
     }

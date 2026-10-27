@@ -107,7 +107,7 @@ struct StatusSheet: View {
                             }
                         }
                         .padding(.horizontal, 14).frame(height: 50)
-                        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .frostedFill(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
                         Text("Clear after").font(.jakarta(12, .bold)).foregroundStyle(Palette.muted).padding(.top, 4)
                         ScrollView(.horizontal, showsIndicators: false) {
@@ -142,7 +142,7 @@ struct StatusSheet: View {
                                 if p != .invisible { Divider().padding(.leading, 46) }
                             }
                         }
-                        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .frostedFill(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
                     }
                     Button { Task { await save() } } label: {

@@ -71,46 +71,37 @@ struct ThemeCard: View {
     }
 }
 
-// The icon tiles as a family of your theme: each kind of place keeps its
-// own spot on the colour wheel next to your colour (so Music and Servers
-// still look different), all at the same softness and the same lightness
-// to the eye, so none glares. "Rainbow" in Settings brings back the classic
-// fixed colours.
+// The icon tiles all in your theme's colour (pink with Strawberry Milk,
+// lilac with Lavender Dream…): each kind of place keeps a slightly different
+// shade of it (a small turn round the colour wheel and its own lightness)
+// so Music and Servers still look apart, but everything reads as one
+// colour, kept soft so it isn't too much. "Rainbow" in Settings brings back
+// the classic fixed colours.
 enum CandyFamily {
     nonisolated(unsafe) private static var made: [UInt32: [Double]] = [:]
     private static let lock = NSLock()
-    // The tiles' turns from your colour, in Candy's index order (berry,
-    // peach, lemon, mint, sky, grape).
-    private static let turns: [Double] = [0, 30, 58, -95, -60, -30]
+    // Each tile's small turn from your colour and how much lighter or deeper
+    // it is, in Candy's index order (berry, peach, lemon, mint, sky, grape).
+    private static let turns: [Double] = [0, 9, 16, -9, -16, -4]
+    private static let lift: [Double] = [0, 0.05, 0.08, -0.03, -0.05, 0.03]
 
     static func stops(turn _: Double, index: Int, around main: UInt32) -> (UInt32, UInt32) {
         let hue = hues(main)[index]
         // Golds need a little more light and colour not to look olive.
         let gold = max(0, 1 - abs(hue - 46) / 30)
-        let top = ColorTone.tone(hue: hue, saturation: 0.34 + 0.12 * gold, luminance: 0.58 + 0.08 * gold)
-        let bottom = ColorTone.tone(hue: hue, saturation: 0.56 + 0.2 * gold, luminance: 0.3 + 0.12 * gold)
+        let up = lift[index]
+        let top = ColorTone.tone(hue: hue, saturation: 0.3 + 0.12 * gold, luminance: 0.6 + 0.08 * gold + up)
+        let bottom = ColorTone.tone(hue: hue, saturation: 0.5 + 0.2 * gold, luminance: 0.32 + 0.12 * gold + up * 0.6)
         return (top, bottom)
     }
 
-    // Each tile's hue: its turn from your colour, kept out of the muddy
-    // yellow-greens and at least 18° from the tiles before it, so no two
-    // look the same.
     private static func hues(_ main: UInt32) -> [Double] {
         lock.lock()
         defer { lock.unlock() }
         if let hit = made[main] { return hit }
         var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         UIColor(hex: main).getHue(&h, saturation: &s, brightness: &b, alpha: &a)
-        var chosen: [Double] = []
-        for turn in turns {
-            var hue = wrap(Double(h) * 360 + turn)
-            var tries = 0
-            while tries < 12 && (muddy(hue) || chosen.contains(where: { gap($0, hue) < 18 })) {
-                hue = wrap(hue + (turn < 0 ? -14 : 14))
-                tries += 1
-            }
-            chosen.append(hue)
-        }
+        let chosen = turns.map { wrap(Double(h) * 360 + $0) }
         made[main] = chosen
         return chosen
     }
@@ -118,11 +109,6 @@ enum CandyFamily {
     private static func wrap(_ hue: Double) -> Double {
         let w = hue.truncatingRemainder(dividingBy: 360)
         return w < 0 ? w + 360 : w
-    }
-    private static func muddy(_ hue: Double) -> Bool { hue > 58 && hue < 100 }
-    private static func gap(_ a: Double, _ b: Double) -> Double {
-        let d = abs(a - b)
-        return min(d, 360 - d)
     }
 }
 
@@ -150,6 +136,42 @@ enum ColorTone {
         }
         return UIColor(hue: hue / 360, saturation: saturation, brightness: (low + high) / 2, alpha: 1).rgbHex
     }
+
+    // Contrast between two colours (1 to 21), as WCAG measures it.
+    static func contrast(_ a: UInt32, _ b: UInt32) -> Double {
+        let x = luminance(a), y = luminance(b)
+        return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+    }
+
+    // The colour as it is if it reads on `background` at `ratio`; otherwise
+    // the nearest shade that does: deeper (or lighter, for dark pages)
+    // while keeping its hue and a little more of its colour, so a rose stays
+    // a rich rose instead of going dusty.
+    static func readable(_ hex: UInt32, on background: UInt32, ratio: Double = 4.5, lighter: Bool = false) -> UInt32 {
+        let key = ReadableKey(hex: hex, background: background, ratio: Int(ratio * 100), lighter: lighter)
+        lock.lock()
+        defer { lock.unlock() }
+        if let hit = readableMade[key] { return hit }
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(hex: hex).getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        var out = hex
+        var step = 0
+        while contrast(out, background) < ratio && step < 60 {
+            step += 1
+            let t = CGFloat(step)
+            if lighter {
+                out = UIColor(hue: h, saturation: max(0, s * (1 - 0.012 * t)), brightness: min(1, b + (1 - b) * 0.04 * t + 0.004 * t), alpha: 1).rgbHex
+            } else {
+                out = UIColor(hue: h, saturation: min(1, s * (1 + 0.01 * t)), brightness: max(0, b * (1 - 0.012 * t)), alpha: 1).rgbHex
+            }
+        }
+        readableMade[key] = out
+        return out
+    }
+    private struct ReadableKey: Hashable {
+        let hex: UInt32, background: UInt32, ratio: Int, lighter: Bool
+    }
+    nonisolated(unsafe) private static var readableMade: [ReadableKey: UInt32] = [:]
 
     // The colour as it is, or a deeper shade of it if it's lighter than
     // `brightest` (so a very light colour doesn't glare on a button).
