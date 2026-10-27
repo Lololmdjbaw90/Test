@@ -134,33 +134,28 @@ struct PinCard: View {
             VStack(alignment: .leading, spacing: 10) {
                 Image(systemName: "quote.opening")
                     .font(.system(size: 18, weight: .heavy))
-                    .foregroundStyle(.white.opacity(0.75))
+                    .foregroundStyle(candy.color)
                 if !post.title.isEmpty {
-                    Text(post.title).font(.display(19)).foregroundStyle(.white)
+                    Text(post.title).font(.display(19)).foregroundStyle(Palette.text)
                         .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if !post.text.isEmpty {
                     Text(post.text).font(.jakarta(post.title.isEmpty ? 16 : 13, post.title.isEmpty ? .bold : .medium))
-                        .foregroundStyle(.white.opacity(post.title.isEmpty ? 1 : 0.92))
+                        .foregroundStyle(post.title.isEmpty ? Palette.text : Palette.text2)
                         .lineLimit(post.title.isEmpty ? 7 : 5)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 130, alignment: .topLeading)
             .padding(16)
+            // A note card: a pale wash of its colour (top to bottom into
+            // the card colour) with dark words, so it's easy to read.
             .background {
-                shape.fill(candy.gradient)
-                    .overlay {
-                        GeometryReader { geo in
-                            Circle().fill(.white.opacity(0.14)).frame(width: geo.size.width * 0.9)
-                                .offset(x: geo.size.width * 0.45, y: geo.size.height * 0.45)
-                        }
-                        .clipShape(shape)
-                    }
-                    .overlay(shape.fill(LinearGradient(colors: [Palette.rim(0.3), .clear], startPoint: .top, endPoint: .center)).padding(1))
+                shape.fill(LinearGradient(colors: [candy.soft, Palette.surface], startPoint: .top, endPoint: .bottom))
             }
-            .shadow(color: candy.color.softGlow(0.3), radius: 10, y: 5)
+            .overlay(shape.strokeBorder(candy.color.opacity(0.22), lineWidth: 1))
+            .shadow(color: Palette.shadow, radius: 6, y: 3)
         } else {
             ArtImage(url: post.imageURL, tallest: 0.56, widest: 1.25)
                 .clipShape(shape)

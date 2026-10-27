@@ -1,7 +1,9 @@
 import SwiftUI
 
-// Shortcuts as candy tiles with a white icon and the place's name, three
-// to a row (Home and the menu).
+// Shortcuts as clean white tiles: a small candy square with the place's
+// icon and its name in dark ink underneath, three to a row (Home and the
+// menu). The colour sits in the icon only, so a page of them reads calm
+// instead of a wall of pink.
 struct CandyShortcutGrid: View {
     struct Item {
         let title: String
@@ -40,40 +42,26 @@ struct CandyShortcutGrid: View {
     }
 
     private func tile(_ item: Item, hop: Int) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
         return VStack(alignment: .leading, spacing: 0) {
-            Image(systemName: item.icon)
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(.white)
+            CandyTile(icon: item.icon, candy: item.candy, size: 38)
                 .symbolEffect(.bounce, value: hop)
-                .frame(width: 38, height: 38)
-                .background(.white.opacity(0.24), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            Spacer(minLength: 12)
+            Spacer(minLength: 10)
             // Room for two lines on every tile (so "Customize bunny" fits and
             // the tiles stay the same height).
             Text(item.title)
-                .font(.jakarta(13, .bold)).foregroundStyle(.white)
+                .font(.jakarta(13, .semibold)).foregroundStyle(Palette.text)
                 .lineLimit(2).minimumScaleFactor(0.8)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, minHeight: 34, alignment: .bottomLeading)
-                .softShadow(.black.opacity(0.12), radius: 1, y: 1)
         }
         .padding(12)
         .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
         .background {
-            shape.fill(item.candy.gradient)
-                .overlay {
-                    // A soft bubble in the corner and a shine along the top.
-                    GeometryReader { geo in
-                        Circle().fill(.white.opacity(0.16))
-                            .frame(width: geo.size.width * 0.7)
-                            .offset(x: geo.size.width * 0.5, y: geo.size.height * 0.35)
-                    }
-                    .clipShape(shape)
-                }
-                .overlay(shape.fill(LinearGradient(colors: [Palette.rim(0.35), .clear], startPoint: .top, endPoint: .center)).padding(1))
-                .softShadow(item.candy.color.softGlow(0.35), radius: 8, y: 4)
+            shape.fill(Palette.surface)
+                .softShadow(Palette.shadow, radius: 4, y: 2)
         }
+        .overlay(shape.strokeBorder(Palette.border, lineWidth: 1))
         .contentShape(shape)
     }
 }

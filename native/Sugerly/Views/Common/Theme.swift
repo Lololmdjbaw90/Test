@@ -53,7 +53,7 @@ enum Palette {
     // Text is near-black with only a whisper of your colour (tinted plum
     // ink looked muddy and was hard to read), and the quieter text levels
     // stay readable: text2 ≈ 7 : 1 and muted ≥ 4.5 : 1 on the page.
-    static var bg: Color { pastel(0xF6F3F5, 0.30, dark: 0x111014, 0.07) }
+    static var bg: Color { pastel(0xF8F5F7, 0.20, dark: 0x111014, 0.07) }
     static var surface: Color { pastel(0xFFFFFF, 0.0, dark: 0x1B191F, 0.07) }
     static var surface2: Color { pastel(0xF3F0F2, 0.16, dark: 0x25222A, 0.09) }
     static var border: Color { pastel(0xE9E5EA, 0.18, dark: 0x312D36, 0.1) }
@@ -393,7 +393,7 @@ enum Theme {
     // seed every other colour is mixed from).
     static var mainHex: UInt32 { custom?.main ?? accent.mainHex }
     // The page colours, as plain values for the contrast sums.
-    static var pageLightHex: UInt32 { Palette.mix(0xF6F3F5, lightHex, 0.30) }
+    static var pageLightHex: UInt32 { Palette.mix(0xF8F5F7, lightHex, 0.20) }
     static var pageDarkHex: UInt32 { Palette.mix(0x111014, mainHex, 0.07) }
     static var lightHex: UInt32 { custom?.light ?? accent.lightHex }
     static var light: Color { custom.map { Color(hex: $0.light) } ?? accent.light }
