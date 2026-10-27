@@ -647,7 +647,7 @@ struct NewChatView: View {
                 Spacer()
                 Button { dismiss() } label: {
                     Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(Palette.text2)
-                        .frame(width: 36, height: 36).background(Palette.surface, in: Circle())
+                        .frame(width: 36, height: 36).frostedFill(in: Circle())
                 }
                 .buttonStyle(BouncyStyle())
             }
@@ -657,7 +657,7 @@ struct NewChatView: View {
             }
             .padding(.horizontal, 16)
             .frame(height: 48)
-            .background(Palette.surface, in: Capsule())
+            .frostedFill(in: Capsule())
             .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
             ScrollView {
                 LazyVStack(spacing: 8) {
@@ -674,7 +674,7 @@ struct NewChatView: View {
                                 Image(systemName: "paperplane.fill").foregroundStyle(Theme.pink)
                             }
                             .padding(12)
-                            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                            .frostedFill(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                         }
                         .buttonStyle(BouncyStyle(scale: 0.97))
                     }

@@ -84,7 +84,7 @@ struct AccountView: View, Equatable {
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(Palette.text2)
                     .frame(width: 38, height: 38)
-                    .background(Palette.surface, in: Circle())
+                    .frostedFill(in: Circle())
                     .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
                     .frame(width: 48, height: 48)
                     .contentShape(Rectangle())
@@ -208,7 +208,7 @@ struct AccountView: View, Equatable {
                         .font(.jakarta(12, .heavy)).foregroundStyle(info.color)
                         .lineLimit(1).minimumScaleFactor(0.7)
                         .padding(.horizontal, 9).padding(.vertical, 4)
-                        .background(Palette.surface.opacity(0.85), in: Capsule())
+                        .frostedFill(in: Capsule())
                 }
                 .layoutPriority(1)
                 Spacer(minLength: 0)
@@ -234,7 +234,7 @@ struct AccountView: View, Equatable {
             }
             .padding(.horizontal, 14)
             .frame(height: 44)
-            .background(Palette.surface.opacity(0.72), in: Capsule())
+            .frostedFill(in: Capsule())
             .overlay(Capsule().strokeBorder(Palette.rim(0.6), lineWidth: 1))
             .contentShape(Capsule())
         }
@@ -254,7 +254,7 @@ struct AccountView: View, Equatable {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
-        .background(Palette.surface.opacity(0.78), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .frostedFill(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.rim(0.6), lineWidth: 1))
         .accessibilityElement(children: .combine)
     }

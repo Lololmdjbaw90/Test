@@ -109,7 +109,7 @@ struct NotificationsPage: View {
                 Label("Read all", systemImage: "checkmark")
                     .font(.jakarta(13, .heavy)).foregroundStyle(Theme.main)
                     .padding(.horizontal, 12).frame(height: 34)
-                    .background(Palette.surface, in: Capsule())
+                    .frostedFill(in: Capsule())
                     .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
                     .contentShape(Capsule())
             }
@@ -874,7 +874,7 @@ struct AdminView: View {
                 ColorPicker("", selection: $announcementColor, supportsOpacity: false).labelsHidden()
             }
             .padding(12)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .frostedFill(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             Text("Default accent for new members").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
             HStack(spacing: 8) {
                 ForEach(Accent.allCases) { a in
@@ -1087,7 +1087,7 @@ struct AdminView: View {
             .foregroundStyle(Theme.main)
         }
         .padding(14)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .frostedFill(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(g.urgent && g.open ? Palette.danger.opacity(0.5) : Palette.border, lineWidth: g.urgent && g.open ? 1.5 : 1))
         .opacity(g.open ? 1 : 0.65)
     }
@@ -1189,7 +1189,7 @@ struct AdminView: View {
                 ColorPicker(selection: $secondary, supportsOpacity: false) { Text("Light colour").font(.jakarta(14, .semibold)).foregroundStyle(Palette.text) }
             }
             .padding(14)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .frostedFill(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             if let error { Text(error).font(.jakarta(13, .semibold)).foregroundStyle(Palette.danger) }
             HStack(spacing: 10) {
                 Button { Task { await saveColors(reset: false) } } label: {

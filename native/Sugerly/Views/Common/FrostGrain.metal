@@ -14,7 +14,7 @@ static float frostHash(float2 p) {
 [[ stitchable ]] half4 frostGrain(float2 position, float strength) {
     float n = frostHash(floor(position)) - 0.5;
     // A few brighter flecks on top of the fine grain, for a frosty sparkle.
-    float fleck = step(0.985, frostHash(floor(position * 0.5) + 17.0)) * 0.6;
+    float fleck = step(0.985, frostHash(floor(position * 0.5) + 17.0)) * 0.3;
     float light = max(n, 0.0) * 2.0 * strength + fleck * strength;
     float shade = max(-n, 0.0) * 2.0 * strength * 0.6;
     // Premultiplied: white specks add light, dark specks add a little shade.

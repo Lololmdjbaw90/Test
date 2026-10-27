@@ -302,7 +302,7 @@ struct ChatView: View {
             actions()
         }
         .padding(14)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .frostedFill(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -362,7 +362,7 @@ struct ChatView: View {
                         }
                     }
                     .padding(.horizontal, 6)
-                    .background(Palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .frostedFill(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(typing ? Theme.main.opacity(0.45) : Palette.border, lineWidth: 1))
                     .motion(Motion.fade, value: typing)
 
@@ -416,14 +416,14 @@ struct ChatView: View {
         }
         .frame(height: 46)
         .padding(.horizontal, 10)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .frostedFill(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var recordingBar: some View {
         HStack(spacing: 12) {
             Button { recorder.cancel() } label: {
                 Image(systemName: "trash.fill").font(.system(size: 17, weight: .bold)).foregroundStyle(Palette.danger)
-                    .frame(width: 44, height: 44).background(Palette.surface, in: Circle())
+                    .frame(width: 44, height: 44).frostedFill(in: Circle())
             }
             .accessibilityLabel("Delete recording")
             HStack(spacing: 8) {
@@ -434,7 +434,7 @@ struct ChatView: View {
             }
             .padding(.horizontal, 14)
             .frame(maxWidth: .infinity, minHeight: 44)
-            .background(Palette.surface, in: Capsule())
+            .frostedFill(in: Capsule())
             Button { Task { await sendVoiceNote() } } label: {
                 Image(systemName: "arrow.up").font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
                     .frame(width: 42, height: 42).background(Theme.main, in: Circle())
@@ -830,7 +830,7 @@ struct ChatBubble: View {
                 if isSticker {
                     VStack(alignment: .trailing, spacing: 2) {
                         MessageMedia(url: message.imageURL)
-                        meta.padding(.horizontal, 8).padding(.vertical, 3).background(Palette.surface.opacity(0.9), in: Capsule())
+                        meta.padding(.horizontal, 8).padding(.vertical, 3).frostedFill(in: Capsule())
                     }
                     .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .modifier(BubbleMenu(items: menuItems))
@@ -927,7 +927,7 @@ struct ChatBubble: View {
                         if people.count > 1 { Text("\(people.count)").font(.jakarta(11, .semibold)).foregroundStyle(mineToo ? Theme.main : Palette.text2).contentTransition(.numericText()) }
                     }
                     .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 7).frame(height: 24)
-                    .background(Palette.surface, in: Capsule())
+                    .frostedFill(in: Capsule())
                     .overlay(Capsule().strokeBorder(mineToo ? Theme.main.opacity(0.5) : Palette.border, lineWidth: 1))
                 }
                 .buttonStyle(BouncyStyle(scale: 0.85))
@@ -992,7 +992,7 @@ struct SwipeToReply<Content: View>: View {
             .background(alignment: .leading) {
                 Image(systemName: "arrowshape.turn.up.left.fill")
                     .font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.main)
-                    .frame(width: 32, height: 32).background(Palette.surface, in: Circle())
+                    .frame(width: 32, height: 32).frostedFill(in: Circle())
                     .scaleEffect(armed ? 1.1 : max(0.3, dx / 60))
                     .opacity(dx > 8 ? 1 : 0)
                     .padding(.leading, 4)

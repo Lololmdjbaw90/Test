@@ -295,7 +295,7 @@ struct BunnyItemUploader: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Price in coins · 0 is free").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
                         TextField("0", text: $price).keyboardType(.numberPad)
-                            .padding(14).background(Palette.surface, in: RoundedRectangle(cornerRadius: 14))
+                            .padding(14).frostedFill(in: RoundedRectangle(cornerRadius: 14))
                     }
                     Button { Task { await upload() } } label: {
                         HStack(spacing: 8) {

@@ -240,7 +240,7 @@ struct PinkCircleButton: View {
                 .frame(width: 34, height: 34)
                 .background {
                     Circle().fill(Theme.candy)
-                        .frostGrain(in: Circle(), strength: 0.12)
+                        .frostGrain(in: Circle(), strength: 0.05)
                         .overlay(Circle().strokeBorder(Palette.rim(0.25).fixed(barScheme), lineWidth: 1))
                         .shadow(color: Theme.glow(0.3).fixed(barScheme), radius: 6, y: 3)
                 }
@@ -326,7 +326,7 @@ private struct MenuHintBubble: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .frostedFill(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.main.opacity(0.25), lineWidth: 1))
         }
         .shadow(color: Palette.shadow, radius: 12, y: 6)

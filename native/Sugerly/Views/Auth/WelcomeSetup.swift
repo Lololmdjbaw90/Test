@@ -173,7 +173,7 @@ struct WelcomeSetupView: View {
                 Text("Finish to get 50 coins").font(.jakarta(14, .bold)).foregroundStyle(Palette.text)
             }
             .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 16).frame(height: 40)
-            .background(Palette.surface, in: Capsule())
+            .frostedFill(in: Capsule())
             .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
             .scaleEffect(appeared ? 1 : 0.5)
             .opacity(appeared ? 1 : 0)
@@ -294,7 +294,7 @@ struct WelcomeSetupView: View {
                             }
                             .foregroundStyle(on ? Theme.main : Palette.text2)
                             .frame(maxWidth: .infinity).frame(height: 84)
-                            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                            .frostedFill(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(on ? Theme.main : Palette.border, lineWidth: on ? 2 : 1))
                         }
                         .buttonStyle(BouncyStyle(scale: 0.94))
@@ -336,7 +336,7 @@ struct WelcomeSetupView: View {
                 Image(systemName: "heart.fill").foregroundStyle(Theme.gradient)
             }
             .padding(14)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .frostedFill(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
             .stagger(appeared, 3)
         }
@@ -387,7 +387,7 @@ struct WelcomeSetupView: View {
                     }
                 }
                 .padding(12)
-                .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .frostedFill(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(on ? Theme.main.opacity(0.35) : Palette.border, lineWidth: 1))
                 .stagger(appeared, i + 1)
             }
@@ -466,7 +466,7 @@ struct WelcomeSetupView: View {
                     .contentTransition(.numericText(value: Double(coins)))
             }
             .padding(.horizontal, 22).frame(height: 64)
-            .background(Palette.surface, in: Capsule())
+            .frostedFill(in: Capsule())
             .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
             .sensoryFeedback(.success, trigger: coins == 50)
             Spacer()

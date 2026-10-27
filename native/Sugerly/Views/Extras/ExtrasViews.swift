@@ -170,7 +170,7 @@ private struct RankBoard: View {
         }
         .padding(.top, 26)
         .padding(.horizontal, 12)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .frostedFill(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }

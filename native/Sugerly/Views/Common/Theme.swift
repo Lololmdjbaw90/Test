@@ -317,7 +317,7 @@ struct CandyTile: View {
                         shape.fill(LinearGradient(colors: [Palette.rim(0.45), .clear], startPoint: .top, endPoint: .center))
                             .padding(1)
                     }
-                    .frostGrain(in: shape, strength: 0.12)
+                    .frostGrain(in: shape, strength: 0.05)
                     .softShadow(candy.color.softGlow(0.28), radius: 6, y: 3)
             }
             .accessibilityHidden(true)
@@ -620,11 +620,39 @@ struct GlassFrame: ViewModifier {
     }
 }
 
+// Frosted glass for the small things (buttons, pills, fields, bubbles,
+// rows): a see-through milky fill with a faint frost grain and a bright
+// edge. No blur, so it costs nothing even in long scrolling lists; the page
+// colour softly shows through instead.
+struct FrostedFill<S: InsettableShape>: ViewModifier {
+    let shape: S
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        let dark = scheme == .dark
+        content
+            .background {
+                shape.fill(LinearGradient(
+                    colors: [Palette.surface.opacity(dark ? 0.62 : 0.74), Palette.surface.opacity(dark ? 0.5 : 0.58)],
+                    startPoint: .top, endPoint: .bottom))
+                    .frostGrain(in: shape, strength: 0.03)
+            }
+            .overlay(shape.strokeBorder(LinearGradient(
+                colors: [Palette.rim(0.9), Theme.main.opacity(dark ? 0.2 : 0.12)],
+                startPoint: .top, endPoint: .bottom), lineWidth: 1).allowsHitTesting(false))
+    }
+}
+
 extension View {
     /// Lays the frosted-glass grain (FrostGrain.metal) over this view,
     /// inside `shape`. A still texture: no cost while scrolling.
-    func frostGrain<S: Shape>(in shape: S, strength: Float = 0.09) -> some View {
+    func frostGrain<S: Shape>(in shape: S, strength: Float = 0.035) -> some View {
         overlay(shape.fill(ShaderLibrary.frostGrain(.float(strength))).allowsHitTesting(false))
+    }
+
+    /// See-through frosted glass behind this view, in `shape` (see FrostedFill).
+    func frostedFill<S: InsettableShape>(in shape: S) -> some View {
+        modifier(FrostedFill(shape: shape))
     }
 }
 

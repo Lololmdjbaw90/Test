@@ -104,7 +104,7 @@ struct BunnyItemEditView: View {
                     SugarField(placeholder: "Name", text: $name)
                     Text("Price in coins · 0 is free").font(.jakarta(14, .bold))
                     TextField("0", text: $price).keyboardType(.numberPad)
-                        .padding(16).background(Palette.surface, in: RoundedRectangle(cornerRadius: 16))
+                        .padding(16).frostedFill(in: RoundedRectangle(cornerRadius: 16))
                     Text("People who already bought it keep their purchase when you change its name or price.")
                         .font(.jakarta(13, .medium)).foregroundStyle(Palette.text2)
                     Button { Task { await save() } } label: { Text(busy ? "Saving…" : "Save item") }
