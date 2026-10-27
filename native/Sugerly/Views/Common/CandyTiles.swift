@@ -57,11 +57,7 @@ struct CandyShortcutGrid: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
-        .background {
-            shape.fill(Palette.surface)
-                .softShadow(Palette.shadow, radius: 4, y: 2)
-        }
-        .overlay(shape.strokeBorder(Palette.border, lineWidth: 1))
+        .glassFrame(radius: 20)
         .contentShape(shape)
     }
 }

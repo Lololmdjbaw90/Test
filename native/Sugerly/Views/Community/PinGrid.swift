@@ -149,18 +149,15 @@ struct PinCard: View {
             }
             .frame(maxWidth: .infinity, minHeight: 130, alignment: .topLeading)
             .padding(16)
-            // A note card: a pale wash of its colour (top to bottom into
-            // the card colour) with dark words, so it's easy to read.
-            .background {
-                shape.fill(LinearGradient(colors: [candy.soft, Palette.surface], startPoint: .top, endPoint: .bottom))
-            }
-            .overlay(shape.strokeBorder(candy.color.opacity(0.22), lineWidth: 1))
-            .shadow(color: Palette.shadow, radius: 6, y: 3)
+            // A note card: frosted glass washed with its colour at the top,
+            // with dark words, so it's easy to read.
+            .glassFrame(radius: 22, tint: candy.soft)
         } else {
             ArtImage(url: post.imageURL, tallest: 0.56, widest: 1.25)
                 .clipShape(shape)
-                .overlay(shape.strokeBorder(Palette.border.opacity(0.6), lineWidth: 1))
-                .shadow(color: Palette.shadow, radius: 10, y: 5)
+                // A photo frame: a bright white edge and a soft glow.
+                .overlay(shape.strokeBorder(Palette.rim(0.85), lineWidth: 2))
+                .shadow(color: Theme.main.opacity(0.16), radius: 10, y: 5)
         }
     }
 

@@ -576,14 +576,41 @@ struct SugarCard: ViewModifier {
     var radius: CGFloat = 18
     var padding: CGFloat = 0
     func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: min(radius, 22), style: .continuous)
         content
             .padding(padding)
+            .glassFrame(radius: min(radius, 22))
+    }
+}
+
+// Frosted glass: the page blurs softly through a milky card, inside a
+// bright frame that runs from white at the top to a hint of your theme
+// colour at the bottom, with a faint glow under it. In the flat look (the
+// menu, long lists) it's a plain card with the same frame, so nothing lags.
+struct GlassFrame: ViewModifier {
+    var radius: CGFloat = 18
+    var tint: Color? = nil
+    @Environment(\.flat) private var flat
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        let dark = scheme == .dark
+        content
             .background {
-                shape.fill(Palette.surface)
-                    .softShadow(Palette.shadow, radius: 3, y: 1)
+                if flat {
+                    shape.fill(Palette.surface)
+                } else {
+                    shape.fill(.ultraThinMaterial)
+                        .overlay(shape.fill(LinearGradient(
+                            colors: [(tint ?? Palette.surface).opacity(dark ? 0.5 : 0.62),
+                                     Palette.surface.opacity(dark ? 0.42 : 0.55)],
+                            startPoint: .top, endPoint: .bottom)))
+                        .softShadow(Theme.main.opacity(dark ? 0.22 : 0.13), radius: 10, y: 4)
+                }
             }
-            .overlay(shape.strokeBorder(Palette.border, lineWidth: 1))
+            .overlay(shape.strokeBorder(LinearGradient(
+                colors: [Palette.rim(0.95), Theme.main.opacity(dark ? 0.28 : 0.2)],
+                startPoint: .top, endPoint: .bottom), lineWidth: 1.2))
     }
 }
 
@@ -609,6 +636,7 @@ struct PastelCard: ViewModifier {
 
 extension View {
     func sugarCard(radius: CGFloat = 18, padding: CGFloat = 0) -> some View { modifier(SugarCard(radius: radius, padding: padding)) }
+    func glassFrame(radius: CGFloat = 18, tint: Color? = nil) -> some View { modifier(GlassFrame(radius: radius, tint: tint)) }
     func pastelCard(radius: CGFloat = 22, padding: CGFloat = 16) -> some View { modifier(PastelCard(radius: radius, padding: padding)) }
 
     // Floating bits (the music player): the surface with a hairline edge and

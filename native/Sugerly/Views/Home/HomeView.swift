@@ -411,11 +411,8 @@ struct HomeView: View {
                 XPBar(info: info)
             }
             .padding(14)
-            // A clean card with a soft wash of your colour at the top.
-            .background(RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(LinearGradient(colors: [Palette.blush, Palette.surface], startPoint: .top, endPoint: .bottom))
-                .softShadow(Palette.shadow, radius: 6, y: 3))
-            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+            // Frosted glass with a soft wash of your colour at the top.
+            .glassFrame(radius: 24, tint: Palette.blush)
             .overlay {
                 // A shine sweeping by (no sparkles: the bunny's tile is the
                 // card's sparkle).
