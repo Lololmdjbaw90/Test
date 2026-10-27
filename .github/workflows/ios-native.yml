@@ -5,6 +5,11 @@ name: Build native iOS app (.ipa)
 
 on:
   workflow_dispatch:
+    inputs:
+      test_filter:
+        description: "Only run these UI test classes (comma separated), e.g. DesignPreviewTests"
+        required: false
+        default: ""
   # One build per change: the working branch only (main gets the same
   # commits, and a second Mac build would just use up minutes).
   push:
@@ -51,6 +56,8 @@ jobs:
 
       - name: Test iPhone editor and Fanart interactions
         timeout-minutes: 18
+        env:
+          TEST_FILTER: ${{ inputs.test_filter }}
         run: bash scripts/test-native-interactions.sh
 
       - name: Test Home scrolling on iPad
