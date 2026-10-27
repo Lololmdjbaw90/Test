@@ -579,8 +579,13 @@ struct ConversationRow: View {
         if card {
             row
                 .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(unread ? Theme.soft : Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(unread ? Theme.main.opacity(0.28) : Palette.border, lineWidth: 1))
+                // Every chat is a white card; unread ones stand out by bold
+                // words, the count badge and a slightly stronger edge.
+                .background {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.surface)
+                        .softShadow(Palette.shadow, radius: 4, y: 2)
+                }
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(unread ? Theme.main.opacity(0.35) : Palette.border, lineWidth: 1))
         } else {
             row.contentShape(Rectangle())
         }
