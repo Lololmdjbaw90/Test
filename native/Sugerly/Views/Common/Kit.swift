@@ -100,9 +100,13 @@ private struct PlainToolbar<Leading: View, Trailing: View>: ViewModifier {
         .environment(\.unifiedBar, true)
         .padding(.horizontal, 8)
         .frame(width: min(UIScreen.main.bounds.width - 32, 728), height: 48)
-        .background(style == "tinted" ? Theme.soft : Palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
-            .strokeBorder(style == "outline" ? Theme.main.opacity(0.5) : Palette.border, lineWidth: 1))
+        // Frosted glass, like the cards (the outlined style adds a theme edge).
+        .glassFrame(radius: 22, tint: style == "tinted" ? Theme.soft : nil)
+        .overlay {
+            if style == "outline" {
+                RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Theme.main.opacity(0.5), lineWidth: 1)
+            }
+        }
         .accessibilityIdentifier("unified-top-bar")
     }
 
@@ -204,7 +208,7 @@ enum TabBarLook {
         let bar = UITabBarAppearance()
         bar.configureWithDefaultBackground()
         bar.backgroundEffect = UIBlurEffect(style: .systemThinMaterial)
-        bar.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x1B191F, alpha: 0.86) : UIColor(hex: 0xFFFFFF, alpha: 0.9) }
+        bar.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x1B191F, alpha: 0.6) : UIColor(hex: 0xFFFFFF, alpha: 0.55) }
         bar.shadowColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x312D36) : UIColor(hex: 0xE9E5EA) }
         for layout in [bar.stackedLayoutAppearance, bar.inlineLayoutAppearance, bar.compactInlineLayoutAppearance] {
             layout.normal.iconColor = muted
@@ -236,6 +240,7 @@ struct PinkCircleButton: View {
                 .frame(width: 34, height: 34)
                 .background {
                     Circle().fill(Theme.candy)
+                        .frostGrain(in: Circle(), strength: 0.12)
                         .overlay(Circle().strokeBorder(Palette.rim(0.25).fixed(barScheme), lineWidth: 1))
                         .shadow(color: Theme.glow(0.3).fixed(barScheme), radius: 6, y: 3)
                 }
@@ -486,7 +491,7 @@ struct TitleSwitch: View {
             }
         }
         .padding(3)
-        .background(Palette.surface2, in: Capsule())
+        .glassFrame(radius: 18)
         .sensoryFeedback(.selection, trigger: selection)
     }
 }

@@ -317,6 +317,7 @@ struct CandyTile: View {
                         shape.fill(LinearGradient(colors: [Palette.rim(0.45), .clear], startPoint: .top, endPoint: .center))
                             .padding(1)
                     }
+                    .frostGrain(in: shape, strength: 0.12)
                     .softShadow(candy.color.softGlow(0.28), radius: 6, y: 3)
             }
             .accessibilityHidden(true)
@@ -582,10 +583,12 @@ struct SugarCard: ViewModifier {
     }
 }
 
-// Frosted glass: the page blurs softly through a milky card, inside a
-// bright frame that runs from white at the top to a hint of your theme
-// colour at the bottom, with a faint glow under it. In the flat look (the
-// menu, long lists) it's a plain card with the same frame, so nothing lags.
+// Frosted glass: the page blurs through a milky, see-through card with a
+// fine frost grain on it, inside a bright frame that runs from white at the
+// top to a hint of your theme colour at the bottom, with a faint glow under
+// it. In the flat look (the menu, long lists) the blur is left off (it would
+// be redrawn on every frame while scrolling) but the card keeps its frost
+// grain, see-through milk and frame, so it still looks frosted.
 struct GlassFrame: ViewModifier {
     var radius: CGFloat = 18
     var tint: Color? = nil
@@ -595,22 +598,33 @@ struct GlassFrame: ViewModifier {
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         let dark = scheme == .dark
+        let milk = LinearGradient(
+            colors: [(tint ?? Palette.surface).opacity(dark ? 0.42 : 0.5),
+                     Palette.surface.opacity(dark ? 0.3 : 0.32)],
+            startPoint: .top, endPoint: .bottom)
         content
             .background {
-                if flat {
-                    shape.fill(Palette.surface)
-                } else {
-                    shape.fill(.ultraThinMaterial)
-                        .overlay(shape.fill(LinearGradient(
-                            colors: [(tint ?? Palette.surface).opacity(dark ? 0.5 : 0.62),
-                                     Palette.surface.opacity(dark ? 0.42 : 0.55)],
-                            startPoint: .top, endPoint: .bottom)))
-                        .softShadow(Theme.main.opacity(dark ? 0.22 : 0.13), radius: 10, y: 4)
+                Group {
+                    if flat {
+                        shape.fill(Palette.surface.opacity(dark ? 0.72 : 0.78)).overlay(shape.fill(milk))
+                    } else {
+                        shape.fill(.thinMaterial).overlay(shape.fill(milk))
+                            .softShadow(Theme.main.opacity(dark ? 0.24 : 0.16), radius: 12, y: 5)
+                    }
                 }
+                .frostGrain(in: shape)
             }
             .overlay(shape.strokeBorder(LinearGradient(
-                colors: [Palette.rim(0.95), Theme.main.opacity(dark ? 0.28 : 0.2)],
-                startPoint: .top, endPoint: .bottom), lineWidth: 1.2))
+                colors: [Palette.rim(0.95), Theme.main.opacity(dark ? 0.3 : 0.22)],
+                startPoint: .top, endPoint: .bottom), lineWidth: 1.3))
+    }
+}
+
+extension View {
+    /// Lays the frosted-glass grain (FrostGrain.metal) over this view,
+    /// inside `shape`. A still texture: no cost while scrolling.
+    func frostGrain<S: Shape>(in shape: S, strength: Float = 0.09) -> some View {
+        overlay(shape.fill(ShaderLibrary.frostGrain(.float(strength))).allowsHitTesting(false))
     }
 }
 

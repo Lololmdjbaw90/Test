@@ -436,11 +436,12 @@ struct CommunityView: View {
         }
         .padding(4)
         .background {
-            Capsule().fill(.ultraThinMaterial)
-                .overlay(Capsule().fill(Palette.surface.opacity(0.78)))
-                .shadow(color: Palette.shadow, radius: 12, y: 5)
+            Capsule().fill(.thinMaterial)
+                .overlay(Capsule().fill(Palette.surface.opacity(0.42)))
+                .frostGrain(in: Capsule())
+                .shadow(color: Theme.main.opacity(0.16), radius: 12, y: 5)
         }
-        .overlay(Capsule().strokeBorder(Palette.border.opacity(0.8), lineWidth: 1).allowsHitTesting(false))
+        .overlay(Capsule().strokeBorder(LinearGradient(colors: [Palette.rim(0.95), Theme.main.opacity(0.22)], startPoint: .top, endPoint: .bottom), lineWidth: 1.3).allowsHitTesting(false))
         .sensoryFeedback(.selection, trigger: feed)
         .padding(.vertical, 8)
     }

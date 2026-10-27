@@ -122,6 +122,7 @@ struct PageHero: View {
                 }
                 // (No corner sparkles here: they'd sit on the big icon.)
                 .overlay { ShineSweep(every: 5.5, strength: 0.28).clipShape(shape) }
+                .frostGrain(in: shape, strength: 0.1)
                 .background(shape.fill(themed ? Theme.main.opacity(0.15) : candy.color.opacity(0.15)).offset(y: 3))
         }
         .onAppear { shown = true }

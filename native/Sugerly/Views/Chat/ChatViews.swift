@@ -513,7 +513,7 @@ struct SectionSwitch: View {
             }
         }
         .padding(3)
-        .background(Palette.surface2, in: Capsule())
+        .glassFrame(radius: 20)
     }
 }
 
