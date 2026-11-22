@@ -192,15 +192,27 @@ enum Tone {
 // Juicy candy colours for the little icon tiles that take you places (Home's
 // shortcuts, the "new post / reel / drawing / song" buttons, menus). Each
 // place keeps its own colour everywhere: music is always "sky", servers
-// "mint", people "grape", rewards "lemon", posts "berry", reels "peach". With
-// a theme (the default) they're all shades of your theme's colour; "Rainbow"
-// in Settings gives the classic fixed colours.
+// "mint", people "grape", rewards "lemon", posts "berry", reels "peach".
+// "Colourful" (the default) gives six balanced colours, so pages don't turn
+// all one colour; "Theme" in Settings makes them all shades of your theme.
 enum Candy: CaseIterable {
     case berry, peach, lemon, mint, sky, grape
 
     private var stops: (UInt32, UInt32) {
-        if ThemeStore.shared.rainbowTiles { return rainbow }
+        if ThemeStore.shared.rainbowTiles { return CandyFamily.colourful(index: index, hue: hue) }
         return CandyFamily.stops(turn: turn, index: index, around: Theme.mainHex)
+    }
+
+    // Each tile's own hue in the colourful set.
+    private var hue: Double {
+        switch self {
+        case .berry: return 338
+        case .peach: return 18
+        case .lemon: return 40
+        case .mint: return 160
+        case .sky: return 212
+        case .grape: return 258
+        }
     }
 
     // Where each sits on the colour wheel from your colour.
@@ -226,16 +238,6 @@ enum Candy: CaseIterable {
         }
     }
 
-    private var rainbow: (UInt32, UInt32) {
-        switch self {
-        case .berry: return (0xFF8DB4, 0xEC4F86)
-        case .peach: return (0xFFB487, 0xF27D45)
-        case .lemon: return (0xFFD46A, 0xF0A92C)
-        case .mint: return (0x7EDFBD, 0x24B386)
-        case .sky: return (0x8DC7FF, 0x3F92EE)
-        case .grape: return (0xC4A6FF, 0x8763EE)
-        }
-    }
     var color: Color { Color(hex: stops.1) }
     // Lighter at the top, like a boiled sweet. A touch deeper in dark mode.
     var gradient: LinearGradient {
@@ -317,8 +319,7 @@ struct CandyTile: View {
                         shape.fill(LinearGradient(colors: [Palette.rim(0.45), .clear], startPoint: .top, endPoint: .center))
                             .padding(1)
                     }
-                    .frostGrain(in: shape, strength: 0.05)
-                    .softShadow(candy.color.softGlow(0.28), radius: 6, y: 3)
+                    .softShadow(candy.color.softGlow(0.22), radius: 5, y: 2)
             }
             .accessibilityHidden(true)
     }
@@ -359,7 +360,7 @@ final class ThemeStore {
     var customMain: UInt32?
     var customLight: UInt32?
     // The icon tiles in the classic rainbow instead of your theme's family.
-    var rainbowTiles = UserDefaults.standard.bool(forKey: "sugerly.tiles.rainbow") {
+    var rainbowTiles = UserDefaults.standard.object(forKey: "sugerly.tiles.rainbow") as? Bool ?? true {
         didSet { UserDefaults.standard.set(rainbowTiles, forKey: "sugerly.tiles.rainbow") }
     }
 }
@@ -583,14 +584,14 @@ struct SugarCard: ViewModifier {
     }
 }
 
-// Frosted glass, built to never lag: a milky, see-through card with a fine
-// frost grain, inside a bright frame that runs from white at the top to a
-// hint of your theme colour at the bottom. There's no live blur here: a
-// blur behind every card is redrawn each frame while the page scrolls or
-// its wallpaper moves, which made scrolling stutter. Our pages are soft
-// gradients, so a milky see-through layer looks just as frosted for free.
-// Only a single thing on screen, like the top bar, asks for a real blur
-// (`blur: true`).
+// Frosted glass, built to never lag and to read clean: an almost solid
+// milky card (just a breath of the page shows through, so busy wallpapers
+// never show behind text), inside a soft frame that runs from a bright
+// white edge at the top to a quiet neutral line at the bottom. No grain
+// and no coloured edge, which made pages look busy and all one colour.
+// There's no live blur here: a blur behind every card is redrawn each frame
+// while the page scrolls. Only a single thing on screen, like the top bar,
+// asks for a real blur (`blur: true`).
 struct GlassFrame: ViewModifier {
     var radius: CGFloat = 18
     var tint: Color? = nil
@@ -601,30 +602,27 @@ struct GlassFrame: ViewModifier {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         let dark = scheme == .dark
         let milk = LinearGradient(
-            colors: [(tint ?? Palette.surface).opacity(dark ? 0.42 : 0.5),
-                     Palette.surface.opacity(dark ? 0.3 : 0.32)],
+            colors: [(tint ?? Palette.surface).opacity(dark ? 0.3 : 0.4),
+                     Palette.surface.opacity(dark ? 0.12 : 0.16)],
             startPoint: .top, endPoint: .bottom)
         content
             .background {
-                Group {
-                    if blur {
-                        shape.fill(.ultraThinMaterial).overlay(shape.fill(milk))
-                    } else {
-                        shape.fill(Palette.surface.opacity(dark ? 0.55 : 0.58)).overlay(shape.fill(milk))
-                    }
+                if blur {
+                    shape.fill(.ultraThinMaterial).overlay(shape.fill(milk))
+                } else {
+                    shape.fill(Palette.surface.opacity(dark ? 0.86 : 0.9)).overlay(shape.fill(milk))
                 }
-                .frostGrain(in: shape)
             }
             .overlay(shape.strokeBorder(LinearGradient(
-                colors: [Palette.rim(0.95), Theme.main.opacity(dark ? 0.3 : 0.22)],
-                startPoint: .top, endPoint: .bottom), lineWidth: 1.3))
+                colors: [Palette.rim(0.95), Palette.border],
+                startPoint: .top, endPoint: .bottom), lineWidth: 1))
     }
 }
 
 // Frosted glass for the small things (buttons, pills, fields, bubbles,
-// rows): a see-through milky fill with a faint frost grain and a bright
-// edge. No blur, so it costs nothing even in long scrolling lists; the page
-// colour softly shows through instead.
+// rows): an almost solid milky fill with a bright top edge and a quiet
+// neutral line below (no grain, no coloured edge). No blur, so it costs
+// nothing even in long scrolling lists.
 struct FrostedFill<S: InsettableShape>: ViewModifier {
     let shape: S
     @Environment(\.colorScheme) private var scheme
@@ -634,24 +632,16 @@ struct FrostedFill<S: InsettableShape>: ViewModifier {
         content
             .background {
                 shape.fill(LinearGradient(
-                    colors: [Palette.surface.opacity(dark ? 0.62 : 0.74), Palette.surface.opacity(dark ? 0.5 : 0.58)],
+                    colors: [Palette.surface.opacity(dark ? 0.9 : 0.94), Palette.surface.opacity(dark ? 0.84 : 0.88)],
                     startPoint: .top, endPoint: .bottom))
-                    .frostGrain(in: shape, strength: 0.03)
             }
             .overlay(shape.strokeBorder(LinearGradient(
-                colors: [Palette.rim(0.9), Theme.main.opacity(dark ? 0.2 : 0.12)],
+                colors: [Palette.rim(0.9), Palette.border],
                 startPoint: .top, endPoint: .bottom), lineWidth: 1).allowsHitTesting(false))
     }
 }
 
 extension View {
-    /// Lays the frosted-glass grain over this view, inside `shape`: one
-    /// small still tile (see FrostNoise), drawn like any picture, so it
-    /// costs nothing while scrolling.
-    func frostGrain<S: Shape>(in shape: S, strength: Double = 0.035) -> some View {
-        overlay(shape.fill(ImagePaint(image: FrostNoise.image)).opacity(strength / FrostNoise.strength).allowsHitTesting(false))
-    }
-
     /// See-through frosted glass behind this view, in `shape` (see FrostedFill).
     func frostedFill<S: InsettableShape>(in shape: S) -> some View {
         modifier(FrostedFill(shape: shape))
@@ -1143,10 +1133,9 @@ struct SparkleBurst: View {
     }
 }
 
-// Collecting a reward: a warm glow swells, then little coins and sparkles
-// fly out and fade. Drawn from the clock each frame (so it can't get stuck
-// halfway or be skipped by other animations) and played again whenever
-// `trigger` changes.
+// Collecting a reward: a soft warm glow swells and fades. Nothing flies
+// out (no coins or sparkles), so it stays calm. Drawn from the clock (so
+// it can't get stuck halfway) and played again whenever `trigger` changes.
 struct RewardBurst: View {
     let trigger: Int
     @State private var start: Date?
@@ -1157,40 +1146,15 @@ struct RewardBurst: View {
             Canvas { context, size in
                 guard let start else { return }
                 let t = timeline.date.timeIntervalSince(start)
-                guard t >= 0, t < 1.3 else { return }
+                guard t >= 0, t < 0.9 else { return }
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
                 let reach = min(size.width, size.height) / 2
-
                 var glow = context
-                glow.opacity = 0.55 * max(0, 1 - t / 0.9)
-                let r = reach * CGFloat(0.35 + 0.45 * min(1, t / 0.25))
+                glow.opacity = 0.4 * max(0, 1 - t / 0.9)
+                let r = reach * CGFloat(0.4 + 0.4 * min(1, t / 0.3))
                 glow.fill(Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)),
-                          with: .radialGradient(Gradient(colors: [Palette.gold.opacity(0.7), Theme.light.opacity(0.35), .clear]),
+                          with: .radialGradient(Gradient(colors: [Palette.gold.opacity(0.55), Theme.light.opacity(0.25), .clear]),
                                                 center: center, startRadius: 0, endRadius: r))
-
-                let pieces = 14
-                let flight = 1 - pow(1 - min(1, t), 3)
-                for i in 0..<pieces {
-                    let seed = Double(i) * 12.9898
-                    let jitter = abs(sin(seed) * 43758.5453).truncatingRemainder(dividingBy: 1)
-                    // Evenly round the circle, starting far enough out that
-                    // neighbours never touch, and all flying out alike.
-                    let angle = Double(i) / Double(pieces) * 2 * .pi + jitter * 0.1
-                    let distance = reach * CGFloat(0.45 + 0.5 * flight)
-                    var piece = context
-                    piece.opacity = max(0, 1 - max(0, t - 0.45) / 0.6)
-                    piece.translateBy(x: center.x + CGFloat(cos(angle)) * distance,
-                                      y: center.y + CGFloat(sin(angle)) * distance - CGFloat(10 * flight))
-                    let dot = CGFloat((i % 3 == 0 ? 5.0 : 3.6) * (1 - 0.3 * flight))
-                    if i % 3 == 0 {
-                        // A little gold coin with a shine.
-                        piece.fill(Path(ellipseIn: CGRect(x: -dot, y: -dot, width: dot * 2, height: dot * 2)), with: .color(Palette.gold))
-                        piece.fill(Path(ellipseIn: CGRect(x: -dot * 0.45, y: -dot * 0.6, width: dot * 0.7, height: dot * 0.5)), with: .color(.white.opacity(0.7)))
-                    } else {
-                        piece.rotate(by: .radians(t * 3 + jitter * 6))
-                        piece.fill(Self.sparkle(dot * 1.5), with: .color(i % 2 == 0 ? Theme.main : Theme.light))
-                    }
-                }
             }
         }
         .allowsHitTesting(false)
@@ -1198,20 +1162,9 @@ struct RewardBurst: View {
         .task(id: trigger) {
             guard trigger > 0, !reduceMotion else { return }
             start = .now
-            try? await Task.sleep(for: .seconds(1.4))
+            try? await Task.sleep(for: .seconds(1))
             start = nil
         }
-    }
-
-    // A four-pointed sparkle.
-    private static func sparkle(_ r: CGFloat) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: 0, y: -r))
-        p.addQuadCurve(to: CGPoint(x: r, y: 0), control: .zero)
-        p.addQuadCurve(to: CGPoint(x: 0, y: r), control: .zero)
-        p.addQuadCurve(to: CGPoint(x: -r, y: 0), control: .zero)
-        p.addQuadCurve(to: CGPoint(x: 0, y: -r), control: .zero)
-        return p
     }
 }
 

@@ -95,6 +95,22 @@ enum CandyFamily {
         return (top, bottom)
     }
 
+    // The colourful set: six fixed hues at the same softness and lightness
+    // to the eye, so they sit together calmly instead of shouting.
+    static func colourful(index: Int, hue: Double) -> (UInt32, UInt32) {
+        lock.lock()
+        if let hit = fixed[index] { lock.unlock(); return hit }
+        lock.unlock()
+        let gold = max(0, 1 - abs(hue - 42) / 30)
+        let top = ColorTone.tone(hue: hue, saturation: 0.36 + 0.14 * gold, luminance: 0.56 + 0.1 * gold)
+        let bottom = ColorTone.tone(hue: hue, saturation: 0.6 + 0.18 * gold, luminance: 0.27 + 0.14 * gold)
+        lock.lock()
+        fixed[index] = (top, bottom)
+        lock.unlock()
+        return (top, bottom)
+    }
+    nonisolated(unsafe) private static var fixed: [Int: (UInt32, UInt32)] = [:]
+
     private static func hues(_ main: UInt32) -> [Double] {
         lock.lock()
         defer { lock.unlock() }

@@ -241,7 +241,6 @@ struct PinkCircleButton: View {
                 .frame(width: 34, height: 34)
                 .background {
                     Circle().fill(Theme.candy)
-                        .frostGrain(in: Circle(), strength: 0.05)
                         .overlay(Circle().strokeBorder(Palette.rim(0.25).fixed(barScheme), lineWidth: 1))
                         .shadow(color: Theme.glow(0.3).fixed(barScheme), radius: 6, y: 3)
                 }
