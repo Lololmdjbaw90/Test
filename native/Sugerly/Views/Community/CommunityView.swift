@@ -516,9 +516,13 @@ struct CommunityView: View {
                     Button { path.append(.person(email)) } label: {
                         VStack(spacing: 6) {
                             // A ring in the palette for people who posted lately.
-                            Avatar(url: person?.picture ?? "", name: person?.displayName ?? email, size: 58, online: person?.isOnline ?? false)
+                            Avatar(url: person?.picture ?? "", name: person?.displayName ?? email, size: 58)
                                 .padding(3)
                                 .overlay(Circle().strokeBorder(AngularGradient(colors: [Theme.main, Theme.partner, Candy.peach.color, Candy.lemon.color, Theme.main], center: .center), lineWidth: 3))
+                                // The online dot sits on top of the ring, not under it.
+                                .overlay(alignment: .bottomTrailing) {
+                                    PresenceBadge(online: person?.isOnline ?? false, size: 58).offset(x: -1, y: -1)
+                                }
                             Text(person?.displayName ?? "").font(.jakarta(12, .semibold)).foregroundStyle(Palette.text).lineLimit(1).frame(width: 70)
                         }
                     }

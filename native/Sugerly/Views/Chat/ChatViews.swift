@@ -259,9 +259,15 @@ struct ChatListView: View {
                         let person = model.person(email)
                         Button { openChat(with: email) } label: {
                             VStack(spacing: 5) {
-                                Avatar(url: person?.picture ?? "", name: person?.displayName ?? email, size: 44, online: true)
+                                // The ring, then the online dot on top of it (on
+                                // the ring's edge, with its white border), so the
+                                // ring never cuts through the dot.
+                                Avatar(url: person?.picture ?? "", name: person?.displayName ?? email, size: 44)
                                     .padding(3)
                                     .overlay(Circle().strokeBorder(Candy.allCases[i % Candy.allCases.count].gradient, lineWidth: 2.5))
+                                    .overlay(alignment: .bottomTrailing) {
+                                        PresenceBadge(online: true, size: 44).offset(x: -1, y: -1)
+                                    }
                                 Text(person?.displayName ?? "").font(.jakarta(11, .semibold)).foregroundStyle(Palette.text2)
                                     .lineLimit(1).frame(width: 58)
                             }
