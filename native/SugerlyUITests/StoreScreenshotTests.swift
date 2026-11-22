@@ -9,6 +9,8 @@ final class StoreScreenshotTests: XCTestCase {
             app.launchArguments = ["--store-screenshots", "--store-" + page]
             app.launch()
             XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20))
+            let label = page == "conversation" ? "Can’t wait to see it! 🎨" : page == "chats" ? "Luna" : page == "bunny" ? "Save" : page == "community" ? "Sketchbook check-in 🌷" : "Mimi"
+            XCTAssertTrue(app.staticTexts[label].firstMatch.waitForExistence(timeout: 20) || app.buttons[label].firstMatch.exists, "Missing demo content on \(page)")
             // Let startup layout and bundled bunny assets settle before capture.
             sleep(5)
             let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())

@@ -61,6 +61,8 @@ struct StoreScreenshotHost: View {
                     .compactTabBar().tint(Theme.main)
                     .environment(\.horizontalSizeClass, .compact)
                 }
+            } else {
+                ProgressView("Preparing demo")
             }
         }
         .sugarBackground()
