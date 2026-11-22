@@ -98,7 +98,8 @@ jobs:
           python3 - <<'PY'
           import base64, json, os, subprocess
           want = ("compact-home", "compact-community", "compact-chats", "menu-full-screen-bottom",
-                  "outlined-titles-rose", "outlined-titles-mint-dark", "bunny-new-bodies", "appearance-options")
+                  "outlined-titles-rose", "outlined-titles-mint-dark", "bunny-new-bodies", "appearance-options",
+                  "reel-playing-above-tab-bar")
           found = []
           def walk(x):
               if isinstance(x, dict):
