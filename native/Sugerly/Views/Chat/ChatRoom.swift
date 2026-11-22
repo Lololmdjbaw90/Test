@@ -138,6 +138,13 @@ struct ChatView: View {
             recorder.cancel()
         }
         .task {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--store-screenshots") {
+                messages = StoreScreenshotHost.messages
+                loaded = true
+                return
+            }
+            #endif
             guard loadMessages else { loaded = true; return }
             restoreCache()
             await poll()
