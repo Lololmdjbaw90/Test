@@ -44,12 +44,11 @@ struct DailyRewardButton: View {
                     if status.claimed {
                         shape.fill(Palette.success.opacity(0.12))
                     } else {
-                        shape.fill(Candy.lemon.gradient).shadow(color: Candy.lemon.color.softGlow(0.35), radius: 6, y: 3)
+                        shape.fill(Candy.lemon.gradient)
                     }
                 }
                 .contentTransition(.symbolEffect(.replace))
                 .symbolEffect(.bounce, value: ripple)
-                .modifier(GiftWiggle(active: !status.claimed))
                 .overlay { RewardBurst(trigger: ripple).frame(width: 150, height: 150) }
             VStack(alignment: .leading, spacing: 2) {
                 Text(titleText(status.claimed))
@@ -86,17 +85,13 @@ struct DailyRewardButton: View {
             }
         }
         .padding(12)
+        // The same clean card as the rest of Home either way: the gold gift
+        // and the button show that a reward is waiting.
         .background {
-            let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
-            if status.claimed {
-                shape.fill(Palette.surface).shadow(color: Palette.shadow, radius: 10, y: 4)
-            } else {
-                // A reward is waiting: warm cream, like a little present.
-                shape.fill(LinearGradient(colors: [Palette.cream, Palette.ivory], startPoint: .top, endPoint: .bottom))
-                    .shadow(color: Palette.gold.opacity(0.18), radius: 10, y: 4)
-            }
+            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.surface)
+                .shadow(color: Palette.shadow, radius: 10, y: 4)
         }
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(status.claimed ? Palette.border : Palette.gold.opacity(0.25), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
         .motion(Motion.playful, value: status.claimed)
         .sensoryFeedback(.success, trigger: ripple)
     }
@@ -847,18 +842,5 @@ private struct HeroPop: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-    }
-}
-
-// A present waiting to be opened gives a little wiggle every few seconds.
-private struct GiftWiggle: ViewModifier {
-    let active: Bool
-
-    func body(content: Content) -> some View {
-        if #available(iOS 18.0, *), active, Motion.ambient, !Motion.reduced {
-            content.symbolEffect(.wiggle.byLayer, options: .repeat(.periodic(delay: 2.5)), isActive: true)
-        } else {
-            content
-        }
     }
 }
