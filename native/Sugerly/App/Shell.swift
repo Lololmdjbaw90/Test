@@ -947,16 +947,7 @@ struct CreateSheet: View {
             .padding(16)
             .background {
                 shape.fill(candy.gradient)
-                    .overlay {
-                        GeometryReader { geo in
-                            Circle().fill(.white.opacity(0.15)).frame(width: geo.size.width * 0.8)
-                                .offset(x: geo.size.width * 0.5, y: -geo.size.width * 0.3)
-                        }
-                        .clipShape(shape)
-                    }
-                    .overlay(shape.fill(LinearGradient(colors: [Palette.rim(0.35), .clear], startPoint: .top, endPoint: .center)).padding(1))
-                    .overlay { ShineSweep(every: 4 + Double(index) * 0.7, strength: 0.3).clipShape(shape) }
-                    .shadow(color: candy.color.softGlow(0.35), radius: 10, y: 5)
+                    .shadow(color: candy.color.softGlow(0.22), radius: 8, y: 4)
             }
         }
         .buttonStyle(BouncyStyle(scale: 0.95))

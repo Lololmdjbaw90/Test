@@ -1579,10 +1579,10 @@ struct AppearanceSettings: View {
             .padding(.vertical, 4)
             .buttonStyle(.borderless)
             VStack(alignment: .leading, spacing: 10) {
-                IconRow(title: "Icon tiles", detail: "Shades of your theme, or the classic rainbow.", icon: "square.grid.2x2.fill")
+                IconRow(title: "Icon tiles", detail: "Six balanced colours, or shades of your theme.", icon: "square.grid.2x2.fill")
                 Picker("Icon tiles", selection: tileStyle) {
+                    Text("Colourful").tag(true)
                     Text("Theme").tag(false)
-                    Text("Rainbow").tag(true)
                 }.pickerStyle(.segmented)
             }.padding(.vertical, 4)
             VStack(alignment: .leading, spacing: 10) {

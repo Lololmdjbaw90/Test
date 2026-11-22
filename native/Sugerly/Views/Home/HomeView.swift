@@ -411,15 +411,11 @@ struct HomeView: View {
                 XPBar(info: info)
             }
             .padding(14)
-            .background(RoundedRectangle(cornerRadius: 24).fill(Theme.pastel))
-            .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(Palette.rim(0.55), lineWidth: 1))
-            .background(RoundedRectangle(cornerRadius: 24).fill(Theme.main.opacity(0.16)).offset(y: 4))
-            .overlay {
-                // A shine sweeping by (no sparkles: the bunny's tile is the
-                // card's sparkle).
-                ShineSweep(every: 5.5, strength: 0.32)
-                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .background {
+                RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Theme.pastel)
+                    .shadow(color: Palette.shadow, radius: 10, y: 4)
             }
+            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.rim(0.55), lineWidth: 1))
             DailyRewardButton()
         }
     }
@@ -492,19 +488,7 @@ struct HomeView: View {
             .background {
                 let shape = RoundedRectangle(cornerRadius: 26, style: .continuous)
                 shape.fill(Theme.candy)
-                    .overlay {
-                        // Soft bubbles in the corner.
-                        GeometryReader { geo in
-                            Circle().fill(.white.opacity(0.14)).frame(width: geo.size.width * 0.5)
-                                .offset(x: geo.size.width * 0.68, y: -geo.size.width * 0.18)
-                            Circle().fill(.white.opacity(0.1)).frame(width: geo.size.width * 0.28)
-                                .offset(x: geo.size.width * 0.55, y: geo.size.height * 0.6)
-                        }
-                        .clipShape(shape)
-                    }
-                    .overlay { TwinkleField(colors: [.white, UIColor(hex: 0xFFF1A8)]).clipShape(shape) }
-                    .overlay { ShineSweep(every: 4.8, strength: 0.3).clipShape(shape) }
-                    .shadow(color: Theme.glow(0.32), radius: 14, y: 6)
+                    .shadow(color: Theme.glow(0.22), radius: 10, y: 4)
             }
         }
         .buttonStyle(BouncyStyle(scale: 0.97))

@@ -45,19 +45,19 @@ enum Palette {
     static let pinkHex: UInt32 = 0xF6BDCC
     static let roseHex: UInt32 = 0xF9B0C4
 
-    // Everything takes your theme's colour (a full recolour, not just the
-    // buttons). Pages: a clear pastel of your theme, so white cards stand
-    // out on it. Cards: clean white. Fields, chips and tracks: a softer
-    // shade of your pastel. Hairlines: a light line of it. Text: a deep ink
-    // of your colour instead of black. In dark mode, deep shades of it.
-    static var bg: Color { pastel(0xF7F4F3, 0.28, dark: 0x131114, 0.09) }
-    static var surface: Color { pastel(0xFFFFFF, 0.0, dark: 0x1D191C, 0.1) }
-    static var surface2: Color { pastel(0xF4F0EF, 0.24, dark: 0x29232A, 0.12) }
-    static var border: Color { pastel(0xEEE8E7, 0.22, dark: 0x352D33, 0.13) }
-    static var borderStrong: Color { pastel(0xE2DAD9, 0.32, dark: 0x473B43, 0.16) }
-    static var text: Color { ink(0x2B1D24, 0.18, dark: 0xFBF1F4, 0.06) }
-    static var text2: Color { ink(0x5E4A53, 0.2, dark: 0xD6C3CB, 0.08) }
-    static var muted: Color { ink(0x8A7882, 0.22, dark: 0x9C8891, 0.1) }
+    // Pages carry your theme (a clear pastel of it, so white cards stand
+    // out); text, fields and hairlines stay close to neutral so the page
+    // doesn't turn into one colour and reads clean and professional. Your
+    // colour itself is kept for buttons, links and what's selected. In dark
+    // mode, deep shades.
+    static var bg: Color { pastel(0xF7F4F3, 0.2, dark: 0x131114, 0.07) }
+    static var surface: Color { pastel(0xFFFFFF, 0.0, dark: 0x1D191C, 0.06) }
+    static var surface2: Color { pastel(0xF4F1F0, 0.12, dark: 0x29232A, 0.08) }
+    static var border: Color { pastel(0xECE7E6, 0.1, dark: 0x352D33, 0.09) }
+    static var borderStrong: Color { pastel(0xE0DADA, 0.16, dark: 0x473B43, 0.11) }
+    static var text: Color { ink(0x2A2027, 0.05, dark: 0xF8F1F4, 0.03) }
+    static var text2: Color { ink(0x5B4E55, 0.07, dark: 0xD3C6CC, 0.04) }
+    static var muted: Color { ink(0x877A81, 0.08, dark: 0x9A8D93, 0.05) }
 
     // Dark screens (the camera, calls, Reels): a deep night of your theme,
     // never plain black.
@@ -188,14 +188,26 @@ enum Tone {
 // shortcuts, the "new post / reel / drawing / song" buttons, menus). Each
 // place keeps its own colour everywhere: music is always "sky", servers
 // "mint", people "grape", rewards "lemon", posts "berry", reels "peach". With
-// a theme (the default) they're a family of your theme's colour; "Rainbow"
-// in Settings gives the classic fixed colours.
+// "Colourful" (the default) they're six balanced colours, so pages don't
+// turn one colour; "Theme" in Settings makes them a family of your theme.
 enum Candy: CaseIterable {
     case berry, peach, lemon, mint, sky, grape
 
     private var stops: (UInt32, UInt32) {
-        if ThemeStore.shared.rainbowTiles { return rainbow }
+        if ThemeStore.shared.rainbowTiles { return CandyFamily.colourful(index: index, hue: hue) }
         return CandyFamily.stops(turn: turn, index: index, around: Theme.mainHex)
+    }
+
+    // Each tile's own hue for the colourful set.
+    private var hue: Double {
+        switch self {
+        case .berry: return 338
+        case .peach: return 18
+        case .lemon: return 40
+        case .mint: return 160
+        case .sky: return 212
+        case .grape: return 258
+        }
     }
 
     // Where each sits on the colour wheel from your colour.
@@ -221,16 +233,6 @@ enum Candy: CaseIterable {
         }
     }
 
-    private var rainbow: (UInt32, UInt32) {
-        switch self {
-        case .berry: return (0xFF8DB4, 0xEC4F86)
-        case .peach: return (0xFFB487, 0xF27D45)
-        case .lemon: return (0xFFD46A, 0xF0A92C)
-        case .mint: return (0x7EDFBD, 0x24B386)
-        case .sky: return (0x8DC7FF, 0x3F92EE)
-        case .grape: return (0xC4A6FF, 0x8763EE)
-        }
-    }
     var color: Color { Color(hex: stops.1) }
     // Lighter at the top, like a boiled sweet. A touch deeper in dark mode.
     var gradient: LinearGradient {
@@ -352,8 +354,9 @@ final class ThemeStore {
     var accent: Accent = .rose
     var customMain: UInt32?
     var customLight: UInt32?
-    // The icon tiles in the classic rainbow instead of your theme's family.
-    var rainbowTiles = UserDefaults.standard.bool(forKey: "sugerly.tiles.rainbow") {
+    // The icon tiles in six balanced colours (the default) instead of your
+    // theme's family.
+    var rainbowTiles = UserDefaults.standard.object(forKey: "sugerly.tiles.rainbow") as? Bool ?? true {
         didSet { UserDefaults.standard.set(rainbowTiles, forKey: "sugerly.tiles.rainbow") }
     }
 }
@@ -639,9 +642,8 @@ private struct GradientButtonBody: View {
             .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: min(height, 50))
             .background {
                 shape.fill(Theme.candy)
-                    .overlay { if enabled { ShineSweep(every: 4.2).clipShape(shape) } }
                     .overlay(shape.strokeBorder(Palette.rim(0.22), lineWidth: 1))
-                    .shadow(color: Theme.glow(enabled ? (pressed ? 0.12 : 0.28) : 0), radius: pressed ? 4 : 10, y: pressed ? 2 : 5)
+                    .shadow(color: Theme.glow(enabled ? (pressed ? 0.1 : 0.2) : 0), radius: pressed ? 3 : 8, y: pressed ? 2 : 4)
             }
             .opacity(enabled ? (pressed ? 0.92 : 1) : 0.45)
             .scaleEffect(pressed && !Motion.reduced ? 0.965 : 1)
@@ -730,9 +732,9 @@ struct SectionHeader: View {
                 .background {
                     let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
                     if let candy = Candy.matching(icon) {
-                        shape.fill(candy.gradient).shadow(color: candy.color.softGlow(0.3), radius: 5, y: 2)
+                        shape.fill(candy.gradient)
                     } else {
-                        shape.fill(Theme.candy).shadow(color: Theme.glow(0.28), radius: 5, y: 2)
+                        shape.fill(Theme.candy)
                     }
                 }
                 .accessibilityHidden(true)
@@ -1053,10 +1055,9 @@ struct SparkleBurst: View {
     }
 }
 
-// Collecting a reward: a warm glow swells, then little coins and sparkles
-// fly out and fade. Drawn from the clock each frame (so it can't get stuck
-// halfway or be skipped by other animations) and played again whenever
-// `trigger` changes.
+// Collecting a reward: a soft warm glow swells and fades. Nothing flies
+// out (no coins or sparkles), so it stays calm. Drawn from the clock (so
+// it can't get stuck halfway) and played again whenever `trigger` changes.
 struct RewardBurst: View {
     let trigger: Int
     @State private var start: Date?
@@ -1067,40 +1068,15 @@ struct RewardBurst: View {
             Canvas { context, size in
                 guard let start else { return }
                 let t = timeline.date.timeIntervalSince(start)
-                guard t >= 0, t < 1.3 else { return }
+                guard t >= 0, t < 0.9 else { return }
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
                 let reach = min(size.width, size.height) / 2
-
                 var glow = context
-                glow.opacity = 0.55 * max(0, 1 - t / 0.9)
-                let r = reach * CGFloat(0.35 + 0.45 * min(1, t / 0.25))
+                glow.opacity = 0.4 * max(0, 1 - t / 0.9)
+                let r = reach * CGFloat(0.4 + 0.4 * min(1, t / 0.3))
                 glow.fill(Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)),
-                          with: .radialGradient(Gradient(colors: [Palette.gold.opacity(0.7), Theme.light.opacity(0.35), .clear]),
+                          with: .radialGradient(Gradient(colors: [Palette.gold.opacity(0.55), Theme.light.opacity(0.25), .clear]),
                                                 center: center, startRadius: 0, endRadius: r))
-
-                let pieces = 14
-                let flight = 1 - pow(1 - min(1, t), 3)
-                for i in 0..<pieces {
-                    let seed = Double(i) * 12.9898
-                    let jitter = abs(sin(seed) * 43758.5453).truncatingRemainder(dividingBy: 1)
-                    // Evenly round the circle, starting far enough out that
-                    // neighbours never touch, and all flying out alike.
-                    let angle = Double(i) / Double(pieces) * 2 * .pi + jitter * 0.1
-                    let distance = reach * CGFloat(0.45 + 0.5 * flight)
-                    var piece = context
-                    piece.opacity = max(0, 1 - max(0, t - 0.45) / 0.6)
-                    piece.translateBy(x: center.x + CGFloat(cos(angle)) * distance,
-                                      y: center.y + CGFloat(sin(angle)) * distance - CGFloat(10 * flight))
-                    let dot = CGFloat((i % 3 == 0 ? 5.0 : 3.6) * (1 - 0.3 * flight))
-                    if i % 3 == 0 {
-                        // A little gold coin with a shine.
-                        piece.fill(Path(ellipseIn: CGRect(x: -dot, y: -dot, width: dot * 2, height: dot * 2)), with: .color(Palette.gold))
-                        piece.fill(Path(ellipseIn: CGRect(x: -dot * 0.45, y: -dot * 0.6, width: dot * 0.7, height: dot * 0.5)), with: .color(.white.opacity(0.7)))
-                    } else {
-                        piece.rotate(by: .radians(t * 3 + jitter * 6))
-                        piece.fill(Self.sparkle(dot * 1.5), with: .color(i % 2 == 0 ? Theme.main : Theme.light))
-                    }
-                }
             }
         }
         .allowsHitTesting(false)
@@ -1108,20 +1084,9 @@ struct RewardBurst: View {
         .task(id: trigger) {
             guard trigger > 0, !reduceMotion else { return }
             start = .now
-            try? await Task.sleep(for: .seconds(1.4))
+            try? await Task.sleep(for: .seconds(1))
             start = nil
         }
-    }
-
-    // A four-pointed sparkle.
-    private static func sparkle(_ r: CGFloat) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: 0, y: -r))
-        p.addQuadCurve(to: CGPoint(x: r, y: 0), control: .zero)
-        p.addQuadCurve(to: CGPoint(x: 0, y: r), control: .zero)
-        p.addQuadCurve(to: CGPoint(x: -r, y: 0), control: .zero)
-        p.addQuadCurve(to: CGPoint(x: 0, y: -r), control: .zero)
-        return p
     }
 }
 

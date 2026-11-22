@@ -139,16 +139,16 @@ enum TapSound {
     }
 }
 
-// A sparkly "you got coins" chime for rewards: a quick rising bell arpeggio
-// with a little shimmer on top. Made in code like the taps; follows the
-// silent switch.
+// The "you got coins" sound: two soft wooden notes going up, like a
+// marimba, short and low (no bells or twinkles). Made in code like the
+// taps; follows the silent switch.
 enum RewardSound {
     private static var id: SystemSoundID = 0
 
     static func play() {
         if id == 0 {
             let url = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("sugerly-reward-v1.wav")
+                .appendingPathComponent("sugerly-reward-v2.wav")
             if !FileManager.default.fileExists(atPath: url.path) { try? TapSound.wav(samples()).write(to: url) }
             AudioServicesCreateSystemSoundID(url as CFURL, &id)
         }
@@ -157,28 +157,24 @@ enum RewardSound {
 
     private static func samples() -> [Int16] {
         let rate = TapSound.rate
-        let length = 1.2
-        var buffer = [Double](repeating: 0, count: Int(rate * length))
-        func bell(_ freq: Double, at start: Double, volume: Double, decay: Double) {
+        var buffer = [Double](repeating: 0, count: Int(rate * 0.7))
+        // A wooden bar: the note, plus its 4th partial that dies away fast
+        // (that's what makes it sound like wood instead of a synth).
+        func note(_ freq: Double, at start: Double, volume: Double) {
             let from = Int(start * rate)
-            let count = min(Int(0.9 * rate), buffer.count - from)
+            let count = min(Int(0.55 * rate), buffer.count - from)
             guard count > 0 else { return }
             for i in 0..<count {
                 let t = Double(i) / rate
-                let env = min(1, t / 0.003) * exp(-t * decay)
-                let phase = 2 * Double.pi * freq * t
-                buffer[from + i] += (sin(phase) + 0.3 * sin(phase * 2) + 0.1 * sin(phase * 3.01)) * env * volume
+                let attack = min(1, t / 0.004)
+                let body = sin(2 * Double.pi * freq * t) * exp(-t * 9)
+                let knock = sin(2 * Double.pi * freq * 3.93 * t) * exp(-t * 60) * 0.35
+                buffer[from + i] += (body + knock) * attack * volume
             }
         }
-        // C6 E6 G6 C7, then a high E7 sparkle.
-        for (i, f) in [1046.5, 1318.5, 1568.0, 2093.0].enumerated() {
-            bell(f, at: Double(i) * 0.075, volume: 0.2, decay: 6)
-        }
-        bell(2637.0, at: 0.32, volume: 0.14, decay: 5)
-        // Tiny twinkles.
-        for (f, t) in [(3520.0, 0.40), (4186.0, 0.50), (3951.0, 0.62), (4699.0, 0.74)] {
-            bell(f, at: t, volume: 0.05, decay: 22)
-        }
+        // E5 then A5.
+        note(659.25, at: 0, volume: 0.24)
+        note(880.0, at: 0.085, volume: 0.22)
         return buffer.map { Int16(max(-1, min(1, $0)) * Double(Int16.max)) }
     }
 }
