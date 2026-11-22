@@ -1,0 +1,84 @@
+# Checks the Apple call key in the GitHub secrets (APNS_KEY, APNS_KEY_ID,
+# APPLE_TEAM_ID) against both of Apple's push servers, using a made-up phone
+# address so nothing is delivered. Only Apple's answer codes are printed:
+#   BadDeviceToken            the key works on that server (only the fake address was refused)
+#   BadEnvironmentKeyInToken  the key isn't allowed on that server (make one for "Sandbox & Production")
+#   InvalidProviderToken      the key, its Key ID or the Team ID don't match
+# App Store and TestFlight phones are rung through "production".
+name: Check Apple call key
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/apns-check.yml
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      APNS_KEY: ${{ secrets.APNS_KEY }}
+      APNS_KEY_ID: ${{ secrets.APNS_KEY_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - name: Ask both Apple push servers
+        run: |
+          node - <<'JS'
+          const crypto = require('crypto');
+          const http2 = require('http2');
+          // The same key reading and signing as netlify/functions/call-ring.mjs.
+          const text = String(process.env.APNS_KEY || '').replace(/\\n/g, '\n');
+          const middle = text.replace(/[\s\S]*-----BEGIN PRIVATE KEY-----/, '').replace(/-----END PRIVATE KEY-----[\s\S]*/, '').replace(/[^A-Za-z0-9+/=]/g, '');
+          const keyId = (process.env.APNS_KEY_ID || '').trim();
+          const team = (process.env.APPLE_TEAM_ID || '').trim();
+          console.log(`Key text: ${middle.length >= 40 ? 'present' : 'MISSING'} · Key ID: ${keyId.length} characters · Team ID: ${team.length} characters`);
+          if (middle.length < 40 || !keyId || !team) process.exit(1);
+          const key = `-----BEGIN PRIVATE KEY-----\n${middle.match(/.{1,64}/g).join('\n')}\n-----END PRIVATE KEY-----\n`;
+          const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+          const head = b64({ alg: 'ES256', kid: keyId });
+          const claims = b64({ iss: team, iat: Math.floor(Date.now() / 1000) });
+          let token;
+          try {
+            const sig = crypto.sign('sha256', Buffer.from(`${head}.${claims}`), { key, dsaEncoding: 'ieee-p1363' }).toString('base64url');
+            token = `${head}.${claims}.${sig}`;
+          } catch (e) { console.log(`The key text isn't a usable .p8 key: ${e.message}`); process.exit(1); }
+          const ask = (host) => new Promise((resolve) => {
+            const client = http2.connect(`https://${host}`);
+            const done = (r) => { try { client.destroy(); } catch {} resolve(r); };
+            client.on('error', (e) => done(`error ${e.message}`));
+            const req = client.request({
+              ':method': 'POST', ':path': `/3/device/${'0'.repeat(64)}`,
+              authorization: `bearer ${token}`, 'apns-topic': 'com.mimilocks.app.voip',
+              'apns-push-type': 'voip', 'apns-priority': '10', 'apns-expiration': '0',
+              'content-type': 'application/json',
+            });
+            let status = 0, body = '';
+            req.setEncoding('utf8');
+            req.on('response', (h) => { status = h[':status']; });
+            req.on('data', (c) => { body += c; });
+            req.on('end', () => { let reason = ''; try { reason = JSON.parse(body).reason; } catch {} done(`${status} ${reason}`); });
+            req.on('error', (e) => done(`error ${e.message}`));
+            req.end('{"aps":{}}');
+          });
+          (async () => {
+            const meaning = {
+              BadDeviceToken: 'OK: the key works here',
+              BadEnvironmentKeyInToken: 'NOT ALLOWED: this key is not enabled for this server',
+              InvalidProviderToken: 'WRONG: key, Key ID or Team ID do not match',
+              TopicDisallowed: 'WRONG: the key is not for the com.mimilocks.app app',
+            };
+            const lines = [];
+            for (const [name, host] of [['production (App Store + TestFlight)', 'api.push.apple.com'], ['sandbox (Xcode builds)', 'api.sandbox.push.apple.com']]) {
+              const answer = await ask(host);
+              const reason = answer.split(' ')[1] || '';
+              const line = `${name}: ${answer} → ${meaning[reason] || 'unexpected answer'}`;
+              console.log(line);
+              lines.push(`- ${line}`);
+            }
+            require('fs').appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
+          })();
+          JS
