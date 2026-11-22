@@ -106,7 +106,7 @@ struct ToastView: View {
         .padding(.leading, 8)
         .padding(.trailing, 18)
         .padding(.vertical, 8)
-        .background(Palette.surface, in: Capsule())
+        .frostedFill(in: Capsule())
         .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
         .shadow(color: Palette.shadow, radius: 12, y: 8)
         .padding(.horizontal, 20)
@@ -387,7 +387,7 @@ struct ReportSheet: View {
                         Spacer(minLength: 0)
                     }
                     .padding(14)
-                    .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .frostedFill(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
                 }
                 if already {
@@ -413,7 +413,7 @@ struct ReportSheet: View {
                         TextField("Optional", text: $details, axis: .vertical)
                             .font(.jakarta(15)).lineLimit(3...6)
                             .padding(12)
-                            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .frostedFill(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
                         if canBlock {
                             Toggle(isOn: $block) {
@@ -424,7 +424,7 @@ struct ReportSheet: View {
                             }
                             .tint(Theme.main)
                             .padding(12)
-                            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .frostedFill(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                         }
                     }
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -463,7 +463,7 @@ struct ReportSheet: View {
                     .contentTransition(.symbolEffect(.replace))
             }
             .padding(10)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .frostedFill(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(active ? Theme.main : Palette.border, lineWidth: active ? 2 : 1))
         }
         .buttonStyle(BouncyStyle(scale: 0.97))

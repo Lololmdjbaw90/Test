@@ -190,7 +190,7 @@ private struct SugarBackground: ViewModifier {
                 Palette.bg
                 AuroraLayer()
                 LinearGradient(stops: [
-                    .init(color: Theme.light.opacity(dark ? 0.16 : 0.45), location: 0),
+                    .init(color: Theme.light.opacity(dark ? 0.14 : 0.32), location: 0),
                     .init(color: Palette.bg.opacity(0), location: 1),
                 ], startPoint: .top, endPoint: .bottom)
                 .frame(height: 260)

@@ -997,7 +997,7 @@ struct SoundPicker: View {
                 TextField("Search songs or artists", text: $query).font(.jakarta(15))
             }
             .padding(.horizontal, 16).frame(height: 46)
-            .background(Palette.surface, in: Capsule())
+            .frostedFill(in: Capsule())
             .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
             ScrollView {
                 LazyVStack(spacing: 6) {
@@ -1026,7 +1026,7 @@ struct SoundPicker: View {
                                 .buttonStyle(GradientButtonStyle(height: 34, fullWidth: false))
                         }
                         .padding(8)
-                        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .frostedFill(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     }
                 }
             }

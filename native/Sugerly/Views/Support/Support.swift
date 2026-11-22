@@ -328,7 +328,7 @@ struct SupportChatView: View {
                     if q != Support.answers.last?.0 { Divider().padding(.leading, 14) }
                 }
             }
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .frostedFill(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
         }
         .padding(.bottom, 8)
@@ -416,7 +416,7 @@ struct SupportChatView: View {
                     .lineLimit(1...5)
                     .focused($typing)
                     .padding(.horizontal, 14).padding(.vertical, 11)
-                    .background(Palette.surface, in: RoundedRectangle(cornerRadius: 21, style: .continuous))
+                    .frostedFill(in: RoundedRectangle(cornerRadius: 21, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 21, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
                 SendButton(enabled: canSend) { Task { await send() } }
             }
@@ -561,7 +561,7 @@ struct ReportStatusCard: View {
             }
         }
         .padding(14)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .frostedFill(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
     }
 }
@@ -621,7 +621,7 @@ struct SupportInbox: View {
                         }
                     }
                     .padding(12)
-                    .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .frostedFill(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(t.teamUnread ? Theme.main.opacity(0.5) : Palette.border, lineWidth: t.teamUnread ? 1.5 : 1))
                 }
                 .buttonStyle(BouncyStyle(scale: 0.98))

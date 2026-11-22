@@ -506,7 +506,7 @@ struct StickerMakerView: View {
                         Text("Cutting out…").font(.jakarta(12, .bold)).foregroundStyle(Palette.text2)
                     }
                     .padding(16)
-                    .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .frostedFill(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
             }
             .frame(height: 300)
@@ -520,7 +520,7 @@ struct StickerMakerView: View {
                     PhotosPicker(selection: $item, matching: .images) {
                         Label("Change photo", systemImage: "photo").font(.jakarta(14, .semibold)).foregroundStyle(Palette.text2)
                             .padding(.horizontal, 16).frame(height: 40)
-                            .background(Palette.surface, in: Capsule())
+                            .frostedFill(in: Capsule())
                             .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
                     }
                 }
@@ -704,7 +704,7 @@ struct GifMakerView: View {
                         .contentShape(Rectangle())
                     }
                 }
-                if loading { ProgressView().tint(Theme.main).padding(16).background(Palette.surface, in: Circle()) }
+                if loading { ProgressView().tint(Theme.main).padding(16).frostedFill(in: Circle()) }
             }
             .frame(height: 300)
 
@@ -721,7 +721,7 @@ struct GifMakerView: View {
                     PhotosPicker(selection: $picked, maxSelectionCount: 30, matching: .any(of: [.images, .videos])) {
                         Label("Change", systemImage: "photo.on.rectangle").font(.jakarta(14, .semibold)).foregroundStyle(Palette.text2)
                             .padding(.horizontal, 16).frame(height: 40)
-                            .background(Palette.surface, in: Capsule())
+                            .frostedFill(in: Capsule())
                             .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
                     }
                 }

@@ -271,7 +271,7 @@ struct SearchField: View {
         }
         .padding(.horizontal, 16)
         .frame(height: 48)
-        .background(Palette.surface, in: Capsule())
+        .frostedFill(in: Capsule())
         .overlay(Capsule().strokeBorder(focused ? Theme.main.opacity(0.5) : Palette.border, lineWidth: focused ? 1.5 : 1))
         .shadow(color: focused ? Theme.main.opacity(0.15) : .clear, radius: 10, y: 4)
         .motion(Motion.standard, value: focused)
@@ -505,7 +505,7 @@ struct FlowChips: View {
                 Button { tap(item) } label: {
                     Text(item).font(.jakarta(13, .semibold)).foregroundStyle(Palette.text2)
                         .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 14).frame(height: 34)
-                        .background(Palette.surface, in: Capsule())
+                        .frostedFill(in: Capsule())
                         .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
                 }
                 .buttonStyle(BouncyStyle())

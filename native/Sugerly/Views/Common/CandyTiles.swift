@@ -1,7 +1,9 @@
 import SwiftUI
 
-// Shortcuts as candy tiles with a white icon and the place's name, three
-// to a row (Home and the menu).
+// Shortcuts as clean white tiles: a small candy square with the place's
+// icon and its name in dark ink underneath, three to a row (Home and the
+// menu). The colour sits in the icon only, so a page of them reads calm
+// instead of a wall of pink.
 struct CandyShortcutGrid: View {
     struct Item {
         let title: String
@@ -13,11 +15,13 @@ struct CandyShortcutGrid: View {
     // They pop in one after another once this turns on.
     var shown = true
     var open: (Route) -> Void
+    @State private var hops: [Int] = Array(repeating: 0, count: 8)
+    @Environment(\.flat) private var flat
 
     var body: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
             ForEach(Array(items.enumerated()), id: \.element.title) { i, item in
-                Button { open(item.route) } label: { tile(item) }
+                Button { open(item.route) } label: { tile(item, hop: hops[i % hops.count]) }
                     .buttonStyle(BouncyStyle(scale: 0.92))
                     .accessibilityLabel(item.title)
                     .scaleEffect(shown || Motion.reduced ? 1 : 0.7)
@@ -25,34 +29,35 @@ struct CandyShortcutGrid: View {
                     .animation(Motion.reduced ? nil : Motion.playful.delay(0.12 + Double(min(i, 8)) * 0.05), value: shown)
             }
         }
+        .task {
+            // Every few seconds one icon hops, so Home never sits still (not
+            // in the menu, which keeps still).
+            guard Motion.ambient, !Motion.reduced, !flat, !items.isEmpty else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2.4))
+                guard !Task.isCancelled else { return }
+                if !Motion.paused { hops[Int.random(in: 0..<items.count)] += 1 }
+            }
+        }
     }
 
-    private func tile(_ item: Item) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+    private func tile(_ item: Item, hop: Int) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
         return VStack(alignment: .leading, spacing: 0) {
-            Image(systemName: item.icon)
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 38, height: 38)
-                .background(.white.opacity(0.24), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            Spacer(minLength: 12)
+            CandyTile(icon: item.icon, candy: item.candy, size: 38)
+                .symbolEffect(.bounce, value: hop)
+            Spacer(minLength: 10)
             // Room for two lines on every tile (so "Customize bunny" fits and
             // the tiles stay the same height).
             Text(item.title)
-                .font(.jakarta(13, .bold)).foregroundStyle(.white)
+                .font(.jakarta(13, .semibold)).foregroundStyle(Palette.text)
                 .lineLimit(2).minimumScaleFactor(0.8)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, minHeight: 34, alignment: .bottomLeading)
-                .softShadow(.black.opacity(0.12), radius: 1, y: 1)
         }
         .padding(12)
         .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
-        .background {
-            // Clean candy tiles: the colour, its icon and name (no bubbles,
-            // shines or hopping, which made pages busy).
-            shape.fill(item.candy.gradient)
-                .softShadow(item.candy.color.softGlow(0.22), radius: 6, y: 3)
-        }
+        .glassFrame(radius: 20)
         .contentShape(shape)
     }
 }
@@ -106,7 +111,19 @@ struct PageHero: View {
         .padding(18)
         .background {
             shape.fill(themed ? Theme.gradient : candy.gradient)
-                .shadow(color: Palette.shadow, radius: 10, y: 4)
+                .overlay {
+                    GeometryReader { geo in
+                        Circle().fill(.white.opacity(0.14)).frame(width: geo.size.height * 1.6)
+                            .offset(x: geo.size.width * 0.6, y: -geo.size.height * 0.4)
+                        Circle().fill(.white.opacity(0.1)).frame(width: geo.size.height * 0.7)
+                            .offset(x: geo.size.width * 0.35, y: geo.size.height * 0.62)
+                    }
+                    .clipShape(shape)
+                }
+                // (No corner sparkles here: they'd sit on the big icon.)
+                .overlay { ShineSweep(every: 5.5, strength: 0.28).clipShape(shape) }
+                .frostGrain(in: shape, strength: 0.045)
+                .background(shape.fill(themed ? Theme.main.opacity(0.15) : candy.color.opacity(0.15)).offset(y: 3))
         }
         .onAppear { shown = true }
     }

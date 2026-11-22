@@ -83,7 +83,9 @@ final class NavigationInteractionTests: XCTestCase {
 
     func testSettingsAndItsNestedPageCloseWhenLeavingTheirTab() {
         tapTab("Community")
-        app.buttons["Open saved profile"].tap()
+        let savedProfile = app.buttons["Open saved profile"]
+        XCTAssertTrue(savedProfile.waitForExistence(timeout: 5))
+        savedProfile.tap()
         XCTAssertTrue(app.staticTexts["Saved profile page"].waitForExistence(timeout: 3))
         app.buttons["Open settings"].tap()
         XCTAssertTrue(app.buttons["Edit profile"].waitForExistence(timeout: 5))

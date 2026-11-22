@@ -390,7 +390,7 @@ struct ServerHubView: View {
                 Button { creating = true } label: {
                     Image(systemName: "plus").font(.system(size: 20, weight: .bold)).foregroundStyle(Palette.success)
                         .frame(width: 50, height: 50)
-                        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 25, style: .continuous))
+                        .frostedFill(in: RoundedRectangle(cornerRadius: 25, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 25, style: .continuous).strokeBorder(Palette.border, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])))
                 }
                 .buttonStyle(BouncyStyle())
@@ -753,7 +753,7 @@ struct ServerPanel: View {
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 7)
-                .background(Palette.surface.opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .frostedFill(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .contentShape(Rectangle())
             }
             .buttonStyle(BouncyStyle(scale: 0.97))
@@ -800,7 +800,7 @@ struct ServerPanel: View {
                             Text("\(count)").font(.jakarta(11, .heavy)).foregroundStyle(Palette.muted)
                         }
                         .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 10).frame(height: 28)
-                        .background(Palette.surface, in: Capsule())
+                        .frostedFill(in: Capsule())
                         .overlay(Capsule().strokeBorder(role.tint.opacity(0.4), lineWidth: 1))
                     }
                 }
@@ -847,7 +847,7 @@ struct CreateServerView: View {
                                 if template == t { Image(systemName: "checkmark.circle.fill").font(.system(size: 22)).foregroundStyle(Theme.gradient) }
                             }
                             .padding(12)
-                            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                            .frostedFill(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(template == t ? Theme.main : Palette.border, lineWidth: template == t ? 2 : 1))
                         }
                         .buttonStyle(BouncyStyle(scale: 0.97))

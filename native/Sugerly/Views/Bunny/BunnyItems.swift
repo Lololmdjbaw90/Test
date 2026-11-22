@@ -201,6 +201,9 @@ struct BunnyItemLayer: View {
         ZStack {
             if item.slot == .body, !item.uploaded, let tint {
                 BunnyLayer(item.asset, tint)
+            } else if item.slot == .top || item.slot == .head {
+                // Clothes and accessories are dyed (see BunnyDye).
+                picture.bunnyDye(tint, anchor: dyeAnchor)
             } else {
                 picture
                     .hueRotation(.degrees(item.slot == .body ? (tint?.hue ?? 0) : turn))
@@ -211,6 +214,12 @@ struct BunnyItemLayer: View {
                 BunnyImages.image(item.outlineAsset).resizable().interpolation(.high)
             }
         }
+    }
+
+    private var dyeAnchor: Float {
+        if !item.asset.isEmpty { return BunnyDye.anchor(item.asset, BunnyImages.uiImage(item.asset)) }
+        guard let image = BunnyRemoteImages.shared.images[item.url] else { return 0.5 }
+        return BunnyDye.anchor(item.url, image)
     }
 
     private var turn: Double {
@@ -286,7 +295,7 @@ struct BunnyItemUploader: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Price in coins · 0 is free").font(.jakarta(13, .bold)).foregroundStyle(Palette.text2)
                         TextField("0", text: $price).keyboardType(.numberPad)
-                            .padding(14).background(Palette.surface, in: RoundedRectangle(cornerRadius: 14))
+                            .padding(14).frostedFill(in: RoundedRectangle(cornerRadius: 14))
                     }
                     Button { Task { await upload() } } label: {
                         HStack(spacing: 8) {

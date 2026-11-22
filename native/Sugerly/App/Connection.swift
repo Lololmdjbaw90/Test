@@ -57,7 +57,7 @@ struct OfflineNotice: View {
         .padding(.leading, 10)
         .padding(.trailing, 16)
         .padding(.vertical, 8)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .frostedFill(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
         .shadow(color: Palette.shadow, radius: 12, y: 8)
         .frame(maxWidth: 520)

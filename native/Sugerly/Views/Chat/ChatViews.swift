@@ -513,7 +513,7 @@ struct SectionSwitch: View {
             }
         }
         .padding(3)
-        .background(Palette.surface2, in: Capsule())
+        .glassFrame(radius: 20)
     }
 }
 
@@ -579,8 +579,9 @@ struct ConversationRow: View {
         if card {
             row
                 .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(unread ? Theme.soft : Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(unread ? Theme.main.opacity(0.28) : Palette.border, lineWidth: 1))
+                // Every chat is a frosted glass card; unread ones stand out
+                // by bold words, the count badge and a blush tint.
+                .glassFrame(radius: 18, tint: unread ? Theme.soft : nil)
         } else {
             row.contentShape(Rectangle())
         }
@@ -646,7 +647,7 @@ struct NewChatView: View {
                 Spacer()
                 Button { dismiss() } label: {
                     Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(Palette.text2)
-                        .frame(width: 36, height: 36).background(Palette.surface, in: Circle())
+                        .frame(width: 36, height: 36).frostedFill(in: Circle())
                 }
                 .buttonStyle(BouncyStyle())
             }
@@ -656,7 +657,7 @@ struct NewChatView: View {
             }
             .padding(.horizontal, 16)
             .frame(height: 48)
-            .background(Palette.surface, in: Capsule())
+            .frostedFill(in: Capsule())
             .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
             ScrollView {
                 LazyVStack(spacing: 8) {
@@ -673,7 +674,7 @@ struct NewChatView: View {
                                 Image(systemName: "paperplane.fill").foregroundStyle(Theme.pink)
                             }
                             .padding(12)
-                            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                            .frostedFill(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                         }
                         .buttonStyle(BouncyStyle(scale: 0.97))
                     }

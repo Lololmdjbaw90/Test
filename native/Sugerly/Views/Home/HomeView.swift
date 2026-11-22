@@ -44,11 +44,12 @@ struct DailyRewardButton: View {
                     if status.claimed {
                         shape.fill(Palette.success.opacity(0.12))
                     } else {
-                        shape.fill(Candy.lemon.gradient)
+                        shape.fill(Candy.lemon.gradient).shadow(color: Candy.lemon.color.softGlow(0.35), radius: 6, y: 3)
                     }
                 }
                 .contentTransition(.symbolEffect(.replace))
                 .symbolEffect(.bounce, value: ripple)
+                .modifier(GiftWiggle(active: !status.claimed))
                 .overlay { RewardBurst(trigger: ripple).frame(width: 150, height: 150) }
             VStack(alignment: .leading, spacing: 2) {
                 Text(titleText(status.claimed))
@@ -85,13 +86,17 @@ struct DailyRewardButton: View {
             }
         }
         .padding(12)
-        // The same clean card as the rest of Home either way: the gold gift
-        // and the button show that a reward is waiting.
         .background {
-            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.surface)
-                .shadow(color: Palette.shadow, radius: 10, y: 4)
+            let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+            if status.claimed {
+                shape.fill(Palette.surface).shadow(color: Palette.shadow, radius: 10, y: 4)
+            } else {
+                // A reward is waiting: warm cream, like a little present.
+                shape.fill(LinearGradient(colors: [Palette.cream, Palette.ivory], startPoint: .top, endPoint: .bottom))
+                    .shadow(color: Palette.gold.opacity(0.18), radius: 10, y: 4)
+            }
         }
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(status.claimed ? Palette.border : Palette.gold.opacity(0.25), lineWidth: 1))
         .motion(Motion.playful, value: status.claimed)
         .sensoryFeedback(.success, trigger: ripple)
     }
@@ -406,11 +411,14 @@ struct HomeView: View {
                 XPBar(info: info)
             }
             .padding(14)
-            .background {
-                RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Theme.pastel)
-                    .shadow(color: Palette.shadow, radius: 10, y: 4)
+            // Frosted glass with a soft wash of your colour at the top.
+            .glassFrame(radius: 24, tint: Palette.blush)
+            .overlay {
+                // A shine sweeping by (no sparkles: the bunny's tile is the
+                // card's sparkle).
+                ShineSweep(every: 5.5, strength: 0.32)
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             }
-            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Palette.rim(0.55), lineWidth: 1))
             DailyRewardButton()
         }
     }
@@ -432,8 +440,7 @@ struct HomeView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12).padding(.vertical, 9)
-            .background(Palette.surface.opacity(0.78), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Palette.rim(0.7), lineWidth: 1))
+            .background(Palette.surface2, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(BouncyStyle(scale: 0.94))
@@ -483,7 +490,19 @@ struct HomeView: View {
             .background {
                 let shape = RoundedRectangle(cornerRadius: 26, style: .continuous)
                 shape.fill(Theme.candy)
-                    .shadow(color: Theme.glow(0.22), radius: 10, y: 4)
+                    .overlay {
+                        // Soft bubbles in the corner.
+                        GeometryReader { geo in
+                            Circle().fill(.white.opacity(0.14)).frame(width: geo.size.width * 0.5)
+                                .offset(x: geo.size.width * 0.68, y: -geo.size.width * 0.18)
+                            Circle().fill(.white.opacity(0.1)).frame(width: geo.size.width * 0.28)
+                                .offset(x: geo.size.width * 0.55, y: geo.size.height * 0.6)
+                        }
+                        .clipShape(shape)
+                    }
+                    .overlay { TwinkleField(colors: [.white, UIColor(hex: 0xFFF1A8)]).clipShape(shape) }
+                    .overlay { ShineSweep(every: 4.8, strength: 0.3).clipShape(shape) }
+                    .shadow(color: Theme.glow(0.32), radius: 14, y: 6)
             }
         }
         .buttonStyle(BouncyStyle(scale: 0.97))
@@ -842,5 +861,18 @@ private struct HeroPop: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+    }
+}
+
+// A present waiting to be opened gives a little wiggle every few seconds.
+private struct GiftWiggle: ViewModifier {
+    let active: Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *), active, Motion.ambient, !Motion.reduced {
+            content.symbolEffect(.wiggle.byLayer, options: .repeat(.periodic(delay: 2.5)), isActive: true)
+        } else {
+            content
+        }
     }
 }

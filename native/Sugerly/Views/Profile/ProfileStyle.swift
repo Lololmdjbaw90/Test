@@ -668,7 +668,7 @@ struct NitroShopView: View {
             VStack(spacing: 8) {
                 Avatar(url: me?.picture ?? "", name: name, size: 70, nitro: true)
                     .padding(4)
-                    .background(Palette.surface, in: Circle())
+                    .frostedFill(in: Circle())
                     .offset(y: -38)
                     .padding(.bottom, -38)
                 HStack(spacing: 6) {

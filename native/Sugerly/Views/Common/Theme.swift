@@ -1,13 +1,13 @@
 import SwiftUI
 import UIKit
 
-// Sugerly's look: soft pastel pages built from one palette — cream
-// (FCF0D6), ivory (F8FBE6), blush (FAD0DC), pink (F6BDCC) and rose (F9B0C4) —
-// with a deeper rose for buttons and links so text stays easy to read, plum
-// text instead of black, and the iPhone's own fonts. Pick another theme in
-// Settings (Themes.swift) and the whole app is recoloured from it: pages,
-// cards, text, tiles and dark screens. Use Theme / Palette colours rather
-// than fixed ones so everything follows.
+// Sugerly's look: a clear pastel page in your theme's colour, clean white
+// cards with a crisp hairline, near-black ink for text, and a rich, deep
+// accent for buttons and links. Every text colour is worked out so it is
+// easy to read (at least 4.5 : 1, the WCAG AA level) on the page, the cards
+// and the fields, for every theme, in light and dark mode. Pick another
+// theme in Settings (Themes.swift) and the whole app is recoloured from it.
+// Use Theme / Palette colours rather than fixed ones so everything follows.
 
 extension UIColor {
     convenience init(hex: UInt32, alpha: CGFloat = 1) {
@@ -45,19 +45,22 @@ enum Palette {
     static let pinkHex: UInt32 = 0xF6BDCC
     static let roseHex: UInt32 = 0xF9B0C4
 
-    // Pages carry your theme (a clear pastel of it, so white cards stand
-    // out); text, fields and hairlines stay close to neutral so the page
-    // doesn't turn into one colour and reads clean and professional. Your
-    // colour itself is kept for buttons, links and what's selected. In dark
-    // mode, deep shades.
-    static var bg: Color { pastel(0xF7F4F3, 0.2, dark: 0x131114, 0.07) }
-    static var surface: Color { pastel(0xFFFFFF, 0.0, dark: 0x1D191C, 0.06) }
-    static var surface2: Color { pastel(0xF4F1F0, 0.12, dark: 0x29232A, 0.08) }
-    static var border: Color { pastel(0xECE7E6, 0.1, dark: 0x352D33, 0.09) }
-    static var borderStrong: Color { pastel(0xE0DADA, 0.16, dark: 0x473B43, 0.11) }
-    static var text: Color { ink(0x2A2027, 0.05, dark: 0xF8F1F4, 0.03) }
-    static var text2: Color { ink(0x5B4E55, 0.07, dark: 0xD3C6CC, 0.04) }
-    static var muted: Color { ink(0x877A81, 0.08, dark: 0x9A8D93, 0.05) }
+    // Everything takes your theme's colour (a full recolour, not just the
+    // buttons). Pages: a clear pastel of your theme, so white cards stand
+    // out on it. Cards: clean white. Fields, chips and tracks: a softer
+    // shade of your pastel. Hairlines: a light line of it. Text: a deep ink
+    // of your colour instead of black. In dark mode, deep shades of it.
+    // Text is near-black with only a whisper of your colour (tinted plum
+    // ink looked muddy and was hard to read), and the quieter text levels
+    // stay readable: text2 ≈ 7 : 1 and muted ≥ 4.5 : 1 on the page.
+    static var bg: Color { pastel(0xF8F5F7, 0.20, dark: 0x111014, 0.07) }
+    static var surface: Color { pastel(0xFFFFFF, 0.0, dark: 0x1B191F, 0.07) }
+    static var surface2: Color { pastel(0xF3F0F2, 0.16, dark: 0x25222A, 0.09) }
+    static var border: Color { pastel(0xE9E5EA, 0.18, dark: 0x312D36, 0.1) }
+    static var borderStrong: Color { pastel(0xD9D3DB, 0.26, dark: 0x433D49, 0.12) }
+    static var text: Color { ink(0x1E1A21, 0.05, dark: 0xF5F2F7, 0.04) }
+    static var text2: Color { ink(0x4B4550, 0.08, dark: 0xCCC6D1, 0.06) }
+    static var muted: Color { ink(0x625C67, 0.08, dark: 0xA29BA8, 0.08) }
 
     // Dark screens (the camera, calls, Reels): a deep night of your theme,
     // never plain black.
@@ -90,11 +93,13 @@ enum Palette {
         swatch(0xFFFFFF, opacity, 0xFFFFFF, min(0.07, opacity * 0.12))
     }
 
-    static let danger = Color(hex: 0xE5484D)
-    static let success = Color(hex: 0x2E9E6B)
-    static let warning = Color(hex: 0xE09A1A)
+    // Status colours, deep enough to read as text on white and on the page
+    // (and lighter in dark mode, so they read there too).
+    static let danger = Color.dynamic(light: 0xD12F45, dark: 0xFF6B7A)
+    static let success = Color.dynamic(light: 0x16855A, dark: 0x4CCB8E)
+    static let warning = Color.dynamic(light: 0xA86A00, dark: 0xF2B544)
     static let gold = Color(hex: 0xE9A21F)
-    static let shadow = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor.black.withAlphaComponent(0.4) : UIColor(hex: 0x4A2A3A, alpha: 0.07) })
+    static let shadow = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor.black.withAlphaComponent(0.45) : UIColor(hex: 0x2A1E2E, alpha: 0.06) })
 
     // Reading the accent here makes every view that uses a page colour
     // redraw when you pick another accent.
@@ -188,26 +193,14 @@ enum Tone {
 // shortcuts, the "new post / reel / drawing / song" buttons, menus). Each
 // place keeps its own colour everywhere: music is always "sky", servers
 // "mint", people "grape", rewards "lemon", posts "berry", reels "peach". With
-// "Colourful" (the default) they're six balanced colours, so pages don't
-// turn one colour; "Theme" in Settings makes them a family of your theme.
+// a theme (the default) they're all shades of your theme's colour; "Rainbow"
+// in Settings gives the classic fixed colours.
 enum Candy: CaseIterable {
     case berry, peach, lemon, mint, sky, grape
 
     private var stops: (UInt32, UInt32) {
-        if ThemeStore.shared.rainbowTiles { return CandyFamily.colourful(index: index, hue: hue) }
+        if ThemeStore.shared.rainbowTiles { return rainbow }
         return CandyFamily.stops(turn: turn, index: index, around: Theme.mainHex)
-    }
-
-    // Each tile's own hue for the colourful set.
-    private var hue: Double {
-        switch self {
-        case .berry: return 338
-        case .peach: return 18
-        case .lemon: return 40
-        case .mint: return 160
-        case .sky: return 212
-        case .grape: return 258
-        }
     }
 
     // Where each sits on the colour wheel from your colour.
@@ -233,6 +226,16 @@ enum Candy: CaseIterable {
         }
     }
 
+    private var rainbow: (UInt32, UInt32) {
+        switch self {
+        case .berry: return (0xFF8DB4, 0xEC4F86)
+        case .peach: return (0xFFB487, 0xF27D45)
+        case .lemon: return (0xFFD46A, 0xF0A92C)
+        case .mint: return (0x7EDFBD, 0x24B386)
+        case .sky: return (0x8DC7FF, 0x3F92EE)
+        case .grape: return (0xC4A6FF, 0x8763EE)
+        }
+    }
     var color: Color { Color(hex: stops.1) }
     // Lighter at the top, like a boiled sweet. A touch deeper in dark mode.
     var gradient: LinearGradient {
@@ -314,6 +317,7 @@ struct CandyTile: View {
                         shape.fill(LinearGradient(colors: [Palette.rim(0.45), .clear], startPoint: .top, endPoint: .center))
                             .padding(1)
                     }
+                    .frostGrain(in: shape, strength: 0.05)
                     .softShadow(candy.color.softGlow(0.28), radius: 6, y: 3)
             }
             .accessibilityHidden(true)
@@ -354,9 +358,8 @@ final class ThemeStore {
     var accent: Accent = .rose
     var customMain: UInt32?
     var customLight: UInt32?
-    // The icon tiles in six balanced colours (the default) instead of your
-    // theme's family.
-    var rainbowTiles = UserDefaults.standard.object(forKey: "sugerly.tiles.rainbow") as? Bool ?? true {
+    // The icon tiles in the classic rainbow instead of your theme's family.
+    var rainbowTiles = UserDefaults.standard.bool(forKey: "sugerly.tiles.rainbow") {
         didSet { UserDefaults.standard.set(rainbowTiles, forKey: "sugerly.tiles.rainbow") }
     }
 }
@@ -379,8 +382,20 @@ enum Theme {
             if ThemeStore.shared.customLight != newValue?.light { ThemeStore.shared.customLight = newValue?.light }
         }
     }
-    static var main: Color { custom.map { Color(hex: $0.main) } ?? accent.main }
+    // The accent as it's drawn: your colour, taken just deep enough (light
+    // mode) or light enough (dark mode) that links, icons and accent text
+    // read clearly on the page. White writing on it reads too.
+    static var main: Color {
+        let base = mainHex
+        return Palette.swatch(ColorTone.readable(base, on: pageLightHex), 1,
+                              ColorTone.readable(base, on: pageDarkHex, lighter: true), 1)
+    }
+    // Your theme's colour exactly as picked (saved to your profile, and the
+    // seed every other colour is mixed from).
     static var mainHex: UInt32 { custom?.main ?? accent.mainHex }
+    // The page colours, as plain values for the contrast sums.
+    static var pageLightHex: UInt32 { Palette.mix(0xF8F5F7, lightHex, 0.20) }
+    static var pageDarkHex: UInt32 { Palette.mix(0x111014, mainHex, 0.07) }
     static var lightHex: UInt32 { custom?.light ?? accent.lightHex }
     static var light: Color { custom.map { Color(hex: $0.light) } ?? accent.light }
     static var pink: Color { main }
@@ -415,9 +430,9 @@ enum Theme {
         return LinearGradient(colors: [top, middle, bottom], startPoint: .top, endPoint: .bottom)
     }
 
-    // Your colour for filled buttons: as it is, unless it's so light that
-    // it glares (then a deeper shade of it).
-    static var buttonHex: UInt32 { ColorTone.calm(mainHex, brightest: 0.3) }
+    // Your colour for filled buttons: deep enough that white writing on it
+    // reads at 4.5 : 1 (light colours like lemon or mint used to fail).
+    static var buttonHex: UInt32 { ColorTone.readable(mainHex, on: 0xFFFFFF) }
     // The soft rosy glow under candy buttons and chips. On dark pages it's a
     // plain shadow instead (a pink glow there looks like neon).
     static func glow(_ opacity: Double) -> Color {
@@ -556,20 +571,90 @@ extension Font {
 
 // MARK: - Building blocks
 
-// A card: the near-white surface, a soft blush hairline and a gentle plum
-// shadow underneath, so it sits lightly on the page.
+// A card: the clean surface with a crisp hairline and a tight, quiet
+// shadow, so it lifts off the tinted page without looking puffy.
 struct SugarCard: ViewModifier {
     var radius: CGFloat = 18
     var padding: CGFloat = 0
     func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: min(radius, 22), style: .continuous)
         content
             .padding(padding)
+            .glassFrame(radius: min(radius, 22))
+    }
+}
+
+// Frosted glass, built to never lag: a milky, see-through card with a fine
+// frost grain, inside a bright frame that runs from white at the top to a
+// hint of your theme colour at the bottom. There's no live blur here: a
+// blur behind every card is redrawn each frame while the page scrolls or
+// its wallpaper moves, which made scrolling stutter. Our pages are soft
+// gradients, so a milky see-through layer looks just as frosted for free.
+// Only a single thing on screen, like the top bar, asks for a real blur
+// (`blur: true`).
+struct GlassFrame: ViewModifier {
+    var radius: CGFloat = 18
+    var tint: Color? = nil
+    var blur = false
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        let dark = scheme == .dark
+        let milk = LinearGradient(
+            colors: [(tint ?? Palette.surface).opacity(dark ? 0.42 : 0.5),
+                     Palette.surface.opacity(dark ? 0.3 : 0.32)],
+            startPoint: .top, endPoint: .bottom)
+        content
             .background {
-                shape.fill(Palette.surface)
-                    .softShadow(Palette.shadow, radius: 6, y: 2)
+                Group {
+                    if blur {
+                        shape.fill(.ultraThinMaterial).overlay(shape.fill(milk))
+                    } else {
+                        shape.fill(Palette.surface.opacity(dark ? 0.55 : 0.58)).overlay(shape.fill(milk))
+                    }
+                }
+                .frostGrain(in: shape)
             }
-            .overlay(shape.strokeBorder(Palette.border.opacity(0.8), lineWidth: 1))
+            .overlay(shape.strokeBorder(LinearGradient(
+                colors: [Palette.rim(0.95), Theme.main.opacity(dark ? 0.3 : 0.22)],
+                startPoint: .top, endPoint: .bottom), lineWidth: 1.3))
+    }
+}
+
+// Frosted glass for the small things (buttons, pills, fields, bubbles,
+// rows): a see-through milky fill with a faint frost grain and a bright
+// edge. No blur, so it costs nothing even in long scrolling lists; the page
+// colour softly shows through instead.
+struct FrostedFill<S: InsettableShape>: ViewModifier {
+    let shape: S
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        let dark = scheme == .dark
+        content
+            .background {
+                shape.fill(LinearGradient(
+                    colors: [Palette.surface.opacity(dark ? 0.62 : 0.74), Palette.surface.opacity(dark ? 0.5 : 0.58)],
+                    startPoint: .top, endPoint: .bottom))
+                    .frostGrain(in: shape, strength: 0.03)
+            }
+            .overlay(shape.strokeBorder(LinearGradient(
+                colors: [Palette.rim(0.9), Theme.main.opacity(dark ? 0.2 : 0.12)],
+                startPoint: .top, endPoint: .bottom), lineWidth: 1).allowsHitTesting(false))
+    }
+}
+
+extension View {
+    /// Lays the frosted-glass grain over this view, inside `shape`: one
+    /// small still tile (see FrostNoise), drawn like any picture, so it
+    /// costs nothing while scrolling.
+    func frostGrain<S: Shape>(in shape: S, strength: Double = 0.035) -> some View {
+        overlay(shape.fill(ImagePaint(image: FrostNoise.image)).opacity(strength / FrostNoise.strength).allowsHitTesting(false))
+    }
+
+    /// See-through frosted glass behind this view, in `shape` (see FrostedFill).
+    func frostedFill<S: InsettableShape>(in shape: S) -> some View {
+        modifier(FrostedFill(shape: shape))
     }
 }
 
@@ -595,6 +680,7 @@ struct PastelCard: ViewModifier {
 
 extension View {
     func sugarCard(radius: CGFloat = 18, padding: CGFloat = 0) -> some View { modifier(SugarCard(radius: radius, padding: padding)) }
+    func glassFrame(radius: CGFloat = 18, tint: Color? = nil, blur: Bool = false) -> some View { modifier(GlassFrame(radius: radius, tint: tint, blur: blur)) }
     func pastelCard(radius: CGFloat = 22, padding: CGFloat = 16) -> some View { modifier(PastelCard(radius: radius, padding: padding)) }
 
     // Floating bits (the music player): the surface with a hairline edge and
@@ -620,9 +706,9 @@ struct GradientButtonStyle: ButtonStyle {
     }
 }
 
-// The main button: a candy-rose pill — the accent with a soft highlight on
-// top, white text and a little rosy shadow. It squishes when pressed and
-// springs back.
+// The main button: a candy pill — the accent with a soft highlight on top,
+// white text and a little shadow in its colour. It squishes when pressed
+// and springs back.
 private struct GradientButtonBody: View {
     let configuration: ButtonStyleConfiguration
     let height: CGFloat
@@ -642,8 +728,9 @@ private struct GradientButtonBody: View {
             .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: min(height, 50))
             .background {
                 shape.fill(Theme.candy)
+                    .overlay { if enabled { ShineSweep(every: 4.2).clipShape(shape) } }
                     .overlay(shape.strokeBorder(Palette.rim(0.22), lineWidth: 1))
-                    .shadow(color: Theme.glow(enabled ? (pressed ? 0.1 : 0.2) : 0), radius: pressed ? 3 : 8, y: pressed ? 2 : 4)
+                    .shadow(color: Theme.glow(enabled ? (pressed ? 0.12 : 0.28) : 0), radius: pressed ? 4 : 10, y: pressed ? 2 : 5)
             }
             .opacity(enabled ? (pressed ? 0.92 : 1) : 0.45)
             .scaleEffect(pressed && !Motion.reduced ? 0.965 : 1)
@@ -651,7 +738,8 @@ private struct GradientButtonBody: View {
     }
 }
 
-// The quieter button: a soft grey fill with the accent colour's text.
+// The quieter button: the card surface with the accent's text and a thin
+// accent edge.
 struct OutlineButtonStyle: ButtonStyle {
     var height: CGFloat = 44
     var fullWidth = false
@@ -669,7 +757,7 @@ struct OutlineButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Palette.surface)
                     .shadow(color: Palette.shadow, radius: 6, y: 2)
             }
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.main.opacity(0.2), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.main.opacity(0.3), lineWidth: 1))
             .opacity(configuration.isPressed ? 0.8 : 1)
             .scaleEffect(configuration.isPressed && !Motion.reduced ? 0.97 : 1)
             .animation(configuration.isPressed ? Motion.press : Motion.release, value: configuration.isPressed)
@@ -732,9 +820,9 @@ struct SectionHeader: View {
                 .background {
                     let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
                     if let candy = Candy.matching(icon) {
-                        shape.fill(candy.gradient)
+                        shape.fill(candy.gradient).shadow(color: candy.color.softGlow(0.3), radius: 5, y: 2)
                     } else {
-                        shape.fill(Theme.candy)
+                        shape.fill(Theme.candy).shadow(color: Theme.glow(0.28), radius: 5, y: 2)
                     }
                 }
                 .accessibilityHidden(true)
@@ -1055,9 +1143,10 @@ struct SparkleBurst: View {
     }
 }
 
-// Collecting a reward: a soft warm glow swells and fades. Nothing flies
-// out (no coins or sparkles), so it stays calm. Drawn from the clock (so
-// it can't get stuck halfway) and played again whenever `trigger` changes.
+// Collecting a reward: a warm glow swells, then little coins and sparkles
+// fly out and fade. Drawn from the clock each frame (so it can't get stuck
+// halfway or be skipped by other animations) and played again whenever
+// `trigger` changes.
 struct RewardBurst: View {
     let trigger: Int
     @State private var start: Date?
@@ -1068,15 +1157,40 @@ struct RewardBurst: View {
             Canvas { context, size in
                 guard let start else { return }
                 let t = timeline.date.timeIntervalSince(start)
-                guard t >= 0, t < 0.9 else { return }
+                guard t >= 0, t < 1.3 else { return }
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
                 let reach = min(size.width, size.height) / 2
+
                 var glow = context
-                glow.opacity = 0.4 * max(0, 1 - t / 0.9)
-                let r = reach * CGFloat(0.4 + 0.4 * min(1, t / 0.3))
+                glow.opacity = 0.55 * max(0, 1 - t / 0.9)
+                let r = reach * CGFloat(0.35 + 0.45 * min(1, t / 0.25))
                 glow.fill(Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)),
-                          with: .radialGradient(Gradient(colors: [Palette.gold.opacity(0.55), Theme.light.opacity(0.25), .clear]),
+                          with: .radialGradient(Gradient(colors: [Palette.gold.opacity(0.7), Theme.light.opacity(0.35), .clear]),
                                                 center: center, startRadius: 0, endRadius: r))
+
+                let pieces = 14
+                let flight = 1 - pow(1 - min(1, t), 3)
+                for i in 0..<pieces {
+                    let seed = Double(i) * 12.9898
+                    let jitter = abs(sin(seed) * 43758.5453).truncatingRemainder(dividingBy: 1)
+                    // Evenly round the circle, starting far enough out that
+                    // neighbours never touch, and all flying out alike.
+                    let angle = Double(i) / Double(pieces) * 2 * .pi + jitter * 0.1
+                    let distance = reach * CGFloat(0.45 + 0.5 * flight)
+                    var piece = context
+                    piece.opacity = max(0, 1 - max(0, t - 0.45) / 0.6)
+                    piece.translateBy(x: center.x + CGFloat(cos(angle)) * distance,
+                                      y: center.y + CGFloat(sin(angle)) * distance - CGFloat(10 * flight))
+                    let dot = CGFloat((i % 3 == 0 ? 5.0 : 3.6) * (1 - 0.3 * flight))
+                    if i % 3 == 0 {
+                        // A little gold coin with a shine.
+                        piece.fill(Path(ellipseIn: CGRect(x: -dot, y: -dot, width: dot * 2, height: dot * 2)), with: .color(Palette.gold))
+                        piece.fill(Path(ellipseIn: CGRect(x: -dot * 0.45, y: -dot * 0.6, width: dot * 0.7, height: dot * 0.5)), with: .color(.white.opacity(0.7)))
+                    } else {
+                        piece.rotate(by: .radians(t * 3 + jitter * 6))
+                        piece.fill(Self.sparkle(dot * 1.5), with: .color(i % 2 == 0 ? Theme.main : Theme.light))
+                    }
+                }
             }
         }
         .allowsHitTesting(false)
@@ -1084,9 +1198,20 @@ struct RewardBurst: View {
         .task(id: trigger) {
             guard trigger > 0, !reduceMotion else { return }
             start = .now
-            try? await Task.sleep(for: .seconds(1))
+            try? await Task.sleep(for: .seconds(1.4))
             start = nil
         }
+    }
+
+    // A four-pointed sparkle.
+    private static func sparkle(_ r: CGFloat) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: 0, y: -r))
+        p.addQuadCurve(to: CGPoint(x: r, y: 0), control: .zero)
+        p.addQuadCurve(to: CGPoint(x: 0, y: r), control: .zero)
+        p.addQuadCurve(to: CGPoint(x: -r, y: 0), control: .zero)
+        p.addQuadCurve(to: CGPoint(x: 0, y: -r), control: .zero)
+        return p
     }
 }
 

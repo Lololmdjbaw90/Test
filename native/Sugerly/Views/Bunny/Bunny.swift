@@ -329,10 +329,14 @@ enum BunnyImages {
     private static let pixels = CGSize(width: 653, height: 900)
 
     static func image(_ name: String) -> Image {
-        if let hit = cache[name] { return Image(uiImage: hit) }
+        Image(uiImage: uiImage(name))
+    }
+
+    static func uiImage(_ name: String) -> UIImage {
+        if let hit = cache[name] { return hit }
         let made = load(name)
         cache[name] = made
-        return Image(uiImage: made)
+        return made
     }
 
     nonisolated static func load(_ name: String) -> UIImage {
@@ -473,7 +477,10 @@ struct BunnyFigure: View, Equatable {
                 if layer.id == "classic:bow" {
                     BunnyLayer("BunnyBow", look.tint(.bow))
                 } else if layer.id.hasPrefix("classic:"), let top = BunnyTop(rawValue: String(layer.id.dropFirst(8))) {
-                    if let piece = top.piece { BunnyLayer(piece, look.tint(.outfit)) }
+                    if let piece = top.piece {
+                        BunnyImages.image(piece.rawValue).resizable().interpolation(.high)
+                            .bunnyDye(look.tint(.outfit), anchor: BunnyDye.anchor(piece.rawValue, BunnyImages.uiImage(piece.rawValue)))
+                    }
                     if top == .sailor { BunnyLayer("BunnyCollar", look.tint(.collar)) }
                 } else if let item = BunnyCatalog.shared.item(layer.id) {
                     BunnyItemLayer(item: item, tint: look.tint(slot == .top ? .outfit : .accessory))

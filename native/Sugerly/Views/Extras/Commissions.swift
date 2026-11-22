@@ -311,7 +311,7 @@ struct CommissionsView: View {
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "creditcard.and.123").font(.system(size: 20, weight: .bold)).foregroundStyle(Theme.main)
-                    .frame(width: 46, height: 46).background(Palette.surface.opacity(0.75), in: Circle())
+                    .frame(width: 46, height: 46).frostedFill(in: Circle())
             }
             HStack(spacing: 8) {
                 heroStat("\(list.filter(\.isOpen).count)", "open shops")
@@ -335,7 +335,7 @@ struct CommissionsView: View {
             Text(label).font(.jakarta(10, .bold)).foregroundStyle(Palette.text2)
         }
         .frame(maxWidth: .infinity).frame(height: 52)
-        .background(Palette.surface.opacity(0.72), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .frostedFill(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.rim(0.6), lineWidth: 1))
     }
 
@@ -366,7 +366,7 @@ struct CommissionsView: View {
             }
         }
         .padding(5)
-        .background(Palette.surface, in: Capsule())
+        .frostedFill(in: Capsule())
         .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
         .shadow(color: Palette.shadow, radius: 8, y: 3)
         .sensoryFeedback(.selection, trigger: tab)
@@ -540,7 +540,7 @@ struct ListingCard: View {
                     Text("from \(Money.format(price, c.currency))")
                         .font(.jakarta(12, .heavy)).foregroundStyle(Theme.main)
                         .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 10).frame(height: 26)
-                        .background(Palette.surface, in: Capsule())
+                        .frostedFill(in: Capsule())
                         .padding(8)
                 }
             }
@@ -577,7 +577,7 @@ struct StatusPill: View {
             Text(open ? "Open" : "Closed").font(.jakarta(11, .heavy)).foregroundStyle(open ? Palette.success : Palette.muted)
         }
         .lineLimit(1).minimumScaleFactor(0.85).padding(.horizontal, 10).frame(height: 26)
-        .background(Palette.surface, in: Capsule())
+        .frostedFill(in: Capsule())
     }
 }
 
@@ -640,7 +640,7 @@ struct OrderRow: View {
             }
         }
         .padding(12)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .frostedFill(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(needsMe ? Theme.main.opacity(0.45) : Palette.border, lineWidth: needsMe ? 1.5 : 1))
         .shadow(color: Palette.shadow, radius: 6, y: 2)
     }
@@ -1044,7 +1044,7 @@ struct CommissionRequestSheet: View {
                     Spacer()
                 }
                 .padding(12)
-                .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .frostedFill(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 Text("WHAT WOULD YOU LIKE?").font(.jakarta(11, .heavy)).tracking(1.2).foregroundStyle(Palette.muted)
                 SugarField(placeholder: "Describe it: who or what, pose, colours, mood, where you'll use it…", text: $brief, lines: 4...10)
                 Text("REFERENCES (OPTIONAL)").font(.jakarta(11, .heavy)).tracking(1.2).foregroundStyle(Palette.muted)
@@ -1904,7 +1904,7 @@ struct NewCommissionView: View {
                         }
                     }
                     .padding(12)
-                    .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .frostedFill(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
                 }
                 if tiers.count < 5 {
@@ -1920,7 +1920,7 @@ struct NewCommissionView: View {
                 }
                 .tint(Theme.main)
                 .padding(12)
-                .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .frostedFill(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 Label("Buyers pay by card through Stripe. You get paid out after they approve your art, minus Sugerly's \(Int(SiteTheme.shared.commissionFee))% fee. Add your payout details in My shop.", systemImage: "banknote")
                     .font(.jakarta(12)).foregroundStyle(Palette.muted)
                 if let error { Text(error).font(.jakarta(13, .semibold)).foregroundStyle(Palette.danger) }

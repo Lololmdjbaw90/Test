@@ -346,7 +346,7 @@ struct ReelShareSheet: View {
             Image(systemName: icon).font(.system(size: 19, weight: .semibold))
                 .foregroundStyle(danger ? Palette.danger : Palette.text)
                 .frame(width: 54, height: 54)
-                .background(Palette.surface, in: Circle())
+                .frostedFill(in: Circle())
                 .overlay(Circle().strokeBorder(Palette.border, lineWidth: 1))
             Text(title).font(.jakarta(11, .semibold)).foregroundStyle(danger ? Palette.danger : Palette.text2).lineLimit(1).frame(width: 72)
         }

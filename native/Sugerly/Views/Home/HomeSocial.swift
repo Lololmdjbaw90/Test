@@ -504,7 +504,7 @@ struct WeeklyChallengeCard: View {
                         Image(systemName: "plus").font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.main)
                     }
                     .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(Palette.surface.opacity(0.7), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .frostedFill(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.main.opacity(0.35), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5])))
                 }
                 .buttonStyle(BouncyStyle(scale: 0.97))
@@ -573,7 +573,7 @@ struct WeeklyChallengeCard: View {
             .motion(Motion.standard, value: active)
         }
         .padding(16)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .frostedFill(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
         .onAppear { shine = true }
     }

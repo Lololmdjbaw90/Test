@@ -171,7 +171,7 @@ struct DailyContentEditor: View {
                             Text(isChallenges ? "No challenges — the card is hidden for everyone." : "No prompts — the card is hidden for everyone.")
                                 .font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
                                 .frame(maxWidth: .infinity).padding(20)
-                                .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                .frostedFill(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                         }
                     }
                     .animation(.spring(response: 0.35, dampingFraction: 0.85), value: challenges)
@@ -266,7 +266,7 @@ struct DailyContentEditor: View {
         }
         .buttonStyle(BouncyStyle(scale: 0.9))
         .padding(10)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .frostedFill(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(isPinned ? Theme.main.opacity(0.5) : Palette.border, lineWidth: 1))
         .transition(.asymmetric(insertion: .scale(scale: 0.9).combined(with: .opacity), removal: .move(edge: .trailing).combined(with: .opacity)))
     }

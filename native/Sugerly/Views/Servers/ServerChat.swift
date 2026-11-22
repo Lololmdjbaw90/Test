@@ -640,7 +640,7 @@ struct MemberSheet: View {
                                     Image(systemName: has ? "checkmark.circle.fill" : "circle").font(.system(size: 20)).foregroundStyle(has ? role.tint : Palette.muted)
                                 }
                                 .padding(.horizontal, 12).padding(.vertical, 10)
-                                .background(Palette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .frostedFill(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                             }
                             .buttonStyle(BouncyStyle(scale: 0.98))
                             .disabled(!editable || busy)

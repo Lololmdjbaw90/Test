@@ -263,7 +263,7 @@ struct ProfileContent: View {
                     if isMe { Image(systemName: "pencil").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.muted) }
                 }
                 .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(Palette.surface, in: Capsule())
+                .frostedFill(in: Capsule())
                 .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
             }
             .buttonStyle(BouncyStyle(scale: 0.97))
@@ -296,7 +296,7 @@ struct ProfileContent: View {
                     } label: {
                         Image(systemName: "ellipsis").font(.system(size: 17, weight: .bold))
                             .frame(width: 44, height: 44)
-                            .background(Palette.surface, in: Capsule())
+                            .frostedFill(in: Capsule())
                             .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
                             .foregroundStyle(Palette.text2)
                     }
@@ -318,7 +318,7 @@ struct ProfileContent: View {
             stat(person.following.count, "Following", index: 3)
         }
         .padding(.vertical, 12)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .frostedFill(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Palette.border, lineWidth: 1))
     }
 
@@ -889,7 +889,7 @@ struct EditProfileView: View {
                             .foregroundStyle(selected ? Theme.main : Palette.text)
                         }
                         .padding(10)
-                        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18))
+                        .frostedFill(in: RoundedRectangle(cornerRadius: 18))
                         .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(selected ? Theme.main : Palette.border, lineWidth: selected ? 2 : 1))
                     }
                     .buttonStyle(SoftPressStyle())
@@ -1218,7 +1218,7 @@ private struct ProfileLookPreview: View {
                     NameText(name: name.isEmpty ? "Your name" : name, style: nameStyle, size: 20, display: true, nitro: nitro, tint: nameColor)
                         .lineLimit(1)
                         .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(Palette.surface, in: Capsule())
+                        .frostedFill(in: Capsule())
                 }
                 .offset(x: 12, y: 30)
             }
@@ -1358,7 +1358,7 @@ struct SettingsView: View {
             Text(label).font(.jakarta(10, .bold)).foregroundStyle(Palette.text2)
         }
         .frame(maxWidth: .infinity).frame(height: 54)
-        .background(Palette.surface.opacity(0.7), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .frostedFill(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.rim(0.6), lineWidth: 1))
     }
 

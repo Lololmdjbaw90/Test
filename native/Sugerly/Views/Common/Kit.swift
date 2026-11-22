@@ -100,9 +100,14 @@ private struct PlainToolbar<Leading: View, Trailing: View>: ViewModifier {
         .environment(\.unifiedBar, true)
         .padding(.horizontal, 8)
         .frame(width: min(UIScreen.main.bounds.width - 32, 728), height: 48)
-        .background(style == "tinted" ? Theme.soft : Palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
-            .strokeBorder(style == "outline" ? Theme.main.opacity(0.5) : Palette.border, lineWidth: 1))
+        // Frosted glass, like the cards, with a real blur since the page scrolls
+        // under it (the outlined style adds a theme edge).
+        .glassFrame(radius: 22, tint: style == "tinted" ? Theme.soft : nil, blur: true)
+        .overlay {
+            if style == "outline" {
+                RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Theme.main.opacity(0.5), lineWidth: 1)
+            }
+        }
         .accessibilityIdentifier("unified-top-bar")
     }
 
@@ -193,25 +198,25 @@ private struct CompactTabBar: ViewModifier {
 }
 
 enum TabBarLook {
-    // Before iOS 26 (which draws its own floating glass bar): a soft blush
-    // frosted bar, quiet icons, the pink one for the tab you're on, and
-    // pink badges, in Sugerly's font.
+    // Before iOS 26 (which draws its own floating glass bar): a frosted bar,
+    // readable grey icons, your accent for the tab you're on, and red
+    // badges.
     static func apply() {
         guard #unavailable(iOS 26.0) else { return }
         let small = UIFont.systemFont(ofSize: 10, weight: .medium)
         let bold = UIFont.systemFont(ofSize: 10, weight: .semibold)
-        let muted = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x9C8891) : UIColor(hex: 0xA08893) }
+        let muted = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0xA29BA8) : UIColor(hex: 0x6A646F) }
         let bar = UITabBarAppearance()
         bar.configureWithDefaultBackground()
         bar.backgroundEffect = UIBlurEffect(style: .systemThinMaterial)
-        bar.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x1A1418, alpha: 0.82) : UIColor(hex: 0xFBF9F8, alpha: 0.88) }
-        bar.shadowColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x382D33) : UIColor(hex: 0xEEE8E7) }
+        bar.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x1B191F, alpha: 0.6) : UIColor(hex: 0xFFFFFF, alpha: 0.55) }
+        bar.shadowColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x312D36) : UIColor(hex: 0xE9E5EA) }
         for layout in [bar.stackedLayoutAppearance, bar.inlineLayoutAppearance, bar.compactInlineLayoutAppearance] {
             layout.normal.iconColor = muted
             layout.normal.titleTextAttributes = [.foregroundColor: muted, .font: small]
             layout.selected.titleTextAttributes = [.font: bold]
-            layout.normal.badgeBackgroundColor = UIColor(hex: 0xE5484D)
-            layout.selected.badgeBackgroundColor = UIColor(hex: 0xE5484D)
+            layout.normal.badgeBackgroundColor = UIColor(hex: 0xD12F45)
+            layout.selected.badgeBackgroundColor = UIColor(hex: 0xD12F45)
         }
         UITabBar.appearance().standardAppearance = bar
         UITabBar.appearance().scrollEdgeAppearance = bar
@@ -236,6 +241,7 @@ struct PinkCircleButton: View {
                 .frame(width: 34, height: 34)
                 .background {
                     Circle().fill(Theme.candy)
+                        .frostGrain(in: Circle(), strength: 0.05)
                         .overlay(Circle().strokeBorder(Palette.rim(0.25).fixed(barScheme), lineWidth: 1))
                         .shadow(color: Theme.glow(0.3).fixed(barScheme), radius: 6, y: 3)
                 }
@@ -321,7 +327,7 @@ private struct MenuHintBubble: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .frostedFill(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.main.opacity(0.25), lineWidth: 1))
         }
         .shadow(color: Palette.shadow, radius: 12, y: 6)
@@ -486,7 +492,7 @@ struct TitleSwitch: View {
             }
         }
         .padding(3)
-        .background(Palette.surface2, in: Capsule())
+        .glassFrame(radius: 18)
         .sensoryFeedback(.selection, trigger: selection)
     }
 }
