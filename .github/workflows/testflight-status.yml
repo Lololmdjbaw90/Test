@@ -51,3 +51,68 @@ jobs:
             require('fs').appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
           })().catch((e) => { console.log(String(e)); process.exit(1); });
           JS
+
+      # Crashes testers sent from TestFlight. Only the technical part is
+      # printed (build, device, iOS, exception and the crashed thread): this
+      # repository's logs are public, so tester names, emails and comments are
+      # never printed.
+      - name: Recent TestFlight crashes
+        run: |
+          node - <<'JS'
+          const crypto = require('crypto');
+          const { KEY, KEY_ID, ISSUER_ID } = process.env;
+          const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+          const now = Math.floor(Date.now() / 1000);
+          const head = b64({ alg: 'ES256', kid: KEY_ID, typ: 'JWT' });
+          const body = b64({ iss: ISSUER_ID, iat: now, exp: now + 600, aud: 'appstoreconnect-v1' });
+          const sig = crypto.sign('sha256', Buffer.from(`${head}.${body}`), { key: KEY, dsaEncoding: 'ieee-p1363' }).toString('base64url');
+          const headers = { Authorization: `Bearer ${head}.${body}.${sig}` };
+          const api = 'https://api.appstoreconnect.apple.com/v1';
+          const get = async (path) => {
+            const res = await fetch(`${api}${path}`, { headers });
+            if (!res.ok) throw new Error(`${path}: ${res.status} ${(await res.text()).slice(0, 300)}`);
+            return res.json();
+          };
+          // Keep the lines that explain the crash; drop identifiers.
+          const technical = (log) => {
+            // Newer logs are two JSON parts (a header line, then the report).
+            if (log.trimStart().startsWith('{')) {
+              try {
+                const cut = log.indexOf('\n');
+                const header = JSON.parse(log.slice(0, cut));
+                const r = JSON.parse(log.slice(cut + 1));
+                const images = r.usedImages || [];
+                const out = [`Version ${header.app_version} (${header.build_version}) · ${r.modelCode || ''} · ${header.os_version || ''}`,
+                  `Exception ${JSON.stringify(r.exception || {})}`, `Termination ${JSON.stringify(r.termination || {})}`];
+                if (r.lastExceptionBacktrace) out.push('Last exception backtrace:', ...r.lastExceptionBacktrace.slice(0, 25).map((f) => `  ${images[f.imageIndex]?.name || '?'}  ${f.symbol || ''}`));
+                const t = (r.threads || [])[r.faultingThread ?? -1];
+                if (t) out.push(`Crashed thread ${r.faultingThread} ${t.queue || ''}:`, ...(t.frames || []).slice(0, 30).map((f) => `  ${images[f.imageIndex]?.name || '?'}  ${f.symbol || ''}${f.sourceFile ? ` (${f.sourceFile}:${f.sourceLine})` : ''}`));
+                return out.join('\n');
+              } catch (e) { return `(unreadable log: ${e})`; }
+            }
+            const lines = log.split('\n');
+            const keep = [];
+            const wanted = /^(Hardware Model|OS Version|Version|Exception Type|Exception Codes|Exception Reason|Termination Reason|Triggered by Thread|Crashed Thread)/;
+            for (const l of lines) if (wanted.test(l)) keep.push(l);
+            const crashed = lines.findIndex((l) => /^Thread \d+ Crashed/.test(l) || /^Last Exception Backtrace/.test(l));
+            if (crashed >= 0) keep.push(...lines.slice(crashed, crashed + 30).filter((l) => l.trim()));
+            return keep.join('\n');
+          };
+          (async () => {
+            const apps = await get('/apps?filter[bundleId]=com.mimilocks.app');
+            const app = apps.data[0];
+            if (!app) return;
+            const subs = await get(`/apps/${app.id}/betaFeedbackCrashSubmissions?limit=12&sort=-createdDate&include=build&fields[builds]=version&fields[betaFeedbackCrashSubmissions]=createdDate,deviceModel,osVersion,appUptimeInMilliseconds,build`);
+            const builds = Object.fromEntries((subs.included || []).filter((i) => i.type === 'builds').map((i) => [i.id, i.attributes.version]));
+            console.log(`${subs.data.length} recent crash report(s)`);
+            for (const s of subs.data) {
+              const a = s.attributes;
+              const build = builds[s.relationships?.build?.data?.id] || '?';
+              console.log(`\n===== ${a.createdDate} · build ${build} · ${a.deviceModel} · iOS ${a.osVersion} · up ${Math.round((a.appUptimeInMilliseconds || 0) / 1000)}s`);
+              try {
+                const log = await get(`/betaFeedbackCrashSubmissions/${s.id}/crashLog`);
+                console.log(technical(log.data?.attributes?.logText || '(no log)'));
+              } catch (e) { console.log(String(e)); }
+            }
+          })().catch((e) => { console.log(String(e)); });
+          JS
