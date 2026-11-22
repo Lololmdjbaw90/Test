@@ -17,7 +17,9 @@ struct BunnyMakerView: View {
     @State private var cheer = 0
     @State private var shuffles = 0
     // The team adding a new item (clothes or an accessory).
+    @State private var importing = false
     @State private var adding: BunnySlot?
+    @State private var selling: BunnyItem?
     @State private var editing: BunnyItem?
     @State private var deleting: BunnyItem?
     @State private var arranging: BunnySlot?
@@ -80,6 +82,7 @@ struct BunnyMakerView: View {
         }
         .task {
             guard !loaded else { return }
+            catalog.usePersonal(model.me?.bunnyItemsJSON ?? "")
             store.use(model.me?.email ?? "")
             look = store.look
             let ids = [look.bodyItem, look.faceItem, look.collarItem] + look.layers(.top).map(\.id) + look.layers(.head).map(\.id)
@@ -89,13 +92,14 @@ struct BunnyMakerView: View {
             var transaction = Transaction(); transaction.disablesAnimations = true
             withTransaction(transaction) { loaded = true }
         }
-        .navigationTitle("Customize bunny")
+        .quietTitle("Customize bunny")
         .navigationBarTitleDisplayMode(.inline)
     }
 
     private var editor: some View {
         ScrollView {
             VStack(spacing: 18) {
+                PageTitle(title: "Customize bunny", subtitle: "A little character, all your own.", icon: "hare.fill", candy: .berry)
                 stage
                 tabs
                 choices
@@ -110,7 +114,7 @@ struct BunnyMakerView: View {
         }
         .scrollIndicators(.hidden)
         .sugarBackground()
-        .navigationTitle("Customize bunny")
+        .quietTitle("Customize bunny")
         .navigationBarTitleDisplayMode(.inline)
 
         .task(id: look) {
@@ -129,6 +133,7 @@ struct BunnyMakerView: View {
             }
         }
         .sheet(item: $arranging) { slot in BunnyLayerEditor(look: $look, slot: slot) }
+        .sheet(item: $selling) { item in BunnySaleEditor(item: item) }
         .sheet(item: $editing) { item in BunnyItemEditView(item: item) }
         .alert("Delete uploaded item?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
             Button("Cancel", role: .cancel) { deleting = nil }
@@ -140,6 +145,7 @@ struct BunnyMakerView: View {
             }
             Button("Cancel", role: .cancel) { buying = nil }
         }
+        .sheet(isPresented: $importing) { BunnyItemUploader(slot: .top, look: look, personal: true) }
         .sheet(item: $adding) { slot in
             BunnyItemUploader(slot: slot, look: look)
                 .presentationCornerRadius(30)
@@ -169,7 +175,7 @@ struct BunnyMakerView: View {
                         .animation(Motion.playful, value: shuffles)
                         .frame(width: 44, height: 44)
                         .background(.white.opacity(0.9), in: Circle())
-                        .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
+                        .budgetShadow(color: .black.opacity(0.12), radius: 6, y: 3)
                 }
                 .buttonStyle(BouncyStyle(scale: 0.88))
                 .padding(14)
@@ -206,7 +212,7 @@ struct BunnyMakerView: View {
                         .background {
                             if on {
                                 Capsule().fill(item.candy.gradient)
-                                    .shadow(color: item.candy.color.softGlow(0.35), radius: 6, y: 3)
+                                    .budgetShadow(color: item.candy.color.softGlow(0.35), radius: 6, y: 3)
                             } else {
                                 Capsule().fill(Palette.surface)
                                     .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
@@ -304,7 +310,7 @@ struct BunnyMakerView: View {
                         .clipShape(Circle())
                         .overlay(Circle().strokeBorder(on ? AnyShapeStyle(Theme.gradient) : AnyShapeStyle(Palette.border), lineWidth: on ? 3 : 1))
                         .scaleEffect(on ? 1.06 : 1)
-                        .shadow(color: on ? Theme.glow(0.3) : .clear, radius: 8, y: 3)
+                        .budgetShadow(color: on ? Theme.glow(0.3) : .clear, radius: 8, y: 3)
                         Text(face.label).font(.jakarta(12, on ? .bold : .medium))
                             .foregroundStyle(on ? Palette.text : Palette.text2).lineLimit(1)
                     }
@@ -404,7 +410,10 @@ struct BunnyMakerView: View {
     // A picture item, zoomed to the part she wears.
     private func itemTile(_ item: BunnyItem, on: Bool, index: Int, pick: @escaping () -> Void) -> some View {
         Button {
-            if item.price > 0 && !owned.contains(item.id) { buying = item }
+            if !item.forSale && !owned.contains(item.id) && item.sellerUID != model.me?.id {
+                model.showToast("This item is no longer for sale"); return
+            }
+            if item.price > 0 && !owned.contains(item.id) && item.sellerUID != model.me?.id { buying = item }
             else { pick() }
         } label: {
             VStack(spacing: 6) {
@@ -421,7 +430,8 @@ struct BunnyMakerView: View {
                 .scaleEffect(on ? 1.03 : 1)
                 Text(item.name).font(.jakarta(12, on ? .bold : .medium))
                     .foregroundStyle(on ? Palette.text : Palette.text2).lineLimit(1).minimumScaleFactor(0.8)
-                if item.price > 0 { Text(owned.contains(item.id) ? "Owned" : "\(item.price) coins").font(.jakarta(11, .bold)).foregroundStyle(Theme.main) }
+                if !item.sellerName.isEmpty { Text("by \(item.sellerName)").font(.jakarta(10)).foregroundStyle(Palette.muted).lineLimit(1) }
+                if item.price > 0 { Text(!item.forSale ? "Not for sale" : owned.contains(item.id) ? "Owned" : "\(item.price) coins").font(.jakarta(11, .bold)).foregroundStyle(Theme.main) }
             }
             .contentShape(Rectangle())
         }
@@ -431,7 +441,18 @@ struct BunnyMakerView: View {
         .modifier(ChoicePop(index: index))
         .disabled(purchasing)
         .overlay(alignment: .topTrailing) {
-            if isAdmin && item.uploaded {
+            if item.id.hasPrefix("personal-") {
+                Menu {
+                    Button { selling = item } label: { Label("Sell for coins", systemImage: "bag.fill") }
+                    Button(role: .destructive) { Task { await removePersonal(item) } } label: { Label("Remove my item", systemImage: "trash") }
+                } label: {
+                    Image(systemName: "ellipsis.circle.fill").font(.system(size: 24)).foregroundStyle(Theme.main, Palette.surface).frame(width: 44, height: 44)
+                }.accessibilityLabel("Manage my \(item.name)")
+            } else if item.sellerUID == model.me?.id {
+                Button { selling = item } label: {
+                    Image(systemName: "bag.circle.fill").font(.system(size: 24)).foregroundStyle(Theme.main, Palette.surface).frame(width: 44, height: 44)
+                }.accessibilityLabel("Manage sale for \(item.name)")
+            } else if isAdmin && item.uploaded {
                 Menu {
                     Button { editing = item } label: { Label("Rename / price", systemImage: "pencil") }
                     Button(role: .destructive) { deleting = item } label: { Label("Delete item", systemImage: "trash") }
@@ -533,7 +554,7 @@ struct BunnyMakerView: View {
                             .overlay {
                                 if on {
                                     Image(systemName: "checkmark").font(.system(size: 16, weight: .heavy)).foregroundStyle(.white)
-                                        .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+                                        .budgetShadow(color: .black.opacity(0.25), radius: 2, y: 1)
                                         .transition(.scale.combined(with: .opacity))
                                 }
                             }
@@ -541,7 +562,7 @@ struct BunnyMakerView: View {
                             .padding(4)
                             .overlay(Circle().strokeBorder(on ? Color(hex: tint.swatch) : .clear, lineWidth: 3))
                             .scaleEffect(on ? 1.06 : 1)
-                            .shadow(color: Color(hex: tint.swatch).softGlow(on ? 0.45 : 0.18), radius: on ? 8 : 4, y: 3)
+                            .budgetShadow(color: Color(hex: tint.swatch).softGlow(on ? 0.45 : 0.18), radius: on ? 8 : 4, y: 3)
                         Text(tint.name).font(.jakarta(12, on ? .bold : .medium))
                             .foregroundStyle(on ? Palette.text : Palette.text2)
                             .lineLimit(1).minimumScaleFactor(0.8)
@@ -643,6 +664,12 @@ struct BunnyMakerView: View {
 
     private var actions: some View {
         VStack(spacing: 10) {
+            Button { importing = true } label: {
+                Label("Import my own item", systemImage: "square.and.arrow.up")
+            }.buttonStyle(OutlineButtonStyle(fullWidth: true))
+            Button { Task { await publishBunny() } } label: {
+                Label("Show my bunny on my profile", systemImage: "hare.fill")
+            }.buttonStyle(OutlineButtonStyle(fullWidth: true)).disabled(busy)
             Button { Task { await useAsPicture() } } label: {
                 HStack(spacing: 8) {
                     if busy { ProgressView().tint(.white) } else { Image(systemName: "person.crop.circle.fill") }
@@ -664,6 +691,33 @@ struct BunnyMakerView: View {
                 .buttonStyle(OutlineButtonStyle(fullWidth: true))
             }
         }
+    }
+
+    private func removePersonal(_ item: BunnyItem) async {
+        guard let me = model.me else { return }
+        do {
+            _ = try await Backend.call("bunny-sell", ["item_id": item.id, "active": false], signedIn: true, missing: "The creator shop is temporarily unavailable.")
+            let docs = me.bunnyItemsJSON.data(using: .utf8).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [Doc] } ?? []
+            let next = docs.filter { $0.str("id") != item.id }
+            let json = String(decoding: try JSONSerialization.data(withJSONObject: next), as: UTF8.self)
+            try await model.updateMe(["bunny_items": json])
+            for slot in [BunnySlot.top, .head] { look.setLayers(look.layers(slot).filter { $0.id != item.id }, slot) }
+            if look.bodyItem == item.id { look.bodyItem = "" }
+            if look.faceItem == item.id { look.faceItem = "" }
+            if look.collarItem == item.id { look.collarItem = "" }
+            model.showToast("Removed from your wardrobe", icon: "tshirt.fill")
+        } catch { model.showToast(error.localizedDescription, error: true) }
+    }
+
+    private func publishBunny() async {
+        guard !busy, let image = BunnyPortrait.render(look, side: 720), let data = image.pngData() else { return }
+        busy = true
+        defer { busy = false }
+        do {
+            let url = try await StorageClient.upload(data, contentType: "image/png", fileExtension: "png")
+            try await model.updateMe(["bunny_picture": url])
+            model.showToast("Your bunny is on your profile", icon: "hare.fill")
+        } catch { model.showToast(error.localizedDescription, error: true) }
     }
 
     private func useAsPicture() async {

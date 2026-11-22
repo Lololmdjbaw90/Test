@@ -250,7 +250,7 @@ struct ReelTimeline: View {
             Capsule().fill(.white).frame(width: 2)
         }
         .frame(width: knob, height: height)
-        .shadow(color: .black.opacity(0.4), radius: 1.5)
+        .budgetShadow(color: .black.opacity(0.4), radius: 1.5)
         .offset(x: center - knob / 2)
         .motion(Motion.release, value: scrubbing)
         .allowsHitTesting(false)
@@ -396,7 +396,7 @@ struct ReelTimeline: View {
                 }
             }
             .scaleEffect(lifted ? 1.04 : 1)
-            .shadow(color: .black.opacity(lifted ? 0.4 : 0), radius: lifted ? 8 : 0, y: lifted ? 5 : 0)
+            .budgetShadow(color: .black.opacity(lifted ? 0.4 : 0), radius: lifted ? 8 : 0, y: lifted ? 5 : 0)
             .opacity(dimmed ? 0.5 : 1)
             .motion(Motion.standard, value: selected)
             .motion(Motion.release, value: lifted)

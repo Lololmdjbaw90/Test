@@ -518,7 +518,7 @@ struct IncomingCallBanner: View {
         .padding(14)
         .background(Color(hex: 0x2A1620), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(.white.opacity(0.1), lineWidth: 1))
-        .shadow(color: .black.opacity(0.35), radius: 24, y: 12)
+        .budgetShadow(color: .black.opacity(0.35), radius: 24, y: 12)
         .padding(.horizontal, 12)
         .frame(maxWidth: 520)
         .onAppear { pulse = true }
@@ -959,7 +959,7 @@ struct CallScreen: View {
                 .frame(width: 104, height: 150)
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(.white.opacity(0.35), lineWidth: 1.5))
-                .shadow(color: .black.opacity(0.4), radius: 14, y: 6)
+                .budgetShadow(color: .black.opacity(0.4), radius: 14, y: 6)
             Button { voice.flipCamera() } label: {
                 Image(systemName: "arrow.triangle.2.circlepath.camera.fill").font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
                     .frame(width: 32, height: 32).background(.black.opacity(0.45), in: Circle())

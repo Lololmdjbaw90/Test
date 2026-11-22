@@ -157,7 +157,7 @@ struct PinCard: View {
                 .clipShape(shape)
                 // A photo frame: a bright white edge and a soft glow.
                 .overlay(shape.strokeBorder(Palette.rim(0.85), lineWidth: 2))
-                .shadow(color: Theme.main.opacity(0.16), radius: 10, y: 5)
+                .budgetShadow(color: Theme.main.opacity(0.16), radius: 10, y: 5)
         }
     }
 
@@ -169,7 +169,7 @@ struct PinCard: View {
                 .symbolEffect(.bounce, value: saved)
                 .frame(width: 32, height: 32)
                 .background(.white.opacity(0.9), in: Circle())
-                .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+                .budgetShadow(color: .black.opacity(0.12), radius: 4, y: 2)
         }
         .buttonStyle(BouncyStyle(scale: 0.85))
         .padding(8)
@@ -182,7 +182,7 @@ struct PinCard: View {
         Image(systemName: "heart.fill")
             .font(.system(size: 62))
             .foregroundStyle(Candy.berry.gradient)
-            .shadow(color: .black.opacity(0.18), radius: 8)
+            .budgetShadow(color: .black.opacity(0.18), radius: 8)
             .scaleEffect(heart ? 1 : 0.3)
             .opacity(heart ? 1 : 0)
             .allowsHitTesting(false)

@@ -9,8 +9,8 @@ import UIKit
 
 extension View {
     /// Content in the middle; side columns when there's room.
-    func sideRails(_ width: CGFloat, left: Bool = true, right: Bool = true) -> some View {
-        modifier(SideRailsLayout(width: width, left: left, right: right))
+    func sideRails(_ width: CGFloat, left: Bool = true, right: Bool = true, homeStyle: Bool = false) -> some View {
+        modifier(SideRailsLayout(width: width, left: left, right: right, homeStyle: homeStyle))
     }
 }
 
@@ -18,6 +18,7 @@ private struct SideRailsLayout: ViewModifier {
     let width: CGFloat
     let left: Bool
     let right: Bool
+    var homeStyle = false
     @State private var available: CGFloat = 0
     private let rail: CGFloat = 270
     private let gap: CGFloat = 18
@@ -28,14 +29,31 @@ private struct SideRailsLayout: ViewModifier {
         let rails = (showRight ? rail + gap : 0) + (showLeft ? rail + gap : 0)
         let column = max(320, min(width, available - rails - 32))
         HStack(alignment: .top, spacing: gap) {
-            if showLeft { SideRail(kind: .explore).frame(width: rail).padding(.top, 12) }
+            if showLeft {
+                railContent(.explore).frame(width: rail)
+            }
             content
                 .frame(maxWidth: showLeft || showRight ? column : width)
                 .environment(\.railsShown, showRight)
-            if showRight { SideRail(kind: showLeft ? .you : .both).frame(width: rail).padding(.top, 12) }
+            if showRight {
+                railContent(showLeft ? .you : .both).frame(width: rail)
+            }
         }
         .frame(maxWidth: .infinity)
         .onGeometryChange(for: CGFloat.self, of: { $0.size.width }, action: { available = $0 })
+    }
+
+    @ViewBuilder private func railContent(_ kind: SideRail.Kind) -> some View {
+        if homeStyle {
+            ScrollView {
+                SideRail(kind: kind).padding(.top, 12)
+            }
+            .scrollIndicators(.hidden)
+            .environment(\.transparentRailCards, true)
+            .accessibilityIdentifier("home-side-extras")
+        } else {
+            SideRail(kind: kind).padding(.top, 12)
+        }
     }
 }
 
@@ -127,7 +145,7 @@ struct PaletteOfTheDay: View {
                     } label: {
                         RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(hex: hex))
                             .frame(height: 44)
-                            .overlay { if copied == code { Image(systemName: "checkmark").font(.system(size: 13, weight: .bold)).foregroundStyle(.white).shadow(radius: 2) } }
+                            .overlay { if copied == code { Image(systemName: "checkmark").font(.system(size: 13, weight: .bold)).foregroundStyle(.white).budgetShadow(radius: 2) } }
                     }
                     .buttonStyle(BouncyStyle(scale: 0.9))
                     .accessibilityLabel("Copy \(code)")
@@ -187,7 +205,7 @@ struct ChartsMini: View {
                 Button { player.play(t, in: tracks) } label: {
                     HStack(spacing: 10) {
                         Text("\(i + 1)").font(.jakarta(12, .heavy)).foregroundStyle(i < 3 ? Theme.main : Palette.muted).frame(width: 16)
-                        RemoteImage(url: t.coverURL).frame(width: 36, height: 36).clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        RemoteImage(url: t.coverURL, maxPixel: 128).frame(width: 36, height: 36).clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                         VStack(alignment: .leading, spacing: 1) {
                             Text(t.title).font(.jakarta(13, .bold)).foregroundStyle(Palette.text).lineLimit(1)
                             Text(t.artist).font(.jakarta(11)).foregroundStyle(Palette.muted).lineLimit(1)
@@ -266,5 +284,17 @@ struct InlineExtras: View {
                 }
             }
         }
+    }
+}
+
+
+private struct TransparentRailCardsKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var transparentRailCards: Bool {
+        get { self[TransparentRailCardsKey.self] }
+        set { self[TransparentRailCardsKey.self] = newValue }
     }
 }

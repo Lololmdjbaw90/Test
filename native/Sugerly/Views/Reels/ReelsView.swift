@@ -734,7 +734,7 @@ struct ReelPage: View {
             ReelTone.shade
                 .allowsHitTesting(false)
             if paused {
-                Image(systemName: "play.fill").font(.system(size: 60)).foregroundStyle(.white.opacity(0.85)).shadow(radius: 10)
+                Image(systemName: "play.fill").font(.system(size: 60)).foregroundStyle(.white.opacity(0.85)).budgetShadow(radius: 10)
                     .transition(.pop)
                     .allowsHitTesting(false)
             }
@@ -856,6 +856,8 @@ struct ReelPage: View {
             if let video, !video.failed {
                 ZStack {
                     // The cover shows at once; the video fades in over it.
+                    // (The stage already has the reel's own shape, so
+                    // showing it whole fills the stage.)
                     if !video.ready { RemoteImage(url: reel.coverURL, contentMode: .fit) }
                     LoopingVideo(player: video.player, fill: false)
                         .scaleEffect(x: reel.mirror ? -1 : 1, y: 1)
@@ -925,10 +927,9 @@ struct ReelPage: View {
                 .transition(.pop)
             }
             Spacer()
-            HStack(alignment: .bottom, spacing: 12) {
-                info
-                Spacer(minLength: 8)
-                actions
+            HStack(alignment: .bottom, spacing: 10) {
+                info.frame(maxWidth: .infinity, alignment: .leading)
+                actions.frame(width: 48)
             }
             .padding(.leading, 16)
             .padding(.trailing, 10)
@@ -940,7 +941,7 @@ struct ReelPage: View {
                 }
             }
         }
-        .padding(.bottom, insets.bottom + (showBack ? 14 : bottomRoom + 2))
+        .padding(.bottom, showBack ? max(12, insets.bottom) : max(10, bottomRoom))
     }
 
     private var relation: String? {
@@ -957,9 +958,9 @@ struct ReelPage: View {
     private var info: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button { path.append(.person(reel.authorEmail)) } label: {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("@\(author?.displayName ?? reel.authorName)").font(.jakarta(17, .heavy)).foregroundStyle(.white)
-                    Text("· \(Dates.ago(reel.created))").font(.jakarta(13)).foregroundStyle(.white.opacity(0.7))
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("@\(author?.displayName ?? reel.authorName)").font(.jakarta(15, .heavy)).lineLimit(1).foregroundStyle(.white)
+                    Text("· \(Dates.ago(reel.created))").font(.jakarta(11)).foregroundStyle(.white.opacity(0.7)).fixedSize()
                     if reel.views > 0 {
                         Label(Self.compact(reel.views), systemImage: "play.fill").font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.75))
                     }
@@ -999,7 +1000,7 @@ struct ReelPage: View {
                 .buttonStyle(BouncyStyle(scale: 0.95))
             }
         }
-        .shadow(color: ReelTone.night.opacity(0.5), radius: 3, y: 1)
+        .budgetShadow(color: ReelTone.night.opacity(0.5), radius: 3, y: 1)
     }
 
     private var actions: some View {
@@ -1054,7 +1055,7 @@ struct ReelPage: View {
                 bubbleLabel(icon, tint: tint)
                 if let count {
                     Text("\(count)").font(.jakarta(13, .heavy)).foregroundStyle(.white)
-                        .shadow(color: ReelTone.night.opacity(0.6), radius: 2, y: 1)
+                        .budgetShadow(color: ReelTone.night.opacity(0.6), radius: 2, y: 1)
                         .contentTransition(.numericText())
                 }
             }
@@ -1455,17 +1456,17 @@ struct ReelTextLayer: View {
                 base.foregroundStyle(Color(hex: color))
                     .padding(.horizontal, size * 0.55).padding(.vertical, size * 0.18)
                     .background(Color(hex: bg).opacity(0.94), in: RoundedRectangle(cornerRadius: size * 0.45, style: .continuous))
-                    .shadow(color: .black.opacity(0.18), radius: size * 0.3, y: size * 0.08)
+                    .budgetShadow(color: .black.opacity(0.18), radius: size * 0.3, y: size * 0.08)
             case "outline":
                 base.foregroundStyle(Color(hex: color)).modifier(OutlineText(on: true, color: Color(hex: contrast)))
             case "neon":
                 base.foregroundStyle(.white)
-                    .shadow(color: Color(hex: color), radius: size * 0.22)
-                    .shadow(color: Color(hex: color), radius: size * 0.5)
+                    .budgetShadow(color: Color(hex: color), radius: size * 0.22)
+                    .budgetShadow(color: Color(hex: color), radius: size * 0.5)
             case "shadow":
-                base.foregroundStyle(Color(hex: color)).shadow(color: Color(hex: contrast), radius: 0, x: size * 0.07, y: size * 0.07)
+                base.foregroundStyle(Color(hex: color)).budgetShadow(color: Color(hex: contrast), radius: 0, x: size * 0.07, y: size * 0.07)
             default:
-                base.foregroundStyle(Color(hex: color)).shadow(color: .black.opacity(0.55), radius: size * 0.3, y: size * 0.05)
+                base.foregroundStyle(Color(hex: color)).budgetShadow(color: .black.opacity(0.55), radius: size * 0.3, y: size * 0.05)
             }
         }
         .frame(maxWidth: width * 0.92)

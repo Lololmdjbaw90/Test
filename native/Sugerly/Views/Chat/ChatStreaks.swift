@@ -246,7 +246,7 @@ struct StreakCheer: View {
         .background {
             Capsule().fill(.ultraThinMaterial)
                 .overlay(Capsule().fill(Palette.surface.opacity(0.8)))
-                .shadow(color: Color(hex: 0xFF6A3D).opacity(0.22), radius: 12, y: 4)
+                .budgetShadow(color: Color(hex: 0xFF6A3D).opacity(0.22), radius: 12, y: 4)
         }
         .overlay(Capsule().strokeBorder(Color(hex: 0xFFB487).opacity(0.6), lineWidth: 1))
         .accessibilityElement(children: .combine)
@@ -294,6 +294,7 @@ struct StreakWatch: ViewModifier {
     }
 
     private func noteNew(_ old: Int, _ new: Int) {
+        guard enabled else { return }
         let everything: Bool = old == 0 || new - old > 20
         let fresh: [Message] = everything ? messages : Array(messages.suffix(20))
         ChatStreaks.shared.note(fresh, me: me)

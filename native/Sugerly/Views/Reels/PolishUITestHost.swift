@@ -32,6 +32,9 @@ struct PolishUITestHost: View {
 
     var body: some View {
         VStack(spacing: 12) {
+            if ProcessInfo.processInfo.arguments.contains("--record-home-scroll") {
+                Text(RenderingBudget.shared.recording ? "Recording budget active" : "Normal rendering").accessibilityIdentifier("home-recording-state")
+            }
             if !preview {
             Picker("Screen", selection: $tab) {
                 Text("Editor").tag(0)
@@ -48,7 +51,9 @@ struct PolishUITestHost: View {
             if ProcessInfo.processInfo.arguments.contains("--check-performance-policy") {
                 Text(PerformanceFixture.result).font(.caption2).accessibilityIdentifier("performance-policy")
             }
-            if tab == 0 {
+            if ProcessInfo.processInfo.arguments.contains("--check-recording-policy") {
+                RecordingPerformanceFixture()
+            } else if tab == 0 {
                 Text(stickers.first.map { String(format: "%.2f,%.2f", $0.start, $0.end ?? 10) } ?? "Deleted")
                     .accessibilityIdentifier("timing-value")
                 Text(StickerFont.allCases.allSatisfy { UIFont(name: $0.uiName, size: 16) != nil } ? "Fonts loaded" : "Missing font")
@@ -73,6 +78,16 @@ struct PolishUITestHost: View {
                 NavigationStack(path: $path) {
                     GalleryView(path: $path, initialArtworks: [art])
                 }
+            } else if tab == 9 {
+                NavigationStack {
+                    ChatView(conversation: Conversation(id: "stress-chat", members: ["test@example.invalid", "friend@example.invalid"], isGroup: true, groupName: "History test", last: nil, unread: 0), loadMessages: false,
+                        previewMessages: (0..<400).map { i in Message(["id": "history-\(i)", "content": "History message \(i)", "user_email": i % 2 == 0 ? "test@example.invalid" : "friend@example.invalid", "created_date": Dates.iso(Date(timeIntervalSince1970: 1_790_000_000 + Double(i)))]) })
+                }
+            } else if tab == 8 {
+                NewCommissionView(existing: Commission([
+                    "id": "fixture-listing", "title": "Pet portraits", "description": "A local editing fixture",
+                    "tiers": [["name": "Sketch", "price": 10], ["name": "Colour", "price": 20], ["name": "Portrait", "price": 30]]
+                ]), initialSamples: [UIImage(systemName: "star.fill"), UIImage(systemName: "heart.fill"), UIImage(systemName: "moon.fill")].compactMap { $0 }) {}
             } else if tab == 6 {
                 EditProfileView()
             } else if tab == 7 {
@@ -91,10 +106,11 @@ struct PolishUITestHost: View {
         .environment(posts).environment(notes).environment(player).environment(chats)
         .environment(VoiceEngine.shared).environment(CallCenter.shared)
         .onAppear {
+            if ProcessInfo.processInfo.arguments.contains("--record-home-scroll") { RenderingBudget.shared.simulateRecording(true) }
             model.me = UserProfile(["id": "fixture-user", "email": "test@example.invalid", "display_name": "Mimi", "coins": 1280, "xp": 340])
             if preview {
                 let args = ProcessInfo.processInfo.arguments
-                tab = args.contains("--preview-profile") ? 6 : args.contains("--preview-appearance") ? 7 : args.contains("--preview-community") ? 2 : args.contains("--preview-chats") ? 5 : 4
+                tab = args.contains("--preview-chat-history") ? 9 : args.contains("--preview-commission") ? 8 : args.contains("--preview-profile") ? 6 : args.contains("--preview-appearance") ? 7 : args.contains("--preview-community") ? 2 : args.contains("--preview-chats") ? 5 : 4
                 posts.posts = [
                     Post(["id": "sample-post", "user_email": "luna@example.invalid", "user_display_name": "Luna", "title": "Little things, big smiles", "content": "Made time to draw today. What are you working on? #art", "created_date": FS.nowISO()]),
                     Post(["id": "sample-post-2", "user_email": "kai@example.invalid", "user_display_name": "Kai", "title": "Your daily reminder", "content": "You don’t have to finish everything today. A little progress counts too.", "created_date": FS.nowISO()]),
@@ -114,6 +130,30 @@ struct PolishUITestHost: View {
         }
     }
 }
+private struct RecordingPerformanceFixture: View {
+    private let budget = RenderingBudget.shared
+    @State private var captureID = UUID()
+    private static let gif: UIImage = {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 32, height: 32))
+        let frames = [UIColor.systemPink, UIColor.systemTeal].map { color in
+            renderer.image { context in color.setFill(); context.fill(CGRect(x: 0, y: 0, width: 32, height: 32)) }
+        }
+        return UIImage.animatedImage(with: frames, duration: 0.4)!
+    }()
+    var body: some View {
+        VStack(spacing: 16) {
+            Text(budget.limited ? "Recording budget active" : "Normal rendering").accessibilityIdentifier("recording-budget-state")
+            LoadedImage(image: Self.gif, fill: false).frame(width: 64, height: 64)
+            Button("Start recording simulation") { budget.simulateRecording(true) }
+            Button("Stop recording simulation") { budget.simulateRecording(false) }
+            Button("Start scene capture") { budget.simulateRecording(nil); budget.sceneCapture(true, id: captureID) }
+            Button("Stop scene capture") { budget.sceneCapture(false, id: captureID) }
+        }
+        .onAppear { budget.simulateRecording(false) }
+        .onDisappear { budget.sceneCapture(false, id: captureID); budget.simulateRecording(nil) }
+    }
+}
+
 // Exercise the real image decoders without network access or private accounts.
 @MainActor
 private enum PerformanceFixture {
@@ -121,14 +161,17 @@ private enum PerformanceFixture {
         let data = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(data, "com.compuserve.gif" as CFString, 2, nil) else { return "GIF fixture failed" }
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 16, height: 16))
-        for color in [UIColor.red, UIColor.blue] {
+        for (index, color) in [UIColor.red, UIColor.blue].enumerated() {
             let image = renderer.image { context in color.setFill(); context.fill(CGRect(x: 0, y: 0, width: 16, height: 16)) }
             guard let cg = image.cgImage else { return "GIF frame failed" }
-            CGImageDestinationAddImage(destination, cg, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 0.1]] as CFDictionary)
+            CGImageDestinationAddImage(destination, cg, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: index == 0 ? 0.02 : 10_000_000]] as CFDictionary)
         }
         guard CGImageDestinationFinalize(destination),
               let poster = AnimatedImages.decode(data as Data, maxPixel: 16, maxFrames: 1), poster.images == nil,
               let animated = AnimatedImages.decode(data as Data, maxPixel: 16, maxFrames: 2), (animated.images?.count ?? 0) >= 2 else { return "GIF playback policy failed" }
+        let links = UserProfile(["website": "legacy.example.com", "websites": ["example.com", "https://portfolio.example.com", "javascript://bad.com", "example.com"]])
+        guard links.profileLinks.count == 2, ProfileLinks.url("javascript://bad.com") == nil else { return "Profile link validation failed" }
+        guard ["toggle", "toggleOff", "like", "send", "receive", "chime", "error", "reward"].allSatisfy({ TapSound.bundled($0) != nil }) else { return "Bundled sounds missing" }
         guard !Motion.ambient else { return "Decorative animations still running" }
         guard ImagePipeline.cacheKey("fixture", maxPixel: 96) != ImagePipeline.cacheKey("fixture") else { return "Thumbnail cache collision" }
         return "Performance fixtures passed"

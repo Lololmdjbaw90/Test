@@ -150,7 +150,7 @@ struct VoiceRoomView: View {
             VStack(spacing: 12) {
                 Image(systemName: "speaker.wave.2.fill").font(.system(size: 30, weight: .bold)).foregroundStyle(.white)
                     .frame(width: 84, height: 84).background(Theme.gradient, in: Circle())
-                    .shadow(color: .black.opacity(0.3), radius: 12, y: 6)
+                    .budgetShadow(color: .black.opacity(0.3), radius: 12, y: 6)
                 Text("Nobody's here yet").font(.display(24)).foregroundStyle(.white)
                 Text("Hop in and your friends will see you're waiting.")
                     .font(.jakarta(14)).foregroundStyle(.white.opacity(0.65)).multilineTextAlignment(.center)

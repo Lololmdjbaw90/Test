@@ -8,7 +8,7 @@ struct SugarLoader: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation) { context in
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion || RenderingBudget.shared.limited)) { context in
             hearts(at: context.date.timeIntervalSinceReferenceDate)
         }
         .accessibilityElement()
@@ -51,7 +51,7 @@ struct EqualizerBars: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 24, paused: reduceMotion)) { context in
+        TimelineView(.animation(minimumInterval: 1.0 / 24, paused: reduceMotion || RenderingBudget.shared.limited)) { context in
             bars(at: context.date.timeIntervalSinceReferenceDate)
         }
         .accessibilityHidden(true)

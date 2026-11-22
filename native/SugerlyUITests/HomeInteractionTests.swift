@@ -1,6 +1,35 @@
 import XCTest
+import UIKit
 
 final class HomeInteractionTests: XCTestCase {
+    func testHomeSidebarKeepsPaletteAndInvites() throws {
+        guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("Wide iPad layout") }
+        let app = XCUIApplication()
+        app.launchArguments = ["--polish-ui-test"]
+        app.launch()
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+        app.buttons["Home"].tap()
+        let inspiration = app.staticTexts["Palette of the day"].firstMatch
+        expectation(for: NSPredicate { _, _ in
+            let bounds = app.windows.firstMatch.frame
+            return bounds.width > bounds.height && inspiration.isHittable
+        }, evaluatedWith: app)
+        waitForExpectations(timeout: 15)
+        XCTAssertTrue(inspiration.exists)
+        let sidebar = app.scrollViews["home-side-extras"].firstMatch
+        let copy = app.buttons["Copy code"].firstMatch
+        XCTAssertTrue(copy.isHittable)
+        copy.tap()
+        XCTAssertTrue(app.staticTexts["Art tip"].firstMatch.exists)
+        XCTAssertTrue(sidebar.exists)
+        XCTAssertTrue(app.buttons["home-compose-post"].exists)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "transparent-home-sidebar"
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
     func testHomeSectionsRemainVisibleAfterScrollingAndReturning() {
         continueAfterFailure = false
         let app = XCUIApplication()

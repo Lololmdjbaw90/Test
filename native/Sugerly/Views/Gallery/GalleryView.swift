@@ -416,7 +416,7 @@ struct GalleryCard: View {
                     ZStack {
                         HeartPop(size: 14, spread: 46).id(pop)
                         Image(systemName: "heart.fill").font(.system(size: 50)).foregroundStyle(.white)
-                            .shadow(color: .black.opacity(0.25), radius: 10, y: 3)
+                            .budgetShadow(color: .black.opacity(0.25), radius: 10, y: 3)
                     }
                     .transition(.scale(scale: 0.8).combined(with: .opacity))
                     .allowsHitTesting(false)
@@ -493,7 +493,7 @@ struct ArtworkDetailView: View {
                     .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Palette.border.opacity(0.6), lineWidth: 1))
                     .overlay {
                         Image(systemName: "heart.fill").font(.system(size: 90)).foregroundStyle(.white)
-                            .shadow(color: .black.opacity(0.25), radius: 14, y: 4)
+                            .budgetShadow(color: .black.opacity(0.25), radius: 14, y: 4)
                             .scaleEffect(heart ? 1 : 0.4)
                             .rotationEffect(.degrees(heart ? 0 : -12))
                             .offset(y: heart ? 0 : 12)

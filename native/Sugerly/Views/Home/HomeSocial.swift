@@ -213,7 +213,7 @@ struct ArtPromptCard: View {
                             .lineLimit(1)
                             .padding(.horizontal, 14).frame(height: 36)
                             .background {
-                                Capsule().fill(Theme.candy).shadow(color: Theme.glow(0.28), radius: 6, y: 3)
+                                Capsule().fill(Theme.candy).budgetShadow(color: Theme.glow(0.28), radius: 6, y: 3)
                             }
                     }
                     Button { compose(.post) } label: {

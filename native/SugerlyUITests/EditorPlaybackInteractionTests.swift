@@ -8,7 +8,7 @@ final class EditorPlaybackInteractionTests: XCTestCase {
         app.launch()
         expectation(for: NSPredicate(format: "label == 'looping'"), evaluatedWith: app.staticTexts["editor-loop-state"])
         waitForExpectations(timeout: 25)
-        XCTAssertEqual(app.staticTexts["editor-framing-result"].label, "Whole frame visible")
+        XCTAssertEqual(app.staticTexts["editor-framing-result"].label, "All formats fill canvas")
         app.buttons["Import again"].tap()
         expectation(for: NSPredicate(format: "label == 'Imported again'"), evaluatedWith: app.staticTexts["editor-export-result"])
         waitForExpectations(timeout: 15)

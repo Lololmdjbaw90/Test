@@ -7,6 +7,7 @@ struct AppearanceUITestHost: View {
     @State private var shop = false
     @State private var dark = false
     @State private var bunny = false
+    @State private var creatorShop = false
 
     var body: some View {
         NavigationStack {
@@ -21,10 +22,12 @@ struct AppearanceUITestHost: View {
                 }
                 Button("Open MimiPlus") { shop = true }
                 Button("Open bunny") { BunnyStore.shared.save(BunnyLook()); bunny = true }
+                Button("Open creator shop") { creatorShop = true }
                 Spacer()
             }
             .padding(16)
             .sugarBackground()
+            .sheet(isPresented: $creatorShop) { BunnySaleEditor(item: BunnyItem(id: "personal-fixture", name: "My little bow", slot: .head, asset: "BunnyItemClips")) }
             .sheet(isPresented: $shop) { NitroShopView() }
             .sheet(isPresented: $bunny) { NavigationStack { BunnyMakerView() } }
         }

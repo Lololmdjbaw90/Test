@@ -5,6 +5,9 @@ struct AdminUserSheet: View {
     let email: String
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @State private var artistVerified = false
+    @State private var verificationLoaded = false
+    @State private var confirmArtist = false
     @State private var amount = "100"
     @State private var reason = ""
     @State private var banDays = 7
@@ -31,6 +34,7 @@ struct AdminUserSheet: View {
                             Label(user.email == model.me?.email ? "You can't change your own account here." : "Only the site owner can manage admins.", systemImage: "lock.fill")
                                 .font(.jakarta(13, .semibold)).foregroundStyle(Palette.muted)
                         }
+                        artistReview(user).disabled(!canManage || busy || !verificationLoaded)
                         coins(user).disabled(!canManage || busy).opacity(canManage ? 1 : 0.5)
                         nitro(user).disabled(!canManage || busy).opacity(canManage ? 1 : 0.5)
                         ban(user).disabled(!canManage || busy).opacity(canManage ? 1 : 0.5)
@@ -40,6 +44,18 @@ struct AdminUserSheet: View {
                 }
             }
             .background(Palette.bg)
+            .task {
+                guard let user else { return }
+                do {
+                    artistVerified = (try await FS.get("SiteConfig", "artist-" + user.id))?["verified"] as? Bool ?? false
+                    verificationLoaded = true
+                } catch { model.showToast("Couldn’t load artist verification", error: true) }
+            }
+            .confirmationDialog(artistVerified ? "Remove artist badge?" : "Approve this artist?", isPresented: $confirmArtist, titleVisibility: .visible) {
+                Button(artistVerified ? "Remove badge" : "Approve reviewed artist") { Task { await setArtist() } }
+            } message: {
+                Text("Review their portfolio and process evidence first. The badge represents your review, not a payment or identity guarantee.")
+            }
             .navigationTitle("Manage")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -60,6 +76,39 @@ struct AdminUserSheet: View {
                 Text("Their login, profile, posts, reels, art, comments and messages are deleted. This can't be undone.")
             }
         }
+    }
+
+    private func artistReview(_ user: UserProfile) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Artist verification", systemImage: "checkmark.seal.fill").font(.jakarta(16, .bold))
+            Text(artistVerified ? "Reviewed artist" : "Not verified").foregroundStyle(Palette.muted)
+            if user.artistPortfolio.isEmpty {
+                Text("No portfolio evidence supplied.").font(.jakarta(13))
+            } else {
+                Text(user.artistPortfolio).font(.jakarta(13)).textSelection(.enabled)
+                ForEach(user.artistPortfolio.split(whereSeparator: \.isNewline).compactMap { ProfileLinks.url(String($0)) }, id: \.absoluteString) { url in
+                    Link(url.host ?? "Portfolio", destination: url)
+                }
+            }
+            Button(artistVerified ? "Remove artist badge" : "Review and approve artist") { confirmArtist = true }
+                .buttonStyle(OutlineButtonStyle(fullWidth: true))
+                .disabled(!artistVerified && user.artistPortfolio.isEmpty)
+        }.sugarCard(radius: 22, padding: 14)
+    }
+
+    private func setArtist() async {
+        guard let user, canManage, model.me?.isAdmin == true else { return }
+        busy = true
+        defer { busy = false }
+        let id = "artist-" + user.id
+        do {
+            if artistVerified { try await FS.delete("SiteConfig", id) }
+            else {
+                _ = try await FS.create("SiteConfig", ["verified": true, "reviewed_date": FS.nowISO()], id: id)
+            }
+            artistVerified.toggle()
+            model.showToast("Artist badge updated", icon: "checkmark.seal.fill")
+        } catch { model.showToast(error.localizedDescription, error: true) }
     }
 
     private func header(_ u: UserProfile) -> some View {

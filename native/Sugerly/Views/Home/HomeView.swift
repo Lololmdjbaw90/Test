@@ -75,7 +75,7 @@ struct DailyRewardButton: View {
                     .padding(.horizontal, 14).frame(height: 36)
                     .background {
                         Capsule().fill(Theme.candy)
-                            .shadow(color: Theme.glow(0.3), radius: 6, y: 3)
+                            .budgetShadow(color: Theme.glow(0.3), radius: 6, y: 3)
                     }
                 }
                 .buttonStyle(BouncyStyle(scale: 0.9))
@@ -147,8 +147,8 @@ struct DailyRewardSheet: View {
                     .animation(reduceMotion ? nil : .spring(response: 0.45, dampingFraction: 0.75), value: bounce)
                     .contentTransition(.symbolEffect(.replace))
             }
-            .padding(.top, 34)
-            .overlay { RewardBurst(trigger: reward == nil ? 0 : 1).frame(width: 280, height: 280) }
+            .frame(height: 180)
+            .overlay { RewardBurst(trigger: reward == nil ? 0 : 1).frame(width: 172, height: 172) }
 
             Text(reward == nil ? "Daily reward" : "+\(reward ?? 0) coins").font(.display(34)).foregroundStyle(Palette.text)
                 .contentTransition(.numericText())
@@ -274,17 +274,19 @@ struct HomeView: View {
             .padding(.horizontal, sizeClass == .regular ? 24 : 16)
             .padding(.top, 8)
             .padding(.bottom, 28)
-            .sideRails(760)
+        }
+        .transaction { transaction in
+            if RenderingBudget.shared.limited { transaction.animation = nil; transaction.disablesAnimations = true }
         }
         .scrollIndicators(.hidden)
         .appearFade()
-        // Your moving pattern (Settings → Background) at the top of Home,
-        // fading into the page.
+        .accessibilityIdentifier("home-feed")
+        .sideRails(760, homeStyle: true)
+        // One continuous wallpaper behind the feed and transparent side extras.
         .background(alignment: .top) {
             HeaderWallpaper().frame(height: 440).ignoresSafeArea(edges: .top)
         }
         .sugarBackground()
-        .accessibilityIdentifier("home-feed")
         .onAppear { bunny.use(model.me?.email ?? "") }
         .onChange(of: model.me?.email) { _, email in bunny.use(email ?? "") }
         .quietTitle("Home")
@@ -357,7 +359,7 @@ struct HomeView: View {
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
             .background(Color(hex: site.announcementColor), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .shadow(color: Color(hex: site.announcementColor).softGlow(0.25), radius: 10, y: 4)
+            .budgetShadow(color: Color(hex: site.announcementColor).softGlow(0.25), radius: 10, y: 4)
             .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
@@ -475,7 +477,7 @@ struct HomeView: View {
             .background {
                 let shape = RoundedRectangle(cornerRadius: 26, style: .continuous)
                 shape.fill(Theme.candy)
-                    .shadow(color: Theme.glow(0.22), radius: 10, y: 4)
+                    .budgetShadow(color: Theme.glow(0.22), radius: 10, y: 4)
             }
         }
         .buttonStyle(BouncyStyle(scale: 0.97))
@@ -525,7 +527,7 @@ struct HomeView: View {
                             .padding(14)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                     } else {
-                        RemoteImage(url: post.imageURL)
+                        RemoteImage(url: post.imageURL, maxPixel: 640)
                     }
                 }
                 .clipped()
@@ -553,7 +555,7 @@ struct HomeView: View {
                     ForEach(reels) { reel in
                         Button { path.append(.reel(reel)) } label: {
                             ZStack(alignment: .bottomLeading) {
-                                RemoteImage(url: reel.coverURL.isEmpty ? (reel.pictures.first ?? "") : reel.coverURL)
+                                RemoteImage(url: reel.coverURL.isEmpty ? (reel.pictures.first ?? "") : reel.coverURL, maxPixel: 480)
                                 LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .center, endPoint: .bottom)
                                 HStack(spacing: 4) {
                                     Image(systemName: "play.fill")
@@ -567,7 +569,7 @@ struct HomeView: View {
                             .frame(width: 120, height: 200)
                             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                             .zoomSource("reel-" + reel.id)
-                            .shadow(color: Palette.shadow, radius: 8, y: 4)
+                            .budgetShadow(color: Palette.shadow, radius: 8, y: 4)
                         }
                         .buttonStyle(BouncyStyle(scale: 0.95))
                         .swipeFade()
@@ -598,7 +600,7 @@ struct HomeView: View {
                     ForEach(Array(list)) { art in
                         Button { path.append(.artwork(art)) } label: {
                             ZStack(alignment: .bottomLeading) {
-                                RemoteImage(url: art.imageURL).frame(width: 200, height: 260)
+                                RemoteImage(url: art.imageURL, maxPixel: 640).frame(width: 200, height: 260)
                                 LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .center, endPoint: .bottom)
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(art.title).font(.display(20)).foregroundStyle(.white).lineLimit(1)
@@ -614,7 +616,7 @@ struct HomeView: View {
                             .frame(width: 200, height: 260)
                             .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                             .zoomSource("art-" + art.id)
-                            .shadow(color: Palette.shadow, radius: 10, y: 5)
+                            .budgetShadow(color: Palette.shadow, radius: 10, y: 5)
                         }
                         .buttonStyle(BouncyStyle(scale: 0.96))
                         .swipeFade()
@@ -749,7 +751,7 @@ struct TrackRow: View {
             }
             Button { player.play(track, in: list) } label: {
                 ZStack {
-                    RemoteImage(url: track.coverURL)
+                    RemoteImage(url: track.coverURL, maxPixel: 160)
                     if track.coverURL.isEmpty { Theme.gradient }
                     Color.black.opacity(0.25)
                     Image(systemName: player.isPlaying(track) ? "pause.fill" : "play.fill")
@@ -758,7 +760,7 @@ struct TrackRow: View {
                 }
                 .frame(width: 52, height: 52)
                 .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-                .shadow(color: current ? Theme.pink.opacity(0.4) : .clear, radius: 8, y: 4)
+                .budgetShadow(color: current ? Theme.pink.opacity(0.4) : .clear, radius: 8, y: 4)
             }
             .buttonStyle(BouncyStyle())
             VStack(alignment: .leading, spacing: 2) {

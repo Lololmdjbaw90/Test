@@ -37,7 +37,12 @@ enum AnimatedImages {
     // maxFrames keeps grids of many GIFs light (thumbnails skip frames).
     static func load(_ url: String, maxPixel: CGFloat = 480, maxFrames: Int = 90, budget: Int = defaultBudget) async -> UIImage? {
         guard ProviderMedia.allows(url) else { return nil }
-        let key = "\(url)#\(Int(maxPixel))#\(maxFrames)" as NSString
+        let limited = await MainActor.run { RenderingBudget.shared.limited }
+        // Keep a small animation ready so images loaded during recording can
+        // resume afterwards without a reload. The view displays its first frame.
+        let frameLimit = limited ? min(24, maxFrames) : maxFrames
+        let decodeBudget = limited ? min(budget, thumbBudget) : budget
+        let key = "\(url)#\(Int(maxPixel))#\(frameLimit)" as NSString
         if let hit = cache.object(forKey: key) { return hit }
         guard let link = URL(string: url) else { return nil }
         var request = URLRequest(url: link)
@@ -55,7 +60,7 @@ enum AnimatedImages {
             await DecodeGate.shared.leave()
             return nil
         }
-        let image = await Task.detached(priority: .userInitiated) { decode(data, maxPixel: maxPixel, maxFrames: maxFrames, budget: budget) }.value
+        let image = await Task.detached(priority: .userInitiated) { decode(data, maxPixel: maxPixel, maxFrames: frameLimit, budget: decodeBudget) }.value
         await DecodeGate.shared.leave()
         if let image { cache.setObject(image, forKey: key, cost: cost(image)) }
         return image
@@ -119,8 +124,16 @@ enum AnimatedImages {
         // stay up longer are repeated (the same image, so no extra memory).
         let unit = max(0.02, delays.min() ?? 0.1)
         var timed: [UIImage] = []
-        for (frame, d) in zip(frames, delays) { timed += Array(repeating: frame, count: max(1, Int((d / unit).rounded()))) }
-        if timed.count > frames.count * 12 { return UIImage.animatedImage(with: frames, duration: max(0.1, delays.reduce(0, +))) }
+        // Check before allocating: a malformed delay must never create millions
+        // of repeated frame references and stall a conversation on opening.
+        let limit = frames.count * 12
+        for (frame, d) in zip(frames, delays) {
+            let repeats = (d / unit).rounded()
+            guard repeats.isFinite, repeats <= Double(limit - timed.count) else {
+                return UIImage.animatedImage(with: frames, duration: max(0.1, delays.reduce(0, +)))
+            }
+            timed += Array(repeating: frame, count: max(1, Int(repeats)))
+        }
         return UIImage.animatedImage(with: timed, duration: max(0.1, Double(timed.count) * unit))
     }
 
@@ -155,8 +168,8 @@ enum AnimatedImages {
         } else if let webp = props[kCGImagePropertyWebPDictionary] as? [CFString: Any] {
             value = (webp[kCGImagePropertyWebPUnclampedDelayTime] as? Double) ?? (webp[kCGImagePropertyWebPDelayTime] as? Double)
         }
-        guard let v = value, v > 0.011 else { return 0.1 }
-        return v
+        guard let v = value, v.isFinite, v > 0.011 else { return 0.1 }
+        return min(v, 10)
     }
 }
 
@@ -210,6 +223,10 @@ struct AnimatedImageView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> Box {
         let box = Box()
+        #if DEBUG
+        box.isAccessibilityElement = true
+        box.accessibilityIdentifier = "decoded-gif-animation"
+        #endif
         box.imageView.contentMode = fill ? .scaleAspectFill : .scaleAspectFit
         box.imageView.image = image
         if box.window != nil { box.imageView.startAnimating() }
@@ -313,6 +330,15 @@ struct FullGIF: View {
     @State private var loadedURL = ""
 
     var body: some View {
+        if RenderingBudget.shared.limited {
+            RemoteImage(url: url, contentMode: fill ? .fill : .fit)
+        } else {
+            playback
+        }
+    }
+
+    @ViewBuilder
+    private var playback: some View {
         let shown = loadedURL == url ? data : nil
         Color.clear
             .overlay {
@@ -339,12 +365,12 @@ struct LoadedImage: View {
     let image: UIImage
     var fill = true
     var body: some View {
-        if image.images != nil {
+        if image.images != nil && !RenderingBudget.shared.limited {
             AnimatedImageView(image: image, fill: fill)
         } else if fill {
-            Image(uiImage: image).resizable().scaledToFill()
+            Image(uiImage: image.images?.first ?? image).resizable().scaledToFill()
         } else {
-            Image(uiImage: image).resizable().scaledToFit()
+            Image(uiImage: image.images?.first ?? image).resizable().scaledToFit()
         }
     }
 }

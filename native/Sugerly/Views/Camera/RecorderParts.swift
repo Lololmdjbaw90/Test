@@ -162,7 +162,7 @@ struct RecordButton: View {
         .scaleEffect(filming ? 1.16 : 1)
         .scaleEffect(held ? 1.06 : 1)
         .frame(width: 104, height: 104)
-        .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
+        .budgetShadow(color: .black.opacity(0.25), radius: 10, y: 4)
         .animation(Motion.press, value: pressed)
         .animation(Motion.standard, value: filming)
         .animation(Motion.standard, value: held)
@@ -238,7 +238,7 @@ struct RailButton: View {
                     // text sizes made long names spill or wrap).
                     Text(title)
                         .font(.jakarta(10, .bold)).foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.55), radius: 2, y: 1)
+                        .budgetShadow(color: .black.opacity(0.55), radius: 2, y: 1)
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
                 }
@@ -477,7 +477,7 @@ struct FocusMark: View {
                 }
                 .offset(x: 56)
         }
-        .shadow(color: .black.opacity(0.3), radius: 3)
+        .budgetShadow(color: .black.opacity(0.3), radius: 3)
         .accessibilityHidden(true)
     }
 }

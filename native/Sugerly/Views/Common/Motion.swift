@@ -40,7 +40,7 @@ enum Motion {
     /// from anywhere; off the main thread it answers "no".
     static var reduced: Bool {
         guard Thread.isMainThread else { return false }
-        return MainActor.assumeIsolated { UIAccessibility.isReduceMotionEnabled }
+        return MainActor.assumeIsolated { UIAccessibility.isReduceMotionEnabled || RenderingBudget.shared.limited }
     }
 
     /// Decorative loops are disabled in production as well as tests. Several
@@ -135,4 +135,34 @@ private struct MotionAnimation<V: Equatable>: ViewModifier {
 final class AmbientPause {
     static let shared = AmbientPause()
     var on = false
+}
+
+// Animate only the arriving page's compositing properties. Cached tabs keep
+// their identity, scroll position and players; no snapshots or redraw loops.
+extension View {
+    func tabPageEntrance(active: Bool) -> some View {
+        modifier(TabPageEntrance(active: active))
+    }
+}
+
+private struct TabPageEntrance: ViewModifier {
+    let active: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var entered = true
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(entered ? 1 : 0.8)
+            .offset(y: entered || reduceMotion ? 0 : 14)
+            .task(id: active) {
+                guard active else { return }
+                guard !RenderingBudget.shared.limited else { entered = true; return }
+                var reset = Transaction(animation: nil)
+                reset.disablesAnimations = true
+                withTransaction(reset) { entered = false }
+                try? await Task.sleep(for: .milliseconds(16))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeOut(duration: reduceMotion ? 0.12 : 0.24)) { entered = true }
+            }
+    }
 }

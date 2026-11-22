@@ -75,7 +75,7 @@ struct HashtagView: View {
                     .font(.system(size: 24, weight: .bold)).foregroundStyle(.white)
                     .frame(width: 58, height: 58)
                     .background(Theme.candy, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .shadow(color: Theme.glow(0.3), radius: 10, y: 5)
+                    .budgetShadow(color: Theme.glow(0.3), radius: 10, y: 5)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("#\(tag)").font(.display(30)).foregroundStyle(Palette.text)
                         .lineLimit(1).minimumScaleFactor(0.6)

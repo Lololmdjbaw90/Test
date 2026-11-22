@@ -319,7 +319,7 @@ struct RecorderView: View {
             if let filterName {
                 Text(filterName)
                     .font(.display(34)).foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.4), radius: 8)
+                    .budgetShadow(color: .black.opacity(0.4), radius: 8)
                     .id(filterTick)
                     .transition(.opacity.combined(with: .scale(scale: 0.92)))
             }
@@ -331,7 +331,7 @@ struct RecorderView: View {
     private var countdownNumber: some View {
         Text("\(countdown)")
             .font(.display(150)).foregroundStyle(.white)
-            .shadow(color: Theme.main.opacity(0.8), radius: 24)
+            .budgetShadow(color: Theme.main.opacity(0.8), radius: 24)
             .id(countdown)
             .transition(.asymmetric(insertion: .scale(scale: 1.6).combined(with: .opacity),
                                     removal: .scale(scale: 0.7).combined(with: .opacity)))
@@ -613,7 +613,7 @@ struct RecorderView: View {
                     .font(.system(size: 20, weight: .heavy)).foregroundStyle(.white)
                     .frame(width: 54, height: 54)
                     .background(Theme.gradient, in: Circle())
-                    .shadow(color: .black.opacity(0.25), radius: 8, y: 3)
+                    .budgetShadow(color: .black.opacity(0.25), radius: 8, y: 3)
             }
             .buttonStyle(BouncyStyle(scale: 0.85))
             .disabled(merging)

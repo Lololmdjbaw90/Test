@@ -12,6 +12,16 @@ import SafariServices
 // server (netlify/functions), which is also the only one that can mark an
 // order paid. Sugerly keeps a small fee and pays artists out.
 
+@MainActor
+enum ArtistReview {
+    static let required = "Artist verification is required before opening commissions. Add your portfolio and process links in Edit profile, then request a review through Help & support."
+    static func require(_ uid: String) async throws {
+        guard (try await FS.get("SiteConfig", "artist-" + uid))?["verified"] as? Bool == true else {
+            throw APIError(message: required)
+        }
+    }
+}
+
 struct CommissionTier: Hashable {
     var name: String
     var price: Double
@@ -368,7 +378,7 @@ struct CommissionsView: View {
         .padding(5)
         .frostedFill(in: Capsule())
         .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 1))
-        .shadow(color: Palette.shadow, radius: 8, y: 3)
+        .budgetShadow(color: Palette.shadow, radius: 8, y: 3)
         .sensoryFeedback(.selection, trigger: tab)
     }
 
@@ -642,7 +652,7 @@ struct OrderRow: View {
         .padding(12)
         .frostedFill(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(needsMe ? Theme.main.opacity(0.45) : Palette.border, lineWidth: needsMe ? 1.5 : 1))
-        .shadow(color: Palette.shadow, radius: 6, y: 2)
+        .budgetShadow(color: Palette.shadow, radius: 6, y: 2)
     }
 }
 
@@ -996,11 +1006,14 @@ struct CommissionDetail: View {
                 HStack(spacing: 10) {
                     Button {
                         let next = !commission.isOpen
-                        commission.isOpen = next
                         Task {
-                            try? await FS.update("Commission", commission.id, ["is_open": next, "updated_date": FS.nowISO()])
-                            model.showToast(next ? "Your shop is open" : "Your shop is closed", icon: "storefront.fill")
-                            changed()
+                            do {
+                                if next { try await ArtistReview.require(model.me?.id ?? "") }
+                                try await FS.update("Commission", commission.id, ["is_open": next, "updated_date": FS.nowISO()])
+                                commission.isOpen = next
+                                model.showToast(next ? "Your shop is open" : "Your shop is closed", icon: "storefront.fill")
+                                changed()
+                            } catch { model.showToast(error.localizedDescription, error: true) }
                         }
                     } label: { Label(commission.isOpen ? "Close shop" : "Open shop", systemImage: commission.isOpen ? "lock.fill" : "lock.open.fill") }
                         .buttonStyle(GradientButtonStyle(height: 46))
@@ -1050,11 +1063,11 @@ struct CommissionRequestSheet: View {
                 Text("REFERENCES (OPTIONAL)").font(.jakarta(11, .heavy)).tracking(1.2).foregroundStyle(Palette.muted)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(refs.indices, id: \.self) { i in
-                            Image(uiImage: refs[i]).resizable().scaledToFill().frame(width: 76, height: 76)
+                        ForEach(Array(refs.enumerated()), id: \.offset) { _, image in
+                            Image(uiImage: image).resizable().scaledToFill().frame(width: 76, height: 76)
                                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                                 .overlay(alignment: .topTrailing) {
-                                    Button { withMotion { _ = refs.remove(at: i) } } label: {
+                                    Button { withMotion { refs.removeAll { $0 === image } } } label: {
                                         Image(systemName: "xmark.circle.fill").font(.system(size: 20)).foregroundStyle(.white, .black.opacity(0.5))
                                     }
                                     .offset(x: 6, y: -6)
@@ -1108,19 +1121,23 @@ struct CommissionRequestSheet: View {
         busy = true
         defer { busy = false }
         do {
+            let artist: UserProfile?
+            if let cached = model.person(commission.artistEmail) { artist = cached }
+            else { artist = try await FS.query("User", [.equals("email", commission.artistEmail)], limit: 1).first.map(UserProfile.init) }
+            guard let artist else { throw APIError(message: "This artist’s profile is unavailable.") }
+            try await ArtistReview.require(artist.id)
             var urls: [String] = []
             for image in refs {
                 if let jpeg = ImageTools.jpeg(image, maxSide: 1600) {
                     urls.append(try await StorageClient.upload(jpeg, contentType: "image/jpeg", fileExtension: "jpg"))
                 }
             }
-            let artist = model.person(commission.artistEmail)
             let created = try await FS.create("CommissionOrder", [
                 "commission_id": commission.id, "commission_title": commission.title, "tier_name": tier.name,
                 "cover_url": commission.samples.first ?? "", "price": tier.price, "currency": commission.currency,
                 "brief": brief.trimmingCharacters(in: .whitespacesAndNewlines), "references": urls,
                 "buyer_email": me.email, "buyer_name": me.displayName,
-                "artist_email": commission.artistEmail, "artist_name": artist?.displayName ?? commission.artistName, "artist_uid": artist?.id ?? "",
+                "artist_email": commission.artistEmail, "artist_name": artist.displayName, "artist_uid": artist.id,
                 "status": "requested",
             ])
             let id = created.str("id")
@@ -1694,11 +1711,11 @@ struct DeliverSheet: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text("THE FINISHED ART").font(.jakarta(11, .heavy)).tracking(1.2).foregroundStyle(Palette.muted)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
-                    ForEach(images.indices, id: \.self) { i in
-                        Image(uiImage: images[i]).resizable().scaledToFill().frame(height: 110).frame(maxWidth: .infinity)
+                    ForEach(Array(images.enumerated()), id: \.offset) { _, image in
+                        Image(uiImage: image).resizable().scaledToFill().frame(height: 110).frame(maxWidth: .infinity)
                             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                             .overlay(alignment: .topTrailing) {
-                                Button { withMotion { _ = images.remove(at: i) } } label: {
+                                Button { withMotion { images.removeAll { $0 === image } } } label: {
                                     Image(systemName: "xmark.circle.fill").font(.system(size: 20)).foregroundStyle(.white, .black.opacity(0.5))
                                 }
                                 .padding(4)
@@ -1839,6 +1856,13 @@ struct NewCommissionView: View {
     @State private var busy = false
     @State private var error: String?
     @State private var loaded = false
+    @FocusState private var focusedTierField: String?
+
+    init(existing: Commission?, initialSamples: [UIImage] = [], onDone: @escaping () async -> Void) {
+        self.existing = existing
+        self.onDone = onDone
+        _samples = State(initialValue: initialSamples)
+    }
 
     private var sampleCount: Int { oldSamples.count + samples.count }
     private var validTiers: [TierDraft] {
@@ -1850,6 +1874,8 @@ struct NewCommissionView: View {
                          canPost: !title.trimmingCharacters(in: .whitespaces).isEmpty && !validTiers.isEmpty,
                          onClose: { dismiss() }, onPost: { Task { await publish() } }) {
             VStack(alignment: .leading, spacing: 14) {
+                Label("Artist verification is required to publish or open a shop.", systemImage: "checkmark.seal.fill")
+                    .font(.jakarta(13, .semibold)).foregroundStyle(Palette.text2)
                 SugarField(placeholder: "Title — e.g. Cute pet portraits", text: $title)
                 SugarField(placeholder: "Your style, what's included, how you work…", text: $about, lines: 3...8)
                 Text("SAMPLES").font(.jakarta(11, .heavy)).tracking(1.2).foregroundStyle(Palette.muted)
@@ -1860,10 +1886,10 @@ struct NewCommissionView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                                 .overlay(alignment: .topTrailing) { removeButton { oldSamples.removeAll { $0 == url } } }
                         }
-                        ForEach(samples.indices, id: \.self) { i in
-                            Image(uiImage: samples[i]).resizable().scaledToFill().frame(width: 84, height: 84)
+                        ForEach(Array(samples.enumerated()), id: \.offset) { _, image in
+                            Image(uiImage: image).resizable().scaledToFill().frame(width: 84, height: 84)
                                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                                .overlay(alignment: .topTrailing) { removeButton { _ = samples.remove(at: i) } }
+                                .overlay(alignment: .topTrailing) { removeButton { samples.removeAll { $0 === image } } }
                         }
                         if sampleCount < 6 {
                             PhotosPicker(selection: $items, maxSelectionCount: 6 - sampleCount, matching: .images) {
@@ -1888,19 +1914,24 @@ struct NewCommissionView: View {
                             .background(Theme.soft, in: Capsule())
                     }
                 }
-                ForEach($tiers) { $tier in
+                ForEach(tiers) { tier in
                     VStack(spacing: 8) {
                         HStack(spacing: 8) {
-                            TextField("Size name (e.g. Headshot)", text: $tier.name).font(.jakarta(14, .semibold))
-                            TextField("Price", text: $tier.price).keyboardType(.decimalPad).font(.jakarta(14, .bold)).multilineTextAlignment(.trailing).frame(width: 76)
+                            TextField("Size name (e.g. Headshot)", text: tierField(tier, \.name)).focused($focusedTierField, equals: "\(tier.id)-name").font(.jakarta(14, .semibold))
+                            TextField("Price", text: tierField(tier, \.price)).focused($focusedTierField, equals: "\(tier.id)-price").keyboardType(.decimalPad).font(.jakarta(14, .bold)).multilineTextAlignment(.trailing).frame(width: 76)
                             if tiers.count > 1 {
-                                Button { withMotion { tiers.removeAll { $0.id == tier.id } } } label: { Image(systemName: "minus.circle.fill").foregroundStyle(Palette.muted) }
+                                Button {
+                                    if focusedTierField?.hasPrefix(tier.id.uuidString) == true { focusedTierField = nil }
+                                    tiers.removeAll { $0.id == tier.id }
+                                } label: { Image(systemName: "minus.circle.fill").foregroundStyle(Palette.muted) }
                                     .buttonStyle(SoftPressStyle())
+                                    .accessibilityLabel("Remove size")
+                                    .accessibilityIdentifier("commission-remove-tier-\(tier.id)")
                             }
                         }
                         HStack(spacing: 8) {
-                            TextField("What's included (optional)", text: $tier.info).font(.jakarta(13))
-                            TextField("Days", text: $tier.days).keyboardType(.numberPad).font(.jakarta(13)).multilineTextAlignment(.trailing).frame(width: 56)
+                            TextField("What's included (optional)", text: tierField(tier, \.info)).focused($focusedTierField, equals: "\(tier.id)-info").font(.jakarta(13))
+                            TextField("Days", text: tierField(tier, \.days)).focused($focusedTierField, equals: "\(tier.id)-days").keyboardType(.numberPad).font(.jakarta(13)).multilineTextAlignment(.trailing).frame(width: 56)
                         }
                     }
                     .padding(12)
@@ -1939,11 +1970,24 @@ struct NewCommissionView: View {
         }
     }
 
+    // SwiftUI may finish a text-field read/write after its row was deleted.
+    // Resolve the stable ID every time; never retain an array subscript.
+    private func tierField(_ snapshot: TierDraft, _ keyPath: WritableKeyPath<TierDraft, String>) -> Binding<String> {
+        Binding(get: {
+            tiers.first(where: { $0.id == snapshot.id })?[keyPath: keyPath] ?? snapshot[keyPath: keyPath]
+        }, set: { value in
+            guard let index = tiers.firstIndex(where: { $0.id == snapshot.id }) else { return }
+            tiers[index][keyPath: keyPath] = value
+        })
+    }
+
     private func removeButton(_ action: @escaping () -> Void) -> some View {
         Button { withMotion { action() } } label: {
             Image(systemName: "xmark.circle.fill").font(.system(size: 20)).foregroundStyle(.white, .black.opacity(0.5))
+                .frame(width: 44, height: 44).contentShape(Rectangle())
         }
         .offset(x: 6, y: -6)
+        .accessibilityLabel("Remove sample")
     }
 
     private func fill() {
@@ -1970,6 +2014,7 @@ struct NewCommissionView: View {
         busy = true
         defer { busy = false }
         do {
+            if existing == nil || isOpen { try await ArtistReview.require(me.id) }
             var urls = oldSamples
             for image in samples {
                 if let jpeg = ImageTools.jpeg(image, maxSide: 1600) {

@@ -485,6 +485,40 @@ export async function settle(session) {
   await notify(order.artist_email, buyer, `${order.buyer_name || "Someone"} paid for "${order.commission_title}". Time to create!`, `/Commissions?order=${orderId}`);
   return { status: "paid", orderId };
 }
+// Creators can list only images uploaded into their own Storage folder.
+export async function sellBunnyItem(user, input) {
+  const personalID = String(input.item_id || "");
+  if (!/^personal-[A-Za-z0-9-]{1,100}$/.test(personalID)) throw new Problem(400, "Choose one of your imported items.");
+  const profile = await getDoc("User", user.uid);
+  if (!profile || profile.banned || Number(profile.muted_until_ms || 0) > Date.now()) throw new Problem(403, "Your account cannot list items right now.");
+  const id = "creator-" + crypto.createHash("sha256").update(`${user.uid}:${personalID}`).digest("hex");
+  const current = await getDoc("BunnyItem", id);
+  if (input.active === false) {
+    if (current) await updateDoc("BunnyItem", id, { is_active: false, updated_date: new Date().toISOString() });
+    return { item_id: id, active: false };
+  }
+  const price = input.price;
+  if (!Number.isSafeInteger(price) || price < 1 || price > 1000000) throw new Problem(400, "Choose a price from 1 to 1,000,000 coins.");
+  let personal;
+  try { personal = JSON.parse(profile.bunny_items || "[]").find(item => item.id === personalID); } catch {}
+  if (!personal) throw new Problem(404, "That item is not in your wardrobe.");
+  let image;
+  try { image = new URL(personal.image_url); } catch { throw new Problem(400, "Import your artwork again first."); }
+  const object = decodeURIComponent(image.pathname.split("/o/")[1] || "");
+  const bucket = image.pathname.split("/b/")[1]?.split("/")[0];
+  if (image.protocol !== "https:" || image.hostname !== "firebasestorage.googleapis.com" ||
+      ![`${PROJECT}.appspot.com`, `${PROJECT}.firebasestorage.app`].includes(bucket) || !object.startsWith(`uploads/${user.uid}/`)) {
+    throw new Problem(403, "You can sell only artwork uploaded from your own account.");
+  }
+  const name = String(input.name || personal.name || "").trim().slice(0, 60);
+  if (!name || !["top", "head", "face", "body", "collar"].includes(personal.slot)) throw new Problem(400, "Choose a name and item category.");
+  if (current && (current.image_url !== personal.image_url || current.slot !== personal.slot)) throw new Problem(409, "A sold item's artwork cannot be replaced. List the new artwork separately.");
+  await setDoc("BunnyItem", id, { name, slot: personal.slot, image_url: personal.image_url, price_coins: price,
+    source_item_id: personalID, seller_uid: user.uid, seller_email: user.email, seller_name: profile.display_name || "Artist", is_active: true,
+    created_by: user.email, created_date: current?.created_date || new Date().toISOString(), updated_date: new Date().toISOString() });
+  return { item_id: id, active: true };
+}
+
 // An idempotent purchase: item price, balance and ownership share one transaction.
 // Only this server can create BunnyPurchase records.
 export async function purchaseBunnyItem(user, itemID, expectedPrice) {
@@ -503,13 +537,30 @@ export async function purchaseBunnyItem(user, itemID, expectedPrice) {
         await firestore(":rollback", { method: "POST", body: JSON.stringify({ transaction }) });
         return { owned: true, coins: profile.coins };
       }
+      if (item.seller_uid === user.uid) {
+        await firestore(":rollback", { method: "POST", body: JSON.stringify({ transaction }) });
+        return { owned: true, coins: profile.coins };
+      }
+      if (item.is_active === false) throw new Problem(409, "This item is no longer for sale.");
       const price = item.price_coins ?? 0;
       if (!Number.isSafeInteger(price) || price < 0 || price > 1000000) throw new Problem(400, "This item's price needs correcting.");
       if (expectedPrice !== price) throw new Problem(409, "The price changed. Reopen the shop before buying.");
       const balance = profile.coins ?? 0;
       if (!Number.isSafeInteger(balance) || balance < price) throw new Problem(400, "You don't have enough coins.");
       const fields = value => Object.fromEntries(Object.entries(value).map(([k, v]) => [k, encode(v)]));
+      const payout = [];
+      if (item.seller_uid && price > 0) {
+        if (!/^[A-Za-z0-9_-]{1,128}$/.test(item.seller_uid)) throw new Problem(400, "This seller is unavailable.");
+        const sellerName = docName("User", item.seller_uid);
+        const sellerRows = await firestore(":batchGet", { method: "POST", body: JSON.stringify({ documents: [sellerName], transaction }) });
+        const seller = sellerRows.find(row => row.found?.name === sellerName);
+        const account = seller ? fromDocument(seller.found) : null;
+        const coins = account?.coins ?? 0;
+        if (!account || account.banned || !Number.isSafeInteger(coins) || coins < 0 || !Number.isSafeInteger(coins + price)) throw new Problem(409, "This seller cannot receive coins right now.");
+        payout.push({ update: { name: sellerName, fields: fields({ coins: coins + price, updated_date: new Date().toISOString() }) }, updateMask: { fieldPaths: ["coins", "updated_date"] } });
+      }
       await firestore(":commit", { method: "POST", body: JSON.stringify({ transaction, writes: [
+        ...payout,
         { update: { name: names[1], fields: fields({ coins: balance - price, updated_date: new Date().toISOString() }) }, updateMask: { fieldPaths: ["coins", "updated_date"] } },
         { update: { name: names[2], fields: fields({ user_email: user.email, user_id: user.uid, item_id: itemID, price_coins: price, created_date: new Date().toISOString() }) }, currentDocument: { exists: false } },
       ] }) });
