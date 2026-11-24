@@ -75,7 +75,12 @@ final class EditorInteractionTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Little updates. Long conversations."].waitForExistence(timeout: 5))
         screenshot("community-page")
         app.buttons["Wall"].tap()
-        XCTAssertTrue(app.buttons["Share fan art"].waitForExistence(timeout: 5))
+        // The wall starts with the sample drawing; if the (signed-out) fan
+        // art query answers with nothing, it shows the empty wall instead.
+        // Either way the page is laid out.
+        let ready = NSPredicate { _, _ in self.app.buttons["Share fan art"].exists || self.app.buttons["Open Pink sketch"].exists }
+        expectation(for: ready, evaluatedWith: app)
+        waitForExpectations(timeout: 8)
         screenshot("fanart-page")
     }
 }
