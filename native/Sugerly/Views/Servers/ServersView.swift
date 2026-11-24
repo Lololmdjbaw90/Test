@@ -720,10 +720,10 @@ struct ServerPanel: View {
                 HStack(spacing: 12) {
                     Label("\(store.server.members.count) members", systemImage: "person.2.fill").foregroundStyle(Palette.muted)
                     HStack(spacing: 5) {
-                        Circle().fill(Palette.success).frame(width: 8, height: 8)
+                        Circle().fill(online > 0 ? Palette.success : Palette.muted.opacity(0.5)).frame(width: 8, height: 8)
                         Text("\(online) online")
                     }
-                    .foregroundStyle(Palette.success)
+                    .foregroundStyle(online > 0 ? Palette.success : Palette.muted)
                 }
                 .font(.jakarta(12, .bold))
                 if !store.server.description.isEmpty {
