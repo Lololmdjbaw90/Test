@@ -54,6 +54,27 @@ final class DesignPreviewTests: XCTestCase {
         app.terminate()
     }
 
+    func testCaptureServersTabAndServerPage() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--polish-ui-test", "--design-preview", "--preview-servers"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Create a server"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["Doodle Club"].exists)
+        XCTAssertTrue(app.staticTexts["Cozy Games"].exists)
+        var shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "servers-tab"; shot.lifetime = .keepAlways; add(shot)
+        app.terminate()
+
+        app.launchArguments = ["--polish-ui-test", "--design-preview", "--preview-server-page"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Members"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["daily-prompt"].waitForExistence(timeout: 5))
+        shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "server-page"; shot.lifetime = .keepAlways; add(shot)
+        app.terminate()
+    }
+
     func testAppearanceOptionsAndProfilePresets() {
         continueAfterFailure = false
         let app = XCUIApplication()

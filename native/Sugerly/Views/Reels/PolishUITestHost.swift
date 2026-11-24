@@ -94,6 +94,18 @@ struct PolishUITestHost: View {
             } else if tab == 12 {
                 Text(ArtworkSaverFixture.result).font(.caption2).accessibilityIdentifier("artwork-watermark")
                 NewArtworkView()
+            } else if tab == 13 {
+                NavigationStack(path: $path) {
+                    VStack(spacing: 0) {
+                        ChatSectionSwitch(selection: .constant(1), unread: 3).padding(.horizontal, 16).padding(.vertical, 8)
+                        ServerList(path: $path, initialServers: ServerPreviewFixture.servers)
+                    }
+                }
+            } else if tab == 14 {
+                NavigationStack(path: $path) {
+                    ServerPanel(store: ServerPreviewFixture.store, path: $path, onLeft: {})
+                        .navigationTitle("Doodle Club").navigationBarTitleDisplayMode(.inline)
+                }
             } else if tab == 9 {
                 NavigationStack {
                     ChatView(conversation: Conversation(id: "stress-chat", members: ["test@example.invalid", "friend@example.invalid"], isGroup: true, groupName: "History test", last: nil, unread: 0), loadMessages: false,
@@ -126,7 +138,7 @@ struct PolishUITestHost: View {
             model.me = UserProfile(["id": "fixture-user", "email": "test@example.invalid", "display_name": "Mimi", "coins": 1280, "xp": 340])
             if preview {
                 let args = ProcessInfo.processInfo.arguments
-                tab = args.contains("--preview-call") ? 10 : args.contains("--preview-loading") ? 11 : args.contains("--preview-new-art") ? 12 : args.contains("--preview-chat-history") ? 9 : args.contains("--preview-commission") ? 8 : args.contains("--preview-profile") ? 6 : args.contains("--preview-appearance") ? 7 : args.contains("--preview-community") ? 2 : args.contains("--preview-chats") ? 5 : 4
+                tab = args.contains("--preview-servers") ? 13 : args.contains("--preview-server-page") ? 14 : args.contains("--preview-call") ? 10 : args.contains("--preview-loading") ? 11 : args.contains("--preview-new-art") ? 12 : args.contains("--preview-chat-history") ? 9 : args.contains("--preview-commission") ? 8 : args.contains("--preview-profile") ? 6 : args.contains("--preview-appearance") ? 7 : args.contains("--preview-community") ? 2 : args.contains("--preview-chats") ? 5 : 4
                 posts.posts = [
                     Post(["id": "sample-post", "user_email": "luna@example.invalid", "user_display_name": "Luna", "title": "Little things, big smiles", "content": "Made time to draw today. What are you working on? #art", "created_date": FS.nowISO()]),
                     Post(["id": "sample-post-2", "user_email": "kai@example.invalid", "user_display_name": "Kai", "title": "Your daily reminder", "content": "You don’t have to finish everything today. A little progress counts too.", "created_date": FS.nowISO()]),
@@ -146,6 +158,32 @@ struct PolishUITestHost: View {
         }
     }
 }
+// Sample servers for the Servers previews (nothing is loaded or saved).
+@MainActor
+private enum ServerPreviewFixture {
+    static let servers: [Server] = [
+        Server(["id": "preview-doodle", "name": "Doodle Club", "description": "Daily sketch prompts and gentle feedback.", "owner_email": "luna@example.invalid",
+                "member_emails": ["test@example.invalid", "luna@example.invalid", "kai@example.invalid", "bea@example.invalid"]]),
+        Server(["id": "preview-study", "name": "Study Buddies", "description": "Focus rooms and lo-fi.", "owner_email": "kai@example.invalid",
+                "member_emails": ["test@example.invalid", "kai@example.invalid"]]),
+        Server(["id": "preview-cozy", "name": "Cozy Games", "description": "Farming sims, puzzle games and good vibes. Weekly game nights on Fridays.", "owner_email": "bea@example.invalid",
+                "member_emails": ["bea@example.invalid", "kai@example.invalid", "mo@example.invalid"]]),
+        Server(["id": "preview-pets", "name": "Pet Portraits", "description": "Show us your pets, drawn or photographed.", "owner_email": "mo@example.invalid",
+                "member_emails": ["mo@example.invalid"]]),
+    ]
+    static let store: ServerStore = {
+        let store = ServerStore(servers[0])
+        store.channels = [
+            ServerChannel(["id": "c1", "community_id": "preview-doodle", "name": "general", "type": "text", "description": "Say hi!", "position": 0]),
+            ServerChannel(["id": "c2", "community_id": "preview-doodle", "name": "daily-prompt", "type": "text", "description": "Today's sketch idea", "position": 1]),
+            ServerChannel(["id": "c3", "community_id": "preview-doodle", "name": "feedback", "type": "text", "position": 2]),
+            ServerChannel(["id": "c4", "community_id": "preview-doodle", "name": "Draw together", "type": "voice", "position": 3]),
+        ]
+        store.loaded = true
+        return store
+    }()
+}
+
 // Someone else's drawing saved to Photos gets the artist's @name in the
 // bottom right corner; the rest of the picture stays as it was.
 private enum ArtworkSaverFixture {

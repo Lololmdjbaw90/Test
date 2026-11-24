@@ -214,7 +214,18 @@ final class ServerStore {
     var voice: [String: [VoicePresenceInfo]] = [:] // channel id -> who's in there
     var loaded = false
 
-    init(_ server: Server) { self.server = server }
+    // A server you've opened before shows its channels at once from what's
+    // saved on the phone; the fresh copy replaces it quietly.
+    init(_ server: Server) {
+        self.server = server
+        let ch = ChatCache.read("server-channels-" + server.id)
+        if !ch.isEmpty {
+            channels = ch.map(ServerChannel.init).sorted { $0.position < $1.position }
+            roles = ChatCache.read("server-roles-" + server.id).map(ServerRole.init)
+            members = ChatCache.read("server-members-" + server.id).map(ServerMember.init)
+            loaded = true
+        }
+    }
 
     var sortedRoles: [ServerRole] { roles.sorted { $0.position < $1.position } }
 
@@ -224,9 +235,22 @@ final class ServerStore {
         async let ro = try? FS.query("ServerRole", [.equals("community_id", server.id)])
         async let me = try? FS.query("ServerMember", [.equals("community_id", server.id)])
         if let doc = await fresh ?? nil { server = Server(doc) }
-        channels = ((await ch) ?? []).map(ServerChannel.init).sorted { $0.position < $1.position }
-        roles = ((await ro) ?? []).map(ServerRole.init)
-        members = ((await me) ?? []).map(ServerMember.init)
+        let channelDocs = await ch
+        let roleDocs = await ro
+        let memberDocs = await me
+        // Offline: keep what's showing instead of emptying the page.
+        if let channelDocs {
+            channels = channelDocs.map(ServerChannel.init).sorted { $0.position < $1.position }
+            ChatCache.write("server-channels-" + server.id, channelDocs)
+        }
+        if let roleDocs {
+            roles = roleDocs.map(ServerRole.init)
+            ChatCache.write("server-roles-" + server.id, roleDocs)
+        }
+        if let memberDocs {
+            members = memberDocs.map(ServerMember.init)
+            ChatCache.write("server-members-" + server.id, memberDocs)
+        }
         loaded = true
         await loadVoice()
     }

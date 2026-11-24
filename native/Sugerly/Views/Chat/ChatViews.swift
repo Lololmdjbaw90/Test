@@ -76,6 +76,39 @@ final class ChatStore {
         } catch {
             if !loaded && conversations.isEmpty { self.error = error.localizedDescription }
         }
+        Task { await warmRecent(me: me) }
+    }
+
+    // Opening a recent chat never shows it loading: the newest messages of
+    // your latest chats are fetched quietly in the background and kept on
+    // the phone (the same page the chat would ask for), so the chat opens
+    // already filled in. Only chats with something new are fetched again.
+    private var warming = false
+    private var warmed: [String: String] = [:]
+    private func warmRecent(me: String) async {
+        guard !warming, !me.isEmpty else { return }
+        warming = true
+        defer { warming = false }
+        for c in conversations.filter({ !isClosed($0) }).prefix(8) {
+            let latest = c.last?.created ?? ""
+            guard warmed[c.id] != latest, Alerts.shared.openConversation != c.id else { continue }
+            let cached = ChatCache.messages(c.id)
+            if let newest = cached.last(where: { !$0.pending })?.created, !latest.isEmpty, newest >= latest {
+                warmed[c.id] = latest
+                continue
+            }
+            let filters: [FS.Filter] = [.equals("conversation_id", c.id), .contains("member_emails", me)]
+            guard let docs = try? await FS.query("DirectMessage", filters, orderBy: "created_date", limit: 50) else { continue }
+            guard Alerts.shared.openConversation != c.id else { continue }
+            let page = docs.map(Message.init).sorted { $0.created < $1.created }
+            // Keep the older saved messages only when they join up with the
+            // new page (no gap in between).
+            let joins = (cached.last?.created ?? "") >= (page.first?.created ?? "~")
+            var seen = Set<String>()
+            let merged = (page + (joins ? cached : [])).filter { seen.insert($0.id).inserted }.sorted { $0.created < $1.created }
+            if !merged.isEmpty { ChatCache.save(c.id, merged) }
+            warmed[c.id] = latest
+        }
     }
 
     private func removeDeletedAccountChats(me: String) async {
@@ -295,9 +328,11 @@ struct ChatListView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Chats or Servers, under the logo.
-            TitleSwitch(titles: ["Chats", "Servers"], selection: $section)
-                .padding(.top, 2)
-                .padding(.bottom, 6)
+            ChatSectionSwitch(selection: $section, unread: store.unread)
+                .frame(maxWidth: 520)
+                .padding(.horizontal, 16)
+                .padding(.top, 4)
+                .padding(.bottom, 8)
             sections
         }
         // The page colour stays put while the list fades in.
@@ -383,15 +418,16 @@ struct ChatListView: View {
                 tucked("Ignored", note: "They can't ping you", icon: "bell.slash.fill", list: ignoredChats, open: $showIgnored)
             }
 
+            // Older chats join the end of the list as you get near it,
+            // quietly (no loading row).
             if search.isEmpty && store.hasOlder {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small).tint(Theme.main)
-                    Text("Loading older chats").font(.jakarta(12, .semibold)).foregroundStyle(Palette.muted)
-                }
-                .frame(maxWidth: .infinity)
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-                .onAppear { Task { await store.loadOlder(me: model.me?.email ?? "") } }
+                Color.clear
+                    .frame(height: 1)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .accessibilityHidden(true)
+                    .onAppear { Task { await store.loadOlder(me: model.me?.email ?? "") } }
             }
 
             let hidden = store.conversations.filter { store.isClosed($0) }.count
@@ -477,6 +513,62 @@ private extension View {
             .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
+    }
+}
+
+// Chats | Servers: two wide halves with their icons. The one you're on is
+// filled with your colour (top to bottom) and slides across when you
+// switch; Chats shows how many messages are unread.
+struct ChatSectionSwitch: View {
+    @Binding var selection: Int
+    var unread: Int
+    @Namespace private var pill
+
+    var body: some View {
+        HStack(spacing: 4) {
+            segment(0, "Chats", icon: "bubble.left.and.bubble.right.fill", badge: unread)
+            segment(1, "Servers", icon: "person.3.fill", badge: 0)
+        }
+        .padding(4)
+        .glassFrame(radius: 24)
+        .sensoryFeedback(.selection, trigger: selection)
+    }
+
+    private func segment(_ i: Int, _ title: String, icon: String, badge: Int) -> some View {
+        let on = selection == i
+        return Button {
+            if !on { TapSound.play(.select) }
+            withMotion(Motion.standard) { selection = i }
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: icon).font(.system(size: 13, weight: .bold))
+                Text(title).font(.jakarta(15, .bold)).lineLimit(1)
+                if badge > 0 {
+                    Text(badge > 99 ? "99+" : "\(badge)")
+                        .font(.jakarta(11, .heavy)).monospacedDigit()
+                        .foregroundStyle(on ? Theme.main : .white)
+                        .padding(.horizontal, 6)
+                        .frame(minWidth: 20, minHeight: 20)
+                        .background(on ? AnyShapeStyle(Color.white) : AnyShapeStyle(Theme.main), in: Capsule())
+                }
+            }
+            .foregroundStyle(on ? Color.white : Palette.muted)
+            .frame(maxWidth: .infinity)
+            .frame(height: 40)
+            .background {
+                if on {
+                    Capsule().fill(Theme.candy)
+                        .overlay(Capsule().fill(LinearGradient(colors: [.white.opacity(0.22), .clear], startPoint: .top, endPoint: .center)).padding(1))
+                        .budgetShadow(color: Theme.glow(0.25), radius: 6, y: 3)
+                        .matchedGeometryEffect(id: "pill", in: pill)
+                }
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(SoftPressStyle())
+        .accessibilityLabel(title)
+        .accessibilityValue(badge > 0 ? "\(badge) unread" : "")
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
 

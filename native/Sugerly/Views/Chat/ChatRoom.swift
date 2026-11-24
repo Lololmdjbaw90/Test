@@ -142,6 +142,9 @@ struct ChatView: View {
             if Alerts.shared.openConversation == conversation.id { Alerts.shared.openConversation = nil }
             recorder.cancel()
         }
+        // The saved messages go in before the first frame is drawn (a task
+        // starts a moment later, which showed an empty chat for a blink).
+        .onAppear { if loadMessages { restoreCache() } }
         .task {
             guard loadMessages else { messages = Array(previewMessages.suffix(50)); hasOlder = previewMessages.count > 50; loaded = true; return }
             restoreCache()
