@@ -452,12 +452,16 @@ struct Artwork: Identifiable, Hashable {
     var created: String
     var year: String
     var tags: [String]
+    // Whether other people may save it to their photos (with the artist's
+    // name on it). Drawings posted before the switch existed allow it.
+    var allowDownload: Bool
 
     init(_ d: Doc) {
         id = d.str("id")
         title = d.str("title")
         text = d.str("description")
         imageURL = d.str("image_url")
+        allowDownload = d["allow_download"] as? Bool ?? true
         year = d.str("year")
         medium = d.str("medium").replacingOccurrences(of: "_", with: " ")
         authorEmail = d.str("user_email").lowercased()

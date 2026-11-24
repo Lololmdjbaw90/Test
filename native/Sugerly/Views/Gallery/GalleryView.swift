@@ -480,8 +480,10 @@ struct ArtworkDetailView: View {
     @State private var reporting: ReportSheet.Target?
     @State private var saving = false
     @State private var liking = false
+    @State private var downloading = false
 
     private var me: String { model.me?.email ?? "" }
+    private var mine: Bool { artwork.authorEmail == me }
     private var liked: Bool { LikeBook.shared.isLiked(artwork, me: me) }
     private var saved: Bool { model.me?.savedArtworks.contains(artwork.id) ?? false }
 
@@ -557,6 +559,16 @@ struct ArtworkDetailView: View {
                         .buttonStyle(OutlineButtonStyle())
                     Spacer()
                     Menu {
+                        if mine || artwork.allowDownload {
+                            Button { Task { await download() } } label: { Label("Save to Photos", systemImage: "square.and.arrow.down") }
+                                .disabled(downloading)
+                        }
+                        if mine {
+                            Button { Task { await setAllowDownload(!artwork.allowDownload) } } label: {
+                                Label(artwork.allowDownload ? "Stop others saving it" : "Let others save it",
+                                      systemImage: artwork.allowDownload ? "lock" : "square.and.arrow.down.on.square")
+                            }
+                        }
                         if artwork.authorEmail != me {
                             Button { reporting = ReportSheet.Target(id: artwork.id, type: "artwork", ownerEmail: artwork.authorEmail, preview: artwork.title, link: "/Gallery?art=\(artwork.id)") } label: { Label("Report", systemImage: "flag") }
                         }
@@ -610,6 +622,34 @@ struct ArtworkDetailView: View {
                 ArtworkEvents.publish(artwork)
                 if liking { Notify.send(to: artwork.authorEmail, from: meProfile, type: "like", message: "\(meProfile.displayName) liked your artwork \"\(artwork.title)\"", link: "/Gallery?art=\(artwork.id)") }
             } catch { artwork.restoreLikes(from: before); model.showToast("Could not save your like. Try again.", error: true) }
+        }
+    }
+
+    // Saves the drawing to your photos: someone else's always carries the
+    // artist's @name, small and see-through, in the bottom corner.
+    private func download() async {
+        guard !downloading else { return }
+        downloading = true
+        defer { downloading = false }
+        let artist = model.name(artwork.authorEmail, artwork.authorName)
+        do {
+            try await ArtworkSaver.save(artwork.imageURL, credit: mine ? nil : "@\(artist) · Sugerly")
+            model.showToast("Saved to your photos", icon: "square.and.arrow.down")
+        } catch {
+            model.showToast((error as? APIError)?.message ?? "Couldn't save it. Try again.", error: true)
+        }
+    }
+
+    private func setAllowDownload(_ on: Bool) async {
+        let before = artwork.allowDownload
+        artwork.allowDownload = on
+        do {
+            try await FS.update("Artwork", artwork.id, ["allow_download": on, "updated_date": FS.nowISO()])
+            ArtworkEvents.publish(artwork)
+            model.showToast(on ? "Others can save it (with your name on it)" : "Only you can save it now", icon: on ? "square.and.arrow.down" : "lock.fill")
+        } catch {
+            artwork.allowDownload = before
+            model.showToast("Couldn't change that. Try again.", error: true)
         }
     }
 
@@ -717,6 +757,7 @@ struct NewArtworkView: View {
     @State private var title = ""
     @State private var text = ""
     @State private var medium = "digital"
+    @State private var allowDownload = true
     @State private var item: PhotosPickerItem?
     @State private var image: UIImage?
     @State private var busy = false
@@ -751,6 +792,20 @@ struct NewArtworkView: View {
                 }
                 .scrollClipDisabled()
             }
+            // Others can save it to their photos, always with your @name
+            // on it; off keeps it on Sugerly only.
+            Toggle(isOn: $allowDownload) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Allow saving").font(.jakarta(15, .bold)).foregroundStyle(Palette.text)
+                    Text("People can save it to their photos with your @\(model.me?.displayName ?? "name") on it. You can change this later.")
+                        .font(.jakarta(12)).foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .tint(Theme.main)
+            .padding(14)
+            .frostedFill(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .accessibilityIdentifier("artwork-allow-saving")
         }
         .onChange(of: image == nil) { _, _ in error = nil }
     }
@@ -779,6 +834,7 @@ struct NewArtworkView: View {
                 "year": "\(Calendar.current.component(.year, from: Date()))", "is_featured": false,
                 "user_email": me.email, "user_display_name": me.displayName, "user_profile_picture": me.picture,
                 "likes": [String](), "created_by": me.email, "created_date": now, "updated_date": now,
+                "allow_download": allowDownload,
             ]
             let created = try await FS.create("Artwork", doc)
             ArtworkEvents.publish(Artwork(created))

@@ -316,13 +316,15 @@ struct HappeningNow: View {
     private func row(_ item: Item) -> some View {
         let person = model.person(item.email)
         return HStack(spacing: 12) {
+            // The activity's little icon sits at the bottom left, so it
+            // never covers the online dot at the bottom right.
             Avatar(url: person?.picture ?? "", name: person?.displayName ?? item.name, size: 42, online: person?.isOnline ?? false)
-                .overlay(alignment: .bottomTrailing) {
+                .overlay(alignment: .bottomLeading) {
                     Image(systemName: item.icon).font(.system(size: 8, weight: .bold)).foregroundStyle(.white)
                         .frame(width: 18, height: 18)
                         .background(Theme.main, in: Circle())
                         .overlay(Circle().strokeBorder(Palette.surface, lineWidth: 2))
-                        .offset(x: 4, y: 4)
+                        .offset(x: -4, y: 4)
                 }
             VStack(alignment: .leading, spacing: 2) {
                 (Text(person?.displayName ?? item.name).font(.jakarta(14, .heavy)) + Text(" " + item.verb).font(.jakarta(14, .medium)))

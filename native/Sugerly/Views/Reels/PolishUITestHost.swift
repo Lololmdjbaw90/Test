@@ -78,6 +78,22 @@ struct PolishUITestHost: View {
                 NavigationStack(path: $path) {
                     GalleryView(path: $path, initialArtworks: [art])
                 }
+            } else if tab == 10 {
+                // A call coming in over Home, as it shows in the app.
+                NavigationStack(path: $path) {
+                    HomeView(path: $path, compose: { _ in }, loadContent: false)
+                }
+                .overlay(alignment: .top) {
+                    IncomingCallBanner(call: CallInfo(["id": "preview-call", "caller_email": "luna@example.invalid", "caller_name": "Luna",
+                                                       "member_emails": ["luna@example.invalid", "test@example.invalid"],
+                                                       "member_names": ["luna@example.invalid": "Luna"], "status": "ringing"]))
+                        .padding(.top, 4)
+                }
+            } else if tab == 11 {
+                SplashView()
+            } else if tab == 12 {
+                Text(ArtworkSaverFixture.result).font(.caption2).accessibilityIdentifier("artwork-watermark")
+                NewArtworkView()
             } else if tab == 9 {
                 NavigationStack {
                     ChatView(conversation: Conversation(id: "stress-chat", members: ["test@example.invalid", "friend@example.invalid"], isGroup: true, groupName: "History test", last: nil, unread: 0), loadMessages: false,
@@ -110,7 +126,7 @@ struct PolishUITestHost: View {
             model.me = UserProfile(["id": "fixture-user", "email": "test@example.invalid", "display_name": "Mimi", "coins": 1280, "xp": 340])
             if preview {
                 let args = ProcessInfo.processInfo.arguments
-                tab = args.contains("--preview-chat-history") ? 9 : args.contains("--preview-commission") ? 8 : args.contains("--preview-profile") ? 6 : args.contains("--preview-appearance") ? 7 : args.contains("--preview-community") ? 2 : args.contains("--preview-chats") ? 5 : 4
+                tab = args.contains("--preview-call") ? 10 : args.contains("--preview-loading") ? 11 : args.contains("--preview-new-art") ? 12 : args.contains("--preview-chat-history") ? 9 : args.contains("--preview-commission") ? 8 : args.contains("--preview-profile") ? 6 : args.contains("--preview-appearance") ? 7 : args.contains("--preview-community") ? 2 : args.contains("--preview-chats") ? 5 : 4
                 posts.posts = [
                     Post(["id": "sample-post", "user_email": "luna@example.invalid", "user_display_name": "Luna", "title": "Little things, big smiles", "content": "Made time to draw today. What are you working on? #art", "created_date": FS.nowISO()]),
                     Post(["id": "sample-post-2", "user_email": "kai@example.invalid", "user_display_name": "Kai", "title": "Your daily reminder", "content": "You don’t have to finish everything today. A little progress counts too.", "created_date": FS.nowISO()]),
@@ -130,6 +146,28 @@ struct PolishUITestHost: View {
         }
     }
 }
+// Someone else's drawing saved to Photos gets the artist's @name in the
+// bottom right corner; the rest of the picture stays as it was.
+private enum ArtworkSaverFixture {
+    static let result: String = {
+        let size = CGSize(width: 400, height: 300)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let plain = UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIColor(red: 0.1, green: 0.1, blue: 0.2, alpha: 1).setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+        }
+        let signed = ArtworkSaver.signed(plain, credit: "@Luna · Sugerly")
+        guard signed.size == size, let image = signed.cgImage,
+              let data = image.dataProvider?.data, let bytes = CFDataGetBytePtr(data) else { return "Watermark missing" }
+        let row = image.bytesPerRow, step = image.bitsPerPixel / 8
+        func bright(_ x: Int, _ y: Int) -> Int { let o = y * row + x * step; return Int(bytes[o]) + Int(bytes[o + 1]) + Int(bytes[o + 2]) }
+        let corner = (300..<392).flatMap { x in (270..<292).map { y in bright(x, y) } }.max() ?? 0
+        let elsewhere = bright(20, 20)
+        return corner > elsewhere + 150 ? "Watermark drawn" : "Watermark missing"
+    }()
+}
+
 private struct RecordingPerformanceFixture: View {
     private let budget = RenderingBudget.shared
     @State private var captureID = UUID()

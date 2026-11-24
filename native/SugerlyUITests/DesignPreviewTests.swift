@@ -22,6 +22,38 @@ final class DesignPreviewTests: XCTestCase {
             app.terminate()
         }
     }
+    func testCaptureIncomingCallLoadingAndArtworkSaving() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--polish-ui-test", "--design-preview", "--preview-call"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Answer"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["Decline"].isHittable)
+        XCTAssertTrue(app.staticTexts["Luna"].exists)
+        var shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "incoming-call"; shot.lifetime = .keepAlways; add(shot)
+        app.terminate()
+
+        app.launchArguments = ["--polish-ui-test", "--design-preview", "--preview-loading"]
+        app.launch()
+        XCTAssertTrue(app.otherElements["Loading Sugerly"].waitForExistence(timeout: 15))
+        shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "loading-screen"; shot.lifetime = .keepAlways; add(shot)
+        app.terminate()
+
+        app.launchArguments = ["--polish-ui-test", "--design-preview", "--preview-new-art"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["artwork-watermark"].waitForExistence(timeout: 15))
+        XCTAssertEqual(app.staticTexts["artwork-watermark"].label, "Watermark drawn")
+        let allow = app.switches["artwork-allow-saving"]
+        for _ in 0..<4 where !allow.isHittable { app.swipeUp() }
+        XCTAssertTrue(allow.isHittable)
+        XCTAssertEqual(allow.value as? String, "1")
+        shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "new-artwork"; shot.lifetime = .keepAlways; add(shot)
+        app.terminate()
+    }
+
     func testAppearanceOptionsAndProfilePresets() {
         continueAfterFailure = false
         let app = XCUIApplication()

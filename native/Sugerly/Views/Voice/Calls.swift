@@ -470,58 +470,101 @@ final class CallCenter {
 
 // MARK: - Incoming call banner
 
+// Someone is calling while Sugerly is open: a card that drops in from the
+// top, in a deep night of your theme colour. Their picture with soft rings
+// going out from it, their name, what kind of call it is, and two big
+// buttons with words on them (Decline and Answer), like the iPhone's own
+// call screen. The rings and the wiggle are simple scale and fade
+// animations, and stop while the screen is recorded or the phone is hot.
 struct IncomingCallBanner: View {
     let call: CallInfo
     @Environment(AppModel.self) private var model
     @Environment(CallCenter.self) private var calls
     @State private var pulse = false
 
+    private var still: Bool { Motion.reduced || RenderingBudget.shared.limited }
+
     var body: some View {
         let me = model.me?.email ?? ""
-        HStack(spacing: 14) {
-            ZStack {
-                ForEach(0..<2) { i in
-                    Circle().stroke(Palette.success.opacity(0.5), lineWidth: 2)
-                        .frame(width: 56, height: 56)
-                        .scaleEffect(pulse && !Motion.reduced ? 1.6 : 1)
-                        .opacity(pulse && !Motion.reduced ? 0 : 0.9)
-                        .animation(Motion.reduced ? nil : .easeOut(duration: 1.6).repeatForever(autoreverses: false).delay(Double(i) * 0.8), value: pulse)
+        let shape = RoundedRectangle(cornerRadius: 30, style: .continuous)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 6) {
+                Image(systemName: call.isGroup ? "person.3.fill" : "phone.fill")
+                    .font(.system(size: 11, weight: .bold))
+                Text(call.isGroup ? "Group call" : "Voice call")
+                    .font(.jakarta(12, .bold))
+                Spacer(minLength: 0)
+                Text("Sugerly").font(.jakarta(12, .bold)).opacity(0.65)
+            }
+            .foregroundStyle(.white.opacity(0.85))
+
+            HStack(spacing: 14) {
+                ZStack {
+                    if !still {
+                        ForEach(0..<2) { i in
+                            Circle().strokeBorder(Theme.light.opacity(0.7), lineWidth: 2)
+                                .frame(width: 62, height: 62)
+                                .scaleEffect(pulse ? 1.45 : 1)
+                                .opacity(pulse ? 0 : 0.9)
+                                .animation(.easeOut(duration: 1.6).repeatForever(autoreverses: false).delay(Double(i) * 0.8), value: pulse)
+                        }
+                    }
+                    Avatar(url: call.isGroup ? call.callerPicture : call.picture(for: me), name: call.title(for: me), size: 58)
+                        .padding(2)
+                        .overlay(Circle().strokeBorder(.white.opacity(0.9), lineWidth: 2))
                 }
-                Avatar(url: call.isGroup ? call.callerPicture : call.picture(for: me), name: call.title(for: me), size: 52)
+                .frame(width: 74, height: 74)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(call.title(for: me))
+                        .font(.display(26)).foregroundStyle(.white)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                    Text(call.isGroup ? "\(call.callerName) started a group call" : "is calling you…")
+                        .font(.jakarta(13, .semibold)).foregroundStyle(.white.opacity(0.75))
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(call.title(for: me)).font(.jakarta(16, .heavy)).foregroundStyle(.white).lineLimit(1)
-                Text(call.isGroup ? "\(call.callerName) started a group call" : "Incoming voice call…")
-                    .font(.jakarta(12, .semibold)).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
+
+            HStack(spacing: 10) {
+                choice("Decline", icon: "phone.down.fill", color: Palette.danger) {
+                    if let meProfile = model.me { calls.decline(call, me: meProfile) }
+                }
+                choice("Answer", icon: "phone.fill", color: Palette.success, wiggle: true) {
+                    guard let meProfile = model.me else { return }
+                    Task { await calls.accept(call, me: meProfile) }
+                }
             }
-            Spacer(minLength: 4)
-            Button {
-                if let meProfile = model.me { calls.decline(call, me: meProfile) }
-            } label: {
-                Image(systemName: "phone.down.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 48, height: 48).background(Palette.danger, in: Circle())
-            }
-            .buttonStyle(BouncyStyle(scale: 0.85))
-            .accessibilityLabel("Decline")
-            Button {
-                guard let meProfile = model.me else { return }
-                Task { await calls.accept(call, me: meProfile) }
-            } label: {
-                Image(systemName: "phone.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 48, height: 48).background(Palette.success, in: Circle())
-                    .rotationEffect(.degrees(Motion.reduced ? 0 : (pulse ? -10 : 10)))
-                    .animation(Motion.reduced ? nil : .easeInOut(duration: 0.18).repeatForever(autoreverses: true), value: pulse)
-            }
-            .buttonStyle(BouncyStyle(scale: 0.85))
-            .accessibilityLabel("Answer")
         }
-        .padding(14)
-        .background(Color(hex: 0x2A1620), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(.white.opacity(0.1), lineWidth: 1))
-        .budgetShadow(color: .black.opacity(0.35), radius: 24, y: 12)
+        .padding(16)
+        .background(Palette.night, in: shape)
+        .overlay(shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.24), .white.opacity(0.06)],
+                                                   startPoint: .top, endPoint: .bottom), lineWidth: 1))
+        .budgetShadow(color: Palette.nightTop.opacity(0.45), radius: 22, y: 10)
         .padding(.horizontal, 12)
         .frame(maxWidth: 520)
+        .accessibilityElement(children: .contain)
         .onAppear { pulse = true }
+    }
+
+    // One of the two big buttons: an icon and its word, in a capsule.
+    private func choice(_ title: String, icon: String, color: Color, wiggle: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .bold))
+                    .rotationEffect(.degrees(wiggle && !still ? (pulse ? -12 : 12) : 0))
+                    .animation(wiggle && !still ? .easeInOut(duration: 0.18).repeatForever(autoreverses: true) : nil, value: pulse)
+                Text(title).font(.jakarta(16, .bold))
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .background(color, in: Capsule())
+            .overlay(Capsule().fill(LinearGradient(colors: [.white.opacity(0.22), .clear],
+                                                   startPoint: .top, endPoint: .center)).padding(1))
+        }
+        .buttonStyle(BouncyStyle(scale: 0.94))
+        .accessibilityLabel(title)
     }
 }
 

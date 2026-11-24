@@ -235,42 +235,28 @@ struct GoodbyeCover: View {
 
 // Shown while logging in: the app gets ready behind it.
 struct SettingUpCover: View {
-    var body: some View { SugerlyLaunchScreen(message: "Welcome back", detail: "Your friends, creations and little moments") }
+    var body: some View { SugerlyLaunchScreen(message: "Setting things up") }
 }
 
 struct SplashView: View {
-    var body: some View { SugerlyLaunchScreen(message: "Welcome back", detail: "Welcome to Sugerly") }
+    var body: some View { SugerlyLaunchScreen(message: "Loading Sugerly") }
 }
 
+// Sugerly's loading screen, kept simple: the app icon, the Sugerly logo and
+// the little heart loader, on the page's own background. Nothing else on it.
 private struct SugerlyLaunchScreen: View {
     let message: String
-    let detail: String
     var body: some View {
-        ZStack {
-            Palette.surface.ignoresSafeArea()
-            VStack {
-                Circle().fill(Theme.soft).frame(width: 230, height: 230).offset(x: -140, y: -90)
-                Spacer()
-                Circle().fill(Theme.main.opacity(0.07)).frame(width: 280, height: 280).offset(x: 140, y: 100)
-            }.ignoresSafeArea().accessibilityHidden(true)
-            VStack(spacing: 22) {
-                AppBadge(size: 108)
-                    .padding(20)
-                    .background(RoundedRectangle(cornerRadius: 44).fill(Theme.soft))
-                    .overlay(alignment: .topTrailing) {
-                        Image(systemName: "sparkle").font(.system(size: 25, weight: .bold)).foregroundStyle(Theme.main).offset(x: 4, y: -4)
-                    }
-                BrandLogo(height: 56)
-                VStack(spacing: 8) {
-                    Text(message).font(.display(23)).foregroundStyle(Palette.text)
-                    Text(detail).font(.jakarta(13, .medium)).foregroundStyle(Palette.text2)
-                }.multilineTextAlignment(.center)
-                ProgressView().progressViewStyle(.circular).tint(Theme.main)
-                    .frame(width: 46, height: 46).background(Theme.soft, in: Circle())
-            }.padding(28)
-            VStack { Spacer(); Text("Made for your little world").font(.jakarta(11, .semibold)).foregroundStyle(Palette.muted).padding(.bottom, 24) }
+        VStack(spacing: 18) {
+            AppBadge(size: 96)
+                .budgetShadow(color: Theme.glow(0.22), radius: 14, y: 6)
+            BrandLogo(height: 44)
+            SugarLoader(size: 10)
+                .padding(.top, 4)
         }
-        .accessibilityElement(children: .combine)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .sugarBackground()
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(message)
     }
 }
