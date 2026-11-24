@@ -328,10 +328,11 @@ struct ChatListView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Chats or Servers, under the logo.
+            // (With room under the top bar, so the two never touch.)
             ChatSectionSwitch(selection: $section, unread: store.unread)
                 .frame(maxWidth: 520)
                 .padding(.horizontal, 16)
-                .padding(.top, 4)
+                .padding(.top, 14)
                 .padding(.bottom, 8)
             sections
         }
